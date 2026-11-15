@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "../../../styles/fonts.css";
+@import "../../../styles/theme.css";
+@custom-variant dark (&:where(.dark, .dark *));
+
+html, body, #root { margin: 0; min-width: 0; min-height: 100%; }
+body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); font-size: 16px; line-height: 1.5; }
+button, input, textarea, select { font: inherit; }
+button:not(:disabled), summary { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+::selection { background: color-mix(in srgb, var(--text-selection) 22%, transparent); }
+.mobile-demo-recovery { margin: 10dvh auto; padding: 24px; max-width: 560px; }
+.mobile-demo-recovery button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--control-radius); }

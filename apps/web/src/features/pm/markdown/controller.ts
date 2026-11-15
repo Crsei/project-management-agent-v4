@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useLocation, useSearchParams } from 'react-router';
+import { HumanIdentity } from '../service/human-identity';
 import { defaultConfiguration, statusCategory, workflowFor, validateTransition, diagnosticsOf, type Diagnostic, type FileRecord, type UnsupportedFile, type ProtocolConfiguration, type WorkspaceSnapshot, type ViewConfig, type Status, type Entity, type EntityKind, type SavedView } from '@pm-schema';
 import { validateRelations } from '@pm-schema/relations';
 import type { GraphQuery } from '@pm-schema/graph';
@@ -66,11 +67,11 @@ export interface WorkspaceController {
   error: string; setError: Dispatch<SetStateAction<string>>; busy: string | null; requestDiagnostics: Diagnostic[]; setRequestDiagnostics: Dispatch<SetStateAction<Diagnostic[]>>;
   deleteTarget: FileRecord | null; setDeleteTarget: Dispatch<SetStateAction<FileRecord | null>>; deleteConfirmation: string; setDeleteConfirmation: Dispatch<SetStateAction<string>>;
   conflict: RevisionConflict | null; setConflict: Dispatch<SetStateAction<RevisionConflict | null>>; rebaseReviewed: boolean; setRebaseReviewed: Dispatch<SetStateAction<boolean>>;
-  createStatus: Status | undefined | null; creationScope: { kind: EntityKind; project: string; assignee?: string; due?: string; watch?: boolean; priority?: string }; saveViewOpen: boolean; setSaveViewOpen: Dispatch<SetStateAction<boolean>>;
+  createStatus: Status | undefined | null; creationScope: CreationInitial & { kind: EntityKind; project: string }; saveViewOpen: boolean; setSaveViewOpen: Dispatch<SetStateAction<boolean>>;
   activeView: SavedView | undefined; context: { id: string; markdown: string } | null; setContext: Dispatch<SetStateAction<{ id: string; markdown: string } | null>>;
   activity: string[]; canWrite: boolean;
   select: (id: string) => void; updateDraft: (raw: string) => void; acceptRecord: (file: FileRecord) => void; removeDraft: (id: string) => void;
-  save: (background?: boolean) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; patch: (id: string, changes: Record<string, unknown>) => Promise<void>;
+  save: (background?: boolean) => Promise<void>; saveEntity: (id: string, background?: boolean) => Promise<boolean>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; patch: (id: string, changes: Record<string, unknown>) => Promise<void>;
   saveDocument: (id: string, background?: boolean) => Promise<boolean>;
   reconcileDocument: (id: string) => Promise<void>; adoptDocumentRevision: (id: string) => void;
   canEditSourceDraft: boolean; canEditTaskDraft: boolean; draftParseError: boolean;
@@ -78,13 +79,14 @@ export interface WorkspaceController {
   patchDocumentDraft: (changes: Record<string, unknown>) => void;
   canManageLifecycle: (id: string) => boolean;
   toggleChecklist: (line: number) => Promise<void>; wikiLink: (target: string) => void;
-  openCreate: (status: Status | undefined | null, origin?: ViewConfig, initial?: { assignee?: string; due?: string; watch?: boolean; priority?: string }) => void; acceptCreated: (file: FileRecord) => void;
+  openCreate: (status: Status | undefined | null, origin?: ViewConfig, initial?: CreationInitial) => void; acceptCreated: (file: FileRecord) => void;
   lifecycle: (file: FileRecord, action: 'archive' | 'restore' | 'delete') => Promise<void>;
   useView: (view: ViewConfig, saved?: SavedView) => void; acceptView: (view: SavedView) => void; clearView: () => void;
   loadContext: () => Promise<void>; refresh: () => Promise<void>;
 }
 const defaults: Preferences = { entity: 'work_item', layout: 'list', project: '', priority: '', status: '', sort: '', sortDirection: 'asc', archived: 'exclude', editorWidth: 43, groupBy: 'status', conditions: [] };
 const documentSaveFlights = new Map<string, Promise<boolean>>();
+const entitySaveFlights = new Map<string, Promise<boolean>>();
 function message(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function parseDraftSource(file: FileRecord | undefined, raw: string, configuration: ProtocolConfiguration): { entity?: Entity; diagnostics: Diagnostic[] } {
   try {
@@ -130,8 +132,13 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     void onAccessFailure().catch(() => {});
   }, [client, queryKey, onAccessFailure]);
   const handleAccessError = useCallback((error: unknown) => {
-    if (error instanceof ApiError && [401, 403].includes(error.status)) blockAccess(error);
-  }, [blockAccess]);
+    if (!(error instanceof ApiError)) return;
+    if (error.status === 401) blockAccess(error);
+    // A capability-specific 403 does not revoke workspace read access. Refresh
+    // membership and the authoritative snapshot; actual revocation still flows
+    // through the workspace query's access-error handling above.
+    else if (error.status === 403) void onAccessFailure().catch(() => {});
+  }, [blockAccess, onAccessFailure]);
   const graphSource = useCallback<GraphSource>(async (input, signal) => {
     try { return await api.graph(input, signal); }
     catch (error) {
@@ -200,6 +207,8 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const [requestDiagnostics, setRequestDiagnostics] = useState<Diagnostic[]>([]);
   const rejectedTaskFieldsRef = useRef<Record<string, Record<string, Diagnostic[]>>>({});
   const autosaving = useRef(false);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const [rejectedTaskFields, setRejectedTaskFields] = useState(rejectedTaskFieldsRef.current);
   const [deleteTarget, setDeleteTarget] = useState<FileRecord | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -484,33 +493,59 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
       setError(''); setRequestDiagnostics([]);
     } catch (cause) { reportError(cause); }
   }
+  function saveEntity(id: string, background = false): Promise<boolean> {
+    if (!session.isCurrent()) return Promise.resolve(false);
+    const flightKey = JSON.stringify([session.scope, id]);
+    const existing = entitySaveFlights.get(flightKey);
+    if (existing) return existing;
+    const run = async (): Promise<boolean> => {
+      const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
+      const file = current?.files.find(candidate => candidate.id === id);
+      const savingDraft = session.drafts.getSnapshot()[id];
+      if (!current || !file || !savingDraft) return false;
+      if (file.entity.entity === 'document') return saveDocument(id, background);
+      // Service field drafts keep their explicit PATCH receipt flow; never replay them as a raw native write.
+      if (background && readProjectTaskDraft(savingDraft)) return false;
+      if (busy || (!background && autosaving.current) || !options.canWrite || writesBlocked || accessError || query.isError || command.pending || command.unknownCommand || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || current.configurationErrors.some(issue => issue.severity === 'error') || file.entity.archived || current.unsupportedFiles.some(source => source.id === file.id || source.path === file.path)) return false;
+      const surface = selectedIdRef.current === id;
+      if (savingDraft.revision !== file.revision) {
+        if (surface) { setRebaseReviewed(false); setConflict({ id, current: file, local: savingDraft.raw }); }
+        return false;
+      }
+      const parsed = parseDraftSource(file, savingDraft.raw, current.configuration);
+      const diagnostics = [...(file.entity.entity === 'work_item' ? Object.values(rejectedTaskFieldsRef.current[file.id] || {}).flat() : []), ...parsed.diagnostics, ...(parsed.entity ? validateDraftSource(file, savingDraft.raw, parsed.entity, current.files, current.configuration) : [])];
+      if (diagnostics.some(issue => issue.severity === 'error')) {
+        if (surface) { setRequestDiagnostics(diagnostics); setError('Repair the Markdown draft before saving.'); }
+        return false;
+      }
+      if (!background) { autosaving.current = true; setBusy(file.id); }
+      if (surface) { setError(''); setRequestDiagnostics([]); }
+      const saving = savingDraft.raw;
+      try {
+        const saved = await api.save(file.id, saving, savingDraft.revision);
+        acceptRecord(saved);
+        setDrafts(old => { const next = { ...old }; if (next[file.id]?.raw === saving) delete next[file.id]; else if (next[file.id]) next[file.id] = { ...next[file.id], revision: saved.revision }; return next; });
+        if (!background && selectedIdRef.current === file.id) setNotice(`${saved.id} saved to Markdown`);
+        return !session.drafts.getSnapshot()[file.id];
+      } catch (e) {
+        if (selectedIdRef.current === file.id) await handleError(e, file.id, saving);
+        return false;
+      } finally {
+        if (!background) { autosaving.current = false; setBusy(null); }
+      }
+    };
+    const pending = run().finally(() => entitySaveFlights.delete(flightKey));
+    entitySaveFlights.set(flightKey, pending);
+    return pending;
+  }
   async function save(background = false) {
-    if (selected?.entity.entity === 'document' && !unsupported) { await saveDocument(selected.id, background); return; }
-    if (!selected || unsupported || busy || autosaving.current || !options.canWrite || writesBlocked || accessError || query.isError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || command.pending || command.unknownCommand) return;
-    const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
-    const file = current?.files.find(file => file.id === selected.id);
-    const savingDraft = session.drafts.getSnapshot()[selected.id];
-    if (!current || !file || !savingDraft || file.entity.archived || current.configurationErrors.some(issue => issue.severity === 'error') || current.unsupportedFiles.some(source => source.id === file.id || source.path === file.path)) return;
-    if (savingDraft.revision !== file.revision) { setRebaseReviewed(false); setConflict({ id: file.id, current: file, local: savingDraft.raw }); return; }
-    const parsed = parseDraftSource(file, savingDraft.raw, current.configuration);
-    const diagnostics = [...(file.entity.entity === 'work_item' ? Object.values(rejectedTaskFieldsRef.current[file.id] || {}).flat() : []), ...parsed.diagnostics, ...(parsed.entity ? validateDraftSource(file, savingDraft.raw, parsed.entity, current.files, current.configuration) : [])];
-    if (diagnostics.some(issue => issue.severity === 'error')) { setRequestDiagnostics(diagnostics); setError('Repair the Markdown draft before saving.'); return; }
-    autosaving.current = true;
-    if (!background) setBusy(file.id);
-    setError(''); setRequestDiagnostics([]);
-    const saving = savingDraft.raw;
-    try { const saved = await api.save(file.id, saving, savingDraft.revision); acceptRecord(saved); setDrafts(old => { const next = { ...old }; if (next[file.id]?.raw === saving) delete next[file.id]; else if (next[file.id]) next[file.id] = { ...next[file.id], revision: saved.revision }; return next; }); if (!background) setNotice(`${saved.id} saved to Markdown`); }
-    catch (e) { await handleError(e, file.id, saving); }
-    finally { autosaving.current = false; if (!background) setBusy(null); }
+    if (!selected) return;
+    await saveEntity(selected.id, background);
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       if ((event.metaKey || event.ctrlKey) && event.key === 's') { event.preventDefault(); void save(); }
-      const target = event.target as HTMLElement;
-      if (event.key === '/' && !event.metaKey && !event.ctrlKey && !target.isContentEditable && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
-        event.preventDefault();
-        document.querySelector<HTMLInputElement>('[aria-label="Search work items"]')?.focus();
-      }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -633,9 +668,14 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     setRequestDiagnostics([]);
     options.onNavigateEntity(file, anchor);
   }
-  function openCreate(status: Status | undefined | null, origin?: ViewConfig, initial?: { assignee?: string; due?: string; watch?: boolean; priority?: string }) {
+  function openCreate(status: Status | undefined | null, origin?: ViewConfig, initial?: CreationInitial) {
     const current = liveMutationState.current;
-    if (status !== null && (!current.canWrite || current.configurationInvalid || current.busy || current.writesBlocked || current.accessError || current.queryError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()))) return;
+    // Opening the draft is also the recovery entry. Submission keeps its own
+    // durable-request, permission and unknown-result guards in useEntityCreation.
+    if (status !== null && (!current.canWrite || current.configurationInvalid || current.busy || current.accessError || current.queryError)) {
+      setError(options.en ? 'Cannot open creation while permissions, configuration, workspace loading or an active operation block access. Resolve the displayed issue and try again.' : '当前权限、配置、工作区读取或进行中的操作阻止打开创建页。请处理页面提示后重试。');
+      return;
+    }
     if (status !== null) {
       const scope = { kind: origin ? origin.entity || 'work_item' : prefs.entity || 'work_item', project: options.projectId || (origin ? origin.project || '' : prefs.project), ...(!options.projectId && options.taskContext?.scope === 'mine' && options.taskContext.actorId ? { assignee: options.taskContext.actorId } : {}), ...(!options.projectId && options.taskContext?.scope === 'important' ? { watch: true } : {}), ...(origin?.group_by === 'priority' && typeof origin.filter?.priority === 'string' ? { priority: origin.filter.priority } : {}), ...initial };
       if (scope.kind === 'work_item' && options.onCreatePage) {
@@ -646,7 +686,8 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     }
     setCreateStatus(status); setError(''); setRequestDiagnostics([]);
   }
-  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, renderContextMenu: renderCollectionContextMenu, en: options.en, canEdit, canLifecycle: canManageLifecycle, onLifecycle: (id, action) => { const file = files.find(candidate => candidate.id === id); if (file) void lifecycle(file, action); }, onRequestDelete: id => { const file = files.find(candidate => candidate.id === id); if (file && canManageLifecycle(id)) { setDeleteTarget(file); setDeleteConfirmation(''); setError(''); setRequestDiagnostics([]); } }, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite && !configurationInvalid && !busy && !writesBlocked && !accessError && !query.isError ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
+  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, renderContextMenu: renderCollectionContextMenu, en: options.en, canEdit, canLifecycle: canManageLifecycle, onLifecycle: (id, action) => { const file = files.find(candidate => candidate.id === id); if (file) void lifecycle(file, action); }, onRequestDelete: id => { const file = files.find(candidate => candidate.id === id); if (file && canManageLifecycle(id)) { setDeleteTarget(file); setDeleteConfirmation(''); setError(''); setRequestDiagnostics([]); } }, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite && !configurationInvalid && !busy && !accessError && !query.isError ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
+  viewProps.renderPerson = (userId, file) => createElement(HumanIdentity, { userId, projectId: file.entity.entity === 'project' ? file.id : file.entity.project, size: 20 });
   async function lifecycle(file: FileRecord, action: 'archive' | 'restore' | 'delete') {
     if (!canManageLifecycle(file.id)) return;
     setBusy(file.id); setError(''); setRequestDiagnostics([]);
@@ -735,7 +776,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     creationOutsideScope: creationFeedback?.message === notice ? creationFeedback.id : null,
     deleteTarget, setDeleteTarget, deleteConfirmation, setDeleteConfirmation, conflict, setConflict, rebaseReviewed, setRebaseReviewed,
     createStatus, creationScope, saveViewOpen, setSaveViewOpen, activeView, context, setContext, activity, canWrite: sourcePermission && selectedTaskAttempt?.phase !== 'unknown' && selectedTaskAttempt?.phase !== 'observed',
-    select, updateDraft, acceptRecord, removeDraft, save, saveDocument, reconcileDocument, adoptDocumentRevision, canEdit, canManageLifecycle, patch, toggleChecklist, wikiLink,
+    select, updateDraft, acceptRecord, removeDraft, save, saveEntity, saveDocument, reconcileDocument, adoptDocumentRevision, canEdit, canManageLifecycle, patch, toggleChecklist, wikiLink,
     canEditSourceDraft, canEditTaskDraft, draftParseError, patchTaskDraft, toggleTaskChecklist, patchDocumentDraft,
     openCreate, acceptCreated, lifecycle, useView, acceptView, clearView, loadContext, refresh,
   };

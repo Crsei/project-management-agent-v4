@@ -8,13 +8,14 @@ import { MemberDirectoryView } from "@/views/pm/member-directory"
 import { InvitationStatus } from "@/views/pm/people-views"
 import type { ControlledContactCopyReceipt, ControlledInvitation, ControlledMember, MemberDirectoryInteraction, MemberDirectorySort } from "@/views/pm/people-controlled-contracts"
 import { usePmCommand, usePmService } from "./pm-service"
-import { memberViews, resolveVariant, usePmDisplaySetting } from "./pm-display-settings"
+import { memberViews, resolveVariant } from "./pm-display-settings"
 import { ServiceGuard, CommandNotice, useText, allowed, queryData, useDraftState } from "./pm-ui"
 import { useMemberDirectory, useMemberInvitations } from "./pm-member-hooks"
 import { directoryMemberRecord, invitationRecord, memberRoleValues, visibleDirectoryMembers } from "./pm-member-model"
 import { matchesInvitationConditions } from "@/views/pm/member-directory-filters"
 import { MemberAccessForm, MemberInvitationForm, MemberInvitationOperationDialog, MemberSelfProfileEditor, type InvitationOperation } from "./pm-member-editors"
 import { RadixSelect } from "@/components/ui/radix-select"
+import { PeoplePersonDetail } from "./people-person-detail"
 
 export function ServiceMembers() {
   const { workspace, actor } = usePmService()
@@ -23,8 +24,9 @@ export function ServiceMembers() {
   const invitationQuery = useMemberInvitations()
   const command = usePmCommand()
   const [searchParams, setSearchParams] = useSearchParams()
-  const configuredView = usePmDisplaySetting(workspace?.id, "memberView")
-  const variant = resolveVariant(searchParams.get("view"), configuredView, memberViews)
+  const variant = resolveVariant(searchParams.get("view"), "member1", memberViews)
+  const personId = searchParams.get("person")
+  const fullProfile = !!personId && searchParams.get("presentation") !== "drawer"
   const [editor, setEditor] = useDraftState<{ userId: string | null; mode: "role" | "capabilities" } | null>("members-directory", "accessEditor", null)
   const profileOpen = searchParams.get("profile") === "me"
   const inviteOpen = searchParams.get("panel") === "invitations"
@@ -38,7 +40,7 @@ export function ServiceMembers() {
   const [operation, setOperation] = useDraftState<InvitationOperation | null>("members-directory", "invitationOperation", null)
   const [copyReceipt, setCopyReceipt] = useState<ControlledContactCopyReceipt | null>(null)
   const [interaction, setInteraction] = useDraftState<MemberDirectoryInteraction>("members-directory", "interaction", {
-    query: "", roleFilter: null, activeFilter: "all", sort: "name", display: "grid",
+    query: "", roleFilter: null, activeFilter: "all", sort: "name", display: "list",
     comfortable: false, hiddenColumns: [], tab: "members", selectedIds: [],
     selectedId: null, detailOpen: false, conditions: [],
   })
@@ -119,7 +121,9 @@ export function ServiceMembers() {
   </div>
   return <ServiceGuard>
     <CommandNotice />
-    <MemberDirectoryView
+    {personId && <PeoplePersonDetail key={personId} userId={personId} onEditSelf={() => setPanel("profile", "me")} onManage={member => { if (canManage && !locked) setEditor({ userId: member.userId, mode: "capabilities" }) }} />}
+    {!fullProfile && <MemberDirectoryView
+      memberInspector={null}
       interactive
       embedded
       variant={variant}
@@ -145,7 +149,13 @@ export function ServiceMembers() {
       }}
       actions={{
         setInteraction,
-        memberOpen: member => { if (canOpenMember(member)) setInteraction(previous => ({ ...previous, selectedId: member.membershipId, detailOpen: true })) },
+        memberOpen: member => {
+          if (!canOpenMember(member)) return
+          const next = new URLSearchParams(searchParams)
+          next.set("person", member.userId)
+          next.set("presentation", "drawer")
+          setSearchParams(next)
+        },
         memberWorkload: member => {
           const current = currentMember(member)
           if (!current || !canOpenMember(current)) return
@@ -184,15 +194,15 @@ export function ServiceMembers() {
           <InvitationRecords items={invitationItems} loading={invitationQuery.isPending} error={invitationQuery.error} refresh={() => { void invitationQuery.refetch() }} disabled={locked || invitationBlocked} enabled={smtpEnabled} onOperation={(invitation, kind) => setOperation({ invitation, kind })} />
         </> : <p role="status">{invitationNotice}</p>}</DialogBody>
       </DialogContent></Dialog>}
-      roleEditor={<Dialog open={editor !== null && canManage} onOpenChange={open => { if (!open) setEditor(null) }}><DialogContent className="max-w-2xl">
+    />}
+    <Dialog open={editor !== null && canManage} onOpenChange={open => { if (!open) setEditor(null) }}><DialogContent className="max-w-2xl">
         <DialogTitle>{editor?.mode === "role" ? t("角色模板", "Role template") : t("成员能力与访问", "Member capabilities and access")}</DialogTitle>
         <DialogDescription>{t("仅当前工作区管理员可修改；版本冲突与未知结果保留草稿。", "Only current workspace administrators can make changes. Conflicts and unknown outcomes retain the draft.")}</DialogDescription>
         <DialogBody className="space-y-4"><CommandNotice />
           {editor?.userId && <div className="flex gap-2"><Button variant={editor.mode === "role" ? "secondary" : "outline"} disabled={locked} onClick={() => setEditor({ ...editor, mode: "role" })}>{t("角色模板", "Role template")}</Button><Button variant={editor.mode === "capabilities" ? "secondary" : "outline"} disabled={locked} onClick={() => setEditor({ ...editor, mode: "capabilities" })}>{t("编辑独立能力", "Edit capabilities")}</Button></div>}
           {editor && (!editor.userId || selectedEditor?.access) && <MemberAccessForm key={`${actor?.id}:${workspace?.id}:${editor.userId ?? "new"}:${editor.mode}`} member={selectedEditor} all={query.data?.members ?? []} mode={editor.mode} disabled={!canManage || readBlocked} />}
         </DialogBody>
-      </DialogContent></Dialog>}
-    />
+    </DialogContent></Dialog>
     <Dialog open={profileOpen} onOpenChange={open => setPanel("profile", open ? "me" : null)}><DialogContent>
       <DialogTitle>{t("本人资料", "My profile")}</DialogTitle><DialogDescription>{t("仅修改本人，资料版本跨工作区共享。2FA 暂无可信身份源，不提供虚假开关。", "Edit only your own profile; its version is shared across workspaces. No trusted 2FA source is configured, so no simulated switch is offered.")}</DialogDescription>
       <DialogBody className="space-y-4"><CommandNotice />

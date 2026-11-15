@@ -124,6 +124,10 @@ export function PmUserMenu({ collapsed = false, placement = "sidebar" }: { colla
               <UserRound aria-hidden="true" />
               {t("查看个人资料", "View profile")}
             </PopoverClose>
+            <PopoverClose render={<Link to={`${base}/onboarding`} data-navigation-close className={styles.item} />}>
+              <UserRound aria-hidden="true" />
+              {t("开始使用引导", "Getting started guide")}
+            </PopoverClose>
           </>
         )}
         <div className={styles.separator} />

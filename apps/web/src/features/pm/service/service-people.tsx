@@ -23,6 +23,10 @@ function PeopleWorkspace() {
     next.set("tab", value)
     next.delete("panel")
     next.delete("profile")
+    next.delete("person")
+    next.delete("presentation")
+    next.delete("team")
+    next.delete("section")
     setParams(next)
   }
   return <section className={`${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`} aria-label={t("成员与团队", "Members and teams")} data-pm-people>

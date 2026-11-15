@@ -34,7 +34,7 @@ test('directory source reads arbitrary Markdown recursively without changing sou
 });
 
 test('directory source rejects traversal, links, private trees and non-Markdown paths', () => {
-  for (const relative of ['../secret.md', '/secret.md', 'C:\\secret.md', 'folder/../secret.md', 'folder//secret.md', '.pm/core/secret.md', '.ssh/secret.md', 'folder\\secret.md', 'note.txt'])
+  for (const relative of ['../secret.md', '/secret.md', 'C:\\secret.md', 'folder/../secret.md', 'folder//secret.md', '.pm/core/secret.md', '.dovspace/.pm/core/secret.md', '.ssh/secret.md', 'folder\\secret.md', 'note.txt'])
     assert.throws(() => assertDocumentRelativePath(relative), code('document_source_path_forbidden'));
   const root = mkdtempSync(path.join(temporaryRoot, 'pm-document-links-'));
   try {

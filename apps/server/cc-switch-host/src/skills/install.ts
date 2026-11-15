@@ -239,13 +239,14 @@ function cleanupStaging(staged: StagedTarget[]): void {
  * then commit metadata. A failed swap restores the previous directories so a
  * metadata failure cannot leave a native copy looking like a user edit.
  */
-function updateManagedSkillFiles<T>(
+export function updateManagedSkillFiles<T>(
   source: string,
   ssot: string,
   directory: string,
   deployments: Array<[string, PiSkillDeployment]>,
   nativeTargets: string[],
   commit: () => T,
+  beforeSwap: () => void = () => undefined,
 ): T {
   validateSyncSourceDir(source, directory);
   const targets: Array<{ destination: string; symlink: boolean }> = [
@@ -288,6 +289,7 @@ function updateManagedSkillFiles<T>(
   let changed = 0;
   let preserveStaging = false;
   try {
+    beforeSwap();
     for (const { destination, staging } of staged) {
       if (pathExists(destination) || isSymlink(destination)) {
         renameSync(destination, path.join(staging, "old"));
@@ -326,6 +328,7 @@ function updateManagedSkillFiles<T>(
 export async function updateSkill(db: Database, skillId: string): Promise<InstalledSkill> {
   let skill = db.skills.getInstalled(skillId);
   if (skill === undefined) throw new AppError("CONFIG", `Skill not found: ${skillId}`);
+  if (skill.source) throw new AppError("INVALID_INPUT", "Bundled Dovspace Skills update only from the shipped catalog; use the bundled Skills installer.");
   skill = withNativePresence(skill);
 
   // Backup source, remove and copy all join `directory`; validate before any of them.

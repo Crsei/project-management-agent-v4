@@ -6,12 +6,12 @@ import type { SqlExecutor } from '../../application/src/ports.ts';
 import { LocalBlobStore, blobKeyDigest, type BlobScope, type BlobStore } from './blobs.ts';
 import { readStorageBinding } from './blob-storage-binding.ts';
 
-export type ProjectBlobMount = { workspaceId: string; projectId: string; storageId: string; root: string; attachmentsPath: string };
+export type ProjectBlobMount = { workspaceId: string; projectId: string; storageId: string; root: string; storageRoot: string; attachmentsPath: string };
 export type ProjectBlobResolver = (workspaceId: string, projectId: string) => ProjectBlobMount | null | Promise<ProjectBlobMount | null>;
 const markerSchema = z.strictObject({ formatVersion: z.literal(1), storageId: z.uuid(), workspaceId: z.uuid(), projectId: z.string().min(1) });
 function markerFor(mount: ProjectBlobMount) { return markerSchema.parse({ formatVersion: 1, storageId: mount.storageId, workspaceId: mount.workspaceId, projectId: mount.projectId }); }
 function providerFor(mount: ProjectBlobMount): LocalBlobStore {
-  if (resolve(mount.root, '.pm/attachments') !== mount.attachmentsPath || resolve(mount.root) !== mount.root) throw new DomainError('blob_storage_binding_mismatch', 'Invalid project attachment mount', 503);
+  if (resolve(mount.storageRoot, '.pm/attachments') !== mount.attachmentsPath || resolve(mount.storageRoot) !== mount.storageRoot) throw new DomainError('blob_storage_binding_mismatch', 'Invalid project attachment mount', 503);
   return new LocalBlobStore(mount.attachmentsPath);
 }
 async function checkMarker(provider: LocalBlobStore, mount: ProjectBlobMount): Promise<void> {

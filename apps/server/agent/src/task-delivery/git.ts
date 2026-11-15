@@ -54,7 +54,7 @@ export async function verifyWorktree(value: TaskCodeDelivery): Promise<void> {
   ]);
   if (root.trim() !== b.directory || branch.trim() !== b.branch || common.trim() !== b.commonDirectory || remote.trim() !== b.remote || push.trim() !== b.remote) throw new DeliveryError('repository_changed', '仓库、分支或远端已改变，拒绝继续。');
 }
-const sensitive = /(^|\/)(?:\.git|\.pm|\.local|\.env(?:\..*)?|credentials|secrets?|id_rsa|id_ed25519)(\/|$)|\.(?:pem|key|p12)$/i;
+const sensitive = /(^|\/)(?:\.git|\.pm|\.dovspace|\.local|\.env(?:\..*)?|credentials|secrets?|id_rsa|id_ed25519)(\/|$)|\.(?:pem|key|p12)$/i;
 export async function readTree(value: TaskCodeDelivery, comparisonHead?: string): Promise<DeliveryTree> {
   await verifyWorktree(value);
   const cwd = binding(value).directory;

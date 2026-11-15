@@ -1,14 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lookup } from 'node:dns/promises';
 import { createServer, request, type ClientRequest, type IncomingMessage, type ServerResponse } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
-import { StringDecoder } from 'node:string_decoder';
 import type { BenchmarkConfig } from '../benchmark.config.ts';
 import type { BenchEvent, Budget, FixtureHandle, FixtureTarget } from '../schemas/types.ts';
 import { digest } from '../fixtures/snapshot.ts';
 import { pmAutomationEventSchema } from '../../../packages/contracts/src/automation-pm.ts';
 import { verifyAutomationServiceRequest } from '../../../packages/infrastructure/src/automation-execution-client.ts';
+import { createProviderTransport } from './provider-transport.ts';
+import type { NativeAccountRelay } from './native-account.ts';
 
 export type Broker = { events: BenchEvent[]; close(): Promise<void>; armResponseLoss(targetId: string): void };
 type NativeToolRequest = { name?: string; operationId?: string; threadId?: string; generationId?: string; arguments?: Record<string, unknown>; target?: { workspaceId?: string; projectId?: string | null } };
@@ -20,8 +19,12 @@ export function publicAddress(address: string): boolean {
   const value = address.toLowerCase();
   return isIP(value) === 6 && /^[23]/.test(value) && !value.startsWith('2001:db8:');
 }
-export function boundedProviderRequest(input: Record<string, unknown>): boolean {
-  const allowed = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'reasoning', 'store', 'stream', 'include', 'prompt_cache_key', 'client_metadata', 'text', 'temperature', 'top_p', 'max_output_tokens', 'truncation', 'metadata', 'safety_identifier', 'service_tier'];
+export function boundedProviderRequest(input: Record<string, unknown>, api: BenchmarkConfig['providerApi'] = 'openai-responses'): boolean {
+  const allowed = api === 'openai-completions'
+    ? ['model', 'messages', 'tools', 'tool_choice', 'parallel_tool_calls', 'reasoning_effort', 'store', 'stream', 'stream_options', 'temperature', 'top_p', 'max_tokens', 'max_completion_tokens', 'service_tier', 'response_format', 'user', 'metadata']
+    : ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'reasoning', 'store', 'stream', 'include', 'prompt_cache_key', 'prompt_cache_retention', 'client_metadata', 'text', 'temperature', 'top_p', 'max_output_tokens', 'truncation', 'metadata', 'safety_identifier', 'service_tier'];
+  if (api === 'openai-codex-responses') allowed.push('access_programs', 'stream_options');
+  if (api === 'openai-codex-responses' && input.access_programs !== undefined && (!input.access_programs || typeof input.access_programs !== 'object' || Object.keys(input.access_programs).some(key => key !== 'cyber') || (input.access_programs as Record<string, unknown>).cyber !== 'standard')) return false;
   if (Object.keys(input).some(key => !allowed.includes(key)) || input.store === true || input.service_tier !== undefined && input.service_tier !== 'default') return false;
   if (Array.isArray(input.tools) && input.tools.some(value => !value || typeof value !== 'object' || !['function', 'custom'].includes(String((value as Record<string, unknown>).type)))) return false;
   function bounded(value: unknown): boolean {
@@ -33,10 +36,10 @@ export function boundedProviderRequest(input: Record<string, unknown>): boolean 
   }
   return bounded(input);
 }
-export function authoritativeProviderUsage(frame: Record<string, unknown>, streaming: boolean): Record<string, unknown> | undefined {
-  if (streaming && !['response.completed', 'response.failed', 'response.incomplete'].includes(String(frame.type))) return undefined;
+export function authoritativeProviderUsage(frame: Record<string, unknown>, streaming: boolean, api: BenchmarkConfig['providerApi'] = 'openai-responses'): Record<string, unknown> | undefined {
+  if (streaming && (api === 'openai-completions' ? !Array.isArray(frame.choices) || frame.choices.length !== 0 : !['response.completed', 'response.failed', 'response.incomplete'].includes(String(frame.type)) && !(api === 'openai-codex-responses' && frame.type === 'response.done'))) return undefined;
   const response = frame.response as Record<string, unknown> | undefined;
-  const usage = frame.usage ?? response?.usage;
+  const usage = api === 'openai-codex-responses' && frame.type === 'response.done' ? response?.usage : frame.usage ?? response?.usage;
   return usage && typeof usage === 'object' ? usage as Record<string, unknown> : undefined;
 }
 async function bodyOf(incoming: IncomingMessage): Promise<Buffer> {
@@ -45,11 +48,12 @@ async function bodyOf(incoming: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 function deny(response: ServerResponse, status = 403): void { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify({ error: 'benchmark_capability_denied' })); }
-export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle, options: { runId: string; taskId?: string; budget: Budget; allowedTools?: string[]; allowedTargets?: FixtureTarget[]; providerToken: string; socketPath: string; agentSocketPath?: string; agentAccessToken?: string; pmServiceSecret?: string }): Promise<Broker> {
+export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle, options: { runId: string; taskId?: string; budget: Budget; allowedTools?: string[]; allowedTargets?: FixtureTarget[]; providerToken: string; socketPath: string; agentSocketPath?: string; agentAccessToken?: string; pmServiceSecret?: string; controlledProviderSocketPath?: string; nativeAccountRelay?: Pick<NativeAccountRelay, 'socketPath' | 'capability' | 'evidence'> }): Promise<Broker> {
   const events: BenchEvent[] = [];
   const allowedTools = new Set(options.allowedTools ?? []), allowedTargets = new Set((options.allowedTargets ?? []).map(target => target.entityId));
-  let calls = 0, tools = 0, nativeTools = 0, reservedCost = 0, settledCost = 0, responseLossTarget: string | null = null, closed = false, costBreached = false;
-  let pinnedSettingsHash: string | null = null;
+  const nativePmToken = /^pm_v4_session=([A-Za-z0-9_-]{43,512})$/.exec(handle.pm.token)?.[1];
+  const pmAuthorization = nativePmToken ? `Bearer ${nativePmToken}` : undefined;
+  let tools = 0, responseLossTarget: string | null = null, closed = false, pmObservationComplete = true;
   const active = new Set<ClientRequest>();
   const originals = new Map<string, { targetId: string | null; revision: string | null; receiptIdentity: string | null; sessionId: string }>();
   const deadline = Date.now() + options.budget.maxDurationMinutes * 60_000;
@@ -57,6 +61,7 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
     const event: BenchEvent = { id: randomUUID(), timestamp: new Date().toISOString(), runId: options.runId, type, source: 'transport', data, ...(options.taskId ? { taskId: options.taskId } : {}), ...linkage };
     events.push(event); return event;
   }
+  const provider = createProviderTransport(config, handle, { budget: options.budget, providerToken: options.providerToken, deadline, clockId: `broker:${options.runId}`, ...(options.controlledProviderSocketPath ? { controlledProviderSocketPath: options.controlledProviderSocketPath } : {}), ...(options.nativeAccountRelay ? { nativeAccountRelay: options.nativeAccountRelay } : {}) }, emit, { authoritativeProviderUsage, boundedProviderRequest, publicAddress });
   const server = createServer((incoming, outgoing) => { void (async () => {
     if (closed || Date.now() >= deadline) { emit('budget_exceeded', { kind: 'duration' }); deny(outgoing, 429); return; }
     const route = new URL(incoming.url ?? '/', 'http://broker.invalid');
@@ -94,7 +99,7 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
       const original = originals.get(operationId);
       if (!['GET', 'POST'].includes(incoming.method ?? '') || !/^[a-f0-9-]{36}$/.test(operationId) || !original || !original.targetId || !allowedTargets.has(original.targetId) || !options.agentSocketPath || !options.agentAccessToken) { deny(outgoing); return; }
       const requesterSessionId = handle.runtime?.activeSessionId ?? null, requesterGenerationId = handle.runtime?.activeGenerationId ?? null;
-      if (!requesterSessionId || !requesterGenerationId || options.taskId === 'L02' && requesterSessionId === original.sessionId) { deny(outgoing); return; }
+      if (!requesterSessionId || !requesterGenerationId || ['L02', 'D04'].includes(options.taskId ?? '') && requesterSessionId === original.sessionId) { deny(outgoing); return; }
       const upstream = request({ socketPath: options.agentSocketPath, path: `/api/pm-tools/calls/${operationId}/reconcile`, method: 'POST', headers: { authorization: `Bearer ${options.agentAccessToken}`, cookie: handle.pm.token, 'content-type': 'application/json' } }, response => {
         const chunks: Buffer[] = [];
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -111,136 +116,42 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
       active.add(upstream); upstream.once('close', () => active.delete(upstream));
       upstream.once('error', () => deny(outgoing, 502)); upstream.end('{}'); return;
     }
-    if (route.pathname.startsWith('/provider/')) {
-      if (!config.providerEndpoint || !config.providerApiKey || incoming.headers.authorization !== `Bearer ${options.providerToken}` || incoming.method !== 'POST' || route.pathname !== '/provider/v1/responses') { deny(outgoing); return; }
-      const input = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
-      if (input.model !== config.model || typeof input.model !== 'string') { emit('safety_violation', { kind: 'fixed-model-mismatch' }); deny(outgoing); return; }
-      if (input.service_tier !== undefined && input.service_tier !== null && !['auto', 'default'].includes(String(input.service_tier))) { emit('safety_violation', { kind: 'fixed-service-tier-mismatch' }); deny(outgoing); return; }
-      input.service_tier = 'default';
-      const reasoning = input.reasoning as Record<string, unknown> | undefined, text = input.text as Record<string, unknown> | undefined;
-      const expected = config.modelOptions;
-      if (expected.reasoningEffort !== undefined && reasoning?.effort !== expected.reasoningEffort || expected.reasoningSummary !== undefined && reasoning?.summary !== expected.reasoningSummary || expected.verbosity !== undefined && text?.verbosity !== expected.verbosity || expected.temperature !== undefined && String(input.temperature) !== String(expected.temperature) || expected.topP !== undefined && String(input.top_p) !== String(expected.topP)) { emit('safety_violation', { kind: 'declared-model-options-mismatch' }); deny(outgoing); return; }
-      const settings = { reasoning: input.reasoning ?? null, temperature: input.temperature ?? null, topP: input.top_p ?? null, text: input.text ?? null, serviceTier: 'default' }, settingsHash = digest(settings);
-      if (pinnedSettingsHash && settingsHash !== pinnedSettingsHash) { emit('safety_violation', { kind: 'fixed-model-settings-mismatch' }); deny(outgoing); return; }
-      if (!pinnedSettingsHash) { pinnedSettingsHash = settingsHash; if (handle.runtime) handle.runtime.effectiveModelSettingsHash = settingsHash; emit('provider_settings', { settingsHash, settings }); }
-      if (Array.isArray(input.tools)) {
-        const removedTypes = input.tools.filter(value => value && typeof value === 'object' && !['function', 'custom'].includes(String((value as Record<string, unknown>).type))).map(value => String((value as Record<string, unknown>).type));
-        if (removedTypes.length) emit('provider_tools_restricted', { removedTypes, reason: 'Hosted tools are outside the fixed local-tool permission and cost boundary' });
-        input.tools = input.tools.filter(value => value && typeof value === 'object' && ['function', 'custom'].includes(String((value as Record<string, unknown>).type)));
-      }
-      if (!boundedProviderRequest(input)) { emit('safety_violation', { kind: 'unbounded-provider-input' }); deny(outgoing); return; }
-      if (costBreached) { emit('budget_exceeded', { kind: 'observed-provider-cost' }); deny(outgoing, 429); return; }
-      if (++calls > options.budget.maxModelCalls) { emit('budget_exceeded', { kind: 'model-calls', calls }); deny(outgoing, 429); return; }
-      const requestNumber = calls, requestId = randomUUID();
-      let reservation = 0;
-      if (options.budget.maxCostUsd !== null) {
-        if (!config.prices) { emit('budget_exceeded', { kind: 'cost-unobservable' }); deny(outgoing, 429); return; }
-        reservation = ((body.length * 4 + 1024) * config.prices.inputPerMillion + config.prices.maxOutputTokens * config.prices.outputPerMillion) / 1_000_000;
-        if (settledCost + reservedCost + reservation > options.budget.maxCostUsd) { emit('budget_exceeded', { kind: 'cost', reservedCost, settledCost }); deny(outgoing, 429); return; }
-        reservedCost += reservation;
-        input.max_output_tokens = Math.min(typeof input.max_output_tokens === 'number' ? input.max_output_tokens : config.prices.maxOutputTokens, config.prices.maxOutputTokens);
-      }
-      const endpoint = new URL(config.providerEndpoint);
-      const addresses = await lookup(endpoint.hostname, { all: true });
-      if (!addresses.length || addresses.some(value => !publicAddress(value.address))) { emit('safety_violation', { kind: 'private-provider-address' }); deny(outgoing); return; }
-      const selected = addresses[0]!;
-      const suffix = route.pathname.replace('/provider/v1', '');
-      const target = new URL(endpoint.toString()); target.pathname = endpoint.pathname.replace(/\/$/, '') + suffix;
-      const payload = Buffer.from(JSON.stringify(input));
-      emit('provider_request', { model: config.model, requestNumber, requestId, reservedCostUsd: options.budget.maxCostUsd === null ? null : reservedCost }, { provider: config.provider, model: config.model });
-      const upstream = httpsRequest(target, { method: 'POST', headers: { authorization: `Bearer ${config.providerApiKey}`, 'content-type': 'application/json', 'content-length': String(payload.length), accept: incoming.headers.accept ?? 'text/event-stream' }, lookup: (_hostname, _options, callback) => callback(null, selected.address, selected.family) }, response => {
-        const streaming = response.headers['content-type']?.includes('text/event-stream') ?? false;
-        outgoing.writeHead(response.statusCode ?? 502, { 'content-type': response.headers['content-type'] ?? 'application/json' });
-        const decoder = new StringDecoder('utf8'), seenTools = new Set<string>();
-        let buffered = '', bytes = 0, rejected = false, usageRecorded = false;
-        function inspectFrame(candidate: string): boolean {
-          if (!candidate.trim() || candidate.trim() === '[DONE]') return true;
-          let parsed: Record<string, unknown>;
-          try { parsed = JSON.parse(candidate) as Record<string, unknown>; }
-          catch { emit('safety_violation', { kind: 'uninspectable-provider-frame', requestId }); return false; }
-          const responseBody = parsed.response as Record<string, unknown> | undefined;
-          const usage = authoritativeProviderUsage(parsed, streaming);
-          if (usage && !usageRecorded) {
-            const inputTokens = usage.input_tokens ?? usage.prompt_tokens ?? null, outputTokens = usage.output_tokens ?? usage.completion_tokens ?? null;
-            const costUsd = config.prices && typeof inputTokens === 'number' && typeof outputTokens === 'number' ? (inputTokens * config.prices.inputPerMillion + outputTokens * config.prices.outputPerMillion) / 1_000_000 : null;
-            if (costUsd !== null && options.budget.maxCostUsd !== null) {
-              reservedCost = Math.max(0, reservedCost - reservation); settledCost += costUsd;
-              if (costUsd > reservation || settledCost + reservedCost > options.budget.maxCostUsd) { costBreached = true; emit('budget_exceeded', { kind: 'observed-provider-cost', settledCost, reservedCost, requestId }); }
-            }
-            emit('provider_usage', { requestId, requestNumber, inputTokens, outputTokens, cacheReadTokens: (usage.input_tokens_details as Record<string, unknown> | undefined)?.cached_tokens ?? null, cacheWriteTokens: null, costUsd });
-            usageRecorded = true;
-          }
-          const items = [parsed.item, ...(Array.isArray(parsed.output) ? parsed.output : []), ...(Array.isArray(responseBody?.output) ? responseBody.output : [])];
-          for (const value of items) {
-            if (!value || typeof value !== 'object') continue;
-            const item = value as { id?: string; call_id?: string; type?: string; name?: string };
-            if (!item.type?.endsWith('_call')) continue;
-            const identity = item.id ?? item.call_id;
-            if (!identity) { emit('safety_violation', { kind: 'tool-call-without-identity', requestId }); return false; }
-            if (seenTools.has(identity)) continue;
-            seenTools.add(identity);
-            if (++nativeTools > options.budget.maxToolCalls) { emit('budget_exceeded', { kind: 'native-tool-calls', nativeTools, requestId }); return false; }
-            emit('native_tool_call', { requestId, callId: identity, toolName: item.name ?? item.type, toolCalls: nativeTools });
-          }
-          return true;
-        }
-        response.on('data', (chunk: Buffer) => {
-          if (rejected) return;
-          bytes += chunk.length;
-          if (bytes > 32 * 1024 * 1024) { rejected = true; upstream.destroy(); outgoing.destroy(); return; }
-          buffered += decoder.write(chunk);
-          if (!streaming) return;
-          let end = buffered.indexOf('\n');
-          while (end >= 0) {
-            const line = buffered.slice(0, end + 1); buffered = buffered.slice(end + 1);
-            if (line.startsWith('data:') && !inspectFrame(line.slice(5))) { rejected = true; upstream.destroy(); outgoing.destroy(); return; }
-            outgoing.write(line.replaceAll(config.providerApiKey!, '[REDACTED]'));
-            end = buffered.indexOf('\n');
-          }
-        });
-        response.on('end', () => {
-          if (rejected) return;
-          buffered += decoder.end();
-          if (buffered && !(streaming ? !buffered.startsWith('data:') || inspectFrame(buffered.slice(5)) : inspectFrame(buffered))) { outgoing.destroy(); return; }
-          outgoing.end(buffered.replaceAll(config.providerApiKey!, '[REDACTED]'));
-          emit('provider_response', { requestNumber, requestId, status: response.statusCode ?? null });
-        });
-      });
-      active.add(upstream); upstream.once('close', () => active.delete(upstream));
-      upstream.setTimeout(Math.max(1, deadline - Date.now()), () => upstream.destroy());
-      upstream.once('error', () => { emit('provider.error', { category: 'transport' }); if (!outgoing.headersSent) deny(outgoing, 502); else outgoing.destroy(); });
-      upstream.end(payload); return;
-    }
+    if (route.pathname.startsWith('/provider/')) { await provider.handle(incoming, outgoing, body, route.pathname); return; }
     const prefix = `/api/v1/workspaces/${handle.workspaceId}`;
     const isResult = route.pathname === `${prefix}/agent-tools/result`;
     const isTool = route.pathname === `${prefix}/agent-tools/call` || isResult;
     const isInternal = incoming.method === 'POST' && route.pathname === '/api/v1/internal/agent-tools/reconcile';
     const isContext = incoming.method === 'POST' && (route.pathname === '/api/v1/agent-contexts/authorize' || route.pathname === `${prefix}/agent-references/resolve`);
     const isRead = incoming.method === 'GET' && (route.pathname.startsWith(prefix + '/') || ['/api/v1/agent-contexts', '/api/v1/agent-tools', '/api/v1/workspaces', '/api/v1/auth/session', '/api/v1/auth/me', '/api/v1/me', '/api/v1/capabilities'].includes(route.pathname));
-    if (!isInternal && incoming.headers.cookie !== handle.pm.token || !isRead && !isContext && !isInternal && !(isTool && incoming.method === 'POST')) { emit('safety_violation', { kind: 'unauthorized-pm-route', method: incoming.method, pathname: route.pathname.slice(0, 256), sessionAuthenticated: incoming.headers.cookie === handle.pm.token }); deny(outgoing); return; }
+    const authorization = incoming.headers.authorization;
+    const isNativePmBearer = pmAuthorization !== undefined && authorization === pmAuthorization;
+    const isAgentBearer = options.agentAccessToken !== undefined && authorization === `Bearer ${options.agentAccessToken}`;
+    const sessionAuthenticated = isNativePmBearer || (authorization === undefined || isAgentBearer) && incoming.headers.cookie === handle.pm.token;
+    if (!isInternal && !sessionAuthenticated || !isRead && !isContext && !isInternal && !(isTool && incoming.method === 'POST')) { emit('safety_violation', { kind: 'unauthorized-pm-route', method: incoming.method, pathname: route.pathname.slice(0, 256), sessionAuthenticated }); deny(outgoing); return; }
     if (isContext && route.pathname.endsWith('/authorize')) {
       const target = JSON.parse(body.toString('utf8')) as { workspaceId?: string; projectId?: string | null };
       if (target.workspaceId !== handle.workspaceId || target.projectId && !Object.values(handle.targets).some(value => value.projectId === target.projectId)) { deny(outgoing); return; }
     }
     let tool: NativeToolRequest | null = null;
     let requestEvent: BenchEvent | null = null;
+    const pmStarted = performance.now();
     if (isTool) {
       tool = JSON.parse(body.toString('utf8')) as NativeToolRequest;
       if (!tool.name || !allowedTools.has(tool.name) || tool.target?.workspaceId !== handle.workspaceId || !tool.operationId) { emit('safety_violation', { kind: 'tool-permission' }); deny(outgoing); return; }
       if (!isResult && ++tools > options.budget.maxToolCalls) { emit('budget_exceeded', { kind: 'tool-calls', tools }); deny(outgoing, 429); return; }
       const args = tool.arguments ?? {};
       const ids = ['id', 'taskId', 'issueId', 'entityId', 'projectId', 'sourceId', 'targetId'].flatMap(key => typeof args[key] === 'string' ? [String(args[key])] : []);
-      const mutation = !tool.name.startsWith('pm_read') && !tool.name.startsWith('pm_query') && tool.name !== 'pm_search' && tool.name !== 'pm_list_workspaces';
+      const mutation = !tool.name.startsWith('pm_read') && !tool.name.startsWith('pm_query') && !['pm_search', 'pm_search_knowledge', 'pm_task_brief', 'pm_list_workspaces'].includes(tool.name);
       if (mutation && (ids.some(value => !allowedTargets.has(value)) || ['done', 'completed', 'canceled', 'cancelled'].includes(String(args.status ?? args.toStatus ?? '')) || tool.name === 'pm_create_task' && (!tool.target?.projectId || !allowedTargets.has(tool.target.projectId)))) { emit('safety_violation', { kind: 'target-permission', toolName: tool.name }); deny(outgoing); return; }
-      requestEvent = emit(isResult ? 'pm_reconcile_request' : 'pm_request', { mutation, action: tool.name === 'pm_create_task' ? 'create' : 'update', workspaceId: handle.workspaceId, projectId: tool.target?.projectId ?? null, targetId: ids.find(value => value.startsWith('TASK-')) ?? ids[0] ?? null, revision: args.revision ?? null, argumentsHash: digest({ name: tool.name, target: tool.target, arguments: tool.arguments }), operationId: tool.operationId, requestNumber: tools }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name });
+      requestEvent = emit(isResult ? 'pm_reconcile_request' : 'pm_request', { mutation, action: tool.name === 'pm_create_task' ? 'create' : 'update', workspaceId: handle.workspaceId, projectId: tool.target?.projectId ?? null, targetId: ids.find(value => value.startsWith('TASK-')) ?? ids[0] ?? null, revision: args.revision ?? null, arguments: args, argumentsHash: digest({ name: tool.name, target: tool.target, arguments: tool.arguments }), operationId: tool.operationId, requestNumber: tools }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name });
     }
-    const upstream = request(handle.pm.baseUrl + route.pathname, { method: incoming.method, headers: { cookie: handle.pm.token, 'content-type': 'application/json', ...(isInternal && incoming.headers.authorization ? { authorization: incoming.headers.authorization } : {}), ...(incoming.headers['x-pm-tool-linkage'] ? { 'x-pm-tool-linkage': incoming.headers['x-pm-tool-linkage'] } : {}) } }, response => {
+    const upstream = request(handle.pm.baseUrl + route.pathname, { method: incoming.method, headers: { cookie: handle.pm.token, 'content-type': 'application/json', ...((isInternal || isNativePmBearer) && authorization ? { authorization } : {}), ...(incoming.headers['x-pm-tool-linkage'] ? { 'x-pm-tool-linkage': incoming.headers['x-pm-tool-linkage'] } : {}) } }, response => {
       const chunks: Buffer[] = [];
       response.on('data', (chunk: Buffer) => chunks.push(chunk));
       response.on('end', () => {
         const payload = Buffer.concat(chunks);
         let result: { status?: string; result?: { receipt?: { targetId?: string | null; revision?: string | null; commandId?: string; operationId?: string }; items?: { id: string; revision?: string }[] } } = {};
-        try { result = JSON.parse(payload.toString('utf8')); } catch { /* Non-JSON PM failures remain transport failures. */ }
+        try { result = JSON.parse(payload.toString('utf8')); } catch { pmObservationComplete = false; }
         if (tool) {
           const receipt = result.result?.receipt;
           const targetId = receipt?.targetId ?? result.result?.items?.[0]?.id ?? String(tool.arguments?.id ?? tool.arguments?.taskId ?? '');
@@ -250,9 +161,9 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
           if (result.status === 'succeeded' && tool.operationId) originals.set(tool.operationId, authority);
           if (tool.name === 'pm_create_task' && result.status === 'succeeded' && receipt?.targetId && tool.target?.projectId && allowedTargets.has(tool.target.projectId)) allowedTargets.add(receipt.targetId);
           if (requestEvent && receipt?.targetId) { requestEvent.data.targetId = receipt.targetId; requestEvent.targetId = receipt.targetId; requestEvent.data.receiptIdentity = receiptIdentity; }
-          emit(isResult ? 'receipt_reconciled' : 'pm_response', { ...authority, resultRevision: revision, status: result.status ?? 'unknown', httpStatus: response.statusCode ?? 502, operationId: tool.operationId }, { sessionId: tool.threadId, threadId: tool.threadId, operationId: tool.operationId, toolName: tool.name, ...(receiptIdentity ? { receiptId: receiptIdentity } : {}) });
+          emit(isResult ? 'receipt_reconciled' : 'pm_response', { ...authority, resultRevision: revision, status: result.status ?? 'unknown', httpStatus: response.statusCode ?? 502, operationId: tool.operationId, rawResult: result, responseBytes: payload.length, durationMs: performance.now() - pmStarted, intervalKind: 'pm', clockId: `broker:${options.runId}`, startedMonotonicMs: pmStarted, endedMonotonicMs: performance.now() }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name, ...(receiptIdentity ? { receiptId: receiptIdentity } : {}) });
           if (responseLossTarget && targetId === responseLossTarget && tool.name === 'pm_update_task' && result.status === 'succeeded' && !isResult) {
-            emit('response_lost', { ...authority, committed: true, operationId: tool.operationId }, { sessionId: tool.threadId, operationId: tool.operationId, toolName: tool.name });
+            emit('response_lost', { ...authority, committed: true, operationId: tool.operationId }, { sessionId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name });
             responseLossTarget = null; outgoing.destroy(); return;
           }
         } else if (isInternal) {
@@ -268,12 +179,20 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
       });
     });
     active.add(upstream); upstream.once('close', () => active.delete(upstream));
-    upstream.once('error', () => { if (!outgoing.headersSent) deny(outgoing, 502); else outgoing.destroy(); });
+    upstream.once('error', () => { pmObservationComplete = false; if (!outgoing.headersSent) deny(outgoing, 502); else outgoing.destroy(); });
     upstream.end(body);
-  })().catch(() => { emit('transport.error', { category: 'broker' }); if (!outgoing.headersSent) deny(outgoing, 502); else outgoing.destroy(); }); });
+  })().catch(() => { pmObservationComplete = false; emit('transport.error', { category: 'broker' }); if (!outgoing.headersSent) deny(outgoing, 502); else outgoing.destroy(); }); });
   const listening = Promise.withResolvers<void>();
   server.once('error', (error: NodeJS.ErrnoException) => listening.reject(new Error(`Private broker socket failed (${error.code ?? 'unknown_error'})`)));
   server.listen(options.socketPath, () => listening.resolve());
   await listening.promise;
-  return { events, armResponseLoss(targetId) { if (!allowedTargets.has(targetId)) throw new Error('Response loss requires an explicitly permitted target'); responseLossTarget = targetId; }, async close() { if (closed) return; closed = true; for (const upstream of active) upstream.destroy(); const ending = Promise.withResolvers<void>(); server.close(() => ending.resolve()); server.closeAllConnections(); await ending.promise; } };
+  return { events, armResponseLoss(targetId) { if (!allowedTargets.has(targetId)) throw new Error('Response loss requires an explicitly permitted target'); responseLossTarget = targetId; }, async close() {
+    if (closed) return;
+    closed = true;
+    const pmComplete = pmObservationComplete && active.size === 0;
+    provider.close();
+    for (const upstream of active) upstream.destroy();
+    const ending = Promise.withResolvers<void>(); server.close(() => ending.resolve()); server.closeAllConnections(); await ending.promise;
+    emit('observation_complete', { providerRequests: provider.complete, pmTools: pmComplete, nativeTools: provider.complete, reason: provider.complete && pmComplete ? 'broker-drained' : 'active-or-incomplete-streams' });
+  } };
 }

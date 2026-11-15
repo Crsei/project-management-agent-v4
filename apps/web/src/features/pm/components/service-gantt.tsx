@@ -58,14 +58,14 @@ function StatusIcon({ item, locale }: { item: ScheduleItem; locale: string }) {
   </span>
 }
 
-function Assignee({ item }: { item: ScheduleItem }) {
+function Assignee({ item, interactive = true }: { item: ScheduleItem; interactive?: boolean }) {
   const name = itemText(item, "assigneeName")
   const id = itemText(item, "assigneeId")
+  const href = itemText(item, "assigneeHref")
   if (!name && !id) return null
   const initials = name.trim().split(/\s+/u).map(part => Array.from(part)[0] ?? "").slice(0, 2).join("").toLocaleUpperCase()
-  return <span className={styles.assignee} title={name || id} aria-label={name || id}>
-    {name ? initials : <UserRound size={11} aria-hidden="true" />}
-  </span>
+  const content = name ? initials : <UserRound size={11} aria-hidden="true" />
+  return interactive && href ? <a className={styles.assignee} href={href} title={name || id} aria-label={name || id} onClick={event => event.stopPropagation()}>{content}</a> : <span className={styles.assignee} title={name || id} aria-label={name || id}>{content}</span>
 }
 
 function timelinePeriod(anchor: string, scale: Scale, weekStartsOn: 0 | 1 | 6) {
@@ -121,7 +121,7 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
     const groups = new Map<string, { title: string; items: T[] }>()
     for (const item of items) {
       const key = groupBy === "project" ? itemText(item, "projectId") || itemText(item, "projectTitle") : groupBy === "assignee" ? itemText(item, "assigneeId") || itemText(item, "assigneeName") : itemStatus(item)
-      const title = groupBy === "project" ? itemText(item, "projectTitle") || key || (en ? "No project" : "未关联项目") : groupBy === "assignee" ? itemText(item, "assigneeName") || key || (en ? "Unassigned" : "未分配") : taskStatus(item, locale)
+      const title = groupBy === "project" ? itemText(item, "projectTitle") || key || (en ? "No project" : "未关联项目") : groupBy === "assignee" ? itemText(item, "assigneeName") || (key ? (en ? "Identity unavailable" : "身份不可用") : (en ? "Unassigned" : "未分配")) : taskStatus(item, locale)
       const group = groups.get(key)
       if (group) group.items.push(item)
       else groups.set(key, { title, items: [item] })
@@ -308,7 +308,7 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
               const detail = `${en ? "Start" : "开始"}: ${dates.start ? display.date(dates.start) : "—"} · ${en ? "Due (inclusive)" : "截止（含当天）"}: ${dates.due ? display.date(dates.due) : "—"}`
               return <div key={item.id} data-gantt-task={item.id}>
                 <button type="button" className={styles.bar} data-category={category(item)} data-partial={!dates.start || !dates.due || undefined} data-clipped-start={start < 0 || undefined} data-clipped-end={finish > width || undefined} aria-pressed={selectedId === item.id} aria-label={`${itemTitle(item)} · ${detail} · ${en ? "View or edit dates" : "查看或编辑日期"}`} title={`${itemTitle(item)} · ${taskStatus(item, locale)} · ${detail}`} style={{ left, top: top + 6, width: barWidth, ...(itemText(item, "color") ? { "--bar-color": itemText(item, "color") } : {}) } as CSSProperties} onClick={event => selectSchedule(item, event.currentTarget)}>
-                  {barWidth > 110 && <><Assignee item={item} /><span className={styles.truncate}>{itemTitle(item)}</span></>}
+                  {barWidth > 110 && <><Assignee item={item} interactive={false} /><span className={styles.truncate}>{itemTitle(item)}</span></>}
                 </button>
                 {barWidth <= 110 && left + barWidth + 8 < width && <span className={styles.barLabel} style={{ left: left + barWidth + 8, top: top + 9, maxWidth: Math.min(280, width - left - barWidth - 12) }} aria-hidden="true">{itemTitle(item)}</span>}
               </div>

@@ -64,6 +64,12 @@ PM_OPENHANDS_AUTHORING_SOURCE=/ABS/authenticated-public-openhands node scripts/c
 
 MinIO 测试镜像的[构建定义](../scripts/ci-minio.Dockerfile)固定[官方 release](https://github.com/minio/minio/releases/tag/RELEASE.2025-09-07T16-13-09Z)的提交 `07c3a429bfed433e49018cb0f78a52145d4bedeb`、归档 SHA-256 `8819e3e7817e46b7b3798f8f200ead208562e571563c2e040352378031abe9f2`，以及 Go 1.24.7 构建镜像的多架构摘要。首次执行 `backend` 需要联网拉取 Docker 镜像、官方源码及 `go.sum` 约束的 Go 依赖；Go 只在构建容器里运行，不要求宿主安装。Docker 构建上下文是新建空临时目录，不发送仓库、`.env` 或业务数据；测试镜像保留 MinIO 原 AGPL 许可证及对应完整源码归档，仅作本机临时夹具，不作为产品运行时发布或推送。
 
+Docker Hub 不可达时，可显式设置 `PM_CI_MINIO_GO_IMAGE` 为镜像站的 `REGISTRY/library/golang:1.24.7-alpine3.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5`。入口仅允许改变 registry 域名，Go 版本及摘要不变；不会自动重试其他来源、接受浮动 tag、修改 Docker daemon 或替换 MinIO 源码。该变量只作为本轮 MinIO Docker build 参数，不进入产品或测试进程的环境。
+
+同样，Go 默认模块代理不可达时可显式设 `PM_CI_MINIO_GOPROXY=https://镜像域名`，仅接受单个无凭据／路径的 HTTPS origin，不支持自动 fallback 列表；`go.sum`、校验数据库与 `-mod=readonly` 均保留，不能以关闭校验换取构建通过。该变量仅传给上述临时构建，不改变宿主 Go 配置。
+
+PostgreSQL 也可显式设置 `PM_CI_POSTGRES_IMAGE=REGISTRY/library/postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab`；入口只接受原版本和摘要，不能替换为现有业务容器或其他版本。所有镜像站配置均由本轮操作者显式提供，不修改全局默认值。
+
 失败或中断后按随机名称、完整容器身份和 owner label 再核对，只移除本轮拥有的容器、MinIO 镜像标签及临时目录；不停止业务服务、按端口杀进程、挂载已有数据卷或清理他人的容器/镜像及共享构建缓存。Node 测试沿用受监督后端入口：失败、skip、todo、cancelled、缺失 summary 和活跃遗留进程均返回非零，不将跳过计入通过。
 
 默认范围：
@@ -88,13 +94,15 @@ PM_OPENHANDS_AUTHORING_SOURCE=/ABS/authenticated-public-openhands node scripts/c
 
 单独 `backend` / `agent` 阶段要求同一检出的 `build` 阶段已完成；缺少必要产物会明确失败，不临时跳过或伪报完整检查。分阶段结果只证明相应范围，不代表默认 `all` 已通过。
 
-`pnpm check:turbo` / `node scripts/check-turbo.mjs` 是底层工程叶入口，默认 `lint`，stage 为 `lint|build|host-build`，不同于 CI 的 `static|build|host|backend|agent|all`。六 lint、九声明/完整类型/构建叶与独立 host 均按公共闭包缓存；**不包含** preflight、文档/合同/边界/许可/来源门禁、host 测试、真实夹具或完整回归。`--task` 按逻辑 ID 可重复，选择叶仍带明确前置；`--baseline` 同环境/闭包直接跑原命令不使用 task cache；`--dry` 不执行叶，互斥且不算通过。具体输出、命令与本轮一次性交付授权见[开发指南](../docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)和[完整任务表](../docs/reference/turbo-rollout-plan.zh.md)。
+`pnpm check:turbo` / `node scripts/check-turbo.mjs` 是底层工程叶入口，默认 `lint`，stage 为 `lint|build|host-build`，不同于 CI 的 `static|build|host|backend|agent|all`。六 lint、九声明/完整类型/构建叶与独立 host 均按公共闭包缓存；**不包含** preflight、文档/合同/边界/许可/来源门禁、host 测试、真实夹具或完整回归。`--task` 按逻辑 ID 可重复，选择叶仍带明确前置；`--baseline` 同环境/闭包直接跑原命令不使用 task cache；`--dry` 不执行叶，互斥且不算通过。具体输出、命令与本轮一次性交付授权见[开发指南](../docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)。
 
 缓存身份支持普通 Git 与严格认证的 sibling-linked worktree（绝对 gitdir、精确 commondir/backlink、无 symlink 元数据），本轮必须真实启用后才能称 HIT。common Git exclude、输入模式与输出策略参与 hash，不读原 Git config/includes/hooks。危险 Git 身份下实际 lint 跑原 uncached 叶，dry 明确失败；产物任务不能证明输出所有权/无跟踪源码/路径安全则删除或恢复前 fail closed。无 Git 导出保持 cache-off 执行，不代表 HIT；目录存在或 dry hash 不变也不是命中证据。只处理互不重叠的声明产物根，不能触碰私有状态/live 输出。
 
-runner 每次 pnpm 调用边界固定 `pnpm_config_verify_deps_before_run=error`，每次 cache read 前新鲜执行真实依赖预检，暖 HIT 不绕过缺失/陈旧状态；冻结安装另行执行。固定 pnpm 对后代下传 `false` 不否认调用边界保护。完整外层 no-implicit-install 用 direct Node 或显式 error 变量，普通外层 pnpm 在 Node 启动前仍遵循自身策略。[本轮证据表](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)记录全 16 叶实测、恢复/失败反证与默认 all 的真实网络阻塞；旧单任务/六 lint/A/B 均为历史，不能拼接当前完整通过。
+runner 每次 pnpm 调用边界固定 `pnpm_config_verify_deps_before_run=error`，每次 cache read 前新鲜执行真实依赖预检，暖 HIT 不绕过缺失/陈旧状态；冻结安装另行执行。固定 pnpm 对后代下传 `false` 不否认调用边界保护。完整外层 no-implicit-install 用 direct Node 或显式 error 变量，普通外层 pnpm 在 Node 启动前仍遵循自身策略。内部本轮证据记录全 16 叶实测、恢复/失败反证与默认 all 的真实网络阻塞；旧单任务/六 lint/A/B 均为历史，不能拼接当前完整通过。
 
 总入口 `check-ci.mjs` 只接受 `all|static|build|host|backend|agent`，不再接受历史 `rust` / `rust-network` 参数。外部真实 Skill 下载仍为独立网络验收，本机范围通过不代表它已通过。Windows/macOS 原生安装、签名/公证与真实 PostgreSQL 桌面管理另由手动 Desktop workflow 验证；真实 Provider 账号/模型、生产供应商和完整浏览器业务验收不在这里宣称通过。来源检查验证随仓发布的输出摘要、配方身份、宿主工具和资源闭包；需要外部固定 Git 对象库的全量上游重建，以及未选定的上游测试工程仍是独立范围。第三方完整性门禁也不等于尚未关闭的授权/资产/发布履约事项已获批准，正式发布另用 `pnpm check:release`。
+
+CLI 的 Windows 跨卷 junction 场景只在 Windows 注册；Linux `agent` 阶段不包含该原生平台验收。Windows 单独验证时须设置 `PM_CLI_TEST_OTHER_VOLUME` 为另一卷上本人可写的临时父目录，再运行 `node --conditions=development --test --test-name-pattern="Windows cross-volume junction" apps/server/agent/src/cli-runtime.test.ts`；卷未准备或平台未执行不能记为通过。真实 Electron Browser、付费 Provider、外部 OAuth 客户端与平台送达同样单列。
 
 `.github/workflows/ci.yml` 对原 push / PR / manual 范围仍执行默认入口；PR token 只读、不持久 checkout 凭据、无签名环境/Provider secret。新增 task/dependency 共享缓存只对默认分支 trusted push/manual restore/save，所有 PR（同仓/fork）与其他分支不读写共享缓存。task-cache 上传仅 `.local/check-turbo/actions-trusted`，按 OS/arch/hosted image/固定工具链和 policy 分区，native task hash 核验实际输入；上传前拒绝 symlink/未知文件/硬链接。未授权触发真实远端作业，本轮不宣称 hosted restore/save、全量成功或性能收益。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。
 
@@ -112,11 +120,11 @@ runner 每次 pnpm 调用边界固定 `pnpm_config_verify_deps_before_run=error`
 
 GitHub 仓库检查 workflow 仍用 `always()` 保存安全 JSONL，14 天，不上传原始业务日志或 HOME。task-cache 只上传 `.local/check-turbo/actions-trusted`，不上传 `.local` 父目录、`.turbo` summary/日志、fixture、凭据或业务数据；native archive 自带隔离工程 task log（本轮 16 个），不冒称无日志，也不任意追加原始日志。受信默认分支成功 job 才 save，所有 PR/其他分支无共享 cache 访问。pnpm 内容仓同样 trusted-only、精确锁定 OS/架构/镜像/工具链，恢复后仍冻结安装。桌面另有 SHA256 验证的下载归档，不缓存签名/运行数据；Windows/macOS 不使用此 Linux 监督器，真实耗时须读取实际 Actions job。
 
-一次失败耗时不能作为完整测试耗时，本机结果不能代替 hosted 冷/暖对比。历史见 [2026-11-06 耗时记录](../docs/reference/ci-performance-2026-11-06.zh.md)；当前全 16 叶、真实消费者及 fresh CI 范围见[本轮证据](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
+一次失败耗时不能作为完整测试耗时，本机结果不能代替 hosted 冷/暖对比。历史与当前全 16 叶、真实消费者及 fresh CI 范围属于内部记录，不随公开树分发。
 
 ### 可复现的前后对比协议
 
-复用现有 JSONL 与 Node TAP，不引入第二套监控或测试运行器。先由主线程核对服务归属，再串行安排测量；实现期间不并发运行重检查。
+复用现有 JSONL 与 Node TAP，不引入第二套监控或测试运行器。先由维护者核对服务归属，再串行安排测量；实现期间不并发运行重检查。
 
 1. **冻结源码而不是重置工作树。** 记录精确 HEAD、当前已暂存/未暂存的二进制 diff、明确审核的 untracked 公共源码及关键输入 SHA256；保留用户既有修改。不要把 HEAD 当作 dirty 工作树身份，也不要归档 `.env`、私有 `.local`、Home、数据库、`node_modules` 或构建产物。对运行中的安装，导出到工作树外的新独立目录，冻结安装依赖，在该目录测量；不能覆盖公共服务正在使用的 `apps/web/dist`。
 2. **把正确性修复与性能改动分开。** 原始失败保留；修复已退役的 Cargo preflight 输入、隔离 dotenv 边界等前提后，另存“修复后参考基线”。失败前后耗时不是提速，不与成功样本混算。新目录中的 workspace 链接必须指向该目录，不复用原 checkout 的 `node_modules`。
@@ -147,7 +155,7 @@ GitHub 仓库检查 workflow 仍用 `always()` 保存安全 JSONL，14 天，不
 
 ### 本轮全 16 工程叶与恢复验收
 
-以下是 Main 在新 linked worktree、固定 Node/pnpm/Turbo 和冻结代码/配置下串行执行的当前结果；公开证据文档随后更新，不能把测量身份当作之后文档输入仍旧命中的证明。worker 未重跑检查。完整 runId、原始值与限制见[落地计划](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
+以下是 Main 在新 linked worktree、固定 Node/pnpm/Turbo 和冻结代码/配置下串行执行的当前结果；内部证据随后更新，不能把测量身份当作之后文档输入仍旧命中的证明。worker 未重跑检查。完整 runId、原始值与限制保留在内部记录中。
 
 | 范围 | 本轮实际结果 | 边界 |
 | --- | --- | --- |
@@ -165,7 +173,7 @@ GitHub 仓库检查 workflow 仍用 `always()` 保存安全 JSONL，14 天，不
 
 ### 2026-11-08 验证范围与未通过项
 
-以下是**阶段 1 全仓显式调度扩展之前**的独立源码导出历史执行结果，不是新 runner/六 lint/当前发布批准，也不能把多个独立阶段拼成完整 CI。新阶段的实际结果单列在[落地计划证据表](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)：
+以下是**阶段 1 全仓显式调度扩展之前**的独立源码导出历史执行结果，不是新 runner/六 lint/当前发布批准，也不能把多个独立阶段拼成完整 CI。新阶段的实际结果单列在内部证据表：
 
 | 范围 | 观察结果与边界 |
 | --- | --- |

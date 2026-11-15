@@ -59,11 +59,11 @@ describe('project copy and guarded deletion', { timeout: 600_000, concurrency: 1
     await f.pool.query(`CREATE FUNCTION reject_copy_binding() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'deterministic copy binding fault'; END $$;
       CREATE TRIGGER reject_copy_binding BEFORE INSERT ON project_blob_stores FOR EACH ROW EXECUTE FUNCTION reject_copy_binding()`);
     const failed = await f.send(input); assert.equal(failed.status, 503);
-    const marker = JSON.parse(await readFile(join(f.parents[1], 'recover', '.pm/project.json'), 'utf8')) as { projectId: string };
-    const before = (await readdir(join(f.parents[1], 'recover', '.pm/core/work-items'))).sort();
+    const marker = JSON.parse(await readFile(join(f.parents[1], 'recover', '.dovspace/.pm/project.json'), 'utf8')) as { projectId: string };
+    const before = (await readdir(join(f.parents[1], 'recover', '.dovspace/.pm/core/work-items'))).sort();
     const receipts = `/api/v1/workspaces/${f.workspaceId}/commands/${input.commandId}`;
     assert.equal((await f.request(receipts)).status, 404, 'unknown is not falsely committed');
-    assert.deepEqual((await readdir(join(f.parents[1], 'recover', '.pm/core/work-items'))).sort(), before);
+    assert.deepEqual((await readdir(join(f.parents[1], 'recover', '.dovspace/.pm/core/work-items'))).sort(), before);
     assert.equal((await f.send(input)).body.error?.code, 'command_outcome_unknown');
     const other = await f.member('Other actor');
     assert.ok([403, 404].includes((await f.request(`${receipts}/recover`, { method: 'POST', body: {}, cookie: other.cookie })).status));

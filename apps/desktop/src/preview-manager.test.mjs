@@ -164,9 +164,14 @@ test("capture is serialized and returns a data URL", async () => {
     const created = manager.createTab("tab-3", { url: "http://127.0.0.1:3223/pm" });
     const wc = fake.register(3, fake.sessions.get(created.partition));
     await manager.registerWebview("tab-3", 3);
+    wc.title = "Captured page";
     const [first, second] = await Promise.all([manager.capture("tab-3"), manager.capture("tab-3")]);
     assert.equal(first.dataUrl, "data:image/png;base64,FULL");
-    assert.deepEqual(second, first);
+    assert.equal(second.dataUrl, first.dataUrl);
+    assert.equal(first.url, wc.url);
+    assert.equal(first.title, "Captured page");
+    assert.notEqual(first.captureId, second.captureId);
+    assert.match(first.capturedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(wc.isDestroyed(), false);
   } finally {
     manager.destroy();
@@ -194,6 +199,114 @@ test("element pick starts the guest overlay and crops by DPR", async () => {
     assert.equal(result.tagName, "div");
     assert.equal(result.dataUrl, "data:image/png;base64,CROP:20,40,200,100");
     assert.equal(result.screenshotFailed, false);
+    assert.equal(result.url, wc.url);
+    assert.deepEqual(result.rect, { x: 10, y: 20, width: 100, height: 50 });
+    assert.equal(result.devicePixelRatio, 2);
+    assert.match(result.captureId, /^[a-f0-9-]{36}$/);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("a failed screenshot keeps the selected element snapshot and its explicit error", async () => {
+  const { manager, fake } = makeManager();
+  try {
+    const created = manager.createTab("failed-crop", { url: "http://127.0.0.1:3224/page" });
+    const wc = fake.register(20, fake.sessions.get(created.partition));
+    await manager.registerWebview("failed-crop", 20);
+    wc.title = "Original page";
+    wc.capturePage = () => Promise.reject(new Error("capture unavailable"));
+    const pending = manager.pick("failed-crop");
+    wc.ipc.emit(ELEMENT_PICKED, {}, { rect: { x: 4, y: 8, width: 80, height: 30 }, dpr: 1, selector: "#save", tagName: "button", text: "Save" });
+    const result = await pending;
+    assert.equal(result.url, "http://127.0.0.1:3224/page");
+    assert.equal(result.title, "Original page");
+    assert.equal(result.selector, "#save");
+    assert.equal(result.text, "Save");
+    assert.equal(result.dataUrl, null);
+    assert.equal(result.screenshotFailed, true);
+    assert.equal(result.screenshotError, "capture unavailable");
+    assert.equal(wc.ipc.listenerCount(ELEMENT_PICKED), 0);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("navigation during an accepted element capture preserves the old snapshot without a mismatched image", async () => {
+  const { manager, fake } = makeManager();
+  try {
+    const created = manager.createTab("changing-crop", { url: "http://127.0.0.1:3224/original" });
+    const wc = fake.register(21, fake.sessions.get(created.partition));
+    await manager.registerWebview("changing-crop", 21);
+    let finishCapture;
+    wc.capturePage = () => new Promise(resolve => { finishCapture = resolve; });
+    const pending = manager.pick("changing-crop");
+    wc.ipc.emit(ELEMENT_PICKED, {}, { rect: { x: 0, y: 0, width: 50, height: 20 }, dpr: 1, selector: "h1", tagName: "h1", text: "Original heading" });
+    await Promise.resolve();
+    assert.equal(typeof finishCapture, "function");
+    wc.url = "http://127.0.0.1:3224/replacement";
+    wc.emit("did-start-navigation", {}, wc.url, false, true);
+    finishCapture(fakeImage());
+    const result = await pending;
+    assert.equal(result.url, "http://127.0.0.1:3224/original");
+    assert.equal(result.text, "Original heading");
+    assert.equal(result.dataUrl, null);
+    assert.equal(result.screenshotFailed, true);
+    assert.match(result.screenshotError, /page changed/);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("standalone captures reject a navigation race instead of attaching the wrong page", async () => {
+  const { manager, fake } = makeManager();
+  try {
+    const created = manager.createTab("changing-page", { url: "http://127.0.0.1:3224/original" });
+    const wc = fake.register(22, fake.sessions.get(created.partition));
+    await manager.registerWebview("changing-page", 22);
+    let finishCapture;
+    wc.capturePage = () => new Promise(resolve => { finishCapture = resolve; });
+    const pending = manager.capture("changing-page");
+    await Promise.resolve();
+    assert.equal(typeof finishCapture, "function");
+    wc.emit("did-start-navigation", {}, wc.url, false, true);
+    finishCapture(fakeImage());
+    await assert.rejects(pending, /page changed/);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("picker cancellation returns no element record and ignores a late guest selection", async () => {
+  const { manager, fake } = makeManager();
+  try {
+    const created = manager.createTab("cancelled-pick", { url: "http://127.0.0.1:3224/page" });
+    const wc = fake.register(23, fake.sessions.get(created.partition));
+    await manager.registerWebview("cancelled-pick", 23);
+    const pending = manager.pick("cancelled-pick");
+    await manager.cancelPick("cancelled-pick");
+    wc.ipc.emit(ELEMENT_PICKED, {}, { selector: "#late" });
+    assert.deepEqual(await pending, { cancelled: true });
+    assert.equal(wc.ipc.listenerCount(ELEMENT_PICKED), 0);
+  } finally {
+    manager.destroy();
+  }
+});
+
+test("an empty native image keeps the element without claiming a screenshot", async () => {
+  const { manager, fake } = makeManager();
+  try {
+    const created = manager.createTab("empty-crop", { url: "http://127.0.0.1:3224/page" });
+    const wc = fake.register(24, fake.sessions.get(created.partition));
+    await manager.registerWebview("empty-crop", 24);
+    wc.capturePage = () => Promise.resolve({ isEmpty: () => true, getSize: () => ({ width: 0, height: 0 }) });
+    const pending = manager.pick("empty-crop");
+    wc.ipc.emit(ELEMENT_PICKED, {}, { rect: { x: 0, y: 0, width: 20, height: 20 }, dpr: 1, selector: "div", tagName: "div", text: "" });
+    const result = await pending;
+    assert.equal(result.text, "");
+    assert.equal(result.dataUrl, null);
+    assert.equal(result.screenshotFailed, true);
+    assert.match(result.screenshotError, /empty/);
   } finally {
     manager.destroy();
   }

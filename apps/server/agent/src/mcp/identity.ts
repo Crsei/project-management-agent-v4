@@ -1,4 +1,4 @@
-import { createMcpServiceBearer, mcpIdentitySchema, readBoundedMcpBody, trustedMcpOrigin, verifyMcpServiceBearer, type McpInvocationIdentity } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
+import { createMcpServiceBearer, mcpIdentitySchema, readBoundedMcpBody, trustedMcpOrigin, trustedMcpServiceOrigin, verifyMcpServiceBearer, type McpInvocationIdentity } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import { readRecord } from '../durable/store.ts';
 import { assertStoredThread, currentGrant, deny, digest, grantIdentity, MCP_TOKENS, McpAuthError } from './grants.ts';
 import type { Grant } from './grants.ts';
@@ -7,7 +7,9 @@ export { grantMcpThread } from './grants.ts';
 export type McpCatalog = { workspaces: { id: string; name: string; projects: { id: string; name: string }[]; workspaceAllowed?: boolean }[] };
 export const mcpPublicOrigin = (): string => trustedMcpOrigin(process.env.MCP_PUBLIC_ORIGIN ?? '').origin;
 export async function pmRequest(path: string, headers: Headers): Promise<unknown> {
-  const endpoint = new URL(path, trustedMcpOrigin(process.env.PM_API_URL?.trim() || 'http://127.0.0.1:4194'));
+  const origin = trustedMcpServiceOrigin(process.env.PM_API_URL?.trim() || 'http://127.0.0.1:4194');
+  const endpoint = new URL(path, origin);
+  if (endpoint.origin !== origin.origin) throw new Error('MCP PM requests cannot leave the configured service origin.');
   const response = await fetch(endpoint, { headers, redirect: 'error', signal: AbortSignal.timeout(5_000) });
   if (!response.ok) { await response.body?.cancel(); throw new McpAuthError('access_denied', 'Current PM identity or scope is not authorized.', response.status === 401 ? 401 : 403); }
   return JSON.parse(await readBoundedMcpBody(response, 2 * 1024 * 1024));

@@ -12,6 +12,10 @@ Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binar
 
 `desktop-dependency-layout.json` 分别记录 workspace-runtime 的 PM/Agent 上下文和 Electron 应用上下文，包括实际包路径、资源摘要、依赖边与缺席的 optional 依赖。`agent-artifact-manifest.json` 中原始 `.packages`/links 清单仅为来源证明，不再代表桌面成品的物理目录；最终布局以新的 layout manifest 及实际资源核对为准。通用 Agent 独立打包拓扑不因此改变。
 
+workspace runtime 还包含[统一目录](../../packages/skill-resources/catalog.ts)中的九份 PM Skill 原始文件，以及插件 manifest、README 和许可证；不依赖源码检出、相邻仓库或首次启动下载。安装到原生 Provider 是独立的明确动作，可从 Skills 设置或初始化 AI 步骤进入，来源与边界见 [Agent Chat](agent-chat.md#mcp原生-skills-与交互-apps)。
+
+内置 Skill 来源使用 cc-switch 私有扩展配置库的 schema 3（从 schema 2 增加 `source_json`）；旧宿主不能读取新版本。升级前应正常停机并备份对应私有扩展状态及原生配置，回滚必须使用匹配的程序／状态备份，不能仅回退程序或手改版本号。此增量不是 Chat 会话持久化统一设计，亦不承诺跨平台迁移或崩溃后的跨文件／数据库事务原子性。
+
 | 构建目标 | 产物 | 边界 |
 | --- | --- | --- |
 | Windows x64 | NSIS `.exe` | 不提供 Windows ARM64 或跨平台构建 |
@@ -24,14 +28,16 @@ Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binar
 
 - 连接窗口与工作区窗口使用无边框标题栏：Windows/Linux 隐藏原生标题栏和菜单行，保留原生最小化/最大化/关闭按钮并叠放在 React 顶栏右侧；macOS 使用 `hiddenInset` 保留系统红黄绿按钮。React 顶栏承担拖动区域，按钮、链接、输入框和下拉菜单保持可点击；内置连接页使用同一拖动规则。
 - 原生窗口控制颜色随应用明暗主题更新；Windows 通过 `titlebar-area-*` 几何预留控件空间，避免 100%/125%/150% 缩放时重叠。macOS 红黄绿按钮保留原生位置并为顶部内容预留左侧空间。
+- 窗口标题与应用名称为 Dovspace；打包图标使用 `apps/desktop/build/icon.ico`（Windows）与 `icon.icns`（macOS），开发运行使用 `icon.png`。图标与应用名称不改变安装标识、数据目录或更新源。
 - 这些规则只在桌面 preload 提供窗口桥时启用，普通浏览器打开 3224 的 Web 布局不变。Electron GUI 的实际拖动、双击最大化、原生按钮和缩放仍需在对应平台验证，不能由 Web 预览或单元测试替代。
+- 连接页顶栏、真实连接准备／停止状态及更新区使用同一已批准的彩色标记；动画只随真实 busy 状态启用，尊重系统减少动态效果设置，不替代状态／错误文本或修改生命周期操作。
 - 点击关闭、断开或退出时，如果工作区有离页保护，主进程显示“留在页面／离开”确认，默认留在页面。取消保留窗口及本地服务；明确离开后才继续正常关闭和清理，不用强制销毁绕过草稿保护。关闭或刷新失败保留可重试的会话状态，不误报已完成停机。
 
 **首次使用与数据**
 
 - 连接入口采用 Dovspace 中文三步引导：本地工作台 → 设置连接 → 进入工作台。「继续」只切换页面，不会启动服务；已有连接可通过「更改连接」调整，也可「返回当前连接」打开工作台或断开服务。
 - 选择「本地工作台」后，启动空工作台目录会先准备一个一次性设置令牌，并在已打开的工作台页面完成首次账号与工作区创建；桌面端通过受限 preload 桥提供该令牌，令牌不进入网址、历史记录或本地存储。连接已有工作台时直接使用原账号登录。桌面连接窗口不再收集姓名、邮箱、密码或工作区名称，也不把服务不可用视为空实例。
-- 数据目录与项目父目录位于默认折叠的「高级设置」；必填目录无效时会自动展开并定位输入。默认数据仍位于 Electron 用户数据目录 `PM Agent v4/workspace`，视觉品牌更新不迁移数据或更改应用标识。默认项目父目录由应用创建，自定义项目父目录必须已存在。不会读取开发实例的 `.env`、`.local/access.json`，也不会自动导入 v3/v4 开发数据库或复制全局 CLI 凭据。
+- 数据目录与项目父目录位于默认折叠的「高级设置」；必填目录无效时会自动展开并定位输入。桌面显示名称与应用图标为 Dovspace；默认数据仍位于 Electron 用户数据目录 `PM Agent v4/workspace`，应用 ID 与更新源保持不变。视觉品牌更新不迁移数据：从旧 `PM Agent v4` 安装升级时须先卸载旧安装，原安装目录不会自动复用，本地工作区数据继续由新名称读取。默认项目父目录由应用创建，自定义项目父目录必须已存在。不会读取开发实例的 `.env`、`.local/access.json`，也不会自动导入 v3/v4 开发数据库或复制全局 CLI 凭据。
 - 首次建号及登录后新建工作区都会写入内置 Nova 示例项目；它是脱敏模板的独立副本，不是连接或复制开发数据库。每个新工作区包含真实可编辑项目、任务、文档与规划对象，保留固定示例日期、负责人留空，不复制其他实例的用户、权限、评论或执行历史。已存在工作区及删除后的示例不会自动补种。初始化未完成时保留原身份和恢复记录，不宣称连接／创建成功。
 - 连接页只提交本地工作台配置；即使旧设置曾保存远程模式，也不会恢复远程地址表单或提交远程连接。连接状态使用中文提示，原始服务消息与安全错误保留在诊断中；失败后若本地服务仍在运行，会保留断开操作，不显示为连接成功。
 - PostgreSQL 凭据、实例身份、存储绑定与服务端状态保存在私有实例目录；账号初始密码不写入连接配置。Windows 使用当前用户 ACL，Unix 使用私有权限。目录必须是本地规范路径；不能用符号链接、目录联接或无法确认身份的目录替代。
@@ -53,19 +59,43 @@ Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binar
 - Windows unsigned preview 明确标识为未签名测试包；signed 包保留原生验签。macOS 必须是 signed、公证的完整发行包；unsigned/ad-hoc、unsigned 稳定版、开发运行和 OS-managed 分发明确不可用，不关闭签名校验。Rosetta 下的 x64 应用遵循更新器选择原生 arm64 候选，并核对该目标的独立安装身份。
 - 更新会停止本地任务和终端，先备份重要数据。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口，不能承诺运行中的会话／终端无损跨重启。
 
-构建、draft/publish 门禁和两版本测试见[发布指南](release.md)及[双版本计划](../reference/desktop-github-updates-plan.zh.md)。功能已实现不等于公开更新可用；发行许可、签名和实际平台验收仍分开记录。
+构建、draft/publish 门禁和两版本测试见[发布指南](release.md)。功能已实现不等于公开更新可用；发行许可、签名和实际平台验收仍分开记录。
 
 **备份与恢复**
 
-通过连接窗口底部的「管理本地数据」进入独立管理页面，使用「返回连接」回到引导。仅在连接已断开、本地服务停止后允许备份/恢复；维护期间禁用切换与重复操作，结果和错误留在管理页供核对。恢复成功后仍需手动连接，不自动进入工作台。
+通过连接窗口底部的「管理本地数据」进入独立管理页面，使用「返回连接」回到引导。仅在连接已断开、本地服务停止后允许备份/恢复；新备份还须逐次勾选外部写者已停写确认，确认经 preload／主进程／后端传递，不由旧勾选状态自动复用。这是操作者声明，不代表应用检测或停止了外部编辑器／原生 CLI。维护期间禁用切换与重复操作，恢复成功后仍需手动连接。
 
 备份包含 PostgreSQL 逻辑快照、登记项目的 `.pm` 核心文件、附件、应用拥有的聊天文件，以及含私密数据的 Agent 离线备份。新备份只输出 `desktop-backup.enc`，采用固定参数 scrypt 派生密钥与 AES-256-GCM 认证加密；口令至少 12 个字符，不保存，遗失后无法恢复。单份明文内容上限 32 GiB、文件与目录合计上限 200,000。处理期间使用私有明文临时目录，正常完成或失败时清理；不承诺安全擦除或崩溃后自动清理。
+
+新备份同时绑定同一停写屏障的 PM／Agent 恢复集，核对 SQL、核心、附件、聊天树和 Agent 组件身份及关系；混入另一份备份的组件会被拒绝。Agent 恢复分配新 Store／epoch 并围住旧线程执行，历史只读不代表原目录／原生会话可继续。历史 v1／v2 备份保留明确的兼容恢复路径，但不追认它们为新合同下的完整恢复集。
 
 所有格式的恢复均须逐次确认来源可信：备份中的 PostgreSQL SQL 会以本机应用／数据库账号权限执行，可能影响目标目录之外的数据。认证加密不证明作者可信或内容安全；新空目标与失败清理不是 SQL 沙箱，也不能回滚外部副作用。
 
 加密完整性、应用版本、操作系统及归档预检通过后，才初始化新的空目标；不覆盖旧实例。新格式仅支持相同应用版本、相同操作系统，跨版本／跨系统明确拒绝，不隐式迁移。原 v1 未加密备份须另行单次勾选可信旧格式导入；它没有口令认证或应用版本证明，操作者必须使用原版本与原系统。丢失或已变为普通文件的可选聊天区域保留为不可用；实际捕获的目录仍校验路径、身份及链接。
 
 不复制项目的完整外部源码树、外部文档目录、原生外部 Provider Home、浏览器 Cookie/localStorage 或尚未确认的客户端操作日志。恢复后外部文件区域/文档来源需重新关联，Provider 账号按原生策略重新核对，MCP 授权需重新批准；未知副作用先查询。Linux 保留描述符相对遍历及目录 fsync；macOS/Windows 使用路径、身份、链接及内容校验，不承诺对恶意同用户进程的等价文件系统沙箱。Node 无法刷新 Windows 目录句柄，不能保证目录元数据在突然断电时的持久性。
+
+**Windows 安装与首次启动**
+
+- Windows 使用品牌化 NSIS 辅助安装向导（可选安装目录、当前用户安装、桌面/开始菜单快捷方式）：欢迎/完成页使用 Dovspace 侧栏图与顶部图，安装页与卸载页文案、图标由 `apps/desktop/assets/installer-branding.nsh` 与 `build/*.bmp` 提供。品牌宏只改 MUI 页面外观，不替代 `desktop-lifecycle.nsh` 的安装所有权、停机与回滚检查。
+- 安装器只负责程序文件、快捷方式与卸载入口，默认在完成后启动 Dovspace；首次启动沿用现有 React 引导（本地工作台 → 数据目录/项目目录 → 进入工作台）与 Agent Provider 设置，安装器不收集账号、不检测 Agent CLI。
+- 安装保持当前用户、按次显式确认卸载模式；程序安装目录与工作台数据目录相互独立，卸载默认保留工作区数据，删除数据须显式选择模式并再次确认。所有用户安装与重定向数据目录不受支持。
+
+### 品牌素材的可复现导出
+
+唯一彩色母版是 `apps/web/public/dovspace.svg`：用户在 2026-11-15 批准了由验证图重建、移除额外翼折扇形后的几何与配色。`apps/desktop/assets/brand-source.json` 记录参考图片名称／SHA256、母版 SHA256、批准范围与工具版本；视觉批准不证明原始矢量作者身份、法律权属、商标注册或公开分发许可，权利状态仍为 **OPEN**，见根 `THIRD_PARTY_NOTICES.md`。
+
+```sh
+node scripts/generate-brand-assets.mjs
+node scripts/generate-brand-assets.mjs --check
+```
+
+导出需要 Node **24.21.0** 和现有冻结工作区依赖中的 Astro → Sharp **0.34.5**（含当前平台的原生 Sharp／libvips；本次导出 libvips **8.17.3**）。脚本不安装依赖、不下载工具，不需要 ImageMagick、系统字体或 macOS `iconutil`。`--check` 在内存重新导出并逐字节比较所有派生文件，不写文件；跨平台也需具备匹配的原生依赖，不能以缺失依赖跳过比较或擅自更新锁文件。
+
+- 原样派生的 SVG：`apps/desktop/src/dovspace.svg`、`apps/marketing/public/dovspace.svg` 与 `favicon.svg`。桌面现有 build 递归复制 `src` 到 `dist`，staging 再将该目录纳入 `app.asar`；连接页使用本地相对路径，不访问外部品牌资源。
+- Web 导出：`apps/web/public/favicon.ico`（16／24／32／48／64／128／256 px）、透明底 `dovspace-mark.svg`／1024 px `dovspace-mark.png`、单色 `dovspace-monochrome.svg`（currentColor，独立图片默认黑色）和 `dovspace-monochrome-light.svg`（白色）。单色版仅从母版路径派生遮罩与单色透明度，不维护第二套手绘轮廓。
+- 桌面导出：`apps/desktop/build/icon.png`（1024 px）、`icon.ico`（同 Web 尺寸）、`icon.icns`（16／32／64／128／256／512／1024 px PNG 条目）；`installerHeader.bmp` 为 **150×57**、`installerSidebar.bmp` 为 **164×314**，均保持 NSIS 要求的无压缩、底向上 **RGB24**。安装向导文案仍由原 NSIS 宏提供。
+- 母版几何／配色变更必须先重新审阅批准并更新来源记录，再统一导出；不要单独编辑派生 SVG 或二进制。现有字体与许可证文件原样保留。导出／逐字节检查不代表 Windows/macOS 原生图标、安装器或 Electron GUI 验收已完成。
 
 **原生构建**
 
@@ -88,7 +118,7 @@ Windows signed 模式还须设置准确的 `PM_DESKTOP_WINDOWS_SIGNER_SUBJECT` �
 
 Windows 离线依赖预检按 PE 导入表的模块名解析，不假定导入项只能以 `.dll` 结尾：PostgreSQL 扩展会导入 `postgres.exe`，随包库也会导入系统 `WINSPOOL.DRV`。模块名仍须为安全 basename，拒绝路径、ADS、尾点／空格及损坏的表边界；是否为 VC runtime 仍按实际模块身份记录，不推测或下载 redist。
 
-每组交付包含安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz`，以及 manifest 明确列出的辅助产物。对应源码保留已审阅本地改动、构建脚本及根 `turbo.json`；Git 与已审阅的 gitless 快照均将该配置的准确字节纳入清单和源码归档，构建后修改或删除会使源码复核失败。不含 `.env*`、`.local`、Home/凭据、内部历史计划、依赖缓存或旧产物。legal 材料来自最终成品，包括 runtime/Electron/Chromium 的原始许可；它是材料收集而不是第三方分发授权。具体上游 stable/nightly 实际 assets、采用/不采用理由、授权及回滚边界见 [发布设计](../reference/desktop-release-alignment-2026-11-08.zh.md)。
+每组交付包含安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz`，以及 manifest 明确列出的辅助产物。对应源码保留已审阅本地改动、构建脚本及根 `turbo.json`；Git 与已审阅的 gitless 快照均将该配置的准确字节纳入清单和源码归档，构建后修改或删除会使源码复核失败。不含 `.env*`、`.local`、Home/凭据、内部历史计划、依赖缓存或旧产物。legal 材料来自最终成品，包括 runtime/Electron/Chromium 的原始许可；它是材料收集而不是第三方分发授权。具体上游 stable/nightly 实际 assets、采用/不采用理由、授权及回滚边界属于内部记录，不随公开树分发。
 
 schema 3 交付另含 `desktop-sbom.cdx.json`、`desktop-osv.json`、`desktop-vulnerabilities.sarif`，以及目标独立的 `desktop-install-stamp-<platform>-<arch>.json`。SBOM 按实际 PM／Agent／CC Switch host／Web／Electron／Node／PostgreSQL 闭包记录，不把整个开发依赖树当成成品。无版本的随包源码组件保留封存来源，标记为未执行注册表漏洞查询，不伪造版本或 PURL。OSV 查询失败与发现漏洞分别失败关闭；未撤回公告阻止交付。Node／PostgreSQL 的 OSS-Fuzz 映射不等于完整厂商 CVE 覆盖。资产集合、逐文件摘要、源码与 legal 必须完全对账；只允许准确通道／目标的 feed 和 blockmap，校验版本、完整安装器大小／摘要及候选安装身份，未知 YAML、缺文件或跨目标材料均拒绝。
 
@@ -122,7 +152,7 @@ node apps/desktop/scripts/verify-delivery.mjs --output ABS_PACKAGE_DIR --install
 
 仅完整成功且绑定准确 source、artifact、ASAR、run/attempt 与全部日志的 receipt，才能将 `installationExecuted` 置为 `true`；原始 receipt 与材料归档一并纳入摘要清单。`--files-only` 不能导入或补造原生证据。无窗口 controller 的 `electronGuiExecuted` 仍为 `false`，不是 GUI 验收。历史操作授权不自动适用于新增 job，也不授权本次提交、推送、dispatch、签名或发布。
 
-[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，默认 `distribution=unsigned`、`windows_only=true`，只运行 Windows x64；明确取消 Windows-only 才运行现有 macOS x64/arm64 目标。执行真实 PG 回归及最终 payload 冒烟后，只上传从完整 manifest 校验并精确暂存的发行材料，不通配上传 unpacked tree 或临时日志；signed 模式仍使用受保护的 `desktop-signing` 环境。操作与失败恢复见 [Windows 构建手册](../reference/windows-build-runbook.zh.md)。**2026-11-08 操作者进一步明确以当前主分支为准，保留既有修复与性能优化，将所有当前可公开源码更新的审阅增量集成到本地主分支并在该源码上测试；包括桌面、PM／Agent／Web、Turbo 与根 manifest／lock 等更新，不以旧候选覆盖主目录。测试输出隔离，有实际问题先修复并复验；完整范围审阅和主分支必要门禁通过后冻结精确源码，提交并公开推送到 `main`，随后只手动触发一次 `distribution=unsigned`、`windows_only=true` 的 Actions 构建，以该 SHA 的 Windows 实际 `success` 为目标。不下载安装器或发行材料到本地，原下载授权仍已被覆盖；凭据、运行数据、依赖缓存与旧产物不进入发布集。** 这不是动作已执行或原生验收通过的证据；本轮仍未授权 macOS 构建、签名、tag/PR/Release、远端合并操作、接管既有服务或执行真实安装器/GUI。上文接收端核对命令仅保留为未来另获下载授权后的通用操作，不属于本次执行范围。构建进程不得获得发布凭据；公共源码/测试 artifact 上传也不表示第三方发布阻塞已关闭。
+[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，默认 `distribution=unsigned`、`windows_only=true`，只运行 Windows x64；明确取消 Windows-only 才运行现有 macOS x64/arm64 目标。执行真实 PG 回归及最终 payload 冒烟后，只上传从完整 manifest 校验并精确暂存的发行材料，不通配上传 unpacked tree 或临时日志；signed 模式仍使用受保护的 `desktop-signing` 环境。操作与失败恢复步骤属于内部运行手册，不随公开树分发。**2026-11-08 操作者进一步明确以当前主分支为准，保留既有修复与性能优化，将所有当前可公开源码更新的审阅增量集成到本地主分支并在该源码上测试；包括桌面、PM／Agent／Web、Turbo 与根 manifest／lock 等更新，不以旧候选覆盖主目录。测试输出隔离，有实际问题先修复并复验；完整范围审阅和主分支必要门禁通过后冻结精确源码，提交并公开推送到 `main`，随后只手动触发一次 `distribution=unsigned`、`windows_only=true` 的 Actions 构建，以该 SHA 的 Windows 实际 `success` 为目标。不下载安装器或发行材料到本地，原下载授权仍已被覆盖；凭据、运行数据、依赖缓存与旧产物不进入发布集。** 这不是动作已执行或原生验收通过的证据；本轮仍未授权 macOS 构建、签名、tag/PR/Release、远端合并操作、接管既有服务或执行真实安装器/GUI。上文接收端核对命令仅保留为未来另获下载授权后的通用操作，不属于本次执行范围。构建进程不得获得发布凭据；公共源码/测试 artifact 上传也不表示第三方发布阻塞已关闭。
 
 CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。[`.gitattributes`](../../.gitattributes) 固定文本检出的 LF 行尾，避免 Windows `core.autocrlf` 改变受固定哈希保护的构建输入；不放宽或重写完整性校验。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 
@@ -132,7 +162,7 @@ Windows 本次启动的进程使用持有的子进程句柄进行停机核验，
 
 Windows 备份／恢复只排除控制器持有的准确 PostgreSQL 监督连接（PID、backend_start、空闲状态及 loopback 身份）；相同 application_name 的其他连接仍阻止维护。ACL 与维护失败只返回固定阶段、允许的错误类别及退出码，不输出原始子进程 stderr、目录、数据库口令或备份正文。这些修复不改变会话与持久化暂沿用 Agent Chat、统一设计尚未收口的边界。
 
-Actions 只缓存 pnpm 内容仓与 `apps/desktop/.cache/runtime-downloads` 下载归档，signed/unsigned 分离，不缓存应用产物、已安装运行时、私有 Home 或签名材料。缓存命中后仍执行冻结安装、归档 SHA256/官方 Node checksum 校验、重新解压和 runtime smoke，以及全部原生测试、打包和成品冒烟。比较构建耗时必须记录真实 run/attempt、提交、OS/架构、runner image 与缓存命中状态；没有运行结果时不能宣称提速或发布通过，见 [CI 耗时记录](../reference/ci-performance-2026-11-06.zh.md)。
+Actions 只缓存 pnpm 内容仓与 `apps/desktop/.cache/runtime-downloads` 下载归档，signed/unsigned 分离，不缓存应用产物、已安装运行时、私有 Home 或签名材料。缓存命中后仍执行冻结安装、归档 SHA256/官方 Node checksum 校验、重新解压和 runtime smoke，以及全部原生测试、打包和成品冒烟。比较构建耗时必须记录真实 run/attempt、提交、OS/架构、runner image 与缓存命中状态；没有运行结果时不能宣称提速或发布通过。
 
 Windows 权限、reparse 检查和进程监督脚本显式加载系统 PowerShell 模块，不依赖 runner 的模块分析缓存或完整用户环境。卸载快照的原生 reparse 检查同样关闭自动模块发现、显式加载 JSON 所需的系统 Utility 模块；辅助进程限时 15 秒，失败仅报告允许的错误类别，不输出原始路径或 stderr。打包 staging 目录创建后转为真实路径，兼容 macOS 的 `/var` 临时目录别名，同时保留产物目录的符号链接拒绝规则。
 
@@ -158,8 +188,6 @@ Windows NSIS 维护仅支持 per-user，拒绝 `/allusers` 和通用 `--delete-a
 `app-only` 的后续维护命令保存在 `HKCU\Software\Dovspace\DesktopRuntime\com.projectmanagementagent.v4\MaintenanceCommand`，调用保留的 `resources\desktop-maintenance\desktop-maintenance.ps1`。默认诊断持久保存在 `%LOCALAPPDATA%\Dovspace\DesktopLifecycle\`；独立实例可用私有请求／响应文件明确选择，不能借缺失配置清理其他实例。
 
 升级仅接受数据兼容指纹一致的版本，正常停机后保留旧代码／运行时到同卷 `.rollback-*` 及恢复记录；这不是数据库备份或降级承诺。NSIS 检查固定 PE 依赖并执行随包 Node／PostgreSQL 离线加载预检，不下载 VC++ 安装器。删除耗时仍受 loose-file 数量、Defender 和文件锁影响，代码门禁不是计时证据。
-
-参考基准：[桌面工程基准索引](../reference/desktop-engineering-benchmark.zh.md)、[Hermes Agent 基准](../reference/desktop-benchmark-hermes-agent.zh.md)、[Cherry Studio 基准](../reference/desktop-benchmark-cherry-studio.zh.md)。
 
 历史 unsigned Windows 构建实测安装树 **39,809 个文件 / 1,023,987,590 B**（`resources/workspace-runtime` 34,785，`desktop-runtime` 4,951），不是本次新实现的测量。t3code 的少文件方向是将服务端 JS bundle、仅保留必要原生文件；其 80 个 loose-file 上限不适用于本项目 bundled Node／PostgreSQL。
 

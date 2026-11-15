@@ -4,16 +4,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseBenchmarkConfig, type BenchmarkConfig } from '../benchmark.config.ts';
-import { AgentChatAdapter } from '../adapters/agent-chat.ts';
+import { createAdapter } from '../adapters/index.ts';
 import { createFixtureManager } from '../fixtures/manager.ts';
 import type { BenchEvent, CheckResult, FixtureDiff, FixtureHandle, FixtureSnapshot } from '../schemas/types.ts';
 import { collectArtifacts, repositoryDiff, writeAuthorityArtifacts } from './artifacts.ts';
 import { inspectCheckpoint, type CheckpointEvidence } from './checkpoints.ts';
 import { makeEvent, TraceRedactor, TraceWriter } from './telemetry.ts';
+import { summarizeCliObservations } from './cli-observations.ts';
+import { renderCliObservationReport } from '../reports/cli-observations.ts';
 
-export interface ProtocolCalibrationOptions { runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal }
+export interface ProtocolCalibrationOptions { runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal; nativeOmp?: boolean; briefProbeBody?: string }
 export interface ProtocolCalibrationResult {
-  kind: 'protocol-calibration'; schemaVersion: '0.1'; runId: string; passed: boolean; modelEfficacy: null; inferencePerformed: false;
+  kind: 'protocol-calibration' | 'omp-controlled-http'; schemaVersion: '0.1'; runId: string; passed: boolean; modelEfficacy: null; inferencePerformed: false;
+  controlTransport: 'http' | 'cli';
   checks: CheckResult[]; sessions: string[]; fixtureId: string | null; timeMs: number; artifacts: Record<string, string>;
   failure: { category: 'infrastructure' | 'protocol' | 'cleanup'; message: string } | null;
   limitations: string[];
@@ -22,8 +25,10 @@ export interface ProtocolCalibrationResult {
 /** Explicit controlled-peer integration proof. It is never selected by runTask or a missing-provider fallback. */
 export async function runProtocolCalibration(options: ProtocolCalibrationOptions = {}): Promise<ProtocolCalibrationResult> {
   if (options.config?.providerApiKey || options.config?.providerEndpoint) throw new Error('Protocol calibration does not accept paid-provider credentials or endpoints.');
-  const config = parseBenchmarkConfig({ ...options.config, model: 'protocol-calibration', modelOptions: {}, ...(options.outputRoot ? { outputsRoot: options.outputRoot } : {}) });
-  const runId = options.runId ?? `protocol-${randomUUID()}`;
+  const nativeOmp = options.nativeOmp === true;
+  if (!nativeOmp && options.config?.provider === 'omp') throw new Error('OMP cannot use a synthetic Codex RPC peer; select the real OMP controlled HTTP protocol entry.');
+  const config = parseBenchmarkConfig({ ...options.config, provider: nativeOmp ? 'omp' : 'codex', model: nativeOmp ? 'omp-controlled-protocol' : 'protocol-calibration', modelOptions: {}, ...(nativeOmp ? { providerApi: 'openai-completions', ompModel: { contextWindow: 200000, maxTokens: 4096, reasoning: false, compat: { supportsStore: false, supportsDeveloperRole: true, supportsReasoningEffort: false, supportsUsageInStreaming: false, maxTokensField: 'max_tokens' } } } : {}), ...(options.outputRoot ? { outputsRoot: options.outputRoot } : {}) });
+  const runId = options.runId ?? `${nativeOmp ? 'omp-http' : 'protocol'}-${randomUUID()}`;
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(runId)) throw new Error('Invalid protocol calibration identity.');
   let current = path.parse(config.outputsRoot).root;
   for (const part of path.resolve(config.outputsRoot).split(path.sep).filter(Boolean)) {
@@ -38,35 +43,42 @@ export async function runProtocolCalibration(options: ProtocolCalibrationOptions
   const started = Date.now(), redactor = new TraceRedactor();
   const trace = new TraceWriter(path.join(directory, 'trace.jsonl'), redactor);
   await trace.initialize();
-  const manager = createFixtureManager(config), adapter = new AgentChatAdapter('raw');
+  const manager = createFixtureManager(config), adapter = createAdapter('raw', config.controlTransport);
   const control = new AbortController(), signal = options.signal ? AbortSignal.any([options.signal, control.signal]) : control.signal;
   const interrupt = () => control.abort(new Error('Protocol calibration interrupted by operator.'));
   process.on('SIGINT', interrupt); process.on('SIGTERM', interrupt);
   let fixture: FixtureHandle | undefined, before: FixtureSnapshot | undefined, after: FixtureSnapshot | undefined, diff: FixtureDiff | undefined, activeSession: string | undefined;
   let observing: Promise<void> | undefined, cursor = 0;
-  const result: ProtocolCalibrationResult = { kind: 'protocol-calibration', schemaVersion: '0.1', runId, passed: false, modelEfficacy: null, inferencePerformed: false, checks: [], sessions: [], fixtureId: null, timeMs: 0,
+  const result: ProtocolCalibrationResult = { kind: nativeOmp ? 'omp-controlled-http' : 'protocol-calibration', schemaVersion: '0.1', runId, controlTransport: config.controlTransport, passed: false, modelEfficacy: null, inferencePerformed: false, checks: [], sessions: [], fixtureId: null, timeMs: 0,
     artifacts: { result: path.join(directory, 'result.json'), trace: trace.file, report: path.join(directory, 'report.md'), pmDiff: path.join(directory, 'pm-diff.json'), gitDiff: path.join(directory, 'git.diff') }, failure: null,
-    limitations: ['This controlled native JSON-RPC peer performs no model inference, reasoning, provider authentication or paid transport request.', 'Passing proves only the exercised real Agent Chat, isolated fixture, committed-response-loss and original-receipt recovery protocol; it is not task/model efficacy or an A/B experiment.'] };
-  async function append(event: BenchEvent): Promise<void> { await trace.append({ ...event, taskId: 'L02', scenarioId: 'protocol-L02', provider: 'controlled-codex-protocol-peer', model: 'NO-INFERENCE' }); }
+    limitations: nativeOmp ? ['The installed immutable OMP executable performs actual RPC v2, permission hooks, native Host Tools and controlled HTTP provider requests. The HTTP response producer is deterministic, not a model.', 'No real inference, provider credential authentication, tokenizer token counts, model capability, paid costs or A/B improvement is established.', 'Recovery uses the existing run-scoped read-only receipt capability; native pm_get_operation_result is Session-bound and is not relaxed.', 'A fresh Session drops old conversation and rereads handoff/current authority. This does not establish native compaction.'] : ['This controlled native JSON-RPC peer performs no model inference, reasoning, provider authentication or paid transport request.', 'Passing proves only the exercised real Agent Chat, isolated fixture, committed-response-loss and original-receipt recovery protocol; it is not task/model efficacy or an A/B experiment.'] };
+  async function append(event: BenchEvent): Promise<void> { await trace.append({ ...event, taskId: 'L02', scenarioId: nativeOmp ? 'omp-http-L02' : 'protocol-L02', provider: nativeOmp ? 'omp' : 'controlled-codex-protocol-peer', model: 'NO-INFERENCE' }); }
   async function audit(): Promise<void> { const events = fixture?.runtime?.auditEvents ?? []; while (cursor < events.length) await append(events[cursor++]!); }
   function check(id: string, passed: boolean, evidence: string[]): void { result.checks.push({ id, passed, required: true, score: passed ? 1 : 0, evidence }); }
   try {
-    await append(makeEvent(runId, 'runner', 'protocol_calibration_started', { kind: 'protocol-calibration', inferencePerformed: false }));
+    await append(makeEvent(runId, 'runner', 'protocol_calibration_started', { kind: 'protocol-calibration', controlTransport: config.controlTransport, inferencePerformed: false }));
     if (signal.aborted) throw signal.reason;
     fixture = await manager.reset({ runId }); result.fixtureId = fixture.fixtureId;
     redactor.addSecrets([fixture.pm.token]);
-    before = await manager.snapshot(fixture);
     const target = fixture.targets['beacon-receipt']!;
-    const budget = { maxDurationMinutes: 2, maxModelCalls: 1, maxToolCalls: 20, maxCostUsd: null };
-    await manager.startProtocolRuntime(fixture, { runId, taskId: 'L02', budget, allowedTools: ['pm_list_workspaces', 'pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations', 'pm_update_task'], allowedTargets: [target], controlledProviderScript: await readFile(new URL('./protocol-codex-peer.mjs', import.meta.url), 'utf8') });
+    if (nativeOmp && options.briefProbeBody !== undefined) {
+      const updated = await manager.request<{ id: string; revision: string }>(fixture, `/api/v1/workspaces/${fixture.workspaceId}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { entity: 'work_item', title: 'Controlled OMP exact Task Brief source', project: target.projectId, body: options.briefProbeBody, priority: 'medium', status: 'todo' } });
+      if (!updated.id || !updated.revision) throw new Error('Actual brief probe creation returned no target/revision');
+      target.entityId = updated.id; target.revision = updated.revision;
+    }
+    before = await manager.snapshot(fixture);
+    const budget = { maxDurationMinutes: 3, maxModelCalls: nativeOmp ? 16 : 1, maxToolCalls: 30, maxCostUsd: null };
+    const allowedTools = ['pm_list_workspaces', 'pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations', 'pm_update_task', ...(nativeOmp ? ['pm_task_brief'] : [])];
+    if (nativeOmp) await manager.startOmpControlledRuntime(fixture, { runId, taskId: 'L02', budget, allowedTools, allowedTargets: [target] });
+    else await manager.startProtocolRuntime(fixture, { runId, taskId: 'L02', budget, allowedTools, allowedTargets: [target], controlledProviderScript: await readFile(new URL('./protocol-codex-peer.mjs', import.meta.url), 'utf8') });
     redactor.addSecrets([fixture.runtime!.agentAccessToken, fixture.runtime!.pmCookie, ...fixture.runtime!.providerConfig.environment.map(value => value.value)]);
     result.artifacts.environment = path.join(directory, 'artifacts', 'runtime-environment.json');
     await writeFile(result.artifacts.environment, JSON.stringify(redactor.value({ environmentHash: fixture.runtime!.environmentHash, ...fixture.runtime!.environmentEvidence }), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     check('actual-os-isolation-denial-probes', fixture.isolation?.verified === true && fixture.isolation.checks.every(value => value.passed), fixture.isolation?.checks.flatMap(value => value.evidence) ?? []);
     await append(makeEvent(runId, 'isolation', 'isolation_verified', { ...fixture.isolation }));
-    await adapter.prepare({ runId, fixtureId: fixture.fixtureId, fixture, arm: 'raw', model: 'protocol-calibration', provider: 'codex', modelOptions: {}, allowedTools: ['pm_read', 'pm_update_task'], allowedTargets: [target], budget });
+    await adapter.prepare({ runId, fixtureId: fixture.fixtureId, fixture, arm: 'raw', model: config.model, provider: config.provider, modelOptions: config.modelOptions, allowedTools, allowedTargets: [target], budget });
     manager.armResponseLoss(fixture, { targetId: target.entityId });
-    activeSession = (await adapter.start({ taskId: 'L02', instruction: 'PROTOCOL_CALIBRATION_WRITE: use the real generation-scoped PM CLI transport to read beacon-receipt, persist original operation handoff, issue one revision-safe priority=high mutation, then remain active for the scheduled real interruption. This is controlled protocol calibration, NOT inference.' })).sessionId;
+    activeSession = (await adapter.start({ taskId: 'L02', instruction: nativeOmp ? 'OMP_CONTROLLED_WRITE: read actual task brief and PM entity through native pm_* Host Tools, perform one revision-safe priority=high mutation, re-read authority, save original unknown operation handoff, then remain active for real cancellation. Controlled HTTP protocol only, no inference.' : 'PROTOCOL_CALIBRATION_WRITE: use the real generation-scoped PM CLI transport to read beacon-receipt, persist original operation handoff, issue one revision-safe priority=high mutation, then remain active for the scheduled real interruption. This is controlled protocol calibration, NOT inference.' })).sessionId;
     manager.bindActiveSession(fixture, adapter.sessionIdentity(activeSession)); result.sessions.push(activeSession);
     let settled = false;
     observing = (async () => { try { for await (const event of adapter.observe(activeSession!)) await append(event); } finally { settled = true; } })();
@@ -88,15 +100,17 @@ export async function runProtocolCalibration(options: ProtocolCalibrationOptions
     const acknowledgement = trace.events.find(event => event.type === 'interrupt_acknowledged' && event.sessionId === priorSession);
     check('real-active-interruption-acknowledged', acknowledgement?.data.wasActive === true, acknowledgement ? [acknowledgement.id] : []);
     if (!acknowledgement?.data.wasActive) throw new Error('A real active native turn interruption was not established.');
-    await append(makeEvent(runId, 'runner', 'context_compressed', { priorSessionId: priorSession, handoffPath: 'artifacts/handoff.json', originalOperationId: checkpoint.operationId, droppedConversation: true, source: 'handoff-only' }));
-    activeSession = (await adapter.resume({ priorSessionId: priorSession, instruction: `PROTOCOL_CALIBRATION_RESUME: read your original handoff; recover original operation ${checkpoint.operationId} only through the run-scoped READ-ONLY real receipt capability http://127.0.0.1:3901/bench/receipts/${checkpoint.operationId}. Never redispatch the committed mutation. No previous conversation/native cursor is supplied. This is protocol calibration, NOT inference.` })).sessionId;
+    await append(makeEvent(runId, 'runner', nativeOmp ? 'handoff_only_new_session' : 'context_compressed', { priorSessionId: priorSession, handoffPath: 'artifacts/handoff.json', originalOperationId: checkpoint.operationId, droppedConversation: true, source: 'handoff-only', nativeCompactionObserved: false }));
+    activeSession = (await adapter.resume({ priorSessionId: priorSession, instruction: `${nativeOmp ? 'OMP_CONTROLLED_RESUME' : 'PROTOCOL_CALIBRATION_RESUME'}: read your original handoff; re-read current PM entity, then recover original operation ${checkpoint.operationId} only through the run-scoped READ-ONLY real receipt capability http://127.0.0.1:3901/bench/receipts/${checkpoint.operationId}. Never redispatch the committed mutation. No previous conversation/native cursor is supplied. This is protocol calibration, NOT inference.` })).sessionId;
     manager.bindActiveSession(fixture, adapter.sessionIdentity(activeSession)); result.sessions.push(activeSession);
     settled = false;
     observing = (async () => { try { for await (const event of adapter.observe(activeSession!)) await append(event); } finally { settled = true; } })();
     void observing.catch(() => undefined);
     while (!settled) { if (signal.aborted) throw signal.reason; await audit(); if (Date.now() >= deadline) throw new Error('Fresh-Session original receipt recovery timed out.'); await delay(50); }
     await observing; await audit();
+    await adapter.dispose?.();
     await manager.stopRuntime(fixture);
+    await audit();
     after = await manager.snapshot(fixture);
     const lost = trace.events.find(event => event.source === 'transport' && event.type === 'response_lost' && event.operationId === checkpoint!.operationId);
     const reconciled = trace.events.find(event => event.source === 'transport' && event.type === 'receipt_reconciled' && event.operationId === checkpoint!.operationId && event.sessionId === activeSession);
@@ -109,7 +123,20 @@ export async function runProtocolCalibration(options: ProtocolCalibrationOptions
     check('no-original-write-replay', mutationAttempts.length === 1 && mutationAttempts[0]?.operationId === checkpoint.operationId, mutationAttempts.map(event => event.id));
     check('actual-business-state-not-generation-status', entity?.entity.priority === 'high' && entity.entity.status === previous?.entity.status && before.entities.filter(value => value.id !== target.entityId).every(value => after!.entities.find(current => current.id === value.id)?.revision === value.revision), [target.entityId, String(entity?.revision)]);
     check('no-capability-violations', !trace.events.some(event => event.type === 'safety_violation'), trace.events.filter(event => event.type === 'safety_violation').map(event => event.id));
-    check('no-provider-inference', !trace.events.some(event => event.type === 'provider_request'), ['controlled native protocol peer only']);
+    if (nativeOmp) {
+      const requests = trace.events.filter(event => event.type === 'provider_request');
+      check('real-omp-controlled-http-requests', requests.length >= 9 && requests.every(event => event.data.controlled === true && event.data.api === 'openai-completions' && typeof event.data.requestSha256 === 'string'), requests.map(event => event.id));
+      const brief = trace.events.find(event => event.type === 'pm_response' && event.toolName === 'pm_task_brief' && event.data.status === 'succeeded');
+      const carried = requests.filter(event => Array.isArray(event.data.briefWireObservations) && event.data.briefWireObservations.some(observation => observation && typeof observation === 'object' && 'operationId' in observation && observation.operationId === brief?.operationId));
+      check('actual-brief-host-result-enters-provider-request', !!brief && carried.length > 0, [...(brief ? [brief.id] : []), ...carried.map(event => event.id)]);
+      const reads = trace.events.filter(event => event.type === 'pm_response' && event.toolName === 'pm_read' && event.data.targetId === target.entityId);
+      const priorRead = reads.find(event => event.sessionId === priorSession && event.data.revision === entity?.revision);
+      const freshRead = reads.find(event => event.sessionId === activeSession && event.data.revision === entity?.revision);
+      check('fresh-session-legitimate-same-revision-reread', !!priorRead && !!freshRead && priorRead.sessionId !== freshRead.sessionId, [priorRead?.id ?? 'missing-prior-read', freshRead?.id ?? 'missing-fresh-read']);
+      check('missing-controlled-usage-remains-unknown', trace.events.filter(event => event.type === 'provider_usage').every(event => event.data.inputTokens === null && event.data.outputTokens === null && event.data.costUsd === null), ['controlled HTTP producer has no tokenizer/billing']);
+      result.artifacts.requests = path.join(directory, 'artifacts', 'provider-requests.json');
+      await writeFile(result.artifacts.requests, JSON.stringify(redactor.value(requests), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    } else check('no-provider-inference', !trace.events.some(event => event.type === 'provider_request'), ['controlled native protocol peer only']);
     result.passed = result.checks.every(value => value.passed);
     if (!result.passed) result.failure = { category: 'protocol', message: 'One or more independent real protocol checks failed.' };
   } catch (error) {
@@ -118,6 +145,7 @@ export async function runProtocolCalibration(options: ProtocolCalibrationOptions
   } finally {
     try {
       if (activeSession) await adapter.stop(activeSession).catch(() => undefined);
+      await adapter.dispose?.().catch(error => { result.failure ??= { category: 'cleanup', message: redactor.text(String(error)) }; });
       if (fixture) {
         await manager.stopRuntime(fixture).catch(error => { result.failure ??= { category: 'cleanup', message: redactor.text(String(error)) }; });
         if (observing) await observing.catch(() => undefined);
@@ -141,8 +169,15 @@ export async function runProtocolCalibration(options: ProtocolCalibrationOptions
       await writeFile(result.artifacts.gitDiff!, before && after ? redactor.text(repositoryDiff(before, after)) : '# No complete code snapshots available.\n', { mode: 0o600 });
       await append(makeEvent(runId, 'runner', 'protocol_calibration_finished', { passed: result.passed, modelEfficacy: null }));
       await trace.flush();
+      if (config.controlTransport === 'cli') {
+        const observations = summarizeCliObservations(trace.events);
+        result.artifacts.cliObservations = path.join(directory, 'artifacts', 'cli-observations.json');
+        result.artifacts.cliObservationReport = path.join(directory, 'artifacts', 'cli-observations.md');
+        await writeFile(result.artifacts.cliObservations, JSON.stringify(redactor.value(observations), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+        await writeFile(result.artifacts.cliObservationReport, redactor.text(renderCliObservationReport(observations)), { mode: 0o600, flag: 'wx' });
+      }
       await writeFile(result.artifacts.result!, JSON.stringify(redactor.value(result), null, 2) + '\n', { mode: 0o600 });
-      const report = ['# Controlled protocol calibration', '', `Kind: **protocol-calibration**; real protocol checks: **${result.passed ? 'passed' : 'failed'}**.`, '', '**Model efficacy: UNKNOWN. No inference or paid-provider authentication was evaluated.**', '', ...result.checks.map(value => `- [${value.passed ? 'x' : ' '}] ${value.id}: ${value.evidence.join(', ')}`), '', ...(result.failure ? [`Failure (${result.failure.category}): ${result.failure.message}`, ''] : []), ...result.limitations.map(value => `- ${value}`), ''].join('\n');
+      const report = [`# ${nativeOmp ? 'Installed OMP controlled HTTP protocol' : 'Controlled protocol calibration'}`, '', `Kind: **${result.kind}**; control transport: **${result.controlTransport}**; real protocol checks: **${result.passed ? 'passed' : 'failed'}**.`, '', '**Model efficacy: UNKNOWN. No inference or paid-provider authentication was evaluated.**', '', ...result.checks.map(value => `- [${value.passed ? 'x' : ' '}] ${value.id}: ${value.evidence.join(', ')}`), '', ...(result.failure ? [`Failure (${result.failure.category}): ${result.failure.message}`, ''] : []), ...result.limitations.map(value => `- ${value}`), ''].join('\n');
       await writeFile(result.artifacts.report!, redactor.text(report), { mode: 0o600 });
     } finally { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); }
   }
@@ -159,6 +194,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       if (args[index] === '--agent-image') supplied.agentImage = value;
       else if (args[index] === '--code-image') supplied.codeImage = value;
       else if (args[index] === '--outputs-root') supplied.outputsRoot = value;
+      else if (args[index] === '--control-transport' && (value === 'http' || value === 'cli')) supplied.controlTransport = value;
       else throw new Error(`Unsupported protocol calibration option ${args[index]}`);
     }
     const result = await runProtocolCalibration({ config: supplied });

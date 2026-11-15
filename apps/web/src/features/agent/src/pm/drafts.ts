@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuiState, type AssistantRuntime } from "@assistant-ui/react";
 import { agentText } from "../i18n-text.ts";
+import { hasMessageContextDraft } from "../chat/message-context-store";
+import { getPmReferences } from "./pm-chat-bridge";
 
 const PREFIX = "pm-v3:agent-draft:";
 type ComposerDraft = ReturnType<AssistantRuntime["thread"]["composer"]["getState"]>;
 const memoryDrafts = new Map<string, Pick<ComposerDraft, "text" | "quote" | "attachments">>();
-export function useChatDrafts(runtime: AssistantRuntime) {
+export function useChatDrafts(runtime: AssistantRuntime, enabled = true) {
   const localId = useAuiState((s) => s.threads.mainThreadId);
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
   const [storageError, setStorageError] = useState<string>();
   const previous = useRef<{ localId: string; key: string } | null>(null);
   const key = remoteId ? `thread:${remoteId}` : `draft:${localId}`;
   useEffect(() => {
+    if (!enabled) return;
     const composer = runtime.threads.getById(localId).composer;
     const previousOwner = previous.current;
     const sameThread = previousOwner?.localId === localId;
@@ -67,7 +70,7 @@ export function useChatDrafts(runtime: AssistantRuntime) {
     const beforeUnload = (event: BeforeUnloadEvent) => {
       const draft = composer.getState();
       save();
-      if (draft.text.trim() || draft.attachments.length || draft.quote) {
+      if (draft.text.trim() || draft.attachments.length || draft.quote || hasMessageContextDraft(localId) || getPmReferences(localId).length) {
         event.preventDefault();
         event.returnValue = "";
       }
@@ -79,11 +82,11 @@ export function useChatDrafts(runtime: AssistantRuntime) {
       unsubscribe();
       window.removeEventListener("beforeunload", beforeUnload);
     };
-  }, [runtime, localId, key]);
+  }, [enabled, runtime, localId, key]);
   const protect = () => {
     const draft = runtime.thread.composer.getState();
-    if (!draft.text.trim() && !draft.attachments.length && !draft.quote) return true;
-    return window.confirm(agentText("当前会话有未发送草稿。文字可在此标签页恢复；附件和引用仅在同一页面会话中保留，刷新浏览器会丢失。仍要切换吗？后台生成不会取消。", "This session has an unsent draft. Text can be restored in this tab; attachments and references last only for this page session and are lost on reload. Switch anyway? Background generation continues."));
+    if (!draft.text.trim() && !draft.attachments.length && !draft.quote && !hasMessageContextDraft(localId) && !getPmReferences(localId).length) return true;
+    return window.confirm(agentText("当前会话有未发送草稿。文字可在此标签页恢复；附件和消息上下文仅在同一页面会话中保留，刷新浏览器会丢失。仍要切换吗？后台生成不会取消。", "This session has an unsent draft. Text can be restored in this tab; attachments and message context last only for this page session and are lost on reload. Switch anyway? Background generation continues."));
   };
   return { protect, storageError };
 }

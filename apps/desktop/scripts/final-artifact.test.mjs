@@ -80,17 +80,17 @@ test("implicit Windows directory case aliases are rejected even without explicit
 });
 
 test("NSIS installed uninstaller selection is exact and excludes private implementation/plugin members", () => {
-  for (const path of ["Uninstall PM Agent v4.exe", "$INSTDIR/Uninstall PM Agent v4.exe"]) {
+  for (const path of ["Uninstall Dovspace.exe", "$INSTDIR/Uninstall Dovspace.exe"]) {
     const uninstaller = { path, Path: path, Size: "4096", Folder: "-", Attributes: "A" };
     assert.equal(nsisUninstallerMember([{ path: "$PLUGINSDIR/System.dll", Size: "1024" }, { path: "$PLUGINSDIR/private-helper.exe", Size: "1024" }, uninstaller]), uninstaller);
   }
-  assert.throws(() => nsisUninstallerMember([{ path: "$PLUGINSDIR/Uninstall PM Agent v4.exe", Size: "4096" }]), /exactly one bounded regular/);
+  assert.throws(() => nsisUninstallerMember([{ path: "$PLUGINSDIR/Uninstall Dovspace.exe", Size: "4096" }]), /exactly one bounded regular/);
 });
 
 test("NSIS installed uninstaller parser rejects missing, ambiguous, linked, non-file and oversized members", () => {
-  const entry = { path: "Uninstall PM Agent v4.exe", Path: "Uninstall PM Agent v4.exe", Size: "4096", Folder: "-", Attributes: "A" };
+  const entry = { path: "Uninstall Dovspace.exe", Path: "Uninstall Dovspace.exe", Size: "4096", Folder: "-", Attributes: "A" };
   for (const members of [
-    [], [entry, entry], [entry, { ...entry, path: "$INSTDIR/Uninstall PM Agent v4.exe" }],
+    [], [entry, entry], [entry, { ...entry, path: "$INSTDIR/Uninstall Dovspace.exe" }],
     [{ ...entry, Size: "0" }], [{ ...entry, Size: String(NSIS_UNINSTALLER_BYTE_LIMIT + 1) }],
     [{ ...entry, Size: "1e6" }], [{ ...entry, Folder: "+" }], [{ ...entry, Attributes: "D" }],
     [{ ...entry, "Symbolic Link": "another.exe" }], [{ ...entry, "Hard Link": "another.exe" }],

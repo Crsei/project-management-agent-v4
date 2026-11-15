@@ -15,8 +15,8 @@ import { createDashboardFixture, dashboardDatabaseUrl } from './dashboard-fixtur
 import { Workspace } from '../packages/pm-core/index.ts';
 import { LocalBlobStore } from '../packages/infrastructure/src/blobs.ts';
 
-function nativeIdentity(workspaceId: string, actorId: string, key: string): string {
-  return createHash('sha256').update(JSON.stringify([workspaceId, actorId, 'CreateCoreEntity', null, key])).digest('hex');
+function nativeIdentity(workspaceId: string, actorId: string, key: string, action: 'CreateCoreEntity' | 'CreateCoreWorkItem' = 'CreateCoreEntity'): string {
+  return createHash('sha256').update(JSON.stringify([workspaceId, actorId, action, null, key])).digest('hex');
 }
 
 describe('authorized durable native creation outcomes', { skip: !dashboardDatabaseUrl }, () => {
@@ -269,5 +269,40 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     const source = await f.request(`${base}/files/${created.body.id}`, { method: 'PUT', cookie: member.cookie,
       body: { revision: completed.body.revision, raw: completed.body.raw + '\n<!-- A formatting-only source write -->\n' } });
     assert.equal(source.status, 403, 'Raw source still requires planning.edit even when parsed business fields are unchanged');
+  });
+  it('recovers the original task/items action independently from an entity request with the same key', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
+    const project = await f.command<Entity>('CreateProject', { name: 'Task protocol recovery', goal: '', ownerId: f.owner.id, completionCriteria: [] });
+    const base = `/api/v1/workspaces/${f.workspaceId}/core`, key = randomUUID();
+    await f.pool.query(`CREATE FUNCTION reject_task_creation_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.action='CreateCoreWorkItem' THEN RAISE EXCEPTION 'injected original task audit failure'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER reject_task_creation_audit BEFORE INSERT ON project_audit FOR EACH ROW EXECUTE FUNCTION reject_task_creation_audit()`);
+    const originalInput = { project: project.id, title: 'Original items task', body: 'Committed before response' };
+    const created = await f.request(`${base}/items`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: originalInput });
+    assert.equal(created.status, 503);
+    const root = join(f.coreRoot, f.workspaceId), journalFile = join(root, '.pm/state/pm-command-journal.ndjson');
+    const journal = await readFile(journalFile, 'utf8'), state = await readFile(join(root, '.pm/state/state.json'), 'utf8');
+    const endpoint = `${base}/creation-attempts/${key}`;
+    assert.deepEqual((await f.request(endpoint)).body, { status: 'not_found' }, 'Entity lookup never guesses the task protocol');
+    assert.deepEqual((await f.request(`${endpoint}?kind=task`)).body, { status: 'pending', reason: 'audit_pending' });
+    assert.equal(await readFile(journalFile, 'utf8'), journal); assert.equal(await readFile(join(root, '.pm/state/state.json'), 'utf8'), state);
+    assert.equal((await f.request(`${endpoint}?kind=unknown`)).status, 400);
+    assert.equal((await f.request(`${endpoint}?kind=task&action=anything`)).status, 400);
+    await f.pool.query('DROP TRIGGER reject_task_creation_audit ON project_audit; DROP FUNCTION reject_task_creation_audit()');
+    const recovered = coreCreationAttemptSchema.parse((await f.request(`${endpoint}/recover?kind=task`, { method: 'POST', body: {} })).body);
+    assert.equal(recovered.status, 'committed'); if (recovered.status !== 'committed') throw new Error('Expected original task outcome');
+    const taskCommandId = nativeIdentity(f.workspaceId, f.owner.id, key, 'CreateCoreWorkItem');
+    assert.equal((await f.pool.query('SELECT 1 FROM project_audit WHERE command_id=$1', [taskCommandId])).rowCount, 1);
+    const sameKeyEntity = await f.request<FileRecord>(`${base}/entities`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { entity: 'work_item', project: project.id, title: 'Separate entity protocol' } });
+    assert.equal(sameKeyEntity.status, 200);
+    assert.notEqual(sameKeyEntity.body.id, recovered.entityId);
+    const entityOutcome = coreCreationAttemptSchema.parse((await f.request(endpoint)).body);
+    assert.equal(entityOutcome.status, 'committed'); if (entityOutcome.status !== 'committed') throw new Error('Expected separate entity outcome');
+    assert.equal(entityOutcome.entityId, sameKeyEntity.body.id);
+    assert.deepEqual((await f.request(`${endpoint}/recover?kind=task`, { method: 'POST', body: {} })).body, recovered);
+    const files = (await f.request<{ items: FileRecord[] }>(`${base}/items`)).body.items;
+    assert.equal(files.filter(file => file.entity.title === originalInput.title).length, 1);
+    assert.equal(files.filter(file => file.entity.title === 'Separate entity protocol').length, 1);
   });
 });

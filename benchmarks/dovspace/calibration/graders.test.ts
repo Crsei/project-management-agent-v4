@@ -2,16 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { referenceCase, putPublic } from './reference.ts';
-import { calibrationMutations } from './cases.ts';
+import { calibrationMutations, GUIDANCE_EXPECTED_FAILURES } from './cases.ts';
 import { gradeTask, gradeKnowledge, gradeProcess, gradeSafety, gradeState } from '../graders/index.ts';
-import { getTaskDefinition, listTaskDefinitions, SMOKE_TASK_IDS } from '../tasks/index.ts';
+import { getTaskDefinition, listTaskDefinitions, RUNNABLE_TASK_IDS, SMOKE_TASK_IDS } from '../tasks/index.ts';
 import { TaskDefinitionSchema } from '../schemas/types.ts';
-import { parseArtifact } from '../graders/knowledge.ts';
+import { parseArtifact, publicFile } from '../graders/knowledge.ts';
+import { checkpointSnapshot } from '../graders/guidance.ts';
+import { inspectCheckpoint } from '../runners/checkpoints.ts';
+import { contentHash, changedLines } from '../tasks/guidance.ts';
 
-test('catalog retains twelve complete definitions and precisely six runnable smoke tasks', () => {
+test('catalog retains twelve definitions, six original smoke tasks and nine executable cases', () => {
   const tasks = listTaskDefinitions();
   assert.equal(tasks.length, 12);
   assert.deepEqual(SMOKE_TASK_IDS, ['K02', 'K03', 'D01', 'D02', 'L02', 'L04']);
+  assert.deepEqual(RUNNABLE_TASK_IDS, ['K02', 'K03', 'K04', 'D01', 'D02', 'D04', 'L02', 'L03', 'L04']);
   for (const task of tasks) {
     assert.equal(TaskDefinitionSchema.safeParse(task).success, true, task.id);
     assert.ok(task.phases.length > 0 && task.phases.every((phase) => phase.requiredEvidence.length > 0));
@@ -42,6 +46,7 @@ test('planning prompt does not disclose current answers or an expected dependenc
   assert.doesNotMatch(instruction, /retentionDays=30|retryLimit=4|2026-12-15|retry blocked_by retention/);
   assert.match(instruction, /docs\/atlas\/release-request\.md/);
   assert.doesNotMatch(getTaskDefinition('L04').instruction, /incidentEscalationMinutes\s*=\s*10/);
+  assert.doesNotMatch(getTaskDefinition('L03').instruction, /server-minimum|retry-v2/);
 });
 
 test('plan grading accepts independent titles/prose and checks typed conditions rather than exact sentences', () => {
@@ -140,4 +145,55 @@ test('definition-only tasks cannot be silently graded as a different runnable ca
   const input = referenceCase('D01', '/reference-only/unsupported');
   input.task = { ...input.task, id: 'D03', hiddenGrader: 'task:D03' };
   await assert.rejects(() => gradeTask(input), /definition-only/);
+});
+
+for (const taskId of ['K04', 'D04', 'L03'] as const) {
+  test(`${taskId} trusted synthetic non-code reference passes every independent behavior/authority/safety check`, () => {
+    const input = referenceCase(taskId, `/reference-only/${taskId}`);
+    for (const item of [...gradeKnowledge(input), ...gradeProcess(input), ...gradeState(input)]) assert.equal(item.passed, true, item.id);
+    assert.equal(gradeSafety(input).safetyGate.passed, true);
+    const snapshot = checkpointSnapshot(input)!;
+    assert.ok(snapshot);
+    if (taskId === 'D04') {
+      // The original checkpoint is pre-response: the final handoff has since reconciled it.
+      const handoff = parseArtifact<Record<string, unknown>>(snapshot, 'artifacts/handoff.json')!;
+      handoff.revision = handoff.observedRevision;
+      putPublic(snapshot, 'artifacts/handoff.json', handoff);
+      const original = input.after.receipts.find(receipt => receipt.operationId === handoff.operationId)!;
+      snapshot.receipts = [original];
+      snapshot.entities = structuredClone(input.after.entities);
+      const target = snapshot.entities.find(entity => entity.id === original.targetId)!;
+      target.revision = original.revision!;
+      target.entity.body = String(target.entity.body).replace('\ndovspace:D04:delivered', '');
+    }
+    assert.ok(inspectCheckpoint(taskId, taskId === 'K04' ? 'save' : taskId === 'D04' ? 'handoff' : 'partial', input.fixture, input.before, snapshot, input.events), 'actual checkpoint input is admissible');
+  });
+  for (const mutation of calibrationMutations(taskId).filter(item => !['known-uncapped-failure-repeated', 'omitted-http-date-acceptance', 'remaining-http-date-work-omitted', 'revoked-replacement-still-implemented'].includes(item.name))) {
+    test(`${taskId} non-code scoring rejects ${mutation.name}`, () => {
+      const input = referenceCase(taskId, `/reference-only/${taskId}/${mutation.name}`);
+      mutation.mutate(input);
+      const checks = [...gradeKnowledge(input), ...gradeProcess(input), ...gradeState(input)];
+      assert.ok(checks.some(item => !item.passed) || !gradeSafety(input).safetyGate.passed, mutation.name);
+    });
+  }
+}
+
+test('L03 measured rework binds frozen source hashes and deterministic line differences', () => {
+  const input = referenceCase('L03', '/reference-only/L03/rework-measurement');
+  const checkpoint = checkpointSnapshot(input)!;
+  const before = publicFile(checkpoint, 'repo/src/retry.ts')!;
+  const after = publicFile(input.after, 'repo/src/retry.ts')!;
+  const rework = parseArtifact<{ checkpointSourceHash: string; finalSourceHash: string; measurement: { value: number } }>(input.after, 'artifacts/rework.json')!;
+  assert.equal(rework.checkpointSourceHash, contentHash(before));
+  assert.equal(rework.finalSourceHash, contentHash(after));
+  assert.equal(rework.measurement.value, changedLines(before, after));
+  assert.ok(rework.measurement.value > 0);
+});
+
+test('every added targeted calibration negative names an independent intended failure', () => {
+  for (const taskId of ['K04', 'D04', 'L03']) {
+    const targeted = calibrationMutations(taskId).filter(item => !['unsafe-business-completion', 'unrelated-pm-mutation', 'forged-agent-success'].includes(item.name));
+    assert.ok(targeted.length >= 8);
+    for (const mutation of targeted) assert.ok(GUIDANCE_EXPECTED_FAILURES[taskId]?.[mutation.name], `${taskId}/${mutation.name}`);
+  }
 });

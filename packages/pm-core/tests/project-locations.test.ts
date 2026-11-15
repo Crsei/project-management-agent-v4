@@ -47,26 +47,30 @@ test('two physical roots share aggregate IDs/configuration and expose virtual pa
   const two = await f.workspace.initializeProject({ entity: 'project', title: 'Two' }, 'two-key', { workspaceId: 'workspace-1', root: f.second });
   assert.equal(one.id, 'PRJ-001'); assert.equal(two.id, 'PRJ-002');
   assert.equal(one.path, 'project-roots/PRJ-001/projects/PRJ-001.md');
-  assert.equal(await readFile(path.join(f.first, '.pm/core/projects/PRJ-001.md'), 'utf8'), one.raw);
+  assert.equal(await readFile(path.join(f.first, '.dovspace/.pm/core/projects/PRJ-001.md'), 'utf8'), one.raw);
   assert.equal(await readFile(path.join(f.first, 'README.md'), 'utf8'), readme);
   const task = await f.workspace.createEntity({ entity: 'work_item', project: one.id, title: 'Task one' }, 'task-one');
   const secondTask = await f.workspace.createEntity({ entity: 'work_item', project: two.id, title: 'Task two' }, 'task-two');
   const document = await f.workspace.createEntity({ entity: 'document', project: one.id, title: 'Design', body: `See [[${task.id}]].` }, 'document-key');
   assert.equal(task.id, 'TASK-001'); assert.equal(secondTask.id, 'TASK-002');
   assert.equal(document.path, `project-roots/${one.id}/docs/${document.id}.md`);
-  assert.equal(await readFile(path.join(f.second, '.pm/core/work-items/TASK-002.md'), 'utf8'), secondTask.raw);
+  assert.equal(await readFile(path.join(f.second, '.dovspace/.pm/core/work-items/TASK-002.md'), 'utf8'), secondTask.raw);
   assert.deepEqual(f.workspace.items().map(item => item.id).sort(), [task.id, secondTask.id].sort());
   const expectedIds = [one.id, two.id, task.id, secondTask.id, document.id].sort();
   assert.deepEqual(f.workspace.snapshot().files.map(file => file.id).sort(), expectedIds);
   assert.deepEqual(f.workspace.graph().nodes.map(node => node.id).sort(), expectedIds);
   assert.equal(JSON.stringify(f.workspace.snapshot()).includes(f.first), false);
-  assert.equal(await access(path.join(f.first, '.pm/state')).then(() => true, () => false), false);
-  assert.equal(await access(path.join(f.second, '.pm/config.yaml')).then(() => true, () => false), false);
+  assert.equal(await access(path.join(f.first, '.pm')).then(() => true, () => false), false);
+  assert.equal(await access(path.join(f.second, '.pm')).then(() => true, () => false), false);
+  assert.deepEqual((await readdir(path.join(f.first, '.dovspace'))).sort(), ['.gitignore', '.pm']);
+  assert.equal(await readFile(path.join(f.first, '.dovspace/.gitignore'), 'utf8'), '*\n');
   await f.restart();
   assert.equal(f.workspace.get(task.id).revision, task.revision);
   assert.equal(f.workspace.get(document.id).raw, document.raw);
   assert.equal(Workspace.inspectCreation(f.root, 'one-key').current?.path, one.path);
-  assert.equal(enumerateProjectMounts(f.root).length, 2);
+  const mounts = enumerateProjectMounts(f.root);
+  assert.equal(mounts.length, 2);
+  assert.deepEqual(mounts.map(mount => [mount.root, mount.storageRoot, mount.layout]), [[f.first, path.join(f.first, '.dovspace'), 'dovspace-v1'], [f.second, path.join(f.second, '.dovspace'), 'dovspace-v1']]);
 });
 
 test('all ordinary edits, raw saves, archive and deletion use the registered core', { timeout: 90_000 }, async t => {
@@ -74,7 +78,7 @@ test('all ordinary edits, raw saves, archive and deletion use the registered cor
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Edits' }, 'edit-project', { workspaceId: 'workspace-1', root: f.first });
   let task = await f.workspace.create({ project: project.id, title: 'Dates', 'x-pm-start': '2026-10-24', due: '2026-10-25' });
   task = await f.workspace.patch(task.id, { due: '2026-10-27' }, task.revision);
-  const physical = path.join(f.first, '.pm/core/work-items', `${task.id}.md`);
+  const physical = path.join(f.first, '.dovspace/.pm/core/work-items', `${task.id}.md`);
   assert.equal(await readFile(physical, 'utf8'), task.raw);
   task = await f.workspace.save(task.id, task.raw.replace('# Dates', '# Raw title'), task.revision);
   assert.equal(f.workspace.get(task.id).entity.title, 'Raw title');
@@ -95,7 +99,7 @@ test('missing registered roots never recreate directories, including after resta
   await f.restart();
   await assert.rejects(f.workspace.initializeProject({ entity: 'project', title: 'Missing' }, 'missing-key', { workspaceId: 'workspace-1', root: f.first }));
   await assert.rejects(access(f.first), { code: 'ENOENT' });
-  assert.equal(await readFile(path.join(parked, '.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
+  assert.equal(await readFile(path.join(parked, '.dovspace/.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
 });
 
 test('preflight refuses overlaps, foreign metadata, sensitive roots and filesystem links', { timeout: 90_000 }, async t => {
@@ -108,12 +112,15 @@ test('preflight refuses overlaps, foreign metadata, sensitive roots and filesyst
   assert.throws(() => previewProjectDirectory(f.root, { workspaceId: 'workspace-1', root: '/etc' }));
   await mkdir(path.join(f.second, '.pm')); await writeFile(path.join(f.second, '.pm/project.json'), '{}');
   assert.throws(() => previewProjectDirectory(f.root, { workspaceId: 'workspace-1', root: f.second }));
+  await rm(path.join(f.second, '.pm'), { recursive: true });
+  await mkdir(path.join(f.second, '.dovspace')); await writeFile(path.join(f.second, '.dovspace/other'), '{}');
+  assert.throws(() => previewProjectDirectory(f.root, { workspaceId: 'workspace-1', root: f.second }));
   const linked = path.join(f.base, 'linked'); await symlink(f.first, linked, 'dir');
   assert.throws(() => previewProjectDirectory(f.root, { workspaceId: 'workspace-1', root: linked }));
   assert.deepEqual(enumerateProjectMounts(f.root).map(mount => mount.projectId), [project.id]);
-  assert.equal(await readFile(path.join(f.first, '.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
+  assert.equal(await readFile(path.join(f.first, '.dovspace/.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
   const task = await f.workspace.create({ project: project.id, title: 'No hard links' });
-  await link(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), path.join(f.base, 'hard-linked.md'));
+  await link(path.join(f.first, '.dovspace/.pm/core/work-items', `${task.id}.md`), path.join(f.base, 'hard-linked.md'));
   await f.workspace.rescan();
   await assert.rejects(f.workspace.patch(task.id, { title: 'Refused' }, task.revision));
   assert.throws(() => readCurrentCore(f.root));
@@ -126,7 +133,7 @@ test('external project membership changes never enter the aggregate or readonly 
   const one = await f.workspace.initializeProject({ entity: 'project', title: 'One' }, 'owner-one', { workspaceId: 'workspace-1', root: f.first });
   const two = await f.workspace.initializeProject({ entity: 'project', title: 'Two' }, 'owner-two', { workspaceId: 'workspace-1', root: f.second });
   const foreign = createMarkdown({ id: 'TASK-700', entity: 'work_item', project: two.id, title: 'Wrong mount' });
-  await writeFile(path.join(f.first, '.pm/core/work-items/TASK-700.md'), foreign);
+  await writeFile(path.join(f.first, '.dovspace/.pm/core/work-items/TASK-700.md'), foreign);
   await f.workspace.rescan();
   assert.equal(f.workspace.items().some(item => item.id === 'TASK-700'), false);
   assert.ok(f.workspace.snapshot().errors.some(issue => issue.path === `project-roots/${one.id}/work-items/TASK-700.md`));
@@ -147,7 +154,7 @@ test('an interrupted original initialization resumes the reserved ID/key without
   assert.equal(await readFile(path.join(f.root, '.pm/state/state.json'), 'utf8'), before);
   await f.restart();
   await assert.rejects(f.workspace.create({ title: 'Other writer' }), (error: unknown) => error instanceof WorkspaceError && error.status === 409);
-  await assert.rejects(access(path.join(f.first, '.pm/core/projects/PRJ-001.md')), { code: 'ENOENT' });
+  await assert.rejects(access(path.join(f.first, '.dovspace/.pm/core/projects/PRJ-001.md')), { code: 'ENOENT' });
   const result = await f.workspace.initializeProject(input, 'original-key', directory);
   assert.equal(result.id, 'PRJ-001'); assert.equal(result.raw, raw);
   assert.equal((await f.workspace.initializeProject(input, 'original-key', directory)).id, result.id);
@@ -179,7 +186,7 @@ test('legacy authority remains real until migration, then relocation preserves r
   assert.deepEqual(await readFile(path.join(relocated.attachmentsPath, 'objects/file.bin')), bytes);
   assert.equal(await readFile(path.join(relocated.attachmentsPath, '.pm-store.json'), 'utf8'), '{"stable":"identity"}\n');
   assert.equal(await readFile(path.join(f.first, 'source.ts'), 'utf8'), 'export const untouched = true;\n');
-  await assert.rejects(access(path.join(f.first, '.pm/project.json')), { code: 'ENOENT' });
+  await assert.rejects(access(path.join(f.first, '.dovspace/.pm/project.json')), { code: 'ENOENT' });
   assert.equal(Workspace.inspectCreation(f.root, 'legacy-original').current?.revision, project.revision);
   await f.restart();
   assert.equal(f.workspace.get(task.id).revision, task.revision);
@@ -212,7 +219,7 @@ test('stopped restore rebinding reads only copied destinations and leaves readon
   rebindProjectLocations(restoredWorkspace, { [project.id]: restoredProject });
   const statePath = path.join(restoredWorkspace, '.pm/state/state.json');
   const mapPath = path.join(restoredWorkspace, '.pm/state/project-locations.json');
-  const beforeState = await readFile(statePath, 'utf8'), beforeMap = await readFile(mapPath, 'utf8');
+  const beforeState = await readFile(statePath, "utf8"), beforeMap = await readFile(mapPath, "utf8");
   assert.equal(readCurrentCore(restoredWorkspace).files[0]?.revision, project.revision);
   assert.equal(await readFile(statePath, 'utf8'), beforeState); assert.equal(await readFile(mapPath, 'utf8'), beforeMap);
   assert.equal(beforeMap.includes(f.first), false);
@@ -234,7 +241,7 @@ test('watcher observes registered core changes without importing arbitrary code 
   if (observation.aborted) aborted();
   void changed.promise.catch(() => undefined);
   try {
-    await writeFile(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), task.raw.replace('# Before external edit', '# External edit'));
+    await writeFile(path.join(f.first, '.dovspace/.pm/core/work-items', `${task.id}.md`), task.raw.replace('# Before external edit', '# External edit'));
     await changed.promise;
   } finally {
     off();
@@ -243,9 +250,9 @@ test('watcher observes registered core changes without importing arbitrary code 
   await writeFile(path.join(f.first, 'NOT-AN-ENTITY.md'), createMarkdown({ id: 'TASK-900', title: 'Code tree is not imported' }));
   await f.workspace.rescan();
   assert.equal(f.workspace.items().some(file => file.id === 'TASK-900'), false);
-  const stored = await readdir(path.join(f.first, '.pm'));
+  const stored = await readdir(path.join(f.first, '.dovspace/.pm'));
   assert.deepEqual(stored.sort(), ['attachments', 'core', 'project.json']);
-  assert.equal(f.workspace.get(task.id).revision, revisionOf(await readFile(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), 'utf8')));
+  assert.equal(f.workspace.get(task.id).revision, revisionOf(await readFile(path.join(f.first, '.dovspace/.pm/core/work-items', `${task.id}.md`), 'utf8')));
 });
 
 test('new-folder mode creates only the reserved root and refuses inode replacement', { timeout: 90_000 }, async t => {
@@ -272,13 +279,13 @@ test('a durable partial migration stays fenced on restart and resumes only its o
   const diskIdentity = await stat(f.first, { bigint: true });
   const storageId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const marker = { version: 1, workspaceId: 'workspace-1', projectId: project.id, storageId, core: '.pm/core', attachments: '.pm/attachments' };
-  await mkdir(path.join(f.first, '.pm/core/projects'), { recursive: true });
-  await mkdir(path.join(f.first, '.pm/core/work-items')); await mkdir(path.join(f.first, '.pm/core/docs')); await mkdir(path.join(f.first, '.pm/attachments'));
-  await writeFile(path.join(f.first, '.pm/project.json'), JSON.stringify(marker, null, 2) + '\n');
-  await writeFile(path.join(f.first, '.pm/core', project.path), project.raw);
-  const journal = { version: 1, entries: [{ projectId: project.id, workspaceId: 'workspace-1', storageId, root: f.first, mode: 'existing',
+  await mkdir(path.join(f.first, '.dovspace/.pm/core/projects'), { recursive: true });
+  await mkdir(path.join(f.first, '.dovspace/.pm/core/work-items')); await mkdir(path.join(f.first, '.dovspace/.pm/core/docs')); await mkdir(path.join(f.first, '.dovspace/.pm/attachments'));
+  await writeFile(path.join(f.first, '.dovspace/.pm/project.json'), JSON.stringify(marker, null, 2) + '\n');
+  await writeFile(path.join(f.first, '.dovspace/.pm/core', project.path), project.raw);
+  const journal = { version: 1, entries: [{ projectId: project.id, workspaceId: 'workspace-1', storageId, root: f.first, mode: 'existing', layout: 'dovspace-v1',
     initialization: { key: 'original-transfer', hash: operationHash, step: 'reserved' },
-    transfer: { key: 'original-transfer', hash: operationHash, phase: 'copying', target: { root: f.first, mode: 'existing', identity: { device: String(diskIdentity.dev), inode: String(diskIdentity.ino) } },
+    transfer: { key: 'original-transfer', hash: operationHash, phase: 'copying', target: { root: f.first, mode: 'existing', layout: 'dovspace-v1', identity: { device: String(diskIdentity.dev), inode: String(diskIdentity.ino) } },
       files: [project, task].map(file => ({ source: file.path, destination: file.path, revision: file.revision })) } }] };
   await writeFile(path.join(f.root, '.pm/state/project-locations.json'), JSON.stringify(journal));
   await f.restart();
@@ -323,7 +330,7 @@ test('a real unwritable selected directory stays pending without modifying exist
   await chmod(f.first, 0o500);
   try {
     await assert.rejects(f.workspace.initializeProject(input, 'permission-key', directory), /requires recovery/);
-    await assert.rejects(access(path.join(f.first, '.pm/project.json')), { code: 'ENOENT' });
+    await assert.rejects(access(path.join(f.first, '.dovspace/.pm/project.json')), { code: 'ENOENT' });
     assert.deepEqual(await readFile(path.join(f.first, 'README.md')), original);
     assert.throws(() => readCurrentCore(f.root), /recovery/);
   } finally { await chmod(f.first, 0o700); }
@@ -340,19 +347,19 @@ test('ENOSPC after the identity marker preserves the reservation and resumes wit
   const directory = { workspaceId: 'workspace-1', root: f.first, mode: 'existing' as const };
   const mkdir = FileRepository.prototype.mkdir;
   const fault = t.mock.method(FileRepository.prototype, 'mkdir', function (this: FileRepository, relative: string) {
-    if (this.root === f.first && relative === '.pm/core') throw Object.assign(new Error('Selected disk capacity exhausted'), { code: 'ENOSPC' });
+    if (this.root === path.join(f.first, '.dovspace') && relative === '.pm/core') throw Object.assign(new Error('Selected disk capacity exhausted'), { code: 'ENOSPC' });
     return mkdir.call(this, relative);
   });
   await assert.rejects(f.workspace.initializeProject(input, 'capacity-key', directory), /requires recovery/);
-  const marker = await readFile(path.join(f.first, '.pm/project.json'));
-  await assert.rejects(access(path.join(f.first, '.pm/core/projects/PRJ-001.md')), { code: 'ENOENT' });
+  const marker = await readFile(path.join(f.first, '.dovspace/.pm/project.json'));
+  await assert.rejects(access(path.join(f.first, '.dovspace/.pm/core/projects/PRJ-001.md')), { code: 'ENOENT' });
   await f.restart();
   assert.throws(() => readCurrentCore(f.root), /recovery/);
   await assert.rejects(f.workspace.create({ title: 'Forbidden replacement' }), (error: unknown) => error instanceof WorkspaceError && error.status === 409);
   fault.mock.restore();
   const recovered = await f.workspace.initializeProject(input, 'capacity-key', directory);
   assert.equal(recovered.id, 'PRJ-001');
-  assert.deepEqual(await readFile(path.join(f.first, '.pm/project.json')), marker);
+  assert.deepEqual(await readFile(path.join(f.first, '.dovspace/.pm/project.json')), marker);
   const next = await f.workspace.initializeProject({ entity: 'project', title: 'Next identity' }, 'after-capacity-key', { workspaceId: 'workspace-1', root: f.second });
   assert.equal(next.id, 'PRJ-002');
 });

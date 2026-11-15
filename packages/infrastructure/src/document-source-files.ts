@@ -14,7 +14,7 @@ import { cacheWindowsPathAttributes } from '../../pm-core/windows-reparse.ts';
 export type DocumentDirectoryIdentity = { device: string; inode: string };
 type Link = GuardedDirectory;
 const fileFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-const privateComponents: Record<string, true> = { '.pm': true, '.git': true, '.ssh': true, '.aws': true, '.config': true, '.codex': true, '.claude': true, '.agent-workspace': true, 'provider-homes': true };
+const privateComponents: Record<string, true> = { '.pm': true, '.dovspace': true, '.git': true, '.ssh': true, '.aws': true, '.config': true, '.codex': true, '.claude': true, '.agent-workspace': true, 'provider-homes': true };
 const operationProofSchema = z.strictObject({ requestHash: z.string().regex(/^[a-f0-9]{64}$/), receipt: z.preprocess(parseDocumentSourceReceipt, documentSourceMutationReceiptSchema) });
 const operationHistorySchema = z.strictObject({ requestHash: z.string().regex(/^[a-f0-9]{64}$/), capture: externalDocumentHistoryPreparedSchema });
 const sameIdentity = sameFileIdentity;

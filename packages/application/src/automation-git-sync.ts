@@ -10,12 +10,13 @@ import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 import { automationSnapshot, authorizeAutomationProject } from './automation-report.ts';
 import { automationConfigHash, deterministicAutomationId, runAutomationTransferCycle, validateScriptFiles, type AutomationTransferStudio } from './automation-transfer.ts';
 import { requestHash } from './kernel.ts';
+import type { SqlExecutor } from './ports.ts';
 
 type ConfigRow = { id: string; workspace_id: string; actor_id: string; project_id: string; revision: number; config: AutomationGitConfig; token_sealed: string | null; encryption_key_sealed: string | null; last_commit: string | null; last_synced_at: Date | null };
 type OperationRow = { id: string; config_id: string; config_revision: number; status: AutomationGitOperation['status']; remote_commit: string | null; prepared_commit: string | null; error: string | null; started_at: Date | null; finished_at: Date | null };
 type Mapping = { path: string; definition_id: string; config_hash: string; remote_hash: string };
 type StoredGitResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string }; httpStatus: number };
-export type AutomationGitSyncOptions = { database: () => Pool; core: NotificationCorePort; studio: AutomationTransferStudio; git?: AutomationGitPort };
+export type AutomationGitSyncOptions = { database: () => Pool; core: NotificationCorePort; studio: AutomationTransferStudio; git?: AutomationGitPort; checkAuthorization?: (sql: SqlExecutor) => Promise<void> };
 function operationDto(row: OperationRow): AutomationGitOperation { return { id: row.id, status: row.status, commit: row.prepared_commit, startedAt: row.started_at?.toISOString() ?? null, finishedAt: row.finished_at?.toISOString() ?? null, error: row.error }; }
 async function definitions(studio: AutomationTransferStudio, actor: Actor, workspaceId: string, projectId: string): Promise<StudioDefinition[]> {
   const result: StudioDefinition[] = []; let cursor: string | undefined;
@@ -24,7 +25,7 @@ async function definitions(studio: AutomationTransferStudio, actor: Actor, works
 }
 export function createAutomationGitSyncService(options: AutomationGitSyncOptions) {
   const git = options.git ?? createConfiguredAutomationGitPort();
-  async function authorize(actor: Actor, workspaceId: string, projectId: string, write: boolean) { await authorizeAutomationProject(options.database(), actor, workspaceId, projectId, await automationSnapshot(options.core, workspaceId), write); }
+  async function authorize(actor: Actor, workspaceId: string, projectId: string, write: boolean) { await options.checkAuthorization?.(options.database()); await authorizeAutomationProject(options.database(), actor, workspaceId, projectId, await automationSnapshot(options.core, workspaceId), write); }
   async function current(actor: Actor, workspaceId: string, projectId: string): Promise<ConfigRow | undefined> { return (await options.database().query<ConfigRow>('SELECT * FROM automation_git_configs WHERE workspace_id=$1 AND actor_id=$2 AND project_id=$3', [workspaceId, actor.id, projectId])).rows[0]; }
   async function status(actor: Actor, workspaceId: string, projectId: string): Promise<AutomationGitStatus> {
     await authorize(actor, workspaceId, projectId, false); const row = await current(actor, workspaceId, projectId);
@@ -41,6 +42,7 @@ export function createAutomationGitSyncService(options: AutomationGitSyncOptions
     let result: StoredGitResult<T>;
     try {
       await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); await authorizeAutomationProject(sql, actor, workspaceId, projectId, await automationSnapshot(options.core, workspaceId), true);
+      await options.checkAuthorization?.(sql);
       const prior = (await sql.query<{ request_hash: string; result: StoredGitResult<T> }>('SELECT request_hash,result FROM automation_git_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0];
       if (prior && prior.request_hash !== hash) throw new DomainError('idempotency_conflict', 'Git request ID already represents a different mutation', 409);
       if (prior) result = prior.result;
@@ -74,6 +76,12 @@ export function createAutomationGitSyncService(options: AutomationGitSyncOptions
   }
   return {
     status,
+    async inspectReceipt(actor: Actor, workspaceId: string, requestId: string) {
+      const row = (await options.database().query<{ project_id: string; request_hash: string; result: StoredGitResult<AutomationGitStatus | AutomationGitOperation | { savedRevision: number }> }>('SELECT project_id,request_hash,result FROM automation_git_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0];
+      if (!row) throw new DomainError('not_found_or_forbidden', 'Git receipt is not accessible', 404);
+      await authorize(actor, workspaceId, row.project_id, false);
+      return { hash: row.request_hash, projectIds: [row.project_id], status: row.result.ok ? 'succeeded' as const : row.result.httpStatus >= 500 ? 'unknown' as const : 'failed' as const };
+    },
     async save(actor: Actor, workspaceId: string, input: AutomationGitSave): Promise<AutomationGitStatus> {
       await mutation(actor, workspaceId, input.config.projectId, input, input.requestId, async sql => {
         const row = (await sql.query<ConfigRow>('SELECT * FROM automation_git_configs WHERE workspace_id=$1 AND actor_id=$2 AND project_id=$3 FOR UPDATE', [workspaceId, actor.id, input.config.projectId])).rows[0];

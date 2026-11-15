@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { CAPABILITIES, DomainError } from '../../domain/src/core.ts';
 import type { Actor, Capability } from '../../domain/src/core.ts';
 import type { CommandRegistry, SqlExecutor } from './ports.ts';
+import { readMemberImpact } from './member-lifecycle.ts';
 
 export type Membership = { userId: string; workspaceId: string; capabilities: Capability[]; projectIds: string[] | null; version: number; revokedAt: string | null };
 type MembershipRow = { user_id: string; workspace_id: string; capabilities: Capability[]; project_ids: string[] | null; version: number; revoked_at: Date | null };
@@ -65,6 +66,29 @@ export const accessCommands: CommandRegistry = {
       if (!updated.rows[0]) throw new DomainError('version_conflict', 'Membership version changed', 409);
       const member = memberFromRow(updated.rows[0]!);
       await emitAccessEvent(ctx.sql, ctx.workspaceId, userId, member.version, ctx.actor.id, ctx.command.commandId, 'WorkspaceMemberSet');
+      return member;
+    },
+  },
+  LeaveWorkspace: {
+    payload: z.object({ userId: z.uuid().toLowerCase() }).strict(),
+    async handler(ctx) {
+      const { userId } = ctx.command.payload as { userId: string };
+      if (ctx.command.projectId || ctx.command.targetId && ctx.command.targetId !== userId) throw new DomainError('scope_mismatch', 'Departure targets the workspace member');
+      if (ctx.actor.id === userId) await ctx.requireSelf();
+      else await ctx.require('access.manage');
+      // The kernel holds the same workspace lock used by grants and core writes.
+      // Never infer that an unreadable or partial source has no responsibilities.
+      await ctx.core?.refresh?.();
+      const impact = await readMemberImpact(ctx, userId);
+      if (ctx.command.expectedVersions?.[userId] !== impact.membershipVersion) throw new DomainError('version_conflict', 'Membership version changed', 409);
+      if (impact.revokedAt) throw new DomainError('member_already_revoked', 'Membership has already been revoked', 409);
+      if (!impact.scopeComplete) throw new DomainError('impact_incomplete', 'A workspace manager must resolve unreadable responsibility sources', 409);
+      if (impact.duties.length) throw new DomainError('handover_required', 'Outstanding responsibilities must be handed over before normal departure', 409, { duties: impact.duties });
+      await protectFinalAdministrator(ctx.sql, ctx.workspaceId, userId, false);
+      const updated = await ctx.sql.query<MembershipRow>('UPDATE memberships SET revoked_at=now(),version=version+1,updated_at=now() WHERE workspace_id=$1 AND user_id=$2 AND version=$3 AND revoked_at IS NULL RETURNING *', [ctx.workspaceId, userId, impact.membershipVersion]);
+      if (!updated.rows[0]) throw new DomainError('version_conflict', 'Membership version changed', 409);
+      const member = memberFromRow(updated.rows[0]);
+      await emitAccessEvent(ctx.sql, ctx.workspaceId, userId, member.version, ctx.actor.id, ctx.command.commandId, 'WorkspaceMemberLeft');
       return member;
     },
   },

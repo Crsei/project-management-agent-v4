@@ -12,9 +12,10 @@ import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { requireCapability } from './access.ts';
 import type { CommandContext, CommandRegistry, SqlExecutor } from './ports.ts';
 
+import { readInvitationTeams } from './invitation-teams.ts';
 export type InvitationProjectValidator = (sql: SqlExecutor, actor: Actor, workspaceId: string, projectIds: string[]) => Promise<void>;
 export type InvitationRow = {
-  id: string; workspace_id: string; email: string; role: MemberRole; project_ids: string[] | null;
+  id: string; workspace_id: string; email: string; role: MemberRole; project_ids: string[] | null; team_ids: string[];
   status: InvitationStatus; version: number; generation: number; token_hash: string; invited_by: string;
   accepted_by: string | null; accepted_at: Date | null; expires_at: Date; created_at: Date; updated_at: Date;
   delivery_status?: InvitationDeliveryStatus; failure_code?: InvitationFailureCode | null; delivery_updated_at?: Date;
@@ -23,7 +24,7 @@ export const invitationColumns = `SELECT i.*,q.status AS delivery_status,q.failu
   FROM member_invitations i LEFT JOIN invitation_mail_queue q ON q.invitation_id=i.id AND q.generation=i.generation`;
 export function invitationTokenHash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
 export function invitationDto(row: InvitationRow, now = new Date()): MemberInvitationDto {
-  return { id: row.id, workspaceId: row.workspace_id, email: row.email, role: row.role, projectIds: row.project_ids,
+  return { id: row.id, workspaceId: row.workspace_id, email: row.email, role: row.role, projectIds: row.project_ids, teamIds: row.team_ids,
     status: row.status === 'pending' && row.expires_at <= now ? 'expired' : row.status, version: row.version,
     expiresAt: row.expires_at.toISOString(), createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
     invitedBy: row.invited_by, acceptedAt: row.accepted_at?.toISOString() ?? null,
@@ -81,7 +82,8 @@ function enabled(config: InvitationMailConfig | undefined): InvitationMailConfig
   return config;
 }
 const createPayload = z.strictObject({ email: z.email().max(254).transform(email => email.trim().toLowerCase()), role: z.enum(MEMBER_ROLES),
-  projectIds: z.array(z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/)).max(1000).refine(ids => new Set(ids).size === ids.length, 'Duplicate project IDs').nullable() });
+  projectIds: z.array(z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/)).max(1000).refine(ids => new Set(ids).size === ids.length, 'Duplicate project IDs').nullable(),
+  teamIds: z.array(z.uuid().toLowerCase()).max(100).refine(ids => new Set(ids).size === ids.length, 'Duplicate team IDs').default([]) });
 
 /** All handlers run under the kernel's workspace lock, command receipt transaction and CAS rules. */
 export function createInvitationCommands(config?: InvitationMailConfig, validateProjects?: InvitationProjectValidator): CommandRegistry {
@@ -95,14 +97,15 @@ export function createInvitationCommands(config?: InvitationMailConfig, validate
         const payload = createPayload.parse(ctx.command.payload);
         if (payload.role === 'admin' && payload.projectIds !== null) throw new DomainError('validation_failed', 'Administrators require workspace scope');
         await projectsForCommand(ctx, payload.projectIds, validateProjects);
+        await readInvitationTeams(ctx.sql, ctx.workspaceId, payload.teamIds);
         await rejectExistingMember(ctx.sql, ctx.workspaceId, payload.email);
         await ctx.sql.query("UPDATE member_invitations SET status='expired',version=version+1,updated_at=now() WHERE workspace_id=$1 AND email=$2 AND status='pending' AND expires_at<=now()", [ctx.workspaceId, payload.email]);
         const prior = await ctx.sql.query("SELECT id FROM member_invitations WHERE workspace_id=$1 AND email=$2 AND status='pending'", [ctx.workspaceId, payload.email]);
         if (prior.rowCount) throw new DomainError('invitation_already_pending', 'An active invitation already exists for this email', 409);
         const token = randomBytes(32).toString('base64url');
-        const result = await ctx.sql.query<InvitationRow>(`INSERT INTO member_invitations(id,workspace_id,email,role,project_ids,token_hash,invited_by,expires_at)
-          VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 second') RETURNING *`,
-        [randomUUID(), ctx.workspaceId, payload.email, payload.role, payload.projectIds, invitationTokenHash(token), ctx.actor.id, mail.ttlSeconds]);
+        const result = await ctx.sql.query<InvitationRow>(`INSERT INTO member_invitations(id,workspace_id,email,role,project_ids,token_hash,invited_by,expires_at,team_ids)
+          VALUES($1,$2,$3,$4,$5,$6,$7,now()+$8*interval '1 second',$9) RETURNING *`,
+        [randomUUID(), ctx.workspaceId, payload.email, payload.role, payload.projectIds, invitationTokenHash(token), ctx.actor.id, mail.ttlSeconds, payload.teamIds]);
         const row = result.rows[0]!;
         await queueMail(ctx.sql, row, token, mail);
         await invitationEvent(ctx.sql, row, ctx.actor.id, ctx.command.commandId, 'MemberInvitationCreated');
@@ -130,6 +133,7 @@ export function createInvitationCommands(config?: InvitationMailConfig, validate
         if (row.status === 'accepted' || row.status === 'revoked') throw new DomainError('invitation_not_pending', 'This invitation cannot be resent', 409);
         if (row.delivery_status === 'sending') throw new DomainError('invitation_send_in_progress', 'Wait for the sending attempt to resolve before explicitly resending', 409);
         await projectsForCommand(ctx, row.project_ids, validateProjects);
+        await readInvitationTeams(ctx.sql, ctx.workspaceId, row.team_ids);
         await rejectExistingMember(ctx.sql, ctx.workspaceId, row.email);
         const other = await ctx.sql.query("SELECT 1 FROM member_invitations WHERE workspace_id=$1 AND email=$2 AND status='pending' AND id<>$3", [ctx.workspaceId, row.email, row.id]);
         if (other.rowCount) throw new DomainError('invitation_already_pending', 'Another active invitation exists for this email', 409);

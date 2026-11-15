@@ -1,0 +1,450 @@
+.marketing .download-page {
+  padding-block: 72px var(--section-space);
+}
+.marketing .download-head {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  margin-bottom: 48px;
+}
+.marketing .download-head .app-icon {
+  width: 66px;
+  height: 66px;
+  margin-top: 4px;
+}
+.marketing .download-head h1 {
+  max-width: 1000px;
+  margin-bottom: 18px;
+  font-size: clamp(36px, 4.2vw, 56px);
+  line-height: 1.2;
+}
+.marketing .download-head p {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.8;
+}
+.marketing .release-summary {
+  min-width: 0;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+}
+.marketing .release-summary h2 {
+  margin-bottom: 0;
+  font-size: clamp(28px, 2.8vw, 36px);
+  line-height: 1.35;
+}
+.marketing .release-summary-current {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.45fr);
+  align-items: start;
+  gap: 48px;
+  background: var(--surface);
+}
+.marketing .release-summary-heading .eyebrow {
+  margin-bottom: 18px;
+}
+.marketing .release-summary-heading .release-links {
+  align-items: center;
+  gap: 16px 20px;
+  margin-top: 28px;
+}
+.marketing .release-meta {
+  display: grid;
+  gap: 16px;
+  margin: 24px 0;
+}
+.marketing .release-meta > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.marketing .release-meta dt {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.marketing .release-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.marketing .release-summary-current .release-meta {
+  gap: 0;
+  margin: 0;
+}
+.marketing .release-summary-current .release-meta > div {
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  padding-block: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.marketing .release-summary-current .release-meta > div:first-child {
+  padding-top: 0;
+}
+.marketing .release-summary-current .release-meta > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.marketing .download-page code {
+  color: var(--fg);
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
+}
+.marketing .release-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.marketing .download-page :where(.release-meta, .release-links, .release-history-heading, .release-artifacts, .release-evidence-note, .release-gap-list, .download-note, .web-card, .build-details) a:not(.btn) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.marketing .download-page a:not(.btn):hover {
+  color: var(--accent-hover);
+}
+.marketing .release-history-heading {
+  max-width: 800px;
+  margin-block: 64px 32px;
+}
+.marketing .release-history-heading .eyebrow {
+  margin-bottom: 16px;
+}
+.marketing .release-history-heading h2 {
+  margin-bottom: 20px;
+  font-size: clamp(28px, 3.4vw, 44px);
+  line-height: 1.3;
+}
+.marketing .release-history-heading p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.marketing .release-history-heading p + p {
+  margin-top: 16px;
+}
+.marketing .release-history-heading .release-links {
+  margin-top: 24px;
+}
+.marketing .download-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+.marketing .download-card {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+.marketing .download-card-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.marketing .download-card-head > div {
+  min-width: 0;
+}
+.marketing .platform-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg);
+  font: 18px/1 var(--mono);
+}
+.marketing .download-card h3 {
+  margin-bottom: 4px;
+  font-size: 24px;
+  line-height: 1.3;
+}
+.marketing .download-card .arch {
+  color: var(--muted);
+  font-size: 15px;
+}
+.marketing .download-card .format {
+  margin-top: 16px;
+  color: var(--dim);
+  font: 13px/1.7 var(--mono);
+}
+.marketing .download-card .release-meta {
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.marketing .download-card .btn-disabled {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+}
+.marketing .download-card .small-note {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.marketing .release-artifacts-details {
+  margin-block: 24px;
+  padding-block: 8px;
+  border-block: 1px solid var(--border);
+}
+.marketing .release-artifacts-details summary {
+  min-height: 44px;
+  padding-block: 10px;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+.marketing .release-artifacts-details summary::marker {
+  color: var(--accent);
+}
+.marketing .release-artifacts {
+  display: grid;
+  gap: 12px;
+  margin-block: 12px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+  list-style: none;
+}
+.marketing .release-artifacts li {
+  min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.marketing .release-artifacts p + p {
+  margin-top: 6px;
+}
+.marketing .release-artifacts .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.marketing .download-note {
+  max-width: 960px;
+  margin-block: 24px 56px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.marketing .release-summary-evidence {
+  display: grid;
+  gap: 24px;
+}
+.marketing .release-evidence-note {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.marketing .release-gap-list {
+  display: grid;
+  gap: 12px;
+  padding-left: 24px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.marketing .release-gap-list strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.marketing .web-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  margin-top: 48px;
+  padding: 32px;
+  background: var(--surface);
+}
+.marketing .web-card > div {
+  min-width: 0;
+  max-width: 760px;
+}
+.marketing .web-card h2 {
+  margin-block: 14px 16px;
+  font-size: clamp(26px, 2.8vw, 36px);
+  line-height: 1.35;
+}
+.marketing .web-card p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.marketing .web-card .btn {
+  flex-shrink: 0;
+}
+.marketing .build-details {
+  min-width: 0;
+  margin-top: 40px;
+  padding-block: 16px;
+  border-block: 1px solid var(--border);
+}
+.marketing .build-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 44px;
+  padding-block: 8px;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  list-style: none;
+}
+.marketing .build-details summary::-webkit-details-marker {
+  display: none;
+}
+.marketing .build-details summary::marker {
+  content: '';
+}
+.marketing .build-details summary span {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 24px;
+  font-weight: 400;
+}
+.marketing .build-details[open] summary span {
+  transform: rotate(45deg);
+}
+.marketing .build-details p {
+  margin-block: 20px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.marketing .build-details pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 24px;
+  border: 1px solid var(--dark);
+  border-radius: var(--radius-card);
+  background: var(--dark);
+  color: var(--on-dark);
+  font: 14px/1.9 var(--mono);
+  white-space: pre;
+  overflow-wrap: normal;
+  scroll-padding-inline: 24px;
+  color-scheme: dark;
+}
+.marketing .build-details pre:focus-visible {
+  outline-offset: -4px;
+}
+.marketing .build-details pre code {
+  color: inherit;
+  font-size: inherit;
+  overflow-wrap: normal;
+}
+.marketing .back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+@media (max-width: 1100px) {
+  .marketing .release-summary-current {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .marketing .release-summary-heading {
+    max-width: 760px;
+  }
+  .marketing .download-card {
+    padding: 22px;
+  }
+}
+@media (min-width: 601px) and (max-width: 960px) {
+  .marketing .download-card .release-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 32px;
+  }
+}
+@media (max-width: 960px) {
+  .marketing .download-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .marketing .download-card {
+    padding: 28px;
+  }
+  .marketing .web-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+  }
+}
+@media (max-width: 820px) {
+  .marketing .download-page {
+    padding-block: 48px 64px;
+  }
+  .marketing .download-head {
+    margin-bottom: 36px;
+  }
+  .marketing .download-head p {
+    font-size: 16px;
+  }
+  .marketing .release-history-heading {
+    margin-top: 48px;
+  }
+  .marketing .download-note {
+    margin-bottom: 40px;
+  }
+}
+@media (max-width: 600px) {
+  .marketing .download-head {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .marketing .download-head .app-icon {
+    width: 52px;
+    height: 52px;
+    margin: 0;
+  }
+  .marketing .download-head h1 {
+    font-size: 36px;
+  }
+  .marketing .release-summary,
+  .marketing .download-card,
+  .marketing .web-card {
+    padding: 24px;
+  }
+  .marketing .release-summary-current .release-meta > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .marketing .release-links {
+    gap: 16px;
+  }
+  .marketing .release-summary-heading .release-links {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .marketing .build-details pre {
+    padding: 18px;
+    scroll-padding-inline: 18px;
+  }
+}

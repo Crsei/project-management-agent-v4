@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, useDraggable, useDroppable, useDndContext, type DragEndEvent } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
-import { Circle, CircleDashed, CheckCircle2, XCircle, LockKeyhole, GitBranch, Plus, CalendarDays, ArrowUpRight, Pencil, Ellipsis } from 'lucide-react';
+import { Circle, CircleDashed, CheckCircle2, XCircle, LockKeyhole, GitBranch, Plus, CalendarDays, ArrowUpRight, Pencil, Ellipsis, UserRound } from 'lucide-react';
 import { defaultConfiguration, entityKinds, fieldRegistry, workflowFor, statusCategory, type FileRecord, type Status, type Priority, type ViewConfig, type ProtocolConfiguration } from '../pm-schema/index.ts';
 import { relationFields } from '../pm-schema/relations.ts';
 import { applyView, groupChange } from '../pm-schema/query.ts';
@@ -30,7 +30,7 @@ export type ArchiveFilter = 'exclude' | 'include' | 'only';
 export type ContextMenuAction = { id: string; label: string; disabled?: boolean; reason?: string; destructive?: boolean; separatorBefore?: boolean; onSelect: () => void };
 export type ContextMenuRenderer = (trigger: React.ReactElement, actions: ContextMenuAction[], file?: FileRecord) => React.ReactNode;
 export function matchesArchive(file: FileRecord, filter: ArchiveFilter = 'exclude') { return filter === 'include' || (filter === 'only' ? !!file.entity.archived : !file.entity.archived); }
-export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; renderItemAdornment?: (file: FileRecord) => React.ReactNode; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
+export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; renderItemAdornment?: (file: FileRecord) => React.ReactNode; renderPerson?: (userId: string | undefined, file: FileRecord) => React.ReactNode; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
 
 export function filterFiles(files: FileRecord[], config: ViewConfig, search = '', archiveFilter: ArchiveFilter = 'exclude', configuration = defaultConfiguration) { return applyView(files, config, { search, archived: archiveFilter, configuration }); }
 export function unresolvedBlockers(file: FileRecord, files: FileRecord[], configuration = defaultConfiguration) { return file.entity.blocked_by.filter(id => { const entity = files.find(f => f.id === id)?.entity; const category = entity && statusCategory(entity, configuration); return category !== 'completed' && category !== 'canceled'; }); }
@@ -46,6 +46,12 @@ function permitsGroup(file: FileRecord, value: unknown, props: ViewProps): boole
   if (file.entity.entity === 'work_item' && props.config.group_by === 'project' && value !== file.entity.project) return false;
   try { return props.canEdit(file.id, groupChange(file.entity, props.config.group_by || 'status', value, props.configuration)); }
   catch { return false; }
+}
+function PersonCell({ value, file, props }: { value: unknown; file: FileRecord; props: ViewProps }) {
+  const userId = typeof value === 'string' && value ? value : undefined;
+  if (props.renderPerson) return props.renderPerson(userId, file);
+  const label = userId ? (props.en === false ? '身份未解析' : 'Identity unavailable') : (props.en === false ? '未分配' : 'Unassigned');
+  return <span className="muted" title={label}><UserRound size={14} aria-label={label} /></span>;
 }
 
 function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: { file: FileRecord; props: ViewProps; draggable: boolean; groupId: string; groups: Map<string, { value: unknown; label: string; category?: string }>; onGroup: (id: string, group: string) => void; landed: boolean }) {
@@ -122,7 +128,7 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
       {blocked.length > 0 && <span className="blocked-badge" title={`Blocked by ${blocked.join(', ')}`}><LockKeyhole size={11} />{blocked.length}</span>}
       <span className="card-bottom-spacer" />
       {file.entity.archived && <span className="draft-pill">Archived</span>}
-      <span className="assignee-avatar" title={file.entity.assignee || String(file.entity.owner || 'Unassigned')}>{String(file.entity.assignee || file.entity.owner || '?').replace('agent:', '').slice(0, 1).toUpperCase()}</span>
+      <PersonCell value={file.entity.assignee || file.entity.owner} file={file} props={props} />
     </div>
     <MoveControls file={file} props={props} />
   </article>;
@@ -191,6 +197,7 @@ function Table(props: ViewProps) {
         }
         if (name === 'status') return <StateSelect file={file} props={props} />;
         if (name === 'priority' && ['work_item', 'requirement'].includes(file.entity.entity)) return <RadixSelect aria-label={`Priority for ${file.id}`} disabled={!props.canEdit(file.id)} value={String(file.entity.priority || 'medium')} onChange={event => void props.onPatch(file.id, { priority: event.target.value })}>{priorities.map(priority => <option key={priority}>{priority}</option>)}</RadixSelect>;
+        if (name === 'assignee' || name === 'owner') return <PersonCell value={file.entity[name]} file={file} props={props} />;
         return <span className="muted">{Array.isArray(file.entity[name]) ? (file.entity[name] as unknown[]).join(', ') : String(file.entity[name] ?? '—')}</span>;
       } })),
     ];
@@ -214,7 +221,7 @@ function Tree(props: ViewProps) {
     visited.add(file.id);
     const children = props.files.filter(f => f.entity.parent === file.id);
     const next = new Set(ancestors).add(file.id);
-    return <React.Fragment key={file.id}><div className={`tree-row ${props.selectedId === file.id ? 'selected' : ''}`} style={{ paddingLeft: 16 + depth * 22 }}><button className="icon-button" aria-label={`${collapsed.has(file.id) ? 'Expand' : 'Collapse'} ${file.id}`} disabled={!children.length} onClick={() => setCollapsed(old => { const copy = new Set(old); if (copy.has(file.id)) copy.delete(file.id); else copy.add(file.id); return copy; })}>{children.length ? collapsed.has(file.id) ? '▸' : '▾' : '·'}</button><StatusIcon category={statusCategory(file.entity, props.configuration)} /><button className="tree-title" onClick={() => props.onSelect(file.id)}><span className="mono">{file.id}</span>{file.entity.title}</button>{!props.config.project && file.entity.project && <span className="muted" title={props.en ? 'Project' : '所属项目'}>{file.entity.project}</span>}<span className="muted">{file.entity.kind || file.entity.entity}</span><MoveControls file={file} props={props} />{file.entity.parent && !(props.allFiles || props.files).some(f => f.id === file.entity.parent) && <span className="relation-warning">Missing parent {file.entity.parent}</span>}</div>{!collapsed.has(file.id) && children.map(child => render(child, depth + 1, next))}</React.Fragment>;
+    return <React.Fragment key={file.id}><div className={`tree-row ${props.selectedId === file.id ? 'selected' : ''}`} style={{ paddingLeft: 16 + depth * 22 }}><button className="icon-button" aria-label={`${collapsed.has(file.id) ? 'Expand' : 'Collapse'} ${file.id}`} disabled={!children.length} onClick={() => setCollapsed(old => { const copy = new Set(old); if (copy.has(file.id)) copy.delete(file.id); else copy.add(file.id); return copy; })}>{children.length ? collapsed.has(file.id) ? '▸' : '▾' : '·'}</button><StatusIcon category={statusCategory(file.entity, props.configuration)} /><button className="tree-title" onClick={() => props.onSelect(file.id)}><span className="mono">{file.id}</span>{file.entity.title}</button>{!props.config.project && file.entity.project && <span className="muted" title={props.en ? 'Project' : '所属项目'}>{file.entity.project}</span>}<span className="muted">{file.entity.kind || file.entity.entity}</span>{props.renderItemAdornment?.(file)}<PersonCell value={file.entity.assignee || file.entity.owner} file={file} props={props} /><MoveControls file={file} props={props} />{file.entity.parent && !(props.allFiles || props.files).some(f => f.id === file.entity.parent) && <span className="relation-warning">Missing parent {file.entity.parent}</span>}</div>{!collapsed.has(file.id) && children.map(child => render(child, depth + 1, next))}</React.Fragment>;
   }
   const roots = props.files.filter(f => !f.entity.parent || !props.files.some(p => p.id === f.entity.parent));
   const result = roots.map(f => render(f, 0, new Set()));

@@ -1,13 +1,35 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { open } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { parseDocument } from 'yaml';
-import type { Diagnostic, FileRecord, UnsupportedFile } from '../pm-schema/index.ts';
-import { authenticate, CliAuthError, loginCli, logoutCli, serviceOrigin } from './auth.ts';
+import { createHash, randomUUID } from 'node:crypto';
+import type { Diagnostic, FileRecord, UnsupportedFile, WorkspaceSnapshot } from '../pm-schema/index.ts';
+import { inspectFrontmatter, inspectMarkdown } from '../pm-markdown/index.ts';
+import { CliAuthError, loginCli, logoutCli } from './auth.ts';
+import { createCliRuntime, CliRequestError, identifier, inputFile, nonempty, objectInput, parseOptions, textFile, type CliFamily, type CliRuntime } from './runtime.ts';
+import { pmToolCallProjectionSchema } from '../agent-contracts/src/pm-tools.ts';
 import { pluginOperation, pluginRead } from './plugin-adapter.ts';
 import { managePlugin, PLUGIN_POLICY_NOTICE } from './plugin-distribution.ts';
+import { collaborationFamily } from './collaboration.ts';
+import { administrationFamily } from './administration.ts';
+import { documentsFilesFamily } from './documents-files.ts';
+import { dashboardFamily } from './dashboard.ts';
+import { planningRecordsFamily } from './planning-records.ts';
+import { automationFamily } from './automation.ts';
+import { integrationsFamily } from './integrations.ts';
+import { agentAccessFamily } from './agent-access.ts';
+import { AgentConnectionError } from './agent-connection.ts';
+import { agentSessionsFamily } from './agent-sessions.ts';
+import { agentProvidersFamily } from './agent-providers.ts';
+import { agentExtensionsFamily } from './agent-extensions.ts';
+import { agentRuntimeFamily } from './agent-runtime.ts';
+import { agentDeliveryFamily } from './agent-delivery.ts';
+
+const CLI_FAMILIES: readonly CliFamily[] = [
+  collaborationFamily, administrationFamily, documentsFilesFamily, dashboardFamily,
+  planningRecordsFamily, automationFamily, integrationsFamily, agentAccessFamily,
+  agentSessionsFamily, agentProvidersFamily, agentExtensionsFamily, agentRuntimeFamily,
+  agentDeliveryFamily,
+];
 
 const HELP = `Markdown PM Lab — operate the same live workspace as the browser
 
@@ -18,6 +40,7 @@ Usage:
   pm plugin tools
   pm plugin workspaces
   pm plugin call|result --file ORIGINAL_REQUEST.json
+  pm plugin check --file RESULT.json
   pm plugin generate|install|update --root ABSOLUTE_PRIVATE_DIR --origin CONCRETE_ORIGIN
   pm plugin uninstall --root ABSOLUTE_PRIVATE_DIR
   pm file ID
@@ -26,12 +49,18 @@ Usage:
   pm task create --title TEXT [--project ID] [--kind task] [--idempotency-key KEY]
   pm entity list [--entity KIND] [--project ID] [--status STATUS] [--archived exclude|include|only]
   pm entity create --entity KIND --title TEXT [fields] [--set JSON] [--idempotency-key KEY]
+  pm task|entity source ID --file SOURCE.md --revision HASH [--idempotency-key KEY]
+  pm task|entity body ID --file BODY.md --revision HASH [--idempotency-key KEY]
   pm task|entity update ID [fields] [--set JSON] [--unset FIELD,FIELD] [--revision HASH]
   pm task|entity archive ID --revision HASH
   pm task|entity restore ID --revision HASH
   pm task|entity delete ID --revision HASH --confirm ID
+  pm creation-attempt get|recover KEY [--kind task|entity]
+  pm command receipt UUID
   pm config get
   pm config set --file PATH --revision REV
+  pm view list
+  pm view get ID
   pm view query --file PATH [--archived exclude|include|only]
   pm view save ID --file PATH [--revision REV]
   pm migration list
@@ -76,6 +105,14 @@ File inputs accept JSON or YAML objects, at most 5 MiB; YAML aliases are disable
 View query files contain a view configuration; view save also requires name.
 Existing views require --revision; new views must omit it. Config set replaces
 the configuration with CAS (--revision absent creates the first config).
+Source saves require the complete Markdown source and an explicit current revision.
+Body saves replace only the Markdown suffix (including the unchanged # Title);
+frontmatter bytes, identity, metadata and formal relationships are preserved.
+Source/body files are UTF-8, at most 4 MiB including retained frontmatter.
+On an unconfirmed save, compare pm file ID with the printed expected source hash;
+do not blindly retry. Creation prints its original key on stderr before dispatch.
+Query that key with its original --kind; recover repairs only that original attempt.
+not_found/pending is not permission to allocate a new key or recreate a deleted item.
 Migration preview never changes business files; inspect its diff/diagnostics
 before apply. Apply and restore both require matching revision and confirmation.
 PM_API_URL defaults to http://127.0.0.1:4194 and must point at this v4 PM API.
@@ -89,10 +126,16 @@ HTTPS; HTTP is allowed only on loopback. Logout revokes the server session and
 removes only this origin's saved session; failures retain local credentials.
 PM_WORKSPACE_ID selects the workspace; otherwise the CLI uses the single
 workspace the account can access.
-Commands operate on /api/v1/workspaces/{workspaceId}/core, the Markdown core.
+PM commands use their native workspace/core services; Agent commands use independent Agent access.
 Plugin adapters use the same PM login, explicit targets, revisions and native
 business service. Keep the original request file and operationId. Repeated
 plugin call attempts query /result only; unknown is never redispatched.
+plugin call/result exit 0 means transport/projection handling, NOT business success.
+Only visibility=visible AND status=succeeded AND result present AND error=null
+allows a consumer to continue. Use:
+pm plugin result --file ORIGINAL_REQUEST.json > RESULT.json && pm plugin check --file RESULT.json && YOUR_NEXT_COMMAND
+failed, unknown, pending_approval, running, redacted and unavailable must stop.
+plugin check is a local, schema-validated success assertion; it sends no requests.
 Plugin distribution never rewrites native client configs or reads their tokens.
 `;
 
@@ -115,40 +158,6 @@ export class CliError extends Error {
   }
 }
 
-function objectInput(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected an object');
-  let nodes = 0;
-  const visit = (entry: unknown, depth: number): void => {
-    if (++nodes > 100000 || depth > 64) throw new Error('Input exceeds structural limits');
-    if (entry && typeof entry === 'object') {
-      for (const [key, child] of Object.entries(entry)) {
-        if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error(`Unsafe input field: ${key}`);
-        visit(child, depth + 1);
-      }
-    }
-  };
-  visit(value, 0);
-  return value as Record<string, unknown>;
-}
-
-async function inputFile(filename: string | undefined): Promise<Record<string, unknown>> {
-  const file = await open(nonempty(filename, '--file'), 'r');
-  try {
-    if (!(await file.stat()).isFile()) throw new Error('--file must identify a regular file');
-    const bytes = Buffer.alloc(MAX_INPUT_BYTES + 1);
-    let length = 0;
-    while (length < bytes.length) {
-      const result = await file.read(bytes, length, bytes.length - length, null);
-      if (!result.bytesRead) break;
-      length += result.bytesRead;
-    }
-    if (length > MAX_INPUT_BYTES) throw new Error('Input exceeds 5 MiB');
-    const source = bytes.toString('utf8', 0, length);
-    const document = parseDocument(source, { uniqueKeys: true });
-    if (document.errors.length) throw new Error(document.errors.map(error => error.message).join('\n'));
-    return objectInput(document.toJS({ maxAliasCount: 0 }));
-  } finally { await file.close(); }
-}
 
 function archiveFilter(value: string | undefined): void {
   if (value !== undefined && !['exclude', 'include', 'only'].includes(value)) throw new Error('archived must be exclude, include, or only');
@@ -160,30 +169,12 @@ function migrationIdentifier(value: string | undefined): string {
   return id;
 }
 
-function parseOptions(args: string[], allowed: readonly string[]): Record<string, string> {
-  const options: Record<string, string> = {};
-  for (let index = 0; index < args.length; index++) {
-    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(args[index]!);
-    if (!match || !match[1] || !allowed.includes(match[1])) throw new Error('Unknown or unsupported option. Run pm --help.');
-    const name = match[1];
-    const value = match[2] ?? args[++index];
-    if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for --${name}`);
-    if (name in options) throw new Error(`Repeated option: --${name}`);
-    options[name] = value;
-  }
-  return options;
+function originalKey(value: string | undefined): string {
+  const key = nonempty(value, 'original operation key');
+  if (key.length > 512 || /[\u0000-\u001f\u007f]/u.test(key)) throw new Error('Original key must be at most 512 characters without control characters');
+  return key;
 }
 
-function nonempty(value: string | undefined, name: string): string {
-  if (value === undefined || !value.trim()) throw new Error(`${name} requires a nonempty value`);
-  return value;
-}
-
-function identifier(value: string | undefined): string {
-  const id = nonempty(value, 'ID');
-  if (!/^[A-Z][A-Z0-9]*-\d+$/.test(id)) throw new Error(`Invalid entity ID: ${id}`);
-  return id;
-}
 
 function fieldValue(field: string, value: string): unknown {
   if (['blocked_by', 'related_to', 'labels', 'goals'].includes(field)) {
@@ -225,78 +216,34 @@ function changesFrom(options: Record<string, string>): Record<string, unknown> {
   return changes;
 }
 
-type Connection = { base: string; headers: Record<string, string>; workspaceId: string };
-let connection: Promise<Connection> | undefined;
 
-function errorText(value: unknown): string | undefined {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object' && 'message' in value && typeof value.message === 'string') return value.message;
-  return undefined;
-}
-
-
-async function connectionFor(): Promise<Connection> {
-  if (connection) return connection;
-  const pending = (async (): Promise<Connection> => {
-    const service = serviceOrigin();
-    const headers = (await authenticate(service)).headers;
-    const workspaceId = process.env.PM_WORKSPACE_ID?.trim();
-    if (!workspaceId) {
-      let response: Response;
-      try { response = await fetch(`${service}/api/v1/workspaces`, { headers, redirect: 'error', signal: AbortSignal.timeout(15_000) }); }
-      catch (error) { throw new CliError('CLI_CONNECTION_FAILED', `Cannot reach ${service}: ${(error as Error).message}`); }
-      if (!response.ok) throw new CliError('CLI_AUTH_FAILED', `Cannot list workspaces (HTTP ${response.status})`);
-      const payload: unknown = await response.json();
-      const items = payload && typeof payload === 'object' && 'items' in payload && Array.isArray(payload.items) ? payload.items : [];
-      const workspaces = items.filter((item): item is { id: string; name?: string } => !!item && typeof item === 'object' && 'id' in item && typeof item.id === 'string');
-      if (workspaces.length !== 1) throw new CliError('CLI_WORKSPACE_REQUIRED', workspaces.length ? `Set PM_WORKSPACE_ID; accessible workspaces: ${workspaces.map(item => item.id).join(', ')}` : 'No accessible workspace');
-      return { base: `${service}/api/v1/workspaces/${workspaces[0]!.id}/core`, headers, workspaceId: workspaces[0]!.id };
-    }
-    return { base: `${service}/api/v1/workspaces/${encodeURIComponent(workspaceId)}/core`, headers, workspaceId };
-  })();
-  connection = pending;
-  pending.catch(() => { if (connection === pending) connection = undefined; });
-  return pending;
-}
-
-async function request<T>(endpoint: string, method = 'GET', body?: unknown, idempotencyKey?: string): Promise<T> {
-  const target = await connectionFor();
-  const headers: Record<string, string> = { ...target.headers };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (idempotencyKey !== undefined) headers['Idempotency-Key'] = nonempty(idempotencyKey, '--idempotency-key');
-  else if (method !== 'GET' && /^\/(?:files|entities)\//.test(endpoint)) headers['Idempotency-Key'] = randomUUID();
-  let response: Response;
-  try {
-    response = await fetch(`${target.base}${endpoint}`, {
-      method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(15000),
-    });
-  } catch (error) { throw new CliError('CLI_CONNECTION_FAILED', `Cannot reach ${target.base}: ${(error as Error).message}`); }
-  const text = await response.text();
-  let payload: unknown;
-  try { payload = text ? JSON.parse(text) : undefined; } catch { payload = undefined; }
-  if (!response.ok) {
-    const record = payload && typeof payload === 'object' ? payload as { error?: unknown; diagnostics?: Diagnostic[]; current?: FileRecord | UnsupportedFile } : {};
-    const message = errorText(record.error);
-    const current = record.current ? `\nCurrent disk revision: ${record.current.revision}` : '';
-    const diagnostics = (record.diagnostics ?? []).map(diagnostic => `\n[${diagnostic.code}] ${diagnostic.message} (${[
-      `path=${diagnostic.path}`, `severity=${diagnostic.severity}`, diagnostic.entityId && `entity=${diagnostic.entityId}`, diagnostic.field && `field=${diagnostic.field}`, diagnostic.targetId && `target=${diagnostic.targetId}`, diagnostic.line !== undefined && `line=${diagnostic.line}`,
-    ].filter(Boolean).join(', ')})`).join('');
-    throw new CliError(record.diagnostics?.[0]?.code ?? 'HTTP_ERROR', `HTTP ${response.status}: ${message ?? response.statusText}${diagnostics}${current}`, record.diagnostics, response.status, record.current);
-  }
-  return payload as T;
-}
-
-async function executeCli(args: string[]): Promise<void> {
+async function executeCli(args: string[], runtime: CliRuntime): Promise<void> {
+  const request = <T>(endpoint: string, method = 'GET', body?: unknown, idempotencyKey?: string): Promise<T> => runtime.json<T>('core', endpoint, {
+    method, ...(body === undefined ? {} : { body }),
+    ...(idempotencyKey === undefined
+      ? method !== 'GET' && /^\/(?:files|entities)\//.test(endpoint) ? { idempotencyKey: randomUUID() } : {}
+      : { idempotencyKey }),
+  });
   if (!args.length || args.includes('--help') || args[0] === 'help' || args[0] === '-h') {
-    console.log(HELP);
+    console.log([HELP, ...CLI_FAMILIES.map(family => family.help)].join('\n'));
     return;
   }
+  for (const family of CLI_FAMILIES) if (await family.dispatch(args, runtime)) return;
   if (args[0] === 'plugin') {
     const action = args[1];
     if (action === 'tools' || action === 'workspaces') {
       if (args.length !== 2) throw new Error(`Usage: pm plugin ${action}`);
       console.error(PLUGIN_POLICY_NOTICE);
       console.log(JSON.stringify(await pluginRead(action), null, 2));
+      return;
+    }
+    if (action === 'check') {
+      const options = parseOptions(args.slice(2), ['file']);
+      const parsed = pmToolCallProjectionSchema.safeParse(await inputFile(options.file));
+      if (!parsed.success || parsed.data.visibility !== 'visible' || parsed.data.status !== 'succeeded' || parsed.data.result === null || parsed.data.error !== null) {
+        throw new CliError('CLI_PLUGIN_NOT_SUCCEEDED', 'Result is not a visible, validated business success. Stop; query the original operation when its outcome is unconfirmed.');
+      }
+      runtime.print(parsed.data);
       return;
     }
     if (action === 'call' || action === 'result') {
@@ -310,7 +257,7 @@ async function executeCli(args: string[]): Promise<void> {
       console.log(JSON.stringify(await managePlugin(action, nonempty(options.root, '--root'), action === 'uninstall' ? undefined : nonempty(options.origin, '--origin')), null, 2));
       return;
     }
-    throw new Error('Usage: pm plugin tools|workspaces|call|result|generate|install|update|uninstall');
+    throw new Error('Usage: pm plugin tools|workspaces|call|result|check|generate|install|update|uninstall');
   }
   if (args[0] === 'login') {
     const options = parseOptions(args.slice(1), ['email']);
@@ -321,6 +268,23 @@ async function executeCli(args: string[]): Promise<void> {
   if (args[0] === 'logout') {
     if (args.length !== 1) throw new Error('Usage: pm logout');
     console.log(JSON.stringify(await logoutCli(), null, 2));
+    return;
+  }
+  if (args[0] === 'creation-attempt') {
+    const action = args[1];
+    if (action !== 'get' && action !== 'recover') throw new Error('Usage: pm creation-attempt get|recover KEY [--kind task|entity]');
+    const key = originalKey(args[2]);
+    const options = parseOptions(args.slice(3), ['kind']);
+    const kind = options.kind ?? 'entity';
+    if (kind !== 'task' && kind !== 'entity') throw new Error('--kind must be task or entity, matching the original creation command');
+    console.log(JSON.stringify(await request(`/creation-attempts/${encodeURIComponent(key)}${action === 'recover' ? '/recover' : ''}?kind=${kind}`, action === 'recover' ? 'POST' : 'GET', action === 'recover' ? {} : undefined), null, 2));
+    return;
+  }
+  if (args[0] === 'command') {
+    if (args[1] !== 'receipt' || args.length !== 3) throw new Error('Usage: pm command receipt UUID');
+    const id = nonempty(args[2], 'original command UUID').toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new Error('Invalid command UUID');
+    runtime.print(await runtime.json('workspace', `/commands/${id}`));
     return;
   }
   if (args[0] === 'protocol') {
@@ -349,7 +313,21 @@ async function executeCli(args: string[]): Promise<void> {
   }
   if (args[0] === 'view') {
     const action = args[1];
-    if (action !== 'query' && action !== 'save') throw new Error('Usage: pm view query --file PATH | save ID --file PATH [--revision REV]');
+    if (action === 'list' || action === 'get') {
+      if (args.length !== (action === 'list' ? 2 : 3)) throw new Error('Usage: pm view list | get ID');
+      const id = action === 'get' ? nonempty(args[2], 'view ID') : undefined;
+      if (id && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id)) throw new Error('Invalid view ID');
+      const snapshot = await request<WorkspaceSnapshot>('/workspace');
+      const diagnostics = snapshot.errors.filter(diagnostic => diagnostic.path.startsWith('.pm/views/'));
+      if (id === undefined) runtime.print({ items: snapshot.views, diagnostics });
+      else {
+        const view = snapshot.views.find(candidate => candidate.id === id);
+        if (!view) throw new CliError('CLI_VIEW_NOT_FOUND', 'Saved view is missing, unreadable, or not accessible.', diagnostics, 404);
+        runtime.print(view);
+      }
+      return;
+    }
+    if (action !== 'query' && action !== 'save') throw new Error('Usage: pm view list | get ID | query --file PATH | save ID --file PATH [--revision REV]');
     const id = action === 'save' ? nonempty(args[2], 'view ID') : undefined;
     if (id && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id)) throw new Error('Invalid view ID');
     const options = parseOptions(args.slice(action === 'save' ? 3 : 2), action === 'save' ? ['file', 'revision'] : ['file', 'archived']);
@@ -402,6 +380,26 @@ async function executeCli(args: string[]): Promise<void> {
     }
     return;
   }
+  if (action === 'source' || action === 'body') {
+    const id = identifier(args[2]);
+    const options = parseOptions(args.slice(3), ['file', 'revision', 'idempotency-key']);
+    const revision = nonempty(options.revision, '--revision');
+    let raw = await textFile(options.file, 4 * 1024 * 1024);
+    if (action === 'body') {
+      const current = await request<FileRecord | UnsupportedFile>(`/files/${id}`);
+      if (!('entity' in current)) throw new CliError('UNSUPPORTED_SCHEMA_VERSION', 'Unsupported source is read-only.', current.diagnostics, 422, current);
+      if (current.revision !== revision) throw new CliError('REVISION_CONFLICT', 'Body save requires the exact revision used to prepare the edit.', [], 409, current);
+      const section = inspectFrontmatter(current.raw);
+      raw = `${current.raw.slice(0, current.raw.length - section.body.length)}${raw}`;
+      if (inspectMarkdown(raw).title !== current.entity.title) throw new Error('Body input must include the unchanged first-level Markdown title; use an explicit source/property edit to change title.');
+    }
+    if (Buffer.byteLength(raw) > 4 * 1024 * 1024) throw new Error('Complete source exceeds 4 MiB');
+    const key = originalKey(options['idempotency-key'] ?? randomUUID());
+    const expected = createHash('sha256').update(raw).digest('hex');
+    console.error(`pm: Original source-save key ${key}; expected revision ${expected}. If unconfirmed, compare pm file ${id} before any retry.`);
+    runtime.print(await request(`/files/${id}`, 'PUT', { raw, revision }, key));
+    return;
+  }
   if (['archive', 'restore', 'delete'].includes(action)) {
     const id = identifier(args[2]);
     const options = parseOptions(args.slice(3), action === 'delete' ? ['revision', 'confirm'] : ['revision']);
@@ -411,7 +409,7 @@ async function executeCli(args: string[]): Promise<void> {
     console.log(JSON.stringify(await request(endpoint, action === 'delete' ? 'DELETE' : 'POST', { revision }), null, 2));
     return;
   }
-  if (action !== 'create' && action !== 'update') throw new Error(`Expected ${scope} list, create, update, archive, restore, or delete. Run pm --help.`);
+  if (action !== 'create' && action !== 'update') throw new Error(`Expected ${scope} list, create, update, source, body, archive, restore, or delete. Run pm --help.`);
   const updating = action === 'update';
   const id = updating ? identifier(args[2]) : undefined;
   const options = parseOptions(args.slice(updating ? 3 : 2), [...FIELD_OPTIONS, 'set', ...(updating ? ['revision', 'unset'] : ['body', 'idempotency-key', ...(scope === 'entity' ? ['entity'] : [])])]);
@@ -426,17 +424,20 @@ async function executeCli(args: string[]): Promise<void> {
     result = await request<FileRecord>(`/entities/${id}`, 'PATCH', { changes, revision });
   } else {
     nonempty(changes.title as string | undefined, '--title');
-    result = await request<FileRecord>(scope === 'task' ? '/items' : '/entities', 'POST', changes, options['idempotency-key']);
+    const key = originalKey(options['idempotency-key'] ?? randomUUID());
+    console.error(`pm: Original creation key ${key}; query with pm creation-attempt get ${JSON.stringify(key)} --kind ${scope}. Never replace an unconfirmed key.`);
+    result = await request<FileRecord>(scope === 'task' ? '/items' : '/entities', 'POST', changes, key);
   }
   console.log(JSON.stringify(result, null, 2));
 }
 
 export async function runCli(args: string[]): Promise<void> {
-  connection = undefined;
-  try { await executeCli(args); }
+  try { await executeCli(args, createCliRuntime()); }
   catch (error) {
     if (error instanceof CliError) throw error;
+    if (error instanceof CliRequestError) throw new CliError(error.code, error.message, error.diagnostics, error.status, error.current);
     if (error instanceof CliAuthError) throw new CliError(error.code, error.message);
+    if (error instanceof AgentConnectionError) throw new CliError(error.code, error.message, [], error.status);
     throw new CliError('CLI_INVALID_ARGUMENT', (error as Error).message);
   }
 }

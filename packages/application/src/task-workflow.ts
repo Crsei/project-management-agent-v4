@@ -136,7 +136,7 @@ export class TaskWorkflowService {
       const selection = executionSelectionSchema.safeParse(executionSelection);
       if (!selection.success || selection.data.agentWorkspaceId === null) fail('agent_workspace_required', '替换 Session 需要明确选择原仓库的 Agent 目录。');
       const task = await this.p.authorize({ ...v.input, executionSelection }, true);
-      if (task.root !== v.projectRoot || task.revision !== workflowTaskRevision(v) || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '替换 Session 不能更换原任务、目录或已确认仓库。');
+      if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '替换 Session 不能更换原目录或已确认仓库；需求变化只供交接核对，不允许恢复旧运行。');
       const delivery = this.p.readDelivery(id);
       if (!delivery) fail('prepare_unknown', '原独立工作目录尚未确认；不能创建替代执行。');
       await this.p.delivery.act(id, { action: 'new-session', executionSelection, confirm: true });
@@ -243,10 +243,15 @@ export class TaskWorkflowService {
             if (!existing) d = await this.p.delivery.act(v.id, { action: 'refresh' });
             const f = d?.feedback;
             if (f && f.head !== d?.head) { this.unknown(v, '远端 HEAD 已变化，本次验证不覆盖新版本。'); break; }
+            const inspection = d?.git ? await this.p.delivery.inspect(v.id) : null;
+            if (f && (!inspection?.tree || inspection.taskChanged || inspection.tree.files.length > 0 || inspection.tree.head !== f.head ||
+              f.taskRevision !== workflowTaskRevision(v) || f.fingerprint !== inspection.tree.fingerprint)) {
+              this.unknown(v, '当前任务版本、HEAD 或工作树已变化/不可核验；旧 CI 与评审快照已陈旧，不能据此继续审核或交付。'); break;
+            }
             const checks = f?.checks ?? [];
             const missing = (node.config.requiredChecks ?? []).filter(name => !checks.some(check => check.name === name));
             if (!missing.length && checks.length && checks.every(c => c.conclusion === 'success' && ['completed', 'success'].includes(c.status))) {
-              if (node.config.taskTransition && (!d?.pr || !d.head || !d.test?.passed || f?.state !== 'open' || !f.draft)) fail('workflow_review_evidence', '进入待审核需要本次通过测试、同提交的开放 Draft PR 和 CI 证据。');
+              if (node.config.taskTransition && (!d?.pr || !d.head || !d.test?.passed || d.test.taskRevision !== workflowTaskRevision(v) || f?.state !== 'open' || !f.draft)) fail('workflow_review_evidence', '进入待审核需要本次版本通过测试、同提交的开放 Draft PR 和 CI 证据。');
               if (await this.transitionGate(v, node)) this.complete(v, node, true, node.config.requiredChecks?.length ? `当前提交的必需 CI 检查通过：${node.config.requiredChecks.join('、')}。` : '当前提交的全部已发现 CI 检查通过（旧模板未指定必需检查）。');
             }
             else if (checks.some(c => c.conclusion !== null && !['success', 'pending'].includes(c.conclusion))) this.complete(v, node, false, 'CI 未通过（含 skipped / neutral），请人工处理。');

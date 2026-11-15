@@ -21,6 +21,8 @@ import { allowed, CommandNotice, issueRecord, projectRecord, queryData, ServiceG
 import { ProjectCoverImage } from "./project-extras"
 import { AgentAssistantMenu } from "../agent/agent-assistant-menu"
 import { ProjectContextMenu, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
+import { ProjectPeopleSummary } from "./project-people"
+import { HumanIdentity } from "./human-identity"
 
 type TableSettings = NonNullable<ProjectCollectionViewProps["table"]>
 type SortKey = NonNullable<TableSettings["sortKey"]>
@@ -144,7 +146,7 @@ function ServiceProjectList() {
   }, [archiveFromUrl])
   const all = useMemo(() => {
     const extraById = new Map(extras.data?.projects.map(row => [row.projectId, row]))
-    const directoryById = new Map(directory.data?.projects.map(row => [row.projectId, row]))
+    const directoryById = new Map(!directory.error ? directory.data?.projects.map(row => [row.projectId, row]) : [])
     const portfolioById = new Map(portfolio.data?.projects.map(row => [row.projectId, row]))
     const milestoneByProject = new Map<string, Entity>()
     for (const milestone of milestones.data ?? []) {
@@ -159,7 +161,7 @@ function ServiceProjectList() {
       const extra = extraById.get(project.id)
       const people = directoryById.get(project.id)
       const milestone = milestoneByProject.get(project.id)
-      const members = people ? [...new Map(people.teams.flatMap(team => team.members).map(member => [member.id, member])).values()] : undefined
+      const members = people?.participants
       return {
         ...record,
         owner: record.owner ? { ...record.owner, name: people?.identities.find(person => person.id === record.owner!.id)?.name ?? record.owner.name } : null,
@@ -167,12 +169,14 @@ function ServiceProjectList() {
         coverVersionId: extra?.cover?.data.artifactVersionId ?? null,
         teams: people?.teams ?? null,
         members,
+        peopleContent: <ProjectPeopleSummary projectId={project.id} />,
+        ownerContent: <HumanIdentity userId={string(project.data.ownerId)} projectId={project.id} />,
         teamSize: members?.length ?? null,
         healthAssessment: portfolioById.get(project.id)?.health?.data ?? null,
         milestone: milestone ? { title: string(milestone.data.name), date: string(milestone.data.targetDate) || null } : null,
       }
     })
-  }, [projects.data, items.data, milestones.data, extras.data, directory.data, portfolio.data])
+  }, [projects.data, items.data, milestones.data, extras.data, directory.data, directory.error, portfolio.data])
   const visible = useMemo(() => {
     const query = interaction.search.trim().toLocaleLowerCase()
     const archive = interaction.quickView === "archived" ? "archived" : interaction.quickView === "active" ? "current" : interaction.archiveScope
@@ -294,7 +298,7 @@ function ServiceProjectList() {
     capabilities={{ create: canCreate, edit: canEdit, star: canStar, openFullDetails: true, filters: { archive: true, updated: true, status: true, starred: !!extras.data && !extras.error, teamSize: !!directory.data && !directory.error } }}
     actions={{ setInteraction: updateInteraction, create: createProject, edit: editProject, star, openFullDetails: openProject }}
     headerActions={<><Button variant={interaction.quickView === "archived" ? "secondary" : "outline"} size="sm" onClick={() => { const next = new URLSearchParams(searchParams); if (archiveFromUrl === "archived") next.delete("archive"); else next.set("archive", "archived"); setSearchParams(next) }}><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}</Button>{allowed(workspace, "access.manage") && <Button variant="outline" size="sm" onClick={() => navigate(`${root}/members?tab=teams`)}>{t("团队管理", "Team management")}</Button>}</>}
-    renderProjectAction={project => <span className="inline-flex items-center gap-1"><AgentAssistantMenu projectId={project.id} /><ProjectMenuButton projectId={project.id} /></span>}
+    renderProjectAction={project => <span className="inline-flex items-center gap-2">{variant !== "browse" && <ProjectPeopleSummary projectId={project.id} />}<AgentAssistantMenu projectId={project.id} /><ProjectMenuButton projectId={project.id} /></span>}
     renderProjectContextMenu={(project, target) => <ProjectContextMenu projectId={project.id}>{target}</ProjectContextMenu>}
     toolbarActions={rows ? <ProjectRowsToolbar table={variant === "table"} interaction={interaction} setInteraction={setInteraction} controls={controls} setControls={setControls} sortKeys={sortKeys} statusOptions={statusOptions} conditions={conditions} setConditions={setFilterConditions} clearFilters={clearFilters} canCreate={canCreate} onCreate={createProject} /> : undefined}
     summarySort={variant === "compact" ? <div className="flex items-center gap-1"><ProjectSortSelect controls={controls} sortKeys={sortKeys} onChange={sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: sortKey === "name" || sortKey === "owner" ? "asc" : "desc" }))} /><SortDirection controls={controls} onToggle={() => setControls(previous => ({ ...previous, sortDir: previous.sortDir === "asc" ? "desc" : "asc" }))} /></div> : undefined}
@@ -305,7 +309,7 @@ function ServiceProjectList() {
       sortDir: controls.sortDir,
       onSort: sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: previous.sortKey === sortKey ? previous.sortDir === "asc" ? "desc" : "asc" : sortKey === "name" || sortKey === "owner" ? "asc" : "desc" })),
       onOpen: openProject,
-      rowActions: project => <ProjectMenuButton projectId={project.id} />,
+      rowActions: project => <span className="inline-flex items-center gap-2"><ProjectPeopleSummary projectId={project.id} /><ProjectMenuButton projectId={project.id} /></span>,
     } : undefined}
     feedback={<div className={`space-y-2 text-xs text-muted-foreground ${variant === "table" ? "px-6 py-3 max-sm:px-4" : "mb-3"}`}>
       <ProjectReadNotices entries={[
@@ -384,7 +388,7 @@ function ProjectRowsToolbar({ table, interaction, setInteraction, controls, setC
   const labels: Record<Column, string> = { owner: t("负责人", "Owner"), health: t("健康度", "Health"), milestone: t("里程碑", "Milestone"), team: t("团队", "Team"), updated: t("更新于", "Updated") }
   const fields: FilterField[] = [
     { id: "status", label: t("业务状态", "Status"), single: true, options: statusOptions },
-    { id: "team", label: t("团队规模", "Team size"), single: true, options: [
+    { id: "team", label: t("参与人数", "Participant count"), single: true, options: [
       { value: "small", label: t("1–5 人", "1–5 members") },
       { value: "medium", label: t("6–10 人", "6–10 members") },
       { value: "large", label: t("11 人以上", "11+ members") },

@@ -130,6 +130,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   const agent = new DatabaseSync(join(agentRoot, 'workspace.sqlite'));
   try {
     agent.exec('CREATE TABLE records(namespace TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(namespace,key)); CREATE TABLE run_events(run_id TEXT NOT NULL,seq INTEGER NOT NULL,event TEXT NOT NULL,PRIMARY KEY(run_id,seq)); CREATE TABLE worker_owner(singleton INTEGER PRIMARY KEY,pid INTEGER NOT NULL,token TEXT NOT NULL)');
+    agent.prepare('INSERT INTO records VALUES (?,?,?)').run('chat:threads', 'thread-a', JSON.stringify({ remoteId: 'thread-a', status: 'regular', revision: 0, createdAt: new Date().toISOString(), settings: {} }));
     agent.prepare('INSERT INTO records VALUES (?,?,?)').run('chat:history', 'history-a', JSON.stringify({ threadId: 'thread-a', format: 'ai-sdk/v6', messages: [{ id: 'message-a', content: { role: 'user', parts: [{ type: 'text', text: 'Agent private conversation survives' }] } }], headId: 'message-a', authoritativeIds: ['message-a'] }));
   } finally { agent.close(); }
   await securePrivateFile(join(agentRoot, 'workspace.sqlite'), { newlyCreated: true });
@@ -138,7 +139,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await t.test('maintenance rejects foreign clients even with the monitor name and rejects stale monitor identities', async () => {
     const monitor = await database.maintenanceMonitorIdentity();
     const refusedDestination = join(root, 'active-client-backup');
-    const request = { operation: 'backup', databaseUrl: started.databaseUrl, dataDir, destination: refusedDestination, postgresRoot: binariesDir!, serverRoot, monitor };
+    const request = { operation: 'backup', databaseUrl: started.databaseUrl, dataDir, destination: refusedDestination, postgresRoot: binariesDir!, serverRoot, monitor, stoppedWritersAcknowledged: true };
     const foreign = new Client({ connectionString: started.databaseUrl, application_name: 'pm-desktop-owner' });
     await foreign.connect();
     try {
@@ -157,7 +158,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
     }
   });
   await measured('stop-source', () => database.stop());
-  const options = { serverRoot, runtimeRoot, trustedSourceAcknowledged: true };
+  const options = { serverRoot, runtimeRoot, trustedSourceAcknowledged: true, stoppedWritersAcknowledged: true };
+  await assert.rejects(backupDesktop({ ...options, dataDir, destination, password: backupPassword, stoppedWritersAcknowledged: false }), { code: 'DESKTOP_BACKUP_STOPPED_WRITERS_REQUIRED' });
+  await assert.rejects(lstat(destination), { code: 'ENOENT' });
   const backedUp = await measured('backup', () => backupDesktop({ ...options, dataDir, destination, password: backupPassword }));
   assert.equal(backedUp.encrypted, true);
   assert.deepEqual(await readdir(destination), ['desktop-backup.enc']);
@@ -216,10 +219,16 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await measured('decrypt-fixture', () => decryptBackupDirectory(join(destination, 'desktop-backup.enc'), plaintext, backupPassword));
   const manifestPath = join(plaintext, 'desktop-backup.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert.equal(manifest.recoverySet.format, 'pm-agent-stopped-recovery-set');
+  assert.equal(manifest.recoverySet.complete, true);
+  assert.equal(manifest.recoverySet.quiescence.operatorConfirmedStopped, true);
+  assert.equal(manifest.recoverySet.externalSideEffectsCheckpointed, false);
+  assert.equal(manifest.recoverySet.executionRestored, false);
   for (const [label, change] of [
     ['application-version', { applicationVersion: '999.0.0' }],
     ['operating-system', { platform: process.platform === 'win32' ? 'darwin' : 'win32' }],
     ['format-version', { version: 999 }],
+    ['mixed-recovery-set', { recoverySet: { ...manifest.recoverySet, recoverySetId: randomUUID() } }],
     ['legacy-container-downgrade', { version: 1, applicationVersion: undefined }],
   ] as const) {
     await writeFile(manifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
@@ -243,7 +252,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   const inconsistentBlobs = { ...blobManifest, entries: [] };
   await writeFile(blobManifestPath, JSON.stringify(inconsistentBlobs), { mode: 0o600 });
   await rm(join(plaintext, 'blobs/objects', blob.key));
-  await writeFile(manifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) }), { mode: 0o600 });
+  const inconsistentSet = { ...manifest.recoverySet, components: { ...manifest.recoverySet.components, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) } };
+  await writeFile(join(plaintext, 'recovery-set.json'), JSON.stringify(inconsistentSet), { mode: 0o600 });
+  await writeFile(manifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs), recoverySet: inconsistentSet }), { mode: 0o600 });
   const inconsistent = join(root, 'sql-inconsistent'); await mkdir(inconsistent);
   await measured('encrypt-sql-inconsistent', () => encryptBackupDirectory(plaintext, join(inconsistent, 'desktop-backup.enc'), backupPassword));
   await ensurePrivateDirectory(denied);
@@ -253,7 +264,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await writeFile(blobManifestPath, JSON.stringify(blobManifest), { mode: 0o600 });
   await writeFile(join(plaintext, 'blobs/objects', blob.key), attachment, { mode: 0o600 });
   await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
-  const { applicationVersion: _applicationVersion, ...legacy } = manifest;
+  await writeFile(join(plaintext, 'recovery-set.json'), JSON.stringify(manifest.recoverySet), { mode: 0o600 });
+  const { applicationVersion: _applicationVersion, recoverySet: _recoverySet, ...legacy } = manifest;
+  await rm(join(plaintext, 'recovery-set.json'));
   await writeFile(manifestPath, JSON.stringify({ ...legacy, version: 1 }), { mode: 0o600 });
   await assert.rejects(restoreDesktop({ ...options, source: plaintext, dataDir: denied }));
   await assert.rejects(lstat(denied), { code: 'ENOENT' });

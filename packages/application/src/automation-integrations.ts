@@ -15,8 +15,8 @@ export interface AutomationIntegrationsService {
   list(actor: Actor, workspaceId: string, projectId?: string): Promise<AutomationIntegrationList>;
   definitions(actor: Actor, workspaceId: string, projectId: string): Promise<AutomationMcpDefinitionList>;
   save(actor: Actor, workspaceId: string, id: string, input: z.infer<typeof automationIntegrationSaveSchema>): Promise<AutomationIntegrationConnection>;
-  verify(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }): Promise<AutomationIntegrationConnection>;
-  revoke(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }): Promise<AutomationIntegrationConnection>;
+  verify(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationIntegrationConnection>;
+  revoke(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationIntegrationConnection>;
   receipt(actor: Actor, workspaceId: string, requestId: string): Promise<AutomationIntegrationReceipt>;
   operation(actor: Actor, workspaceId: string, id: string): Promise<AutomationIntegrationOperation>;
 }
@@ -86,8 +86,9 @@ export function createAutomationIntegrationsService(options: AutomationIntegrati
         return connectionDto(row);
       });
     },
-    async verify(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }): Promise<AutomationIntegrationConnection> {
+    async verify(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationIntegrationConnection> {
       const prepared = await readAutomationIntegration(options, actor, workspaceId, async sql => {
+        await checkAuthorization?.(sql);
         const prior = await readAutomationIntegrationReceipt(sql, options, actor, workspaceId, input.requestId);
         if (prior) return { prior };
         const row = await readScopedAutomationConnection(sql, options, actor, workspaceId, id, true);
@@ -122,9 +123,9 @@ export function createAutomationIntegrationsService(options: AutomationIntegrati
         if (verification.mcp && definition) await resolveAutomationMcpDefinition(options.definitionResolver, { actorId: actor.id, workspaceId, projectId: row.project_id }, row.config.mcpDefinition!, definition.configFingerprint);
         const updated = (await sql.query<ConnectionRow>('UPDATE automation_integration_connections SET status=$2,last_error=$3,verification=$4::jsonb,mcp_config_fingerprint=$5,last_checked_at=clock_timestamp(),revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING *', [id, errorCode ? 'error' : 'verified', errorCode, JSON.stringify(verification), verification.mcp ? definition!.configFingerprint : null])).rows[0]!;
         return connectionDto(updated);
-      });
+      }, checkAuthorization);
     },
-    async revoke(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }): Promise<AutomationIntegrationConnection> {
+    async revoke(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationIntegrationConnection> {
       const projects: string[] = [];
       return mutateAutomationIntegration(options, actor, workspaceId, { ...input, id, kind: 'connection-revoke' }, projects, async sql => {
         const row = await readScopedAutomationConnection(sql, options, actor, workspaceId, id); projects.push(row.project_id);
@@ -132,7 +133,7 @@ export function createAutomationIntegrationsService(options: AutomationIntegrati
         if (row.revision !== input.expectedRevision) throw new DomainError('version_conflict', 'Connection changed; reload before revoking', 409);
         const updated = (await sql.query<ConnectionRow>(`UPDATE automation_integration_connections SET status='revoked',native_private_config='',has_credentials=false,mcp_config_fingerprint=NULL,verification='{"mcp":false,"nativeApi":false}'::jsonb,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`, [id])).rows[0]!;
         return connectionDto(updated);
-      });
+      }, checkAuthorization);
     },
     receipt: (actor: Actor, workspaceId: string, requestId: string) => readAutomationIntegration(options, actor, workspaceId, async sql => { const receipt = await readAutomationIntegrationReceipt(sql, options, actor, workspaceId, requestId); if (!receipt) throw new DomainError('not_found_or_forbidden', 'Integration receipt is not accessible', 404); return receipt; }),
     operation: (actor: Actor, workspaceId: string, id: string) => readAutomationIntegration(options, actor, workspaceId, async sql => {

@@ -16,7 +16,14 @@ import type { SqlExecutor } from './ports.ts';
 type EndpointRow = { id: string; workspace_id: string; actor_id: string; project_id: string; definition_id: string; revision: number; config: AutomationEventConfig; private_secret: string; status: 'active' | 'revoked'; created_at: Date; updated_at: Date };
 type DefinitionRow = { id: string; config: StudioConfig; revision: number; status: string };
 export type AutomationEventsOptions = AutomationIntegrationContext & { privateStore?: AutomationPrivateStore; publicOrigin?: string };
-export function createAutomationEventsService(options: AutomationEventsOptions) {
+export interface AutomationEventsService {
+  list(actor: Actor, workspaceId: string, projectId?: string): Promise<{ items: AutomationEventEndpoint[] }>;
+  save(actor: Actor, workspaceId: string, id: string, input: z.infer<typeof automationEventSaveSchema>): Promise<AutomationEventEndpoint>;
+  revoke(actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationEventEndpoint>;
+  events(actor: Actor, workspaceId: string, id: string, cursor?: string): Promise<{ items: AutomationEventReceipt[]; nextCursor: string | null }>;
+  receive(id: string, raw: Buffer, headers: IncomingHttpHeaders): Promise<AutomationEventReceipt | { challenge: string }>;
+}
+export function createAutomationEventsService(options: AutomationEventsOptions): AutomationEventsService {
   const store = options.privateStore ?? createAutomationPrivateStore();
   const dto = (row: EndpointRow): AutomationEventEndpoint => ({ ...row.config, id: row.id, revision: row.revision, status: row.status, hasSecret: Boolean(row.private_secret), url: `${(options.publicOrigin ?? '').replace(/\/$/, '')}/api/v1/automation-webhooks/${row.id}`, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
   async function endpoint(sql: SqlExecutor, actor: Actor, workspaceId: string, id: string): Promise<EndpointRow> {
@@ -50,7 +57,7 @@ export function createAutomationEventsService(options: AutomationEventsOptions) 
       if (!row) throw new DomainError('version_conflict', 'Endpoint identity is not available', 409);
       return dto(row);
     }),
-    revoke: (actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }): Promise<AutomationEventEndpoint> => {
+    revoke: (actor: Actor, workspaceId: string, id: string, input: { requestId: string; expectedRevision: number }, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<AutomationEventEndpoint> => {
       const projects: string[] = [];
       return mutateAutomationIntegration(options, actor, workspaceId, { ...input, id, kind: 'event-revoke' }, projects, async sql => {
         const row = await endpoint(sql, actor, workspaceId, id); projects.push(row.project_id);
@@ -58,7 +65,7 @@ export function createAutomationEventsService(options: AutomationEventsOptions) 
         if (row.revision !== input.expectedRevision) throw new DomainError('version_conflict', 'Event endpoint changed; reload before revoking', 409);
         const updated = (await sql.query<EndpointRow>("UPDATE automation_event_endpoints SET status='revoked',private_secret='',revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING *", [id])).rows[0]!;
         return dto(updated);
-      });
+      }, checkAuthorization);
     },
     events: (actor: Actor, workspaceId: string, id: string, cursor?: string) => readAutomationIntegration(options, actor, workspaceId, async sql => {
       await endpoint(sql, actor, workspaceId, id);

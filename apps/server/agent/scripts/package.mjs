@@ -8,6 +8,7 @@ import { verifyHost } from "./cc-switch.mjs";
 import { verifyOutputs as verifyOpenHandsOutputs } from "../../../../vendor/openhands-extensions/scripts/provenance.mjs";
 import { verifyWebDistribution } from "../../../../vendor/openhands-extensions/scripts/web-build.mjs";
 import { enforceExternalAgentBoundary, isExternalAgentCliPackage } from "./external-agent-packages.mjs";
+import { readBundledPmResources } from "../../../../packages/skill-resources/catalog.ts";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(packageRoot, "../../..");
@@ -149,6 +150,18 @@ async function inventoryTree(root, destination, relative = "") {
 }
 // Preserve package depth: paths.ts derives artifact-owned root via ../../../../ from dist.
 await inventoryTree(buildRoot, "apps/server/agent/dist");
+for (const [target, content] of await readBundledPmResources(repository)) {
+  const bytes = Buffer.from(content);
+  transfers.push({ target, source: path.join(repository, target), sha256: sha(bytes), mode: 0o644 });
+  fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
+}
+// The relocated verifier reads the same registry without a source checkout.
+{
+  const target = "packages/skill-resources/catalog.ts", source = path.join(repository, target);
+  const bytes = await readFile(source);
+  transfers.push({ target, source, sha256: sha(bytes), mode: 0o644 });
+  fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
+}
 if (options.has("--web-dist")) await inventoryTree(await realpath(options.get("--web-dist")), "apps/web/dist");
 for (const record of ordered) {
   await inventoryTree(record.root, record.destination);

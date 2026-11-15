@@ -10,7 +10,7 @@
 
 工程验证与部署构建分开：`pnpm check:ci` 仍持有完整门禁、真实夹具、回归和清理，仅将明确的 lint/build/host-build 工程叶交由共享调度；本轮覆盖六 lint、声明/完整类型及 PM/Agent/host/Web/marketing 公共产物缓存。`pnpm check:turbo --stage build` 关闭 dotenv 读取，可恢复声明的隔离检查产物，**不是**本节按部署环境生成产物的替代命令，也不证明来源/许可或生产验收通过。已有实例直接托管 checkout 产物时，检查/缓存恢复必须使用新的独立 worktree，不覆盖 live dist；配置/工具修改不自动要求重启业务服务。source 前提、fresh 门禁及未执行的 hosted 范围见[开发与验证](../docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)。
 
-本轮全 16 叶缓存/8 roots 恢复与独立 Agent 回归的实际通过仅发生在新的自有 worktree；没有用这些隔离产物替换现有公共服务。Main 对 3224 的真实登录页（0 pageerror）、四个 ready/access/PM/Agent Web HTTP 200、原 Worker/API/Agent/gateway cwd/出生身份及 built mode 作了部署前置/现有健康核验；**不是已部署本轮新产物**。primary 的 24 项对照中 23 字节未变，CHANGELOG 的外部并行变化原样保留，没有覆盖 parallel primary/live 输出，也不声称原树全部 unchanged。默认 all 仍因 MinIO Docker FROM 镜像域名 DNS 失败而没有 backend 用例；hosted、真实 Provider/平台/生产与四项发行许可 blocker 不由此关闭，见[本轮证据](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
+本轮全 16 叶缓存/8 roots 恢复与独立 Agent 回归的实际通过仅发生在新的自有 worktree；没有用这些隔离产物替换现有公共服务。Main 对 3224 的真实登录页（0 pageerror）、四个 ready/access/PM/Agent Web HTTP 200、原 Worker/API/Agent/gateway cwd/出生身份及 built mode 作了部署前置/现有健康核验；**不是已部署本轮新产物**。primary 的 24 项对照中 23 字节未变，CHANGELOG 的外部并行变化原样保留，没有覆盖 parallel primary/live 输出，也不声称原树全部 unchanged。默认 all 仍因 MinIO Docker FROM 镜像域名 DNS 失败而没有 backend 用例；hosted、真实 Provider/平台/生产与四项发行许可 blocker 不由此关闭；本轮证据属于内部记录，不随公开树分发。
 
 ```bash
 node scripts/doctor.mjs
@@ -28,7 +28,17 @@ pnpm services:status
 
 `setup:local` 创建 0600 的 `.env`、`.env.worker`、`.env.agent` 并随机生成新 v4 数据库密码，已有文件不覆盖，不自动复制账号或 Provider 凭据。独立应用数据在本仓 `.local/`；Agent 默认 `.local/agent-data`，不复用 `~/.agent-workspace`。本机服务与桌面启动器继承宿主原生 CLI 环境，实例设置覆盖同名变量；空 Home 不创建独立原生账号目录。容器仅能继承容器服务进程实际可见的配置，不会自动挂载宿主 Home。新安装显式选择 Local，仍须停写绑定；`blob-target.json` 的绝对 BLOB_ROOT 必须与 API 配置一致。已有成果使用 `bind --adopt` 全量核验，不能用 `--new` 冒充空库。数据库 Compose project 为 `project-management-agent-v4-backend`，宿主默认55444。
 
-`pnpm bootstrap` 仅为**空库**准备一次性 Web 设置：将随机令牌持久化到 `.local/setup-token`（0600），数据库仅保存摘要；终端只显示文件路径，不生成账号或明文密码。启动后打开本实例 `/pm`，从私有文件安全取用令牌，输入姓名、邮箱、密码和工作区名称完成设置。默认仅邀请注册；有账号或工作区的旧库直接 no-op，不读取、改写或删除既有凭据，不重置密码。数据库/schema 错误不会当作空库。正式业务命令仍需真实登录会话、当前成员能力和版本；新成员使用工作区邀请，现有受控 `account:create` 入口仍须管理员显式授权。
+`pnpm bootstrap` 仅为**空库**准备一次性 Web 设置：将随机令牌持久化到 `.local/setup-token`（0600），数据库仅保存摘要；终端只显示文件路径，不生成账号或明文密码。启动后打开本实例 `/pm`，从私有文件安全取用令牌，输入姓名、邮箱、密码和工作区名称完成设置。有账号或工作区的旧库直接 no-op，不读取、改写或删除既有凭据，不重置密码。数据库/schema 错误不会当作空库。正式业务命令仍需真实登录会话、当前成员能力和版本；加入已有工作区仍使用邀请或管理员明确授权。
+
+已初始化实例开放 `/pm/register` 与 `POST /api/v1/auth/register`；空实例及只准备了设置令牌的实例拒绝自主注册，不能借此抢占首次设置。注册在一个事务中创建普通账号与 8 小时 `pm_v4_session`，不创建成员关系；沿用同源检查、持久来源限流、密码哈希与 Cookie 安全设置。已有账号（包括停用账号）冲突不改密码；已有有效 PM 会话须先退出，不能静默切换账号。注册结果未知先核对会话，再用相同邮箱普通登录，不自动重发。
+
+自主注册本身没有新增数据库迁移，但依赖现行认证与引导表结构，须同步部署 PM API、Web 和桌面首次启动状态读取器。`GET /api/v1/setup/status` 在已初始化时返回 `registrationMode: "open"`，空实例仍为 `"invite_only"`；旧 Web 或桌面读取器不能与新 API 混用。对公网开放前仍须独立核验 TLS、容量与部署防护；注册不验证邮箱所有权，也不授予 Agent 访问权限。未通过构建或来源门禁时保留现有服务。
+
+### 首次使用引导升级
+
+新分步入口与账号引导依赖增量 `0059_user_onboarding.sql`，必须同步部署 PM API、Web 与使用同一 Web 的桌面后端，不能 Web-only 更新。先核对本项目服务归属、候选代码与产物范围，完成受影响检查、隔离数据库回归和一致备份，再按现有停写迁移流程升级；保留旧 Web 哈希资源。存在未审阅并行产物或门禁失败时保留现有服务，不提前迁移业务库或只替换前端。
+
+迁移只新增用户引导字段：历史账号一次性标为已完成且清单已关闭，新账号默认待引导。完成标记不代表资料、Provider 或业务已验收；历史账号可从账号菜单手动打开。`GET/PATCH /api/v1/auth/onboarding` 使用原 PM 身份和当前工作区授权；更新必须带 `expectedActorId`、`expectedRevision`，冲突或结果未知先读回状态，不自动重试写入。该状态不保存密码、令牌或 Provider 凭据，不统一 PM 与 Agent 会话。
 
 ### 工作区示例初始化升级与恢复
 
@@ -110,11 +120,41 @@ Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚�
 
 公共网关将 `/api`、`/health` 和 `/openapi.json` 转发 PM API，将 `/agent/api/*` 去掉 `/agent` 转发 Agent API，其他页面和资源来自同一 Web 构建；WebSocket 与 SSE 保持同源。Provider 设置为 `/agent/settings/providers`，私有环境为 `.env.agent`，没有模型配置不会返回假成功。
 
+启用本机 Agent CLI 认证时，使用独立的 `AGENT_WORKSPACE_ACCESS_TOKEN`，通过私有 token 文件或非 TTY 私有管道登录，不复用 PM Cookie。外部 MCP 还须在 Agent 角色设置固定 `MCP_PUBLIC_ORIGIN`，在 PM 角色设置直连 Agent 的 `PM_MCP_AGENT_URL`，并核对两角色既有服务密钥一致；loopback HTTP 无需新增白名单。非 loopback 私有 HTTP 的精确白名单及信任边界见 [Agent 指南](../docs/guides/agent-chat.md)。配置完成需要加载对应角色环境；HTTP discovery 可用不等于客户端 OAuth 同意与撤销已验收。
+
 统一 Web 构建保留旧的带哈希 JS/CSS，避免已经打开的页面稍后加载旧 chunk 失败；历史资源只在停止服务并确认旧页面不再使用后显式清理。
 
 现行执行环境使用独立 Agent Workspace v2，需同时更新 PM API、Agent API 和 Agent Web，并在备份后应用 `0051_retire_pm_agent_code_workspaces.sql`。规范化目录、元数据 revision 与设备/inode 身份保存在 Agent SQLite，不绑定 PM 项目。旧 `0037_agent_storage_defaults.sql` 保存位置及 PM file-area 配置不自动转换为 Agent 目录，也不移动文档。纯对话 scratch 位于 Agent 数据目录的 `chat-scratch`；首次分配后丢失或身份改变时拒绝重建。
 
 Files / Git 请求只携带 Session 与相对路径；Session Terminal 使用实际执行目录／Worktree，Workspace Terminal 使用明确打开的文件夹。普通代码环境仅要求 Agent 能访问对应绝对目录；PM 业务预检通过已有服务 HMAC 调用 Agent 的内部解析接口，不把该接口暴露给浏览器或网关。容器挂载须显式配置，不把宿主 `~` 当容器用户主目录。终端拥有服务进程 shell 权限，不是安全沙箱；不跨 Agent 服务重启存活，不自动重放创建请求或命令。
+
+#### 成员协作升级
+
+成员／团队全流程需要匹配的 PM API、Worker、Web 和 `0061_people_participation.sql`、`0062_member_handover.sql`、`0063_invitation_teams.sql`，不能只部署 Web。先完成受影响检查、真实隔离数据库／Markdown／邮件回归、来源门禁和构建；构建或来源绑定失败时保留当前可用服务，不用开发预览替代部署，不更新无关并行变更的批准记录。
+
+依照本手册备份及维护流程应用增量迁移，再切换匹配产物；保留旧哈希 Web 资源。迁移不从任务负责人或团队自动回填参与名单，不追加成员能力、不导入账号，也不改变 Agent SQLite。仅此功能不要求重启独立 Agent，不能据此声称已实现 Agent 多成员会话隔离。
+
+在真实公共入口核对成员／团队页、项目参与保存、逐地址邀请与实际邮件状态、职责交接、团队归档／恢复和退出原收据恢复。验收账号和数据应先在隔离实例建立，不往现有业务库自动种入演示成员；SMTP fixture 接受不证明真实邮箱送达。操作详见[成员使用指南](../docs/guides/project-management.md#成员团队与职责交接)。会话／持久化统一设计仍未收口。
+
+#### Agent 协作与持久化升级
+
+业务 Run／Agent／Team、Issue Work Thread 与 Inbox 需要匹配的 PM、Agent、Web 产物及 `0058_task_comment_agent_origin.sql`，不是 Web-only 更新。先完成受影响检查、来源／许可校验和构建；在核对公共入口、PID、cwd、出生身份与模式前不重启或接管服务。
+
+**新 runtime 拒绝写入缺少持久化元数据的非空旧 Agent 库。** 不得先换二进制再让启动自动修库，也不能删除旧库绕过门禁。D1–D4 的开发授权不等于生产迁移、旧 Session 清理或停写授权。
+
+1. 经独立维护授权，停止本实例纳入恢复集的写者，并由操作者确认外部核心／附件／聊天写者已停写。保留旧产物和同一屏障的完整 PM＋Agent 私有备份；不只复制在线 SQLite 主文件。
+2. 先在真实隔离副本盘点、导出和验证。当前维护命令只接受隔离副本，输出文件须为新的私有路径：
+
+   ```sh
+   node --conditions=development scripts/agent-persistence.ts --data /ABS/StoppedCopy --stopped --isolated-copy --output /PRIVATE/new-persistence-plan.json
+   node --conditions=development scripts/agent-persistence.ts --data /ABS/StoppedCopy --stopped --isolated-copy --apply --plan /PRIVATE/new-persistence-plan.json
+   ```
+
+   核对全部 namespace／关系、blocker、源目录和精确指纹；清单变化即停止。相同清单重复 apply 返回原 Store 身份，不重放执行；`--rollback --plan ...` 只移除本次元数据与写门禁，且要求原记录尚无新增写入。它不是业务或外部副作用回滚。
+3. 需要导出旧历史时使用同一命令的 `--history-thread THREAD_ID --output /PRIVATE/new-history.json`，不启用旧执行。将经验证的副本切换为生产仍需独立审阅与授权；不能把现有源目录谎称为 `--isolated-copy`，也不能把下面的旧 Session 清理流程当成必做迁移。
+4. 具备生产授权、完整恢复集与所有门禁后，按明确切换方案安装匹配产物、应用 PM 增量并启动；保留旧 Web 哈希资源。在 `3224` 验证实际 Agents／Teams、业务 Run、原审批及旧历史边界。任一前提未满足，保留现有可用部署并报告阻塞。
+
+恢复集可用 `node --conditions=development scripts/verify-recovery-set.ts --directory /PRIVATE/RecoverySet --stopped` 独立核验；其静态 SQL 关系核验不代替真实 PostgreSQL 还原。会话／持久化整体设计、目标平台和生产恢复仍需分别验收。
 
 #### Agent Session 执行环境切换
 
@@ -138,7 +178,7 @@ Files / Git 请求只携带 Session 与相对路径；Session Terminal 使用实
 
 本机进程部署可启用受信任的 `LOCAL_PROJECTS_ENABLED=true`、`LOCAL_PROJECT_ALLOWED_ROOTS`（绝对父目录 JSON 数组）及 `LOCAL_PROJECT_DEFAULT_PARENT`；`setup:local` 维护独立的本机目录配置。`LOCAL_DATA_ROOT` 决定共享工作区状态的默认位置，`LOCAL_BACKUP_ROOT` 决定真实备份输出位置。目录授权是服务配置，不由浏览器提交的路径扩权；宿主目录浏览仅对已认证的工作区全局管理员开放。
 
-新项目的 Markdown 位于所选根 `.pm/core`，附件**实际位于该项目 `.pm/attachments`**；`.pm/project.json` 与附件 `.pm-store.json` 固定工作区、项目和 storageId。共享 `.pm/state` 仍在工作区数据根。项目切换不修改全局 `BLOB_ROOT`；未登记旧项目继续使用原 Local/S3。上传/版本保留不可变 storageId，历史 SQL 收据/事件不改写，受控维护以独立对象路由和旧存储身份别名解析历史引用。目录缺失、盘卸载、符号链接或身份冲突均拒绝访问，不自动创建空根或回退到其他目录。
+新项目的 Markdown 位于所选根 `.dovspace/.pm/core`，附件**实际位于该项目 `.dovspace/.pm/attachments`**；`.dovspace/.pm/project.json` 与附件 `.pm-store.json` 固定工作区、项目和 storageId。`.dovspace/.gitignore` 自包含忽略 PM 容器，项目自身的 `.gitignore` 也可加入 `.dovspace/`。共享 `.pm/state` 仍在工作区数据根。项目切换不修改全局 `BLOB_ROOT`；未登记旧项目继续使用原 Local/S3。上传/版本保留不可变 storageId，历史 SQL 收据/事件不改写，受控维护以独立对象路由和旧存储身份别名解析历史引用。目录缺失、盘卸载、符号链接或身份冲突均拒绝访问，不自动创建空根或回退到其他目录。
 
 显式项目迁移与重定位：
 
@@ -284,9 +324,9 @@ PM_COOKIE_SECURE=false
 
 环境按角色隔离：migration仅数据库；runtime为 PM API 的数据库/存储及按需邮件；worker为数据库、邮件及批准 Webhook 元数据/密钥，禁止 S3/AWS；storage仅维护配置；Agent只有 v4 Provider 配置和新32+字符 `AGENT_WORKSPACE_ACCESS_TOKEN`，不复制 PM 数据库/旧 Provider 凭据。Agent容器非loopback监听仍要求原访问令牌保护，不能借部署关闭。Compose插值需要这些路径，即使未开maintenance。数据库主机为本 v4 专用网络中的 `postgres:5432`，不是宿主loopback；HTTPS必须secure Cookie并独立验收。
 
-本地项目功能在应用 Compose 中默认关闭；显式 `PM_LOCAL_PROJECTS_ENABLED=true` 后，API 使用 `/var/lib/pm/projects` 的 `project-data` 卷，Worker 将同一项目卷只读挂载以解析映射后的核心文件，不获得 legacy blob 卷或 S3 凭据。该只读项目卷本身包含附件，不能宣称 OS 层附件保密隔离；Worker 实现仅消费核心事实。容器 UI 选择的是容器可见目录，不是假装浏览任意宿主路径。需要既有宿主代码目录时，操作者必须给 API/维护角色可写、Worker 只读的相同绝对路径 bind mount，并同步可信 allowedRoots；禁止以 symlink 模拟挂载。`project-storage` maintenance service 运行编译后的项目维护 CLI，挂载核心/项目/legacy 卷和 `/maintenance`，仅显式停写操作，不随 API 自行修复。外部根备份必须逐根导出，不能只归档 `core-data`/`blob-data`。
+本地项目功能在应用 Compose 中默认关闭；显式 `PM_LOCAL_PROJECTS_ENABLED=true` 后，API 使用 `/var/lib/pm/projects` 的 `project-data` 卷，Worker 将同一项目卷只读挂载以解析映射后的核心文件，不获得 legacy blob 卷或 S3 凭据。该只读项目卷本身包含附件，不能宣称 OS 层附件保密隔离；Worker 实现仅消费核心事实。容器 UI 选择的是容器可见目录，不是假装浏览任意宿主路径。项目存储不再受 `allowedRoots` 限制，但容器只能看到已挂载路径；需要既有宿主代码目录时，操作者必须给 API/维护角色可写、Worker 只读的相同绝对路径 bind mount。`allowedRoots` 仍约束文档来源等独立能力，按其自身配置维护。禁止以 symlink 模拟挂载。`project-storage` maintenance service 运行编译后的项目维护 CLI，挂载核心/项目/legacy 卷和 `/maintenance`，仅显式停写操作，不随 API 自行修复。外部根备份必须逐根导出，不能只归档 `core-data`/`blob-data`。
 
-Agent 与 API 同挂载 `project-data:/var/lib/pm/projects`，因此 resolve 返回的绝对目录在执行容器中真实存在；添加其他宿主 bind mount 必须给两者提供相同绝对路径并同步原可信 allowedRoots。Agent 数据使用独立 `agent-data` 卷，不共享来源 Provider homes。`scripts/agent-docker.sh build|start|stop|status|logs` 只管理 `project-management-agent-v4-app`，读取 `V4_DEPLOY_ENV_FILE`（默认本仓私有 `.env.deploy`），不能用于停止数据库或其他项目。
+Agent 与 API 同挂载 `project-data:/var/lib/pm/projects`，因此 resolve 返回的绝对目录在执行容器中真实存在；添加其他宿主 bind mount 必须给两者提供相同绝对路径。文档来源等仍受各自 `allowedRoots` 约束的能力按其配置同步。Agent 数据使用独立 `agent-data` 卷，不共享来源 Provider homes。`scripts/agent-docker.sh build|start|stop|status|logs` 只管理 `project-management-agent-v4-app`，读取 `V4_DEPLOY_ENV_FILE`（默认本仓私有 `.env.deploy`），不能用于停止数据库或其他项目。
 
 
 `project-storage` 使用当前原 provider 的 `BLOB_PROVIDER`/`BLOB_ROOT` 或显式 `S3_*` 环境；跨 global-provider 迁移的旧 `storage` CLI 仍使用无凭据描述符及 `SOURCE_S3_*`/`TARGET_S3_*`。这些只属于停写维护角色，不复制给 Worker/Web，也不写入项目标记或备份清单。

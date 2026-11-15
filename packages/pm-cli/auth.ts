@@ -102,7 +102,8 @@ async function passwordPrompt(): Promise<string> {
   const input = process.stdin;
   if (!input.isTTY || !process.stderr.isTTY) throw new CliAuthError('CLI_AUTH_REQUIRED', 'Interactive login requires a terminal; automation must provide both PM_EMAIL and PM_PASSWORD.');
   const wasRaw = input.isRaw;
-  const wasPaused = input.isPaused();
+  // This command owns terminal input; a resumed stdin otherwise keeps Node alive
+  // after readline's keypress listener has been removed (notably after Email).
   // The backend's ES2023 library target does not expose Promise.withResolvers.
   return new Promise<string>((resolve, reject) => {
     let value = '';
@@ -112,13 +113,17 @@ async function passwordPrompt(): Promise<string> {
       settled = true;
       input.removeListener('keypress', onKey);
       input.removeListener('end', onEnd);
-      input.setRawMode(wasRaw);
-      if (wasPaused) input.pause();
+      input.removeListener('error', onError);
+      process.removeListener('SIGINT', onEnd);
+      try { input.setRawMode(wasRaw); }
+      catch { error ??= new CliAuthError('CLI_LOGIN_CANCELLED', 'Terminal input closed; login cancelled.'); }
+      finally { input.pause(); }
       process.stderr.write('\n');
       if (error) reject(error); else resolve(value);
       value = '';
     };
     const onEnd = (): void => finish(new CliAuthError('CLI_LOGIN_CANCELLED', 'Login cancelled.'));
+    const onError = (): void => finish(new CliAuthError('CLI_LOGIN_CANCELLED', 'Terminal input closed; login cancelled.'));
     const onKey = (text: string | undefined, key: { name?: string; ctrl?: boolean; meta?: boolean }): void => {
       if ((key.ctrl && ['c', 'd'].includes(key.name ?? '')) || key.name === 'escape') return onEnd();
       if (key.name === 'return' || key.name === 'enter') return finish();
@@ -128,6 +133,8 @@ async function passwordPrompt(): Promise<string> {
     emitKeypressEvents(input);
     input.on('keypress', onKey);
     input.once('end', onEnd);
+    input.once('error', onError);
+    process.once('SIGINT', onEnd);
     input.setRawMode(true);
     input.resume();
     process.stderr.write('Password: ');
@@ -142,9 +149,22 @@ export async function loginCli(emailOption?: string, environment: Environment = 
   let email = emailOption?.trim() || environment.PM_EMAIL?.trim();
   if (!email) {
     if (!process.stdin.isTTY || !process.stderr.isTTY) throw new CliAuthError('CLI_AUTH_REQUIRED', 'Interactive login requires a terminal; set both PM_EMAIL and PM_PASSWORD for automation.');
-    const prompt = createInterface({ input: process.stdin, output: process.stderr });
-    try { email = await prompt.question('Email: '); }
-    finally { prompt.close(); }
+    const input = process.stdin;
+    const prompt = createInterface({ input, output: process.stderr });
+    const controller = new AbortController();
+    const cancel = (): void => controller.abort();
+    prompt.once('SIGINT', cancel);
+    prompt.once('close', cancel);
+    process.once('SIGINT', cancel);
+    try { email = await prompt.question('Email: ', { signal: controller.signal }); }
+    catch { throw new CliAuthError('CLI_LOGIN_CANCELLED', 'Login cancelled.'); }
+    finally {
+      process.removeListener('SIGINT', cancel);
+      prompt.removeListener('SIGINT', cancel);
+      prompt.removeListener('close', cancel);
+      prompt.close();
+      input.pause();
+    }
   }
   let password = environment.PM_PASSWORD || await passwordPrompt();
   const session = await passwordSession(origin, email.trim(), password).finally(() => { password = ''; });

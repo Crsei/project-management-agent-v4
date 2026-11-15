@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router"
 import { ApiError, type InstanceSetupStatus, type SetupRequest } from "@contracts"
-import { ArrowRight, Eye, EyeOff, LoaderCircle, RefreshCw } from "lucide-react"
-import { DovspaceWordmark } from "@/components/dovspace-brand"
+import { ArrowRight, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { DovspaceLoading } from "@/components/dovspace-brand"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field } from "@/components/ui/field"
@@ -67,7 +67,7 @@ export function PmFirstUsePage() {
   useEffect(() => {
     if (!submitted || phase !== "idle" || !status?.initialized || !actor || loading || error) return
     const id = setupWorkspaceId(workspaces, expectedWorkspaceId)
-    if (id) navigate(`/pm/${encodeURIComponent(id)}/home`, { replace: true })
+    if (id) navigate("/pm", { replace: true })
   }, [submitted, phase, status?.initialized, actor, loading, error, workspaces, expectedWorkspaceId, navigate])
 
   async function readStatusAndSession() {
@@ -148,14 +148,13 @@ export function PmFirstUsePage() {
 
   if (failure || !status || entry === "unprepared" || entry === "unknown" && !busy || pending) return (
     <section className={styles.authForm} aria-labelledby="pm-first-use-title" aria-busy={pending || busy}>
-      <div className="mb-6 flex justify-center"><DovspaceWordmark height={30} /></div>
       <h1 id="pm-first-use-title" className={styles.title}>{pending || busy
         ? t("正在检查实例状态", "Checking instance status")
         : failure ? t("无法确认实例状态", "Instance status is unavailable")
           : entry === "unprepared" ? t("首次设置尚未开放", "First-time setup is not prepared")
             : t("设置结果尚待核对", "Setup outcome is not confirmed")}</h1>
       <div className={styles.feedback}>
-        {pending || busy ? <p role="status" className={styles.description}><LoaderCircle size={18} className="mr-2 inline animate-spin motion-reduce:animate-none" aria-hidden="true" />{t("正在读取服务状态和当前会话，请稍候。", "Reading the service status and current session. Please wait.")}</p>
+        {pending || busy ? <DovspaceLoading className={styles.description} message={t("正在读取服务状态和当前会话，请稍候。", "Reading the service status and current session. Please wait.")} />
           : failure ? <Alert tone="error" className={styles.feedbackAlert}>
             <p>{pmErrorMessage(failure, locale === "en" ? "en" : "zh")}</p>
             <p>{t("读取失败不代表实例为空或尚未初始化。请重新核对，不要重新创建账号或工作区。", "A failed read does not mean this instance is empty or uninitialized. Recheck its state rather than creating another account or workspace.")}</p>
@@ -166,7 +165,7 @@ export function PmFirstUsePage() {
           {!busy && <RefreshCw size={16} aria-hidden="true" />}{t("重新核对状态", "Check status again")}
         </Button>}
       </div>
-      <div className={styles.accountGuidance}><p>{t("此实例仅限邀请加入，不提供公开注册。已有账号、工作区及业务数据不会在此重建。", "This instance is invitation-only, with no public signup. Existing accounts, workspaces, and business data are never recreated here.")}</p></div>
+      <div className={styles.accountGuidance}><p>{t("初始化后可以公开注册；已有账号、工作区及业务数据不会在此重建。", "Public signup is available after initialization. Existing accounts, workspaces, and business data are never recreated here.")}</p></div>
     </section>
   )
 
@@ -190,6 +189,7 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
   const [desktopToken, setDesktopToken] = useState(false)
   const [visible, setVisible] = useState(false)
   const [attempted, setAttempted] = useState(false)
+  const [step, setStep] = useState(0)
   const nameInput = useRef<HTMLInputElement>(null)
   const emailInput = useRef<HTMLInputElement>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
@@ -214,33 +214,48 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
     event.preventDefault()
     if (busy) return
     setAttempted(true)
-    const invalid = [[nameError, nameInput], [emailError, emailInput], [passwordError, passwordInput], [workspaceError, workspaceInput], [tokenError, tokenInput]] as const
-    const first = invalid.find(([issue]) => issue)
+    const groups = [
+      [[nameError, nameInput], [emailError, emailInput]],
+      [[passwordError, passwordInput]],
+      [[workspaceError, workspaceInput]],
+      [[tokenError, tokenInput]],
+    ] as const
+    const first = groups[step].find(([issue]) => issue)
     if (first) { first[1].current?.focus(); return }
+    if (step < 3) { setAttempted(false); setStep(step + 1); return }
+    if (nameError || emailError) { setStep(0); return }
+    if (passwordError) { setStep(1); return }
+    if (workspaceError) { setStep(2); return }
     const request = { name: name.trim(), email: email.trim(), password, workspaceName: workspaceName.trim(), setupToken }
     setPassword("")
     if (!desktopToken) setSetupToken("")
     setVisible(false)
     setAttempted(false)
-    void onSubmit(request)
+    void onSubmit(request).finally(() => setStep(1))
   }
 
   return <section className={styles.authForm} aria-labelledby="pm-setup-title" aria-busy={busy}>
-    <div className="mb-6 flex justify-center"><DovspaceWordmark height={30} /></div>
     <h1 id="pm-setup-title" className={styles.title}>{t("欢迎使用 Dovspace", "Welcome to Dovspace")}</h1>
     <p className={styles.description}>{t("创建你的账号和第一个工作区。仅准备好的一次性令牌可完成设置。", "Create your account and first workspace. A prepared one-time token is required to complete setup.")}</p>
+    <p className={styles.hint} aria-live="polite">{t(`第 ${step + 1} 步，共 4 步`, `Step ${step + 1} of 4`)}</p>
     <form noValidate onSubmit={submit} aria-labelledby="pm-setup-title">
       <fieldset disabled={busy} className={styles.fields}>
-        <Field label={t("姓名", "Name")} required error={attempted ? nameError : null}>{props => <Input {...props} ref={nameInput} name="name" autoComplete="name" maxLength={200} value={name} onChange={event => setName(event.target.value)} />}</Field>
-        <Field label={t("邮箱", "Email")} required error={attempted ? emailError : null}>{props => <Input {...props} ref={emailInput} name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={254} placeholder="you@example.com" value={email} onChange={event => setEmail(event.target.value)} />}</Field>
-        <Field label={t("密码", "Password")} required description={t("至少 12 个字符。请妥善保存，应用不会生成明文密码文件。", "At least 12 characters. Keep it safe; the app does not create a plaintext password file.")} error={attempted ? passwordError : null}>{props => <div className={styles.password}>
+        {step === 0 && <>
+          <Field label={t("姓名", "Name")} required error={attempted ? nameError : null}>{props => <Input {...props} ref={nameInput} name="name" autoComplete="name" maxLength={200} value={name} onChange={event => setName(event.target.value)} />}</Field>
+          <Field label={t("邮箱", "Email")} required error={attempted ? emailError : null}>{props => <Input {...props} ref={emailInput} name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={254} placeholder="you@example.com" value={email} onChange={event => setEmail(event.target.value)} />}</Field>
+        </>}
+        {step === 1 && <Field label={t("密码", "Password")} required description={t("至少 12 个字符。请妥善保存，应用不会生成明文密码文件。", "At least 12 characters. Keep it safe; the app does not create a plaintext password file.")} error={attempted ? passwordError : null}>{props => <div className={styles.password}>
           <Input {...props} ref={passwordInput} name="password" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} maxLength={256} value={password} onChange={event => setPassword(event.target.value)} />
           <Button type="button" variant="ghost" size="icon" aria-label={visible ? t("隐藏密码", "Hide password") : t("显示密码", "Show password")} aria-pressed={visible} aria-controls={props.id} onClick={() => setVisible(value => !value)}>{visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}</Button>
-        </div>}</Field>
-        <Field label={t("工作区名称", "Workspace name")} required error={attempted ? workspaceError : null}>{props => <Input {...props} ref={workspaceInput} name="workspaceName" autoComplete="organization" maxLength={200} value={workspaceName} onChange={event => setWorkspaceName(event.target.value)} />}</Field>
-        <Field label={t("一次性设置令牌", "One-time setup token")} required description={t("由部署管理员提供，请勿放入网址或分享给其他人。", "Provided by your deployment administrator. Never place it in a URL or share it.")} error={attempted ? tokenError : null}>{props => <Input {...props} ref={tokenInput} name="setupToken" type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={43} value={setupToken} onChange={event => { setDesktopToken(false); setSetupToken(event.target.value) }} />}</Field>
-        {desktopToken && <p className={styles.hint} role="status">{t("桌面端已自动填入本机一次性设置令牌；令牌不会进入网址、历史记录或本地存储。", "The desktop app filled in this machine's one-time setup token; it is never placed in a URL, history, or local storage.")}</p>}
-        <Button type="submit" className={styles.submit} loading={busy} disabled={busy}>{checking ? t("正在核对设置和会话…", "Checking setup and session…") : busy ? t("正在设置…", "Setting up…") : t("创建账号与工作区", "Create account and workspace")}{!busy && <ArrowRight size={16} aria-hidden="true" />}</Button>
+        </div>}</Field>}
+        {step === 2 && <Field label={t("工作区名称", "Workspace name")} required error={attempted ? workspaceError : null}>{props => <Input {...props} ref={workspaceInput} name="workspaceName" autoComplete="organization" maxLength={200} value={workspaceName} onChange={event => setWorkspaceName(event.target.value)} />}</Field>}
+        {step === 3 && <>
+          <p className={styles.hint}>{t("请确认账号和工作区", "Confirm your account and workspace")}: {name.trim()} · {email.trim()} · {workspaceName.trim()}</p>
+          <Field label={t("一次性设置令牌", "One-time setup token")} required description={t("由部署管理员提供，请勿放入网址或分享给其他人。", "Provided by your deployment administrator. Never place it in a URL or share it.")} error={attempted ? tokenError : null}>{props => <Input {...props} ref={tokenInput} name="setupToken" type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={43} value={setupToken} onChange={event => { setDesktopToken(false); setSetupToken(event.target.value) }} />}</Field>
+          {desktopToken && <p className={styles.hint} role="status">{t("桌面端已自动填入本机一次性设置令牌；令牌不会进入网址、历史记录或本地存储。", "The desktop app filled in this machine's one-time setup token; it is never placed in a URL, history, or local storage.")}</p>}
+        </>}
+        <Button type="submit" className={styles.submit} loading={busy} disabled={busy}>{checking ? t("正在核对设置和会话…", "Checking setup and session…") : busy ? t("正在设置…", "Setting up…") : step < 3 ? t("继续", "Continue") : t("创建账号与工作区", "Create account and workspace")}{!busy && <ArrowRight size={16} aria-hidden="true" />}</Button>
+        {step > 0 && <Button type="button" variant="outline" disabled={busy} onClick={() => { setAttempted(false); setStep(step - 1) }}>{t("返回", "Back")}</Button>}
       </fieldset>
     </form>
     <div className={styles.feedback}>
@@ -249,8 +264,8 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
       {checking && <p role="status" className={styles.hint}>{t("正在查询设置状态和当前会话；不会再次发送设置请求。", "Checking setup status and the current session; setup is not being submitted again.")}</p>}
     </div>
     <div className={styles.accountGuidance}>
-      <p>{t("设置后直接进入工作区；不需要先配置 Provider 或填写额外问卷。", "Enter your workspace after setup; no Provider configuration or extra questionnaire is required.")}</p>
-      <p>{t("此实例仅限邀请加入。后续成员通过现有邀请加入；本人密码、恢复邮箱和会话在账号安全中管理。设置或邀请不代表恢复邮箱已验证。", "This instance is invitation-only. Add future members with existing invitations. Manage your password, recovery email, and sessions in account security. Setup or an invitation does not verify a recovery email.")}</p>
+      <p>{t("设置后选择工作区；配置 Provider 可以稍后进行。", "Choose a workspace after setup; Provider configuration can be completed later.")}</p>
+      <p>{t("初始化后可公开注册账号；加入已有工作区仍需邀请。本人密码、恢复邮箱和会话在账号安全中管理。设置或邀请不代表恢复邮箱已验证。", "After initialization, people can sign up publicly; joining an existing workspace still requires an invitation. Manage your password, recovery email, and sessions in account security. Setup or an invitation does not verify a recovery email.")}</p>
     </div>
   </section>
 }

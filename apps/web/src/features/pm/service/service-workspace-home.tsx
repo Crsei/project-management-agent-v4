@@ -1,3 +1,4 @@
+import { HumanIdentity } from "./human-identity"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError as PmApiError } from '@contracts';
@@ -17,6 +18,7 @@ import { allowed, ServiceGuard, useText } from './pm-ui';
 import { usePmNoticeCenter } from './pm-notice-center';
 import { teamTaskCreateProjectProblem } from './team-task-actions-model';
 import { workspaceHomeModel, type HomeTaskTab } from './workspace-home-model';
+import { OnboardingChecklist } from './pm-onboarding-checklist';
 import styles from './service-workspace-home.module.css';
 
 const defaultStateLabels: Record<string, { en: string; zh: string }> = {
@@ -34,7 +36,7 @@ export function ServiceWorkspaceHome() {
     ? <CoreSessionProvider key={`${service.actor.id}:${service.workspace.id}:${service.workspace.version}:${service.actorEpoch}`} hostNamespace={window.location.origin} actorId={service.actor.id} workspaceId={service.workspace.id} membershipVersion={service.workspace.version} actorEpoch={service.actorEpoch} onAccessFailure={service.refresh}>
       <WorkspaceHomeContent />
     </CoreSessionProvider>
-    : <div className={styles.unavailable} role="alert"><FolderKanban size={24} aria-hidden="true" /><h1>{t('首页不可用', 'Home unavailable')}</h1><p>{t('当前没有读取工作区业务数据的权限。', 'You do not have permission to read workspace data.')}</p>{allowed(service.workspace, 'access.manage') && <Link to={`/pm/${encodeURIComponent(service.workspace.id)}/members`}>{t('管理工作区成员', 'Manage workspace members')}</Link>}</div>)}</ServiceGuard>;
+    : <><OnboardingChecklist /><div className={styles.unavailable} role="alert"><FolderKanban size={24} aria-hidden="true" /><h1>{t('首页不可用', 'Home unavailable')}</h1><p>{t('当前没有读取工作区业务数据的权限。', 'You do not have permission to read workspace data.')}</p>{allowed(service.workspace, 'access.manage') && <Link to={`/pm/${encodeURIComponent(service.workspace.id)}/members`}>{t('管理工作区成员', 'Manage workspace members')}</Link>}</div></>)}</ServiceGuard>;
 }
 
 function WorkspaceHomeContent() {
@@ -117,6 +119,7 @@ function WorkspaceHomeContent() {
           <Button size="sm" disabled={!canCreateTask} title={!canCreateTask ? taskCreateReason : undefined} aria-describedby={!canCreateTask ? 'home-create-reason' : undefined} onClick={() => navigate(`${root}/issues/new?${new URLSearchParams({ returnTo })}`, { state: { returnTo } })}><Plus size={15} aria-hidden="true" />{t('新建任务', 'New task')}</Button>
         </div>
       </header>
+      <OnboardingChecklist />
       {!canCreateTask && <p id="home-create-reason" className={styles.scopeNote} role="status">{taskCreateReason}</p>}
       <div className={styles.contextLine}><Link to={`${root}/issues?project=`}>{t('全部任务', 'All tasks')}<ArrowUpRight size={13} aria-hidden="true" /></Link></div>
       <HomeReadNotice label={t('工作区任务与项目', 'Workspace tasks and projects')} pending={core.isPending} error={core.error} stale={!!core.data} retry={() => { void core.refetch(); }} />
@@ -158,7 +161,7 @@ function WorkspaceHomeContent() {
               const verb = action ? t(action[0], action[1]) : entry.category === 'status' ? t('更改了状态，位于', 'changed the status of') : t('记录了动态，位于', 'recorded activity on');
               const name = entry.actorId !== null && entry.actorId === actor.id ? t('你', 'You') : entry.actorName || t('未知操作者', 'Someone');
               const title = entry.targetTitle || entry.targetId || t('未知对象', 'Unknown target');
-              return <li key={entry.id} data-activity-source={entry.source}><span className={styles.activityIcon}><History size={13} aria-hidden="true" /></span><div className={styles.activityMain}><span className={styles.eventType} title={entry.action}>{name} {verb}</span>{entry.href ? <Link to={entry.href} state={{ returnTo }}>{title}</Link> : <span>{title}</span>}<ActivityTime occurredAt={entry.occurredAt} timeZone={profile?.timeZone} locale={locale} /></div></li>;
+              return <li key={entry.id} data-activity-source={entry.source}><span className={styles.activityIcon}><History size={13} aria-hidden="true" /></span><div className={styles.activityMain}><span className={styles.eventType} title={entry.action}>{entry.actorId ? <HumanIdentity userId={entry.actorId} projectId={entry.projectId ?? undefined} name={entry.actorName} size={20} /> : name} {verb}</span>{entry.href ? <Link to={entry.href} state={{ returnTo }}>{title}</Link> : <span>{title}</span>}<ActivityTime occurredAt={entry.occurredAt} timeZone={profile?.timeZone} locale={locale} /></div></li>;
             })}</ol> : <div className={styles.empty}><History size={24} aria-hidden="true" /><strong>{t('暂无可见动态', 'No activity yet')}</strong></div>)}</div>
           </section>
         </div>

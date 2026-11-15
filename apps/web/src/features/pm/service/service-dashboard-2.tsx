@@ -1,7 +1,8 @@
 import { useRef, useState, type CSSProperties } from "react"
 import type { Entity } from "@contracts"
 import { Activity, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Clock3, Flag, ListPlus, MoreHorizontal, Plus, RefreshCw, SlidersHorizontal, Zap } from "lucide-react"
-import { Avatar } from "@/components/ui/avatar"
+import { HumanIdentity } from "./human-identity"
+import { ProjectPeopleSummary } from "./project-people"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CountUp } from "@/components/ui/count-up"
@@ -221,8 +222,7 @@ export function ServiceDashboard2({ surface, projects, issues, milestones, membe
             const from = start < rangeStart ? rangeStart : start
             const to = end > rangeEnd ? rangeEnd : end
             const status = string(entity.data.status)
-            const assignee = knownMembers.get(string(entity.data.assigneeId))
-            return <TimelineRow key={entity.id} id={entity.id} sidebar={<span className={d2.timelineLabel}><span title={entity.id}>{shortId(entity.id)}</span><span>{statusLabel(status)}</span></span>}><button type="button" className={d2.timelineBar} data-issue-state={timelineState(status)} style={{ left: `${scheduleDayDifference(from, rangeStart) / windowDays * 100}%`, width: `${Math.max(1, scheduleDayDifference(to, from) + 1) / windowDays * 100}%` }} aria-label={`${entity.id}: ${string(entity.data.title)} · ${statusLabel(status)} · ${start} → ${end}`} title={`${entity.id} · ${string(entity.data.title)}\n${statusLabel(status)} · ${start} → ${end}`} onClick={() => openEntity(entity.id)}><span className={d2.timelineAvatars}>{assignee && <Avatar name={assignee.name} size={24} />}</span><span className={d2.timelineBarCopy}><strong>{shortId(entity.id)} · {string(entity.data.title)}</strong><small>{statusLabel(status)} · {formatDate(start)} – {formatDate(end)}</small></span></button></TimelineRow>
+            return <TimelineRow key={entity.id} id={entity.id} sidebar={<span className={d2.timelineLabel}><span title={entity.id}>{shortId(entity.id)}</span><HumanIdentity userId={string(entity.data.assigneeId)} projectId={entity.projectId ?? undefined} size={20} showName={false} /><span>{statusLabel(status)}</span></span>}><button type="button" className={d2.timelineBar} data-issue-state={timelineState(status)} style={{ left: `${scheduleDayDifference(from, rangeStart) / windowDays * 100}%`, width: `${Math.max(1, scheduleDayDifference(to, from) + 1) / windowDays * 100}%` }} aria-label={`${entity.id}: ${string(entity.data.title)} · ${statusLabel(status)} · ${start} → ${end}`} title={`${entity.id} · ${string(entity.data.title)}\n${statusLabel(status)} · ${start} → ${end}`} onClick={() => openEntity(entity.id)}><span className={d2.timelineBarCopy}><strong>{shortId(entity.id)} · {string(entity.data.title)}</strong><small>{statusLabel(status)} · {formatDate(start)} – {formatDate(end)}</small></span></button></TimelineRow>
           }) : <p className={d2.scheduleEmpty}>{text("此窗口没有已排期的未完成任务；未提供到期日的任务仍可在明细中查看。", "No scheduled open issues in this window. Issues without due dates remain available in the details.")}</p>)}
           {!scopedIssues && <p className={d2.scheduleEmpty}>{text("排期数据未知；等待授权任务与项目快照。", "Schedule unknown; an authorized issue and project snapshot is required.")}</p>}
         </div>
@@ -240,15 +240,14 @@ export function ServiceDashboard2({ surface, projects, issues, milestones, membe
         {scopedProjects?.length === 0 && !!projects.data?.length && <p className={styles.empty}>{text("没有匹配当前范围或搜索的项目。", "No projects match the current scope or search.")}</p>}
         <div className={d2.projectCards}>{(allProjects ? scopedProjects : scopedProjects?.slice(0, 2))?.map(project => {
           const ownerId = string(project.data.ownerId)
-          const owner = knownMembers.get(ownerId)
           const projectIssues = issues.data?.filter(issue => issue.projectId === project.id)
           const assigneeIds = projectIssues ? [...new Set(projectIssues.map(issue => string(issue.data.assigneeId)).filter(Boolean))] : null
           const due = dateValue(project.data.dueDate)
           return <article key={project.id} className={d2.projectCard} data-project-card={project.id}>
             <header className={d2.projectHeader}><span title={project.id}><Zap size={16} aria-hidden="true" />{shortId(project.id)}</span><Button variant="outline" size="sm" aria-label={`${text("查看项目详情", "See project details")}: ${string(project.data.name)}`} onClick={() => surface.actions.openProject(project.id)}>{text("查看详情", "See details")}</Button></header>
             <div className={d2.projectName}><p className={d2.caption}>{text("项目名称", "Project Name")}</p><div className={d2.projectTitle}><h3 title={string(project.data.name)}>{string(project.data.name) || text("未提供名称", "Name not provided")}</h3><Badge shape="pill" size="sm">{statusLabel(string(project.data.status))}</Badge></div></div>
-            <div className={d2.projectPeople}><div><p className={d2.caption}>{text("项目负责人", "Project Manager")}</p>{owner ? <span className={styles.identity}><Avatar name={owner.name} size={24} /><span>{owner.name}</span></span> : <span className={d2.caption} title={ownerId || undefined}>{ownerId ? text("成员身份不可用", "Member identity unavailable") : text("未指定", "Not assigned")}</span>}</div><div><p className={d2.caption}>{text("团队主管", "Team Lead")}</p><span className={d2.caption}>{text("服务未提供", "Not provided")}</span></div></div>
-            <div><p className={d2.caption}>{text("任务受派人", "Issue assignees")}</p><div className={d2.teamAvatars}>{assigneeIds?.slice(0, 4).map(id => { const member = knownMembers.get(id); return member ? <Avatar key={id} name={member.name} size={24} /> : null })}<span className={d2.caption}>{assigneeIds ? text(`${assigneeIds.length} 位任务受派人`, `${assigneeIds.length} issue assignees`) : text("任务快照不可用", "Issue snapshot unavailable")}</span></div></div>
+            <div className={d2.projectPeople}><div><p className={d2.caption}>{text("项目负责人", "Project owner")}</p><HumanIdentity userId={ownerId} projectId={project.id} /></div><div><p className={d2.caption}>{text("显式参与人", "Explicit participants")}</p><ProjectPeopleSummary projectId={project.id} /></div></div>
+            <div><p className={d2.caption}>{text("任务受派人", "Issue assignees")}</p><div className={d2.teamAvatars}>{assigneeIds?.slice(0, 4).map(id => <HumanIdentity key={id} userId={id} projectId={project.id} showName={false} />)}<span className={d2.caption}>{assigneeIds ? text(`${assigneeIds.length} 位任务受派人`, `${assigneeIds.length} issue assignees`) : text("任务快照不可用", "Issue snapshot unavailable")}</span></div></div>
             <footer className={d2.projectTimeline}><div><p className={d2.caption}>{text("截止日期", "Timeline · due date")}</p><span><CalendarDays size={16} aria-hidden="true" />{due ? <time dateTime={due}>{longDate.format(new Date(`${due}T12:00:00Z`))}</time> : text("项目日期未提供", "Project date not provided")}</span></div></footer>
           </article>
         })}</div>

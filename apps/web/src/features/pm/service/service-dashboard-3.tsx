@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react"
 import type { Entity } from "@contracts"
 import { Activity, ArrowRight, Clock3, FileText, Filter, FolderKanban, MoreHorizontal, RefreshCw, Zap } from "lucide-react"
-import { Avatar } from "@/components/ui/avatar"
+import { HumanIdentity } from "./human-identity"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CountUp } from "@/components/ui/count-up"
@@ -85,7 +85,6 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
     ] },
   ]
   const ownerId = current ? string(current.data.ownerId) : ""
-  const owner = activeMembers?.find(member => member.userId === ownerId)
   const taskCounts = new Map<string, ProjectTaskCounts>()
   for (const issue of filteredIssues ?? []) {
     if (!issue.projectId) continue
@@ -136,7 +135,7 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
           <DataTable rows={scopedProjects ?? []} getRowId={project => project.id} getRowLabel={project => string(project.data.name) || project.id} onActivateRow={project => openEntity(project.id)} caption={t("当前项目筛选下的授权服务快照", "Authorized service snapshots under the current project filters")} columns={[
             { id: "project", header: t("项目", "Project"), primary: true, cell: project => <Button variant="ghost" className={d3.rowLink} onClick={() => openEntity(project.id)}><span className={d3.rowTitle}>{string(project.data.name) || project.id}</span><span className={d3.identifier}>{project.id}</span></Button> },
             { id: "status", header: t("记录状态", "Recorded status"), cell: project => string(project.data.status) || notProvided },
-            { id: "owner", header: t("负责人", "Owner"), cell: project => { const id = string(project.data.ownerId); return activeMembers?.find(member => member.userId === id)?.name || id || t("未记录", "Not recorded") } },
+            { id: "owner", header: t("负责人", "Owner"), cell: project => <HumanIdentity userId={string(project.data.ownerId)} projectId={project.id} /> },
             { id: "tasks", header: t("已完成 / 总任务", "Done / total tasks"), cell: project => filteredIssues ? `${taskCounts.get(project.id)?.completed ?? 0} / ${taskCounts.get(project.id)?.total ?? 0}` : "—" },
           ]} />
         </SnapshotContent>
@@ -193,7 +192,7 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
             <p className={d3.caption}>{t("项目名称", "Project Name")}</p>
             <div className={d3.projectHeader}><Button variant="ghost" className={d3.projectLink} aria-label={`${t("打开项目", "Open project")} ${string(current.data.name) || current.id}`} title={string(current.data.name) || current.id} onClick={() => openEntity(current.id)}><FolderKanban size={18} aria-hidden="true" /><span className={d3.rowTitle}>{string(current.data.name) || current.id}</span></Button><Badge size="sm" tone="neutral">{string(current.data.status) || notProvided}</Badge></div>
             <div className={d3.projectFields}>
-              <div><p className={d3.caption}>{t("项目负责人", "Project Owner")}</p><span className={styles.identity}>{owner && <Avatar name={owner.name} size={24} />}<span title={owner?.name || ownerId}>{owner?.name || ownerId || t("未记录", "Not recorded")}</span></span></div>
+              <div><p className={d3.caption}>{t("项目负责人", "Project Owner")}</p><HumanIdentity userId={ownerId} projectId={current.id} /></div>
               <div><p className={d3.caption}>{t("已完成 / 总任务", "Done / total tasks")}</p><span>{currentCounts ? `${currentCounts.completed} / ${currentCounts.total}` : "—"}</span></div>
             </div>
             <p className={d3.caption}>{t("当前项目任务", "Current project tasks")}</p><Button variant="ghost" className={styles.issueAction} onClick={() => surface.actions.openIssues({ projectId: current.id })}>{t("打开任务工作区", "Open issue workspace")}<ArrowRight size={14} aria-hidden="true" /></Button>

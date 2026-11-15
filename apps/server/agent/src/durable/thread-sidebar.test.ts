@@ -523,7 +523,7 @@ for (const change of ["settings", "manual-title", "archive", "history", "queued"
           updateThread("racing-title", { title: "User-chosen title", revision: original.revision });
           break;
         case "archive":
-          updateThread("racing-title", { status: "archived", revision: original.revision });
+          updateThread("racing-title", { status: "archived", revision: original.revision, lifecycleRevision: original.lifecycleRevision ?? 0 });
           break;
         case "history":
           saveFormattedMessage("racing-title", { id: "new-prompt", parent_id: "prompt", format: "ai-sdk/v6",

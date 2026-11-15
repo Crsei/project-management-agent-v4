@@ -498,9 +498,9 @@ export function usePrivateQuery<T>(key: QueryKey, requiredCapability: string | n
   return { ...query, refetch, data: !enabled || blocked || isAccessError(query.error) || !actor || !workspace ? undefined : query.data, error: enabled ? blocked ?? query.error : null, isPending: !enabled || blocked ? false : query.isPending }
 }
 
-export function usePmEntities(kind: EntityKind, projectId?: string, visibility: ArtifactVisibility = "visible") {
+export function usePmEntities(kind: EntityKind, projectId?: string, visibility: ArtifactVisibility = "visible", enabled = true) {
   const { instance, actor, workspace } = useServiceContext()
-  return usePrivateQuery(pmKeys.entities(instance, actor?.id ?? "anonymous", workspace?.id ?? "none", kind, projectId, visibility), "domain.read", projectId, (client, workspaceId, signal) => readAllEntities(client, workspaceId, kind, projectId, signal, visibility))
+  return usePrivateQuery(pmKeys.entities(instance, actor?.id ?? "anonymous", workspace?.id ?? "none", kind, projectId, visibility), "domain.read", projectId, (client, workspaceId, signal) => readAllEntities(client, workspaceId, kind, projectId, signal, visibility), enabled)
 }
 
 export function usePmEntity(id: string, enabled = true) {
@@ -617,4 +617,22 @@ export function usePmCommand() {
     return commands.reconcile(scope, workspace.id, client, settled, (error) => reportCommandFailure(error, actorEpoch))
   }, [actor, actorEpoch, client, commands, isCurrentSession, reportCommandFailure, scope, settled, workspace])
   return useMemo(() => ({ ...state, execute, reconcile }), [execute, reconcile, state])
+}
+
+/** Only the current actor's original self-departure may be reconciled without an active workspace. */
+export function useSelfDepartureRecovery() {
+  const { actor, actorEpoch, client, commands, instance, isCurrentSession, reportCommandFailure } = useServiceContext()
+  const queryClient = useQueryClient()
+  const revision = useSyncExternalStore(commands.subscribe, commands.getRevision, commands.getRevision)
+  const items = useMemo(() => actor ? commands.getSelfDepartures(actor.id) : [], [actor, commands, revision])
+  const reconcile = useCallback(async (workspaceId: string) => {
+    if (!actor || !isCurrentSession(actorEpoch, actor.id)) throw new PmServiceError("session_changed")
+    const scope = `${actor.id}:${workspaceId}`
+    const original = commands.getSnapshot(scope).unknownCommand
+    if (original?.commandType !== "LeaveWorkspace" || original.payload.userId !== actor.id) throw new PmServiceError("receipt_unavailable")
+    return commands.reconcile(scope, workspaceId, client, () => {
+      if (isCurrentSession(actorEpoch, actor.id)) void queryClient.invalidateQueries({ queryKey: pmKeys.workspaces(instance, actor.id) })
+    }, error => reportCommandFailure(error, actorEpoch))
+  }, [actor, actorEpoch, client, commands, instance, isCurrentSession, queryClient, reportCommandFailure])
+  return { items, reconcile }
 }

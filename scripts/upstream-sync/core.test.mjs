@@ -10,6 +10,7 @@ import { parseArguments } from '../upstream-sync.mjs';
 import { resourceClosure } from '../../vendor/cc-switch/scripts/closure.mjs';
 import { patchBytes } from '../../vendor/cc-switch/scripts/provenance.mjs';
 import { loadProfile as loadCcProfile } from './cc-switch.mjs';
+import { captureWorktree, snapshotFile } from './worktree-snapshot.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'upstream-core-test-'));
@@ -756,4 +757,172 @@ test('initial T3 local-authoring preserves OMP and replays exact same-pin adapte
   assert.deepEqual((await file(f.host.root, outputPath)).bytes, baseline);
   const evidence = await verify({ candidate: f.candidate, scope: 'provenance' });
   assert.equal(evidence.status, 'passed', JSON.stringify(evidence.checks));
+});
+
+async function worktreeAuthoringFixture(t) {
+  const f = await sharedForkFixture(t);
+  const task = 'apps/server/agent/src/task-owned.ts', unrelated = 'apps/server/agent/src/unrelated-owned.ts';
+  const original = Buffer.from('export const value = "recorded";\n');
+  const ledger = JSON.parse((await file(f.host.root, f.t3SupplementalPath)).bytes);
+  for (const destination of [task, unrelated]) {
+    await publish(f.host.root, destination, original);
+    ledger.outputs.push({ destination, provenance: 'local-integration', inputs: [], reason: 'Independent local fixture', license: 'Existing repository terms', sha256: sha256(original), bytes: original.length, mode: 0o644, recipe: { kind: 'local-bytes', base64: original.toString('base64') } });
+  }
+  await publish(f.host.root, f.t3SupplementalPath, encode(ledger));
+  const inventoryPath = 'vendor/t3code/sync-inventory.json';
+  const inventory = JSON.parse((await file(f.host.root, inventoryPath)).bytes);
+  for (const destination of ['vendor/t3code/source-manifest.json', f.t3SupplementalPath, 'vendor/t3code/sync-imports.json']) {
+    const bytes = (await file(f.host.root, destination)).bytes;
+    inventory.files.push({ destination, asset: destination, sha256: sha256(bytes), bytes: bytes.length, mode: 0o644, provenance: 'local-addition' });
+  }
+  await publish(f.host.root, inventoryPath, encode(inventory));
+  await publish(f.host.root, 'unrelated.txt', Buffer.from('committed unrelated baseline\n'));
+  await f.host.commit('accepted local fixture outputs');
+  const taskBytes = Buffer.from('export const value = "reviewed task";\n');
+  const unrelatedBytes = Buffer.from('export const value = "unreviewed inherited edit";\n');
+  await publish(f.host.root, task, taskBytes);
+  await publish(f.host.root, unrelated, unrelatedBytes);
+  await publish(f.host.root, 'unrelated.txt', Buffer.from('preserved staged unrelated bytes\n'));
+  await git(f.host.root, ['add', '--', 'unrelated.txt']);
+  await publish(f.host.root, 'untracked.txt', Buffer.from('preserved untracked unrelated bytes\n'));
+  const plan = await inspect({ root: f.host.root, source: f.upstream.root, project: 't3code', target: f.old, purpose: 'local-authoring' });
+  const approvals = { approvedOutputHashes: { [task]: sha256(taskBytes) }, approvedExistingOutputs: { [task]: { recordedSha256: sha256(original), snapshotSha256: sha256(taskBytes) } }, reviews: [{ outputPath: task, disposition: 'integrated', reason: 'Reviewed exact task bytes and retained authority; unrelated output deliberately unaccepted', inputs: [] }] };
+  return { ...f, task, unrelated, original, taskBytes, unrelatedBytes, plan, approvals };
+}
+
+test('explicit current-worktree authoring preserves staged, unstaged and untracked bytes without accepting inherited drift', async t => {
+  const f = await worktreeAuthoringFixture(t);
+  assert.equal(f.plan.status, 'blocked', 'Inspect must not relabel existing drift as passed');
+  assert.ok(f.plan.blockers.some(entry => entry.code === 'BASELINE_DRIFT' && entry.path === f.unrelated));
+  assert.ok(f.plan.blockers.some(entry => entry.code === 'DIRTY_BASELINE'));
+  const index = (await git(f.host.root, ['ls-files', '--stage', '-z'])).stdout;
+  assert.equal(f.plan.worktreeSnapshot.indexBase64, index.toString('base64'));
+  await assert.rejects(prepare({ plan: f.plan, destination: f.candidate }), /WORKTREE_SNAPSHOT_REQUIRES_LOCAL_AUTHORING/);
+  const prepared = await prepare({ plan: f.plan, destination: f.candidate, purpose: 'local-authoring' });
+  assert.equal(prepared.status, 'prepared');
+  assert.deepEqual((await file(f.candidate, f.task)).bytes, f.taskBytes);
+  assert.deepEqual((await file(f.candidate, f.unrelated)).bytes, f.unrelatedBytes);
+  assert.equal((await file(f.candidate, 'untracked.txt')).bytes.toString(), 'preserved untracked unrelated bytes\n');
+  assert.equal((await file(f.candidate, 'unrelated.txt')).bytes.toString(), 'preserved staged unrelated bytes\n');
+  const beforeLedger = (await file(f.candidate, f.t3SupplementalPath)).bytes;
+  await assert.rejects(record({ candidate: f.candidate, approvedOutputHashes: f.approvals.approvedOutputHashes }), /EXISTING_OUTPUT_REQUIRES_EXACT_PREIMAGE_APPROVAL/);
+  await assert.rejects(record({ candidate: f.candidate, ...f.approvals, approvedExistingOutputs: { [f.task]: { recordedSha256: '0'.repeat(64), snapshotSha256: sha256(f.taskBytes) } } }), /EXISTING_OUTPUT_REQUIRES_EXACT_PREIMAGE_APPROVAL/);
+  assert.deepEqual((await file(f.candidate, f.t3SupplementalPath)).bytes, beforeLedger);
+  const unrelatedBefore = JSON.parse(beforeLedger).outputs.find(entry => entry.destination === f.unrelated);
+  const result = await record({ candidate: f.candidate, ...f.approvals });
+  assert.equal(result.status, 'recorded', JSON.stringify(result.blockers));
+  assert.ok(result.preservedBaselineBlockers.some(entry => entry.code === 'BASELINE_DRIFT' && entry.path === f.unrelated));
+  const ledger = JSON.parse((await file(f.candidate, f.t3SupplementalPath)).bytes);
+  assert.deepEqual(ledger.outputs.find(entry => entry.destination === f.unrelated), unrelatedBefore);
+  assert.equal(ledger.outputs.find(entry => entry.destination === f.task).sha256, sha256(f.taskBytes));
+  assert.deepEqual((await git(f.host.root, ['ls-files', '--stage', '-z'])).stdout, index, 'No source index mutation');
+  assert.deepEqual((await file(f.host.root, f.t3SupplementalPath)).bytes, beforeLedger, 'No primary ledger mutation');
+  assert.equal((await record({ candidate: f.candidate, ...f.approvals })).resumed, true);
+  const verification = await verify({ candidate: f.candidate, scope: 'full' });
+  assert.notEqual(verification.status, 'passed');
+  assert.ok(verification.checks.some(check => check.id === 'current-worktree-snapshot' && check.status === 'blocked'));
+  assert.ok(!verification.checks.some(check => check.id === 'host-types'), 'No full commands run through inherited drift');
+  await assert.rejects(handoff({ candidate: f.candidate, output: path.join(f.owned, 'forbidden-handoff') }), /WORKTREE_SNAPSHOT_DIAGNOSTIC_ONLY/);
+});
+
+test('current-worktree snapshots freeze all visible identities and refuse candidate changes outside selected outputs', async t => {
+  const f = await worktreeAuthoringFixture(t);
+  await publish(f.host.root, 'untracked.txt', Buffer.from('concurrent unrelated mutation\n'));
+  await assert.rejects(prepare({ plan: f.plan, destination: f.candidate, purpose: 'local-authoring' }), /STALE_PLAN/);
+  await publish(f.host.root, 'untracked.txt', Buffer.from('preserved untracked unrelated bytes\n'));
+  await prepare({ plan: f.plan, destination: f.candidate, purpose: 'local-authoring' });
+  await publish(f.candidate, f.unrelated, Buffer.from('unauthorized candidate mutation\n'));
+  await assert.rejects(record({ candidate: f.candidate, ...f.approvals }), /LOCAL_AUTHORING_REQUIRES_EXACT_OUTPUT_APPROVAL/);
+  await publish(f.candidate, f.unrelated, f.unrelatedBytes);
+  await publish(f.candidate, 'new-unapproved.ts', Buffer.from('export const unauthorized = true;\n'));
+  await assert.rejects(record({ candidate: f.candidate, ...f.approvals }), /UNAPPROVED_CANDIDATE_PATH/);
+});
+
+test('snapshot-only hardlink reads create independent candidate bytes without changing ordinary file safety', async t => {
+  const f = await worktreeAuthoringFixture(t);
+  const linked = path.join(f.owned, 'external-link');
+  await link(path.join(f.host.root, f.task), linked);
+  const sourceInfo = await lstat(linked);
+  await assert.rejects(file(f.host.root, f.task), /UNSAFE_PATH/);
+  assert.deepEqual((await snapshotFile(f.host.root, f.task)).bytes, f.taskBytes);
+  const plan = await inspect({ root: f.host.root, source: f.upstream.root, project: 't3code', target: f.old, purpose: 'local-authoring' });
+  await prepare({ plan, destination: f.candidate, purpose: 'local-authoring' });
+  const candidateInfo = await lstat(path.join(f.candidate, f.task));
+  assert.equal(candidateInfo.nlink, 1);
+  assert.notEqual(candidateInfo.ino, sourceInfo.ino);
+  await publish(f.candidate, f.task, Buffer.from('candidate-only edit\n'));
+  assert.deepEqual(await readFile(linked), f.taskBytes);
+  assert.equal((await lstat(linked)).ino, sourceInfo.ino);
+  assert.equal((await lstat(linked)).nlink, sourceInfo.nlink);
+});
+
+test('snapshot mode refuses other profiles, pin changes, credentials, symlinks and dirty source authorities', async t => {
+  const f = await worktreeAuthoringFixture(t);
+  await assert.rejects(inspect({ root: f.host.root, source: f.upstream.root, project: 'cc-switch', target: f.old, purpose: 'local-authoring' }), /WORKTREE_SNAPSHOT_REQUIRES_T3_SAME_PIN/);
+  await assert.rejects(inspect({ root: f.host.root, source: f.upstream.root, project: 't3code', target: f.target, purpose: 'local-authoring' }), /WORKTREE_SNAPSHOT_REQUIRES_T3_SAME_PIN/);
+  await writeFile(path.join(f.host.root, '.env'), 'SYNTHETIC_SECRET_NOT_READ\n');
+  await assert.rejects(captureWorktree(f.host.root), /CREDENTIAL_FILE_NOT_ALLOWED/);
+  await rm(path.join(f.host.root, '.env'));
+  await symlink(f.task, path.join(f.host.root, 'linked.ts'));
+  await assert.rejects(captureWorktree(f.host.root), /UNSAFE_SNAPSHOT_INPUT/);
+  await rm(path.join(f.host.root, 'linked.ts'));
+  const ledger = JSON.parse((await file(f.host.root, f.t3SupplementalPath)).bytes);
+  ledger.policy.unreviewed = 'dirty authority';
+  await publish(f.host.root, f.t3SupplementalPath, encode(ledger));
+  const blocked = await inspect({ root: f.host.root, source: f.upstream.root, project: 't3code', target: f.old, purpose: 'local-authoring' });
+  assert.ok(blocked.blockers.some(entry => entry.code === 'UNREVIEWED_SNAPSHOT_METADATA'));
+  await assert.rejects(prepare({ plan: blocked, destination: f.candidate, purpose: 'local-authoring' }), /BLOCKED_PLAN/);
+});
+
+test('snapshot mode authenticates foreign authority bytes and existence before interpreting bindings', async t => {
+  const f = await sharedForkFixture(t);
+  const original = (await file(f.host.root, f.ccInventoryPath)).bytes;
+  const forged = JSON.parse(original);
+  const changed = Buffer.from('export const revision = "unapproved shared edit";\n');
+  await publish(f.host.root, f.shared, changed);
+  const entry = forged.files.find(value => value.destination === f.shared);
+  entry.sha256 = sha256(changed);
+  entry.bytes = changed.length;
+  await publish(f.host.root, f.ccInventoryPath, encode(forged));
+  const inspectSnapshot = () => inspect({ root: f.host.root, source: f.upstream.root, project: 't3code', target: f.old, purpose: 'local-authoring' });
+  const plan = await inspectSnapshot();
+  assert.ok(plan.blockers.some(item => item.code === 'UNREVIEWED_EXTERNAL_AUTHORITY' && item.path === f.ccInventoryPath));
+  assert.ok(plan.blockers.some(item => item.code === 'BLOCKED_CROSS_FORK' && item.path === f.shared), 'Dirty CC expectations cannot replace the immutable baseline');
+  const binding = plan.externalBindings.find(item => item.path === f.ccInventoryPath);
+  assert.equal(binding.references.find(item => item.path === f.shared).sha256, sha256(f.sharedBytes), 'Even diagnostics consume only immutable foreign expectations');
+  await assert.rejects(prepare({ plan, destination: f.candidate, purpose: 'local-authoring' }), /UNREVIEWED_EXTERNAL_AUTHORITY/);
+  assert.equal(await lstat(f.candidate).catch(error => error.code), 'ENOENT');
+  await publish(f.host.root, f.shared, f.sharedBytes);
+  await rm(path.join(f.host.root, f.ccInventoryPath));
+  const deleted = await inspectSnapshot();
+  assert.ok(deleted.blockers.some(item => item.code === 'UNREVIEWED_EXTERNAL_AUTHORITY' && item.path === f.ccInventoryPath && item.actual === null));
+  await assert.rejects(prepare({ plan: deleted, destination: f.candidate, purpose: 'local-authoring' }), /UNREVIEWED_EXTERNAL_AUTHORITY/);
+  await publish(f.host.root, f.ccInventoryPath, original);
+  const addedPath = 'vendor/openhands-extensions/fork-policy.json';
+  await publish(f.host.root, addedPath, encode({ version: 1, reason: 'Unapproved new foreign authority' }));
+  const added = await inspectSnapshot();
+  assert.ok(added.blockers.some(item => item.code === 'UNREVIEWED_EXTERNAL_AUTHORITY' && item.path === addedPath && item.expected === null));
+  assert.ok(!added.externalBindings.some(item => item.path === addedPath), 'A new live authority is never interpreted as trusted');
+  await assert.rejects(prepare({ plan: added, destination: f.candidate, purpose: 'local-authoring' }), /UNREVIEWED_EXTERNAL_AUTHORITY/);
+});
+
+test('snapshot private-tree exclusions survive removed and overridden Git ignores and explicit required paths', async t => {
+  const { root, commit } = await fixture(t);
+  await publish(root, '.gitignore', Buffer.from('.local/\nnode_modules/\n'));
+  await publish(root, 'owned.ts', Buffer.from('export const owned = true;\n'));
+  await commit();
+  for (const name of ['.local/setup-token', '.local/accounts/synthetic.json', 'nested/.local/state.json', 'node_modules/private/accounts.json', 'nested/node_modules/private/setup-token']) await publish(root, name, Buffer.from('SYNTHETIC_PRIVATE_BYTES_MUST_NOT_BE_IMPORTED\n'));
+  for (const ignores of [null, '# private-tree ignores removed by a dirty task\n', '.local/*\n!.local/setup-token\n!.local/accounts/\n!.local/accounts/**\nnode_modules/*\n!node_modules/private/\n!node_modules/private/**\n']) {
+    if (ignores === null) await rm(path.join(root, '.gitignore'), { force: true });
+    else await publish(root, '.gitignore', Buffer.from(ignores));
+    const snapshot = await captureWorktree(root, ['owned.ts']);
+    assert.ok(snapshot.files.some(entry => entry.path === 'owned.ts'));
+    assert.ok(!snapshot.files.some(entry => entry.path.split('/').some(part => part === '.local' || part === 'node_modules')));
+  }
+  for (const name of ['.local/setup-token', '.local/accounts/synthetic.json', 'nested/.local/state.json', 'node_modules/private/accounts.json', 'nested/node_modules/private/setup-token']) {
+    await assert.rejects(snapshotFile(root, name), /CREDENTIAL_FILE_NOT_ALLOWED/, 'The content reader independently rejects private components');
+    await assert.rejects(captureWorktree(root, [name]), /CREDENTIAL_FILE_NOT_ALLOWED/, 'Explicit required paths cannot re-enroll excluded state');
+  }
+  await symlink('/synthetic-unavailable-private-target', path.join(root, '.local/no-read'));
+  await assert.rejects(snapshotFile(root, '.local/no-read'), /CREDENTIAL_FILE_NOT_ALLOWED/, 'Private rejection precedes even symlink inspection');
 });

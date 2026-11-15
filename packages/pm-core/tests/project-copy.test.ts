@@ -69,12 +69,12 @@ test('copy freezes IDs and bytes before a partial disk failure, survives restart
   const expected = pending.idempotency.copy.taskIdMap;
   await f.restart();
   assert.equal(new DurableState(new FileRepository(f.root), true).transaction?.kind, 'duplicate', 'restart does not silently resume writes');
-  const beforeRecovery = await readdir(path.join(destination, '.pm/core/work-items'));
+  const beforeRecovery = await readdir(path.join(destination, '.dovspace/.pm/core/work-items'));
   assert.deepEqual(beforeRecovery, []);
   const copied = await f.workspace.duplicateProject(project.id, project.revision, input, 'durable-copy', directory);
   assert.equal(copied.id, pending.id); assert.deepEqual(copied.taskIdMap, expected);
   assert.equal(await readFile(path.join(destination, 'user-code.ts'), 'utf8'), 'export const retained = true;\n');
-  assert.deepEqual(await readdir(path.join(destination, '.pm/attachments')), []);
+  assert.deepEqual(await readdir(path.join(destination, '.dovspace/.pm/attachments')), []);
   assert.equal(new DurableState(new FileRepository(f.root), true).transaction, undefined);
   await f.restart();
   assert.deepEqual(await f.workspace.duplicateProject(project.id, project.revision, input, 'durable-copy', directory), copied);
@@ -86,7 +86,7 @@ test('validation and source conflicts touch no directory; edited destinations ar
   const changed = await w.patch(project.id, { title: 'Changed source' }, project.revision);
   const destination = path.join(f.base, 'not-created');
   await assert.rejects(w.duplicateProject(project.id, project.revision, { name: 'No copy', includeTasks: false }, 'stale', { workspaceId: 'workspace', root: destination, mode: 'new' }));
-  await assert.rejects(readFile(path.join(destination, '.pm/project.json')), { code: 'ENOENT' });
+  await assert.rejects(readFile(path.join(destination, '.dovspace/.pm/project.json')), { code: 'ENOENT' });
   assert.equal(new DurableState(new FileRepository(f.root), true).transaction, undefined);
   const originalWrite = FileRepository.prototype.write;
   const injected = t.mock.method(FileRepository.prototype, 'write', function(this: FileRepository, relative: string, raw: string, revision?: string) {

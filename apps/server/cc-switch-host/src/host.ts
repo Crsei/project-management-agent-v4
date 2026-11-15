@@ -8,6 +8,7 @@ import { SkillManager } from "./skills/service.ts";
 import { addSkillRepo, checkSkillUpdates, discoverAvailableReport, discoverRepo as discoverRepository, removeSkillRepo, searchSkillsSh } from "./skills/discovery.ts";
 import { migrateStorage } from "./skills/migration.ts";
 import { installSkillsFromZip } from "./skills/install.ts";
+import { installBundledSkill, inspectBundledSkill, parseHostBundledSkills } from "./skills/bundled.ts";
 import { ssotDir } from "./skills/paths.ts";
 import { getSettings, reloadSettings, updateSettings } from "./settings.ts";
 import type { AppId, HostInitialization, McpServer } from "./types.ts";
@@ -156,6 +157,15 @@ export class Host {
           return true;
         });
         return batchId;
+      }
+      // Private Agent-to-host commands: never on the browser invoke allowlist.
+      case "inspect_bundled_skills": {
+        const bundles = parseHostBundledSkills(args.skills);
+        return bundles.map(skill => inspectBundledSkill(this.#db, skill, requireApp(args, "app")));
+      }
+      case "install_bundled_skills": {
+        const bundles = parseHostBundledSkills(args.skills);
+        return bundles.map(skill => installBundledSkill(this.#db, skill, requireApp(args, "app")));
       }
       case "get_installed_skills":
         return this.#skills.getAllInstalled();

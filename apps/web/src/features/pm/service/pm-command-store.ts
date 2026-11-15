@@ -12,6 +12,7 @@ export type CommandState = {
 type Entry = {
   state: CommandState
   completed: Map<string, { request: string; receipt: CommandReceipt }>
+  inFlightCommand?: Command
 }
 
 const emptyState: CommandState = { pending: false, error: null, unknownCommand: null, receipt: null }
@@ -23,6 +24,7 @@ export class PmCommandStore {
   private readonly journal: PmCommandJournal
   private generation = 0
   private recoveryError: Error | null = null
+  private revision = 0
 
   constructor(instance: string) {
     this.journal = new PmCommandJournal(instance)
@@ -62,8 +64,22 @@ export class PmCommandStore {
 
   getSnapshot = (scope: string | null): CommandState => scope ? this.entry(scope).state : emptyState
 
+  getRevision = () => this.revision
+
+  getSelfDepartures(actorId: string) {
+    const items: { workspaceId: string; commandId: string; pending: boolean; error: Error | null }[] = []
+    const prefix = `${actorId}:`
+    for (const [scope, { state }] of this.entries) {
+      const original = state.unknownCommand
+      if (!scope.startsWith(prefix) || original?.commandType !== "LeaveWorkspace" || original.payload.userId !== actorId) continue
+      items.push({ workspaceId: scope.slice(prefix.length), commandId: original.commandId, pending: state.pending, error: state.error })
+    }
+    return items
+  }
+
   private update(entry: Entry, state: Partial<CommandState>) {
     entry.state = { ...entry.state, ...state }
+    this.revision += 1
     for (const listener of this.listeners) listener()
   }
 
@@ -71,14 +87,17 @@ export class PmCommandStore {
     this.generation += 1
     for (const [scope, entry] of this.entries) {
       if (workspaceId && !scope.endsWith(`:${workspaceId}`)) continue
-      this.entries.delete(scope)
       // A membership change drops receipts, but must not unlock an uncertain
       // write. Full identity changes hide everything until actor-scoped restore.
-      const original = entry.state.unknownCommand
+      const original = entry.state.unknownCommand ?? entry.inFlightCommand
+      // Replace in place: deleting and reinserting a visited Map key would
+      // append it to this live iterator and never finish revocation cleanup.
       if (workspaceId && original) this.entries.set(scope, { state: { ...emptyState, unknownCommand: original, error: new PmServiceError("outcome_unknown") }, completed: new Map() })
+      else this.entries.delete(scope)
     }
     // The journal is recovery intent, not a query cache. Logout/revocation must
     // not erase a possibly committed command, including another tab's record.
+    this.revision += 1
     for (const listener of this.listeners) listener()
   }
 
@@ -116,10 +135,12 @@ export class PmCommandStore {
       throw error
     }
     if (this.entries.get(scope) !== entry) throw new PmServiceError("session_changed")
+    entry.inFlightCommand = original
     try {
       // Deliberately no React Query mutation retry or transport retry.
       const receipt = await client.executeCommand(workspaceId, original)
       if (this.entries.get(scope) !== entry) throw new PmServiceError("session_changed")
+      delete entry.inFlightCommand
       this.forget(scope, original.commandId)
       entry.completed.set(original.commandId.toLowerCase(), { request, receipt })
       this.update(entry, { receipt, unknownCommand: null })
@@ -135,6 +156,7 @@ export class PmCommandStore {
       }
       throw error
     } finally {
+      delete entry.inFlightCommand
       if (this.entries.get(scope) === entry) this.update(entry, { pending: false })
     }
   }

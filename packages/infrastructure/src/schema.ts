@@ -33,10 +33,21 @@ export const users = pgTable('users', {
   recoveryEmail: text('recovery_email').unique(),
   recoveryEmailVerifiedAt: timestamp('recovery_email_verified_at', { withTimezone: true }),
   recoveryEmailVersion: integer('recovery_email_version').notNull().default(1),
-});
+  onboardingRevision: integer('onboarding_revision').notNull().default(0),
+  onboardingWorkspaceId: uuid('onboarding_workspace_id'),
+  onboardingProfile: text('onboarding_profile', { enum: ['pending', 'reviewed', 'skipped'] }).notNull().default('pending'),
+  onboardingAi: text('onboarding_ai', { enum: ['pending', 'reviewed', 'skipped'] }).notNull().default('pending'),
+  onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+  onboardingChecklistDismissed: boolean('onboarding_checklist_dismissed').notNull().default(false),
+}, t => [
+  check('users_onboarding_revision_check', sql`${t.onboardingRevision} >= 0`),
+  check('users_onboarding_profile_check', sql`${t.onboardingProfile} IN ('pending','reviewed','skipped')`),
+  check('users_onboarding_ai_check', sql`${t.onboardingAi} IN ('pending','reviewed','skipped')`),
+]);
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey(), name: text('name').notNull(), ownerId: uuid('owner_id').notNull().references(() => users.id),
   icon: text('icon').notNull().default('building'), color: text('color').notNull().default('#2F2E2A'),
+  taxId: text('tax_id'), businessAddress: text('business_address'),
   identityVersion: integer('identity_version').notNull().default(1),
   identityUpdatedAt: timestamp('identity_updated_at', { withTimezone: true }).notNull().defaultNow(),
   streamCursor: bigint('stream_cursor', { mode: 'bigint' }).notNull().default(0n),

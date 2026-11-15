@@ -4,6 +4,9 @@ import { open, readdir, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import type { Pool } from 'pg';
 import type { FixtureDiff, FixtureEntity, FixtureHandle, FixtureReceipt, FixtureSnapshot, Mutation } from '../schemas/types.ts';
+import { AGENT_CHAT_TOOL_REGISTRY } from '../../../packages/application/src/agent-chat-tools.ts';
+
+const readOnlyPmTools = new Set<string>(AGENT_CHAT_TOOL_REGISTRY.filter(tool => !tool.write).map(tool => tool.name));
 
 export function canonical(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
@@ -150,7 +153,7 @@ function authorizedSqlTables(before: FixtureSnapshot, after: FixtureSnapshot, al
   if (afterOperations.length >= oldOperations.size && afterOperations.every(row => {
     const original = oldOperations.get(String(row.operation_id)), scope = row.target as { workspaceId?: string; projectId?: string | null } | null;
     const result = row.result as { receipt?: { targetId?: string; commandId?: string } } | null;
-    const read = /^pm_(?:read|query|search|list)/.test(String(row.name));
+    const read = readOnlyPmTools.has(String(row.name));
     const scoped = scope?.projectId && (allowed.has(scope.projectId) || after.entities.some(entity => allowed.has(entity.id) && entity.projectId === scope.projectId));
     return inWorkspace(row) && scope?.workspaceId === row.workspace_id && (read || result?.receipt?.targetId && allowed.has(result.receipt.targetId) && commands.has(result.receipt.commandId ?? '') || scoped && ['failed', 'unknown', 'running'].includes(String(row.status))) && (!original || canonical(immutableOperation(original)) === canonical(immutableOperation(row)));
   }) && [...oldOperations.keys()].every(id => afterOperations.some(row => row.operation_id === id))) expected.add('pm_agent_tool_operations');

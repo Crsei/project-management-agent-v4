@@ -4,17 +4,19 @@
 
 | 数据 | 权威与保存位置 | 保护 / 可重建性 |
 | --- | --- | --- |
-| 九类核心实体、正文和正式关系 | 未映射项目在 `CORE_WORKSPACE_ROOT/<workspaceId>`；已登记本地项目在所选目录 `.pm/core/` | Markdown为权威，稳定 `PRJ-001` / `TASK-102` 等ID，不用SQL任务副本代替 |
+| 九类核心实体、正文和正式关系 | 未映射项目在 `CORE_WORKSPACE_ROOT/<workspaceId>`；已登记本地项目在所选目录 `.dovspace/.pm/core/` | Markdown为权威，稳定 `PRJ-001` / `TASK-102` 等ID，不用SQL任务副本代替 |
 | 工作流、字段、保存视图、排序 | 共享工作区 `.pm/config.yaml` / `.pm/views/` | 权威配置；合法缺省使用内置配置，但已存在内容必须校验 |
-| 统一ID、幂等、墓碑、目录映射、事实观测与恢复 | 共享工作区 `.pm/state/`；项目 `.pm/project.json` 固定workspace/project/storageId | 不可当缓存删除；私有恢复journal可含任务正文前后内容/自动化快照，不是脱敏日志；缺失已有state/身份时拒绝空白初始化 |
+| 统一ID、幂等、墓碑、目录映射、事实观测与恢复 | 共享工作区 `.pm/state/`；项目 `.dovspace/.pm/project.json` 固定workspace/project/storageId | 不可当缓存删除；私有恢复journal可含任务正文前后内容/自动化快照，不是脱敏日志；缺失已有state/身份时拒绝空白初始化 |
 | 核心查询索引 | `.pm/cache/index.sqlite` | 可从权威文件重建；不是Agent聊天数据库 |
 | 用户、认证会话、成员/能力 | PostgreSQL身份/访问模块 | 会话存摘要；当前授权逐次检查；历史成员引用不自动获得现行权限 |
 | Intent/Decision、评论、审核/证据/提交、Dashboard与项目协作附加事实 | PostgreSQL所属应用模块 | 保留不可变历史和当前版本；不能覆盖核心状态或创建SQL任务权威副本 |
 | 命令结果、审计、outbox与变更流 | PostgreSQL `command_receipts` /审计/事件表 | 原主体/workspace/commandId收据；原生文件写入与SQL审计使用journal恢复，不伪称跨介质原子提交 |
 | 修改前后版本与个人已阅位置 | PostgreSQL `change_history_*`；核心文件受控写入及磁盘观测先保留共享 `.pm/state/change-snapshots/` 不可变分块快照，外部文档操作保留私有原操作证据 | 历史与当前 Markdown 权威分离；采集账本只保留引用，正文不进入公开审计/outbox/通知。当前及历史来源授权逐次检查；个人水位不改任务、通知或人工验收 |
-| 附件元数据与字节 | 元数据/引用在PostgreSQL；已登记项目字节在 `.pm/attachments`，旧项目在原Local/S3 | 持久storageId/marker定位历史版本；不可变字节、SHA-256及8MiB上限；不自动物理GC |
+| 附件元数据与字节 | 元数据/引用在PostgreSQL；已登记项目字节在 `.dovspace/.pm/attachments`，旧项目在原Local/S3 | 持久storageId/marker定位历史版本；不可变字节、SHA-256及8MiB上限；不自动物理GC |
 | Agent Workspace目录登记与私有对话scratch身份 | Agent私有SQLite `agent:workspaces:v1`／`agent:scratch:v1`，scratch内容在数据目录的`chat-scratch` | 独立于PM；元数据revision CAS与设备/inode核验，路径身份不改写，不自动复制仓库或补建丢失目录。`0051`退役旧PM Code Workspace登记表 |
 | Chat线程/消息/输出、执行选择/冻结环境、Provider续聊、工具/任务交付/工作流等记录 | Agent私有SQLite `durable/store.ts`及应用拥有目录 | 单进程所有权和CAS；旧Session仅显式停服清理，保留业务证据；不是PM任务事实源，不按PM成员实现多租户会话隔离 |
+| Agent／Team 定义和不可变版本、业务 Run／委派／输入与结果引用 | Agent 私有 SQLite 的 collaboration 命名空间 | 配置和执行不是 PM 权限；同原键固定参数，根链共享资源限额，代码目录写占用与 Chat 共用；重启保留证据并标中断，不自动派发 |
+| Issue Work Thread 与可信 Agent 评论来源 | 原 PM 任务讨论／评论及 PostgreSQL 来源记录 | 当前任务／评论权限逐次核验；实际人类作者与签名验证后的 Agent／Run／generation 来源分开，不复制完整私有 Session 或建立第二套任务权威 |
 | Workspace／Session Terminal及输入确认/有界输出 | 当前Agent服务内存与其拥有的PTY进程 | 断开视图不终止；当前授权/目录身份复核；服务重启不恢复进程或重放命令，终端cd不改变Session主目录 |
 | Provider账号/原生历史 | 驱动原生Home/外部环境，或明确选择的应用私有managed状态 | 不统一搬入应用目录，不自动复制/删外部账号；缓存/用量记录不能证明远端余额或执行成功 |
 | 浏览器草稿、偏好、个人白板 | 当前origin/账号/workspace及功能定义的浏览器存储或内存 | 非跨设备统一持久化；外部文档正文草稿仅内存，刷新前须显式保存 |
@@ -30,6 +32,11 @@ SQL SSE使用Workspace级数字cursor，以字符串传输但按数字排序；�
 变更历史 sequence 与通知 cursor 分离：查询固定本次历史 head，只有服务端向该主体、目标及关联范围发出的观测凭据才能确认相同水位；单调更新各来源的个人已阅位置，不清除之后的修改。任务正式需求/文档关系各有审阅位置，不能用自有任务的已阅状态吞掉新关联文档的旧历史。历史正文只在已授权的具体差异查询中读取，列表和看板提示不加载全量正文。
 
 核心受控修改通过原 mutation 证明与私有 journal 恢复，普通保存结果不明时不重放文件写入，也不以当前内容替换原快照。首次外部观测是基线；后续只证明观察端点。快照缺失、来源重绑定或权限不足明确失败；`.pm/state/change-snapshots/` 不是可丢弃缓存，须随完整 PM checkpoint 备份。
+
+Agent Session 生命周期使用独立 revision 和原操作 ID。关闭期间先围住新写入，等待实际 generation／PTY 停止，再按业务引用与未知副作用保留闭包提交可见删除；墓碑阻止迟到回调或旧页面复活。原提交查询区分 accepted、not_accepted 与 unknown；同一已受理输入的另一提交键须有完整身份收据，不能因请求丢响应重复执行。
+
+持久化 schema、命名空间、关系及写者版本有显式门禁。非空旧库缺少版本元数据时拒绝新写者，不能当空库初始化；维护只对明确停写、指纹未变的清单操作。恢复生成新 Store 身份与 restore epoch，并围住原线程执行；保留历史可读不等于旧目录或原生会话已恢复信任。
+
 
 ## 单写与备份
 

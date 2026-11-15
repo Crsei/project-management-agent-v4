@@ -9,7 +9,7 @@ import { applySessionCutover, inventorySessionCutover, withOfflineSessionCutover
 
 function database(filename = ':memory:') {
   const db = new DatabaseSync(filename);
-  db.exec('CREATE TABLE records(namespace TEXT,key TEXT,value TEXT,PRIMARY KEY(namespace,key)); CREATE TABLE run_events(run_id TEXT,seq INTEGER,event TEXT); CREATE TABLE worker_owner(singleton INTEGER PRIMARY KEY,pid INTEGER,token TEXT)');
+  db.exec('CREATE TABLE records(namespace TEXT,key TEXT,value TEXT,PRIMARY KEY(namespace,key)); CREATE TABLE run_events(run_id TEXT,seq INTEGER,event TEXT,PRIMARY KEY(run_id,seq)); CREATE TABLE worker_owner(singleton INTEGER PRIMARY KEY,pid INTEGER,token TEXT)');
   return db;
 }
 function put(db: DatabaseSync, namespace: string, key: string, value: unknown) { db.prepare('INSERT OR REPLACE INTO records VALUES(?,?,?)').run(namespace, key, JSON.stringify(value)); }
@@ -29,7 +29,7 @@ test('explicit cutover deletes only old Session payload and preserves business e
       put(db, 'mcp-app-private-assets-v1', `${id}-asset`, { threadId, reference: { attachmentId: `${id}-asset` }, size: 10, sha256: 'registered-sha256' });
     }
     put(db, 'task-code-delivery-v1', 'business-delivery', { id: 'business-delivery', threadId: 'old-business', git: { root: '/preserved-source', worktreePath: '/preserved-worktree' }, testResult: { output: 'preserved-test-evidence' } });
-    put(db, 'chat:history', 'old-history', { threadId: 'old-chat', messages: [{ text: 'private-conversation-body' }] });
+    put(db, 'chat:history', 'old-history', { threadId: 'old-chat', messages: [{ id: 'old-input', parent_id: null, content: { role: 'user', text: 'private-conversation-body' } }] });
     put(db, 'durable:workspaces', 'old-chat', { documents: [{ content: 'private-session-resource' }] });
     put(db, 'mcp-app-model-context-v1', 'app-context', { threadId: 'old-chat', text: 'private-app-context' });
     put(db, 'mcp:grants', 'grant', { threadIds: ['old-chat', 'old-business', 'new-chat'], actorId: 'actor' });
@@ -73,7 +73,7 @@ test('directory cutover retires v1 selections and prior tombstones without chang
     const scratch = { threadId: 'new-chat', path: '/preserved-private-scratch', device: 1, inode: 2 };
     put(db, 'agent:workspaces:v1', workspace.id, workspace);
     put(db, 'agent:scratch:v1', 'new-chat', scratch);
-    put(db, 'chat:history', 'old-v1', { threadId: 'old-v1', messages: [{ text: 'old-payload' }] });
+    put(db, 'chat:history', 'old-v1', { threadId: 'old-v1', messages: [{ id: 'old-input', parent_id: null, content: { role: 'user', text: 'old-payload' } }] });
     const plan = inventorySessionCutover(db, '/explicit/application-data');
     assert.deepEqual(plan.candidateIds, ['old-tombstone', 'old-v1']);
     assert.deepEqual(plan.blockers, []);
@@ -156,4 +156,22 @@ test('failed cutover preserves its original error and never removes a replacemen
     });
     assert.equal(readFileSync(lock, 'utf8'), replacement);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('cutover inventory includes collaboration evidence and refuses unresolved original effects without decoding opaque credentials', () => {
+  const db = database();
+  try {
+    put(db, 'chat:threads', 'old', { remoteId: 'old' });
+    put(db, 'chat:generations', 'original-generation', { id: 'original-generation', threadId: 'old', status: 'completed' });
+    put(db, 'collaboration:runs:v1', 'business-run', { id: 'business-run', threadId: 'old', generationId: 'original-generation', status: 'succeeded' });
+    put(db, 'pm-tool-calls', 'original-operation', { record: { threadId: 'old', generationId: 'original-generation', status: 'unknown', certainty: { dispatch: 'possibly_sent', evidence: 'unresolved' } } });
+    db.prepare('INSERT INTO records VALUES(?,?,?)').run('mcp:tokens', 'opaque', 'must-not-decode-credentials');
+    const plan = inventorySessionCutover(db, '/copy');
+    assert.ok(plan.retainedGenerationIds.includes('original-generation'));
+    assert.ok(plan.namespaceInventory.some(row => row.namespace === 'collaboration:runs:v1' && row.ownership === 'business'));
+    assert.ok(plan.blockers.some(value => value.includes('unresolved_pm_operation')));
+    assert.throws(() => applySessionCutover(db, plan, '/copy'), /Cutover blocked/);
+    assert.equal(get(db, 'pm-tool-calls', 'original-operation').record.status, 'unknown');
+    assert.ok(get(db, 'chat:threads', 'old'));
+  } finally { db.close(); }
 });

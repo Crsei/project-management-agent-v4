@@ -10,6 +10,7 @@ import { createProviderInstance, getStoredInstance, updateProviderInstance } fro
 import { beginProviderAccountOperation, beginProviderExecution, beginProviderHostMutation, beginProviderMaintenance, beginProviderStatus, cancelProviderAuth, getAuthState, invalidateProviderResourcePeers, logoutProvider, registerProviderResourceBindings, requireAccountIdle, resetAuthState, startProviderAuth, subscribeAuth, writeAuthInput } from "./auth.ts";
 import { providerRoutes } from "./routes.ts";
 import { resolveProviderRuntime, runNativeRuntime } from "./runtime.ts";
+import { listProviderInstances } from "./catalog.ts";
 
 async function isolated(run: (state: { authenticated: boolean }) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "native-auth-"));
@@ -187,10 +188,12 @@ test("account switching cannot admit native sessions under the transitional revi
       const pending = options.readInput(); ready.resolve(); await pending;
     };
     const started = await startProviderAuth("codex", { methodId: "native-key" }); await ready.promise;
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, false);
     await assert.rejects(resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" }), { code: "provider_busy" });
     await assert.rejects(runNativeRuntime(oldRuntime, { prompt: "Must not execute as another account.", cwd: process.env.AGENT_WORKSPACE_DATA_DIR! }), { code: "session_mismatch" });
     writeAuthInput("codex", started.flowId!, JSON.stringify({ token: "replacement-account" }));
     assert.equal((await finish()).phase, "succeeded");
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, true);
     const current = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" });
     assert.notEqual(current.instanceRevision, oldRuntime.instanceRevision);
   });
@@ -199,14 +202,19 @@ test("account switching cannot admit native sessions under the transitional revi
 test("logout excludes login and native admission until its credential mutation settles", async () => {
   await isolated(async state => {
     state.authenticated = true;
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, true);
     const entered = Promise.withResolvers<void>(); const release = Promise.withResolvers<void>();
     codexAdapter.logout = async () => { entered.resolve(); await release.promise; state.authenticated = false; };
     const logout = logoutProvider("codex"); await entered.promise;
     try {
+      const busy = (await listProviderInstances()).find(provider => provider.instanceId === "codex")!;
+      assert.equal(busy.nativeSessionReady, false);
+      assert.equal(busy.authCheckedAt, undefined, "account exclusion is not a fresh authentication observation");
       await assert.rejects(startProviderAuth("codex", { methodId: "native-key" }), { status: 409 });
       await assert.rejects(resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" }), { code: "provider_busy" });
     } finally { release.resolve(); }
     assert.equal((await logout).ok, true);
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, false);
     assert.equal((await getAuthState("codex")).phase, "idle");
   });
 });
@@ -253,6 +261,24 @@ test("read reservations are counted and idempotent across overlapping probes", a
   later();
 }));
 
+test("same-revision account and maintenance scopes invalidate directory readiness on release", async () => isolated(async state => {
+  const revision = getStoredInstance("codex")!.revision;
+  for (const begin of [beginProviderAccountOperation, beginProviderMaintenance, (id: string) => beginProviderHostMutation(id, false)]) {
+    state.authenticated = true;
+    resetAuthState("codex");
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, true);
+    const release = begin("codex");
+    try {
+      state.authenticated = false;
+      const busy = (await listProviderInstances()).find(provider => provider.instanceId === "codex")!;
+      assert.equal(busy.nativeSessionReady, false);
+      assert.equal(busy.authCheckedAt, undefined);
+    } finally { release(); }
+    assert.equal(getStoredInstance("codex")!.revision, revision);
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex")!.nativeSessionReady, false);
+  }
+}));
+
 test("original credential bindings and installation lock keys exclude sibling instances", async () => isolated(async () => {
   createProviderInstance({ instanceId: "codex-secondary", driver: "codex", config: { homePath: join(tmpdir(), "separate-native-account") } });
   registerProviderResourceBindings("codex", ["credential:t3:shared-app-binding", "maintenance:shared-installer"]);
@@ -267,18 +293,23 @@ test("original credential bindings and installation lock keys exclude sibling in
   requireAccountIdle("codex-secondary");
 }));
 
-test("source mutations share local exclusion and invalidate sibling account revisions before native writes", async () => isolated(async () => {
+test("source mutations share local exclusion and invalidate sibling account revisions before native writes", async () => isolated(async state => {
   createProviderInstance({ instanceId: "codex-bound-peer", driver: "codex", config: { homePath: join(tmpdir(), "bound-peer-native-home") } });
   registerProviderResourceBindings("codex", ["credential:t3:original-binding"]);
   registerProviderResourceBindings("codex-bound-peer", ["credential:t3:original-binding"]);
+  state.authenticated = true;
+  assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex-bound-peer")!.nativeSessionReady, true);
   const revision = getStoredInstance("codex-bound-peer")!.revision;
   const release = beginProviderHostMutation("codex", false);
   try {
     assert.throws(() => beginProviderHostMutation("codex", false), { status: 409 });
     assert.throws(() => beginProviderExecution("codex-bound-peer"), { status: 409 });
+    assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex-bound-peer")!.nativeSessionReady, false);
     invalidateProviderResourcePeers("codex");
+    state.authenticated = false;
     assert.ok(getStoredInstance("codex-bound-peer")!.revision > revision);
     assert.equal(getStoredInstance("codex-bound-peer")!.observations, undefined);
   } finally { release(); release(); }
   requireAccountIdle("codex-bound-peer");
+  assert.equal((await listProviderInstances()).find(provider => provider.instanceId === "codex-bound-peer")!.nativeSessionReady, false);
 }));

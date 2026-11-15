@@ -7,9 +7,8 @@ import type { ExternalDocumentHistorySink } from '../../../../packages/applicati
 import { documentSourceConfigurationInputSchema, documentSourceContentQuerySchema, documentSourceDirectoriesQuerySchema, documentSourceFilesQuerySchema, documentSourceIdSchema, documentSourceMutationSchema } from '../../../../packages/contracts/src/document-sources.ts';
 import type { Actor } from '../../../../packages/domain/src/core.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
-import type { Workspace } from '../../../../packages/pm-core/index.ts';
 
-type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace>; history?: ExternalDocumentHistorySink };
+type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: DocumentSourceContext['workspace']; history?: ExternalDocumentHistorySink };
 const workspaceParams = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
 const sourceParams = workspaceParams.extend({ sourceId: documentSourceIdSchema });
 const base = '/api/v1/workspaces/:workspaceId/document-sources';

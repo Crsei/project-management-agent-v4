@@ -1,7 +1,7 @@
 // Adapted from t3code d53873b6 composerTrigger.ts, useComposerMenuItems.ts,
 // ComposerCommandMenu.tsx, ChatComposer.tsx, SkillInlineText and
 // useProviderWorkspaceSnapshotRefresh. MIT; LICENSE.t3code.
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useAui, useAuiState } from "@assistant-ui/react";
 import type {
   InspectorSearchEntry,
@@ -19,7 +19,7 @@ import {
   searchProviderSkills,
   serializeComposerFileLink,
 } from "@agent-workspace/client-runtime";
-import { FileIcon, SparklesIcon, SquareTerminalIcon } from "lucide-react";
+import { SquareTerminalIcon } from "lucide-react";
 import { threadExecutionSelection, usePmChatState } from "../pm/state";
 import { workspaceClient } from "../network";
 import { inspectUrl } from "../workspace/inspector/api";
@@ -29,6 +29,7 @@ import {
   type ComposerMenuItem,
   type ComposerTriggerKind,
 } from "./composer-command-menu";
+import type { RichComposerHandle } from "./rich-composer";
 import "./composer-suggestions.css";
 
 type Picked = { thread: string; kind: "skill" | "command"; name: string; path: string; binding: string };
@@ -47,10 +48,6 @@ type FileSearch = {
 
 const EMPTY_FILE_SEARCH: FileSearch = { key: "", entries: [], loading: false, truncated: false };
 
-function basenameOf(path: string): string {
-  const separator = path.lastIndexOf("/");
-  return separator >= 0 ? path.slice(separator + 1) : path;
-}
 
 function directoryOf(path: string): string {
   const separator = path.lastIndexOf("/");
@@ -77,7 +74,7 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
   const key = JSON.stringify([localId, remoteId, instanceId, provider?.revision, executionSelection]);
   const liveKey = useRef(key);
   liveKey.current = key;
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<RichComposerHandle | null>(null);
   const composing = useRef(false);
   const lastRequest = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -88,6 +85,7 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
     loading: boolean;
   }>({ key, loading: false });
   const [cursor, setCursor] = useState(text.length);
+  const [inCode, setInCode] = useState(false);
   const [dismissed, setDismissed] = useState<string>();
   const [highlight, setHighlight] = useState(0);
   const [picked, setPicked] = useState<Picked[]>([]);
@@ -171,13 +169,14 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
     return () => clearTimeout(timer);
   }, [snapshot, refresh]);
 
-  const onInput = (node: HTMLTextAreaElement) => {
-    setCursor(node.selectionStart);
+  const onInput = (cursor: number, code = false) => {
+    setCursor(cursor);
+    setInCode(code);
     setDismissed(undefined);
     setHighlight(0);
     if (Date.now() - lastRequest.current > TTL) void refresh(false);
   };
-  const trigger = !disabled && !composing.current ? detectComposerTrigger(text, cursor) : null;
+  const trigger = !disabled && !inCode && !composing.current ? detectComposerTrigger(text, cursor) : null;
   const triggerKey = trigger ? JSON.stringify([key, text, cursor]) : undefined;
   const triggerKind: ComposerTriggerKind | null =
     trigger?.kind === "path" || trigger?.kind === "skill" || trigger?.kind === "slash-command"
@@ -379,11 +378,11 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
       inputRef.current?.setSelectionRange(edit.cursor, edit.cursor);
     });
   };
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (event: KeyboardEvent) => {
     if (
       composing.current ||
-      event.nativeEvent.isComposing ||
-      event.nativeEvent.keyCode === 229 ||
+      event.isComposing ||
+      event.keyCode === 229 ||
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
@@ -411,9 +410,6 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
   };
 
   const inlineTokens = collectComposerInlineTokens(`${text} `);
-  const mentionTokens: Array<{ value: string; start: number; end: number }> = inlineTokens.filter(
-    (token) => token.type === "mention",
-  );
   const tokens: Array<{ value: string; start: number; end: number }> = inlineTokens.filter(
     (token) => token.type === "skill",
   );
@@ -453,31 +449,6 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
                   snapshot.invocation.commandAllowlist?.includes(command.name)),
             ))),
   );
-  const remove = (name: string) => {
-    const source = aui.composer.getState().text;
-    const matches = collectComposerInlineTokens(`${source} `).filter(
-      (token) => token.type === "skill" && token.value === name,
-    );
-    let next = source;
-    for (const token of [...matches].reverse())
-      next =
-        next.slice(0, token.start) +
-        next.slice(Math.min(source.length, token.end + (source[token.end] === " " ? 1 : 0)));
-    aui.composer.setText(next);
-    setPicked((previous) => previous.filter((pick) => pick.thread !== localId || pick.name !== name));
-  };
-  const removeMention = (path: string) => {
-    const source = aui.composer.getState().text;
-    const matches = collectComposerInlineTokens(`${source} `).filter(
-      (token) => token.type === "mention" && token.value === path,
-    );
-    let next = source;
-    for (const token of [...matches].reverse())
-      next =
-        next.slice(0, token.start) +
-        next.slice(Math.min(source.length, token.end + (source[token.end] === " " ? 1 : 0)));
-    aui.composer.setText(next);
-  };
   const removeCommand = (name: string) => {
     const source = aui.composer.getState().text;
     const matches = commandTokens.filter((token) => token.name === name);
@@ -515,9 +486,9 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
       composing.current = true;
       setDismissed(triggerKey);
     },
-    onCompositionEnd: (node: HTMLTextAreaElement) => {
+    onCompositionEnd: (cursor: number, code = false) => {
       composing.current = false;
-      onInput(node);
+      onInput(cursor, code);
     },
     blocked: invalid.length > 0,
     inputAria: {
@@ -535,48 +506,6 @@ export function useComposerSuggestions(instanceId: string, disabled: boolean) {
               "Native configuration changed; installed does not mean loaded in this session. Active executions are preserved.",
             )}
           </p>
-        )}
-        {mentionTokens.length > 0 && (
-          <div className="composer-reference-chips" aria-label={t("文件引用", "File references")}>
-            {mentionTokens.map((token) => (
-              <button
-                key={`${token.start}:${token.value}`}
-                type="button"
-                title={token.value}
-                onClick={() => removeMention(token.value)}
-              >
-                <FileIcon aria-hidden="true" />
-                {basenameOf(token.value)}
-                <span aria-label={t("移除引用", "Remove reference")}>×</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {tokens.length > 0 && (
-          <div className="composer-reference-chips" aria-label={t("原生 Skill 引用", "Native Skill references")}>
-            {tokens.map((token) => {
-              const skill =
-                current && snapshot
-                  ? snapshot.skills.find(
-                      (candidate) =>
-                        candidate.name === token.value && isProviderSkillUserInvocable(candidate),
-                    )
-                  : undefined;
-              return (
-                <button
-                  key={`${token.start}:${token.value}`}
-                  type="button"
-                  data-invalid={invalid.some((pick) => pick.name === token.value)}
-                  title={skill?.path ?? token.value}
-                  onClick={() => remove(token.value)}
-                >
-                  <SparklesIcon aria-hidden="true" />
-                  {skill ? formatProviderSkillDisplayName(skill) : `$${token.value}`}
-                  <span aria-label={t("移除引用", "Remove reference")}>×</span>
-                </button>
-              );
-            })}
-          </div>
         )}
         {pickedCommands.length > 0 && (
           <div className="composer-reference-chips" aria-label={t("命令引用", "Command references")}>

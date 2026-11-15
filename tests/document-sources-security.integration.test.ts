@@ -157,7 +157,7 @@ describe('directory document sources: filesystem identities and isolation', { co
     assert.equal((await readDocumentSources(f)).find(source => source.projectId === null)?.status, 'available');
     const refreshed = await collectDocumentFiles(f, workspaceSourceId, { limit: 1 });
     assert.deepEqual(refreshed.entries.map(entry => entry.path), ['native-a/same.md', 'native-b/same.md', 'shared.md']);
-    assert.equal(refreshed.entries.some(entry => entry.path.includes('/.pm/')), false);
+    assert.equal(refreshed.entries.some(entry => entry.path.includes('/.pm/') || entry.path.includes('/.dovspace/')), false);
     await configureDocumentSources(f, null, [], 1);
     const { sourceId: aSourceId } = await configureDocumentSource(f, a.record.id, a.location.path!, 0);
     assert.deepEqual((await collectDocumentFiles(f, aSourceId)).entries.map(entry => entry.path), ['same.md']);

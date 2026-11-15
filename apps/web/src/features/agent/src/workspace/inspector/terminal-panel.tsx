@@ -8,6 +8,9 @@ import { workspaceClient } from "@agent/src/network";
 import { getChatBrowserPreferences, useChatBrowserPreferences } from "@agent/src/settings/browser-preferences";
 import { agentText } from "../../i18n-text.ts";
 import { nextTerminalInput, reconcileTerminalInput, shouldRenderTerminalOutput, terminalClientIdentity } from "./terminal-client-state";
+import { ContextMenu, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
+import { useMessageContextDraft } from "../../chat/message-context";
+import { terminalSelectionSnapshot } from "./context-selection";
 
 function readTerminalTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
@@ -18,6 +21,15 @@ function readTerminalTheme(): ITheme {
 /** Only attaches to an already-created service-owned PTY. Unmount never terminates it. */
 export function TerminalPanel({ terminal: descriptor, active = true, onExit }: { terminal: TerminalDescriptor; active?: boolean; onExit?: (exitCode: number, signal?: number) => void }) {
   const { preferences } = useChatBrowserPreferences();
+  const context = useMessageContextDraft();
+  const [selectionMenu, setSelectionMenu] = useState<{ text: string; targetKey: string | undefined; terminalId: string; serviceId: string } | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [contextError, setContextError] = useState<string>();
+  const [contextPending, setContextPending] = useState(false);
+  const contextBusy = useRef(false);
+  const contextAlive = useRef(false);
+  useEffect(() => { contextAlive.current = true; return () => { contextAlive.current = false; }; }, []);
+  useEffect(() => { setSelectionMenu(null); setMenuAnchor(null); setContextError(undefined); }, [context.targetKey]);
   const container = useRef<HTMLDivElement>(null);
   const xterm = useRef<Terminal | null>(null);
   const fit = useRef<FitAddon | null>(null);
@@ -33,6 +45,37 @@ export function TerminalPanel({ terminal: descriptor, active = true, onExit }: {
     fit.current.fit();
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: "resize", cols: xterm.current.cols, rows: xterm.current.rows }));
   }, []);
+
+  async function addSelectedOutput() {
+    if (contextBusy.current || !selectionMenu) return;
+    const term = xterm.current;
+    const snapshot = term && terminalSelectionSnapshot(term);
+    if (!snapshot || snapshot.text !== selectionMenu.text || selectionMenu.targetKey !== context.targetKey || selectionMenu.terminalId !== descriptor.id || selectionMenu.serviceId !== descriptor.serviceId) {
+      setContextError(agentText("所选输出、终端或会话已变化，请重新选择。", "The selected output, terminal, or session changed. Select the output again."));
+      return;
+    }
+    if (snapshot.text.length > 16000) {
+      setContextError(agentText("所选输出超过 16000 字符，请选择较短片段；未截断或添加。", "The selected output exceeds 16,000 characters. Select a shorter excerpt; nothing was truncated or added."));
+      return;
+    }
+    contextBusy.current = true;
+    setContextPending(true);
+    setContextError(undefined);
+    try {
+      await context.add({
+        contextId: crypto.randomUUID(), kind: "terminal",
+        source: { type: "terminal", terminalId: descriptor.id, serviceId: descriptor.serviceId },
+        terminalLabel: `${descriptor.scope === "session" ? "Session" : "Workspace"} ${descriptor.id}`,
+        text: snapshot.text, selection: snapshot.selection,
+      });
+      if (contextAlive.current && context.isCurrent() && xterm.current === term && term.getSelection() === snapshot.text) term.clearSelection();
+    } catch (cause) {
+      if (contextAlive.current && context.isCurrent()) setContextError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      contextBusy.current = false;
+      if (contextAlive.current) setContextPending(false);
+    }
+  }
 
   useEffect(() => {
     if (!container.current) return;
@@ -139,5 +182,25 @@ export function TerminalPanel({ terminal: descriptor, active = true, onExit }: {
 
   useEffect(() => { if (!xterm.current) return; xterm.current.options.fontSize = preferences.terminalFontSize; fitTerminal(); }, [preferences.terminalFontSize, fitTerminal]);
   useEffect(() => { if (!active) return; const frame = requestAnimationFrame(() => { fitTerminal(); xterm.current?.focus(); }); return () => cancelAnimationFrame(frame); }, [active, fitTerminal]);
-  return <div className="inspector-panel inspector-panel--bare"><div ref={container} className="inspector-terminal" data-native-context-menu /></div>;
+  return <div className="inspector-panel inspector-panel--bare relative">
+    {contextError && <p role="alert" className="absolute inset-x-2 top-2 z-10 rounded border border-border bg-background p-2 text-sm">{contextError}</p>}
+    <ContextMenu open={menuAnchor !== null} {...(menuAnchor ? { anchor: menuAnchor } : {})} onOpenChange={open => { if (!open) setMenuAnchor(null); }}>
+      <div ref={container} className="inspector-terminal" data-native-context-menu onContextMenu={event => {
+        // Embedded terminals deliberately bypass object-menu triggers; open their own controlled menu.
+        event.preventDefault();
+        event.stopPropagation();
+        const snapshot = xterm.current && terminalSelectionSnapshot(xterm.current);
+        setSelectionMenu(snapshot ? { text: snapshot.text, targetKey: context.targetKey, terminalId: descriptor.id, serviceId: descriptor.serviceId } : null);
+        const box = event.currentTarget.getBoundingClientRect();
+        setMenuAnchor({ x: event.clientX || box.left + 8, y: event.clientY || box.bottom });
+      }} />
+      <ContextMenuContent onCloseAutoFocus={event => { event.preventDefault(); xterm.current?.focus(); }}>
+        {selectionMenu && context.available && <ContextMenuItem disabled={contextPending} onSelect={() => void addSelectedOutput()}>{agentText("添加到对话", "Add to chat")}</ContextMenuItem>}
+        {selectionMenu && <ContextMenuItem onSelect={() => {
+          void Promise.resolve().then(() => navigator.clipboard.writeText(selectionMenu.text)).catch(cause => { if (contextAlive.current && context.isCurrent()) setContextError(cause instanceof Error ? cause.message : String(cause)); });
+        }}>{agentText("复制所选输出", "Copy selected output")}</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => xterm.current?.selectAll()}>{agentText("全选", "Select all")}</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  </div>;
 }

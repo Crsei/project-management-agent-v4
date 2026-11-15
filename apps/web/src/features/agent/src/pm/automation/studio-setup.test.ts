@@ -159,12 +159,14 @@ test("workspace-tool limits apply to repository templates, not news or determini
   assert.deepEqual(studioProviderToolReadiness(deterministic, capabilities), { featureId: null, available: true, reason: null });
 });
 
-test("quick-access preference survives draft reload and explicit user edits remain protected", t => {
+test("fresh shortcut defaults preserve explicit project selection, draft reload and user opt-out", t => {
   const entries = installStorage(t);
   const key = studioDraftKey("actor", "workspace", 1, "new:blank:PRJ-001");
   const baseline = { ...emptyStudioConfig("PRJ-001"), name: "Saved shortcut" };
   assert.equal(baseline.quickAccess, undefined);
-  const config = { ...baseline, quickAccess: true };
+  assert.equal(emptyStudioConfig("", true).projectId, "");
+  const config = { ...emptyStudioConfig("PRJ-001", true), name: baseline.name };
+  assert.equal(config.quickAccess, true);
   const draft: StudioDraftState = { version: 1, config, baseline, definition: null, values: {}, touched: ["quickAccess"], pending: null, test: null, testPayload: "{}" };
   entries.set(key, serializeStudioDraft(draft));
   const restored = readStudioDraft(key)!;

@@ -68,6 +68,12 @@
 .markdown-workbench .detail-heading h2 { font-size: 17px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
 .markdown-workbench .detail-tabs, .markdown-workbench .settings-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid var(--border); padding: 6px 10px; }
 .markdown-workbench .detail-tabs button { padding: 6px 8px; font-size: 11px; }
+.markdown-workbench .detail-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; flex-shrink: 0; border-bottom: 1px solid var(--border); padding-right: 10px; }
+.markdown-workbench .detail-tabs-row .detail-tabs { border: 0; min-width: 0; }
+.markdown-workbench .detail-tab-action { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 6px 8px; border: 0; border-radius: var(--control-radius); background: transparent; color: var(--muted-foreground); white-space: nowrap; font-size: 11px; }
+.markdown-workbench .detail-tab-action:hover { background: var(--surface-hover); color: var(--foreground); }
+.markdown-workbench .detail-tab-action[aria-expanded="true"] { background: var(--selection); color: var(--foreground); font-weight: 600; }
+.markdown-workbench .detail-tab-action:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .markdown-workbench .detail-save-state { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
 .markdown-workbench .detail-save-state .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .markdown-workbench .detail-save-state > span:last-child { flex-shrink: 0; }
@@ -97,6 +103,8 @@
 .markdown-workbench .unsupported-source { display: block; flex: 1; width: 100%; height: 100%; min-height: 260px; padding: 18px; resize: none; border: 0; border-radius: 0; font: 12px/1.8 var(--font-mono, monospace); white-space: pre; background: var(--surface-raised); }
 .markdown-workbench .pm-view { min-height: 100%; }
 .markdown-workbench .pm-view button { border: 0; background: transparent; color: inherit; }
+/* 上一行重置优先级高于 .task-attention-badge，会清掉描边、底色与颜色；视图内的待审阅角标必须显式恢复（配色定义在 task-list-scope.css） */
+.markdown-workbench .pm-view .task-attention-badge { border: 1px solid var(--attention-border); background: var(--attention-fill); color: var(--info); }
 .markdown-workbench .kanban-board { display: flex; align-items: flex-start; gap: 12px; min-height: 100%; padding: 14px 20px 24px; }
 .markdown-workbench .board-column { display: flex; flex: 0 0 284px; width: 284px; min-width: 0; min-height: 220px; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface-raised); transition: background var(--motion-hover), border-color var(--motion-hover), outline-color var(--motion-hover); }
 .markdown-workbench .board-column.drop-over { background: var(--selection); outline: 1px solid var(--accent); }
@@ -146,6 +154,8 @@
 .markdown-workbench .card-title:hover:not(:disabled) { color: var(--accent); }
 .markdown-workbench .blocked-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); padding: 3px 5px; border-radius: var(--radius-inline-value); }
 .markdown-workbench .card-bottom { display: flex; align-items: center; gap: 6px; min-height: 22px; padding: 0; }
+/* 看板卡片底栏：待审阅角标与 ID/截止日期同为 10/14，不再高于卡片元数据 */
+.markdown-workbench .pm-view .task-card .task-attention-badge { padding: 1px 5px; font-size: 10px; line-height: 14px; }
 .markdown-workbench .card-id { color: var(--muted-foreground); font-size: 10px; white-space: nowrap; }
 .markdown-workbench .priority-icon { width: 13px; height: 13px; flex: none; color: var(--text-secondary); }
 .markdown-workbench .priority-icon.priority-high { color: var(--warning); }

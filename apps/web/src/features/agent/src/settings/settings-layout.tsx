@@ -1,12 +1,14 @@
 import { Component, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useBeforeUnload, useBlocker, useLocation } from "react-router-dom";
-import { ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronRight, Database, FolderOpen, History, Info, Loader2, MessageSquare, Moon, Palette, Plug, RefreshCw, Server, Settings2, ShieldAlert, Sun } from "lucide-react";
+import { ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronRight, Columns3, Database, FolderOpen, History, Info, Loader2, MessageSquare, Moon, Palette, Plug, RefreshCw, Server, Settings2, ShieldAlert, Sun } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@agent/components/ui/dialog";
 import { useTheme } from "@agent/hooks/use-theme";
 import { useChatAppearance } from "./browser-preferences";
 import { useAgentText } from "../i18n";
 import { agentText } from "../i18n-text.ts";
+import { onboardingReturnTo } from "@/lib/onboarding-navigation";
+import { safeRunBoardReturn } from "../pm/run-board-navigation";
 import pmTheme from "@/views/pm/dashboards-views.module.css";
 import "../../styles/pm-chat.css";
 import "./settings.css";
@@ -89,6 +91,7 @@ const groups = [
 
 function workspaceReturnTo(state: unknown, search: string): string {
   const candidate = state && typeof state === "object" && "settingsReturnTo" in state ? state.settingsReturnTo : undefined;
+  if (typeof candidate === "string" && safeRunBoardReturn(candidate)) return candidate;
   if (typeof candidate === "string" && (candidate === "/agent/workspace" || candidate.startsWith("/agent/workspace?") || candidate.startsWith("/agent/workspace#"))) return candidate;
   const source = new URLSearchParams(search);
   const params = new URLSearchParams();
@@ -133,6 +136,8 @@ export function SettingsLayout() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const page = pages.find((item) => location.pathname.replace(/\/+$/, "") === `/agent/settings/${item.id}`);
   const returnTo = workspaceReturnTo(location.state, location.search);
+  const returningToBoard = safeRunBoardReturn(returnTo) !== null;
+  const setupReturnTo = onboardingReturnTo(location.search);
   const navigationState = useMemo(() => ({ settingsReturnTo: returnTo }), [returnTo]);
   const registerGuard = useCallback<GuardContextValue>((id, state) => {
     if (state === "clean") guards.delete(id);
@@ -183,7 +188,7 @@ export function SettingsLayout() {
       <a className="settings-skip-link" href="#settings-content">{t("跳至设置内容", "Skip to settings")}</a>
       <aside className="settings-sidebar" aria-label={t("Agent 设置", "Agent settings")} onKeyDown={event => { if (event.key === "Escape" && mobileNavigationOpen) { event.preventDefault(); event.stopPropagation(); setMobileNavigationOpen(false); mobileNavigationTrigger.current?.focus(); } }}>
         <div className="settings-titlebar desktop-titlebar desktop-titlebar-traffic-lights">
-          <Link to={returnTo} className="settings-product"><MessageSquare aria-hidden="true" /><span>Agent Chat</span></Link>
+          <Link to={returnTo} className="settings-product">{returningToBoard ? <Columns3 aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}<span>{returningToBoard ? t("运行面板", "Run board") : "Agent Chat"}</span></Link>
         </div>
         <p className="settings-nav-caption">{t("设置", "Settings")}</p>
         <button ref={mobileNavigationTrigger} type="button" className="settings-mobile-navigation-toggle" aria-expanded={mobileNavigationOpen} aria-controls={navigationId} onClick={() => setMobileNavigationOpen(open => !open)}><span>{t("设置页面", "Settings pages")}</span><strong>{pageTitle}</strong><ChevronDown aria-hidden="true" /></button>
@@ -196,7 +201,8 @@ export function SettingsLayout() {
           </div>)}
         </nav>
         <div className="settings-sidebar-footer">
-          <Link to={returnTo}><ArrowLeft aria-hidden="true" /><span>{t("返回对话", "Back to chat")}</span></Link>
+          {setupReturnTo && <Link to={setupReturnTo}><ArrowLeft aria-hidden="true" /><span>{t("返回首次使用引导", "Back to getting started")}</span></Link>}
+          <Link to={returnTo}><ArrowLeft aria-hidden="true" /><span>{returningToBoard ? t("返回运行面板", "Back to run board") : t("返回对话", "Back to chat")}</span></Link>
           <Button size="icon-sm" variant="ghost" onClick={toggle} aria-label={theme === "dark" ? t("切换浅色主题", "Switch to light theme") : t("切换深色主题", "Switch to dark theme")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</Button>
         </div>
       </aside>

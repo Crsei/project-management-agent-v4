@@ -8,7 +8,7 @@ import type { StudioExecutionRequest } from '../../../../../../packages/contract
 import { resolveAgentExecution, type AgentExecutionSnapshot } from '../../durable/agent-execution.ts';
 import type { ChatGeneration } from '../../durable/chat-runtime.ts';
 import { emitNativeOutput, initializeNativeOutput } from '../../durable/native-output.ts';
-import { closeStore, listRecords, readRecord, writeRecord } from '../../durable/store.ts';
+import { closeStore, getDatabase, listRecords, readRecord, writeRecord } from '../../durable/store.ts';
 import { automationRequestFingerprint, registerAutomationNativeThread } from '../context.ts';
 import { createNativeTemplateExecutionPort, nativeCommandEvidence } from './host.ts';
 import { createNativeTemplateHttp, decodeNativeFeed, fetchNativePublicFeed, validatePublicFeedUrl } from './http.ts';
@@ -17,6 +17,7 @@ import { admitNativeOperation, createNativeTemplateState, finishNativeOperation,
 import { openNativeTemplateScratchTools } from './workspace-tools.ts';
 import { createProviderInstance } from '../../providers/instances.ts';
 import { openAgentWorkspace } from '../../agent-workspaces.ts';
+import { inventoryPersistence, namespacePolicy } from '../../durable/persistence-schema.ts';
 
 function fixture(): StudioExecutionRequest {
   return { executionId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', actorId: '33333333-3333-4333-8333-333333333333', workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001', definitionId: '55555555-5555-4555-8555-555555555555', definitionRevision: 1, config: { name: 'Native fixture', description: '', projectId: 'PRJ-001', tags: [], templateId: 'news-digest', action: { kind: 'template', templateId: 'news-digest', arguments: { feeds: 'https://news.ycombinator.com/rss', topics: '' }, repositories: [], plugins: [], providerInstanceId: 'fixture', model: 'fixture', options: {}, timeoutSeconds: 30 }, trigger: { kind: 'manual' }, dailyLimit: 2, cooldownMinutes: 0 }, trigger: 'test', payload: null, issuedAt: '2026-10-31T00:00:00.000Z' };
@@ -62,6 +63,7 @@ test('CAS and claims survive restart, retain immutable revisions and reject lost
   await assert.rejects(state.compareAndSet('seen', 2, {}), { code: 'revision_conflict' });
   assert.deepEqual(await state.compareAndSet('seen', 1, { stories: ['one', 'two'] }), { revision: 2, value: { stories: ['one', 'two'] } });
   assert.equal(await state.claim('delivery', { owner: request.executionId }), true);
+  assert.deepEqual(inventoryPersistence(getDatabase()).blockers, []);
   closeStore();
   const later = structuredClone(request); later.executionId = '66666666-6666-4666-8666-666666666666'; later.definitionRevision = 2;
   const restarted = createNativeTemplateState(later);
@@ -82,6 +84,12 @@ test('shared review claims coordinate definitions only within the same actor and
   assert.equal(await createNativeTemplateState(second).claim(key, { owner: 'second' }), false);
   second.config.action.plugins[0]!.version = '5';
   assert.equal(await createNativeTemplateState(second).claim(key, { owner: 'revised' }), true);
+  assert.deepEqual(inventoryPersistence(getDatabase()).blockers, []);
+  const sharedRecords = inventoryPersistence(getDatabase()).namespaces.filter(row => row.namespace.startsWith('pm-automation:native-review-state:'));
+  assert.ok(sharedRecords.some(row => row.namespace.endsWith(':history')));
+  assert.ok(sharedRecords.every(row => row.policy?.deletion === 'evidence'));
+  closeStore();
+  assert.equal(await createNativeTemplateState(request).claim(key, { owner: 'after-reopen' }), false);
 });
 
 test('operation admission is persistent and never reclaims pending or uncertain external writes', () => {
@@ -93,6 +101,7 @@ test('operation admission is persistent and never reclaims pending or uncertain 
   finishNativeOperation(first.operation, { phase: 'completed', value: { fabricated: true } });
   closeStore();
   assert.equal(admitNativeOperation(request, 'github:merge:head', first.operation.fingerprint).operation.phase, 'unknown');
+  assert.deepEqual(inventoryPersistence(getDatabase()).blockers, []);
 });
 
 test('missing execution query and cancel never create a handler admission or a Chat', async () => {
@@ -112,6 +121,10 @@ test('invalid source arguments produce a persistent failure without network or a
   const changed = structuredClone(request); changed.config.description = 'another request';
   await assert.rejects(port.dispatch(changed), /different immutable request/);
   assert.deepEqual(listRecords('chat:threads'), []);
+  assert.ok(listRecords('pm-automation:native-template-executions:history').length > 0);
+  assert.deepEqual(inventoryPersistence(getDatabase()).blockers, []);
+  closeStore();
+  assert.deepEqual(await port.query(request), result);
 });
 
 test('public feeds reject credentials, IP literals, private hostname classes and non-HTTPS before sockets', async () => {
@@ -129,6 +142,11 @@ test('trusted child cwd is a registered canonical descendant, never a caller pat
   const authorized = await authorizedWorkspace(request, root);
   const threadId = 'native-fixture-child', idempotencyKey = 'native-fixture-key';
   const binding = await prepareNativeRepository({ request, threadId, idempotencyKey, authorized, requestJson: async () => { throw new Error('No remote request expected'); }, signal: new AbortController().signal });
+  const baseFiles = readRecord('pm-automation:native-repositories:base-files', JSON.stringify([threadId, idempotencyKey]));
+  assert.ok(baseFiles);
+  assert.deepEqual(inventoryPersistence(getDatabase()).blockers, []);
+  closeStore();
+  assert.deepEqual(readRecord('pm-automation:native-repositories:base-files', JSON.stringify([threadId, idempotencyKey])), baseFiles);
   assert.deepEqual(await resolveSessionNativeTemplateSnapshot('unregistered', authorized, 'execute'), authorized);
   await assert.rejects(resolveSessionNativeTemplateSnapshot(threadId, authorized, 'execute'), /original automation/);
   writeRecord('pm-automation:executions', request.executionId, { request, fingerprint: automationRequestFingerprint(request), phase: 'running' });
@@ -277,4 +295,12 @@ test('read-only stages prove the actual snapshot remained unchanged instead of a
   assert.deepEqual(await readNativeRepositoryChanges(threadId, idempotencyKey, authorized), []);
   await writeFile(path.join(binding.executionPath, 'unapproved.ts'), 'unexpected edit\n');
   await assert.rejects(readNativeRepositoryChanges(threadId, idempotencyKey, authorized), /read-only native repository stage changed/);
+});
+
+test('native state namespace inventory accepts only exact producer hash scopes and history forms', () => {
+  for (const prefix of ['pm-automation:native-state:', 'pm-automation:native-review-state:']) {
+    for (const suffix of ['', ':history']) assert.equal(namespacePolicy(`${prefix}${'a'.repeat(64)}${suffix}`)?.deletion, 'evidence');
+    for (const suffix of ['a'.repeat(63), 'a'.repeat(65), 'G'.repeat(64), `${'a'.repeat(64)}:other`, `${'a'.repeat(64)}:history:extra`])
+      assert.equal(namespacePolicy(`${prefix}${suffix}`), null);
+  }
 });

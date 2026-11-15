@@ -15,16 +15,16 @@
 
 | 数据 | 权威位置 | 可重建 |
 | --- | --- | --- |
-| 九类 Lab 实体、正文、正式关系 | 未映射项目在 `CORE_WORKSPACE_ROOT/<workspaceId>/**.md`；本地映射项目在所选目录 `.pm/core/**.md` | 否 |
+| 九类 Lab 实体、正文、正式关系 | 未映射项目在 `CORE_WORKSPACE_ROOT/<workspaceId>/**.md`；本地映射项目在所选目录 `.dovspace/.pm/core/**.md` | 否 |
 | 工作流、自定义字段、保存视图与 order | `<workspace>/.pm/config.yaml`、`.pm/views/*.yaml` | 否 |
 | ID 台账、幂等、墓碑、项目目录映射、迁移及事实观测/恢复日志 | `<workspace>/.pm/state/` | 否 |
 | 查询索引 | `<workspace>/.pm/cache/index.sqlite` | 是 |
-| PM 账号、会话、成员、Intent/Decision/交付、附件元数据及字节 | PostgreSQL / BlobStore；映射项目字节在所选目录 `.pm/attachments`，历史对象按持久存储身份定位 | 否（PM 独有） |
+| PM 账号、会话、成员、Intent/Decision/交付、附件元数据及字节 | PostgreSQL / BlobStore；映射项目字节在所选目录 `.dovspace/.pm/attachments`，历史对象按持久存储身份定位 | 否（PM 独有） |
 
 - `CORE_WORKSPACE_ROOT` 默认 `.local/pm-workspaces`，每个 PM workspace UUID 一个共享权威目录；本地项目目录不是独立 Workspace。所有根拒绝符号链接，工作区统一维护 ID、配置、关系和恢复台账。
-- 映射由 `.pm/state/project-locations.json` 登记；所选根 `.pm/project.json` 固定工作区/项目/storageId。普通 FileRecord 使用 `project-roots/<projectId>/<core-relative-path>`，不暴露主机绝对路径；管理路径仅对全局管理权限开放。迁移、移动、找回、Worker readonly 和备份复用该映射，见[本地项目存储说明](../../../deploy/README.md)。
+- 映射由 `.pm/state/project-locations.json` 登记；所选根 `.dovspace/.pm/project.json` 固定工作区/项目/storageId。普通 FileRecord 使用 `project-roots/<projectId>/<core-relative-path>`，不暴露主机绝对路径；管理路径仅对全局管理权限开放。迁移、移动、找回、Worker readonly 和备份复用该映射，见[本地项目存储说明](../../../deploy/README.md)。
 - API 核心访问或后台事实 importer 可首次初始化唯一工作区；已有 SQL 审计/恢复证据但权威 state 缺失时拒绝空白初始化。缓存获取等待既有串行磁盘刷新完成，不依赖 watcher 防抖后才读到当前文件。API 关闭时统一关闭 watcher 与 SQLite，Worker 不创建第二个 Workspace，也不修复缺盘。
-- 外部文件监听使用 chokidar，外部项目仅监听受管 `.pm/core` 和身份标记，不导入原代码文件。宿主机 inotify 配额不足时设置 `CHOKIDAR_USEPOLLING=true`；该设置不改变文件权威，只改变监听方式。
+- 外部文件监听使用 chokidar，外部项目仅监听受管 `.dovspace/.pm/core` 和身份标记，不导入原代码文件。宿主机 inotify 配额不足时设置 `CHOKIDAR_USEPOLLING=true`；该设置不改变文件权威，只改变监听方式。
 - `.pm/config.yaml` 可以合法缺省并使用当前核心版本内置配置；备份保留缺省，不为通过恢复而补写配置。已存在配置、views 与 state 须完整校验，state 缺失不按默认值重建。
 
 ## 决策 3：身份规则

@@ -31,7 +31,7 @@ export async function getInstanceSetupStatus(sql: SqlExecutor): Promise<Instance
     EXISTS(SELECT workspace_id,user_id,capabilities,project_ids FROM memberships WHERE false) AS member_schema,
     EXISTS(SELECT key,attempts,expires_at FROM account_auth_limits WHERE false) AS limit_schema`);
   const row = result.rows[0]!;
-  return { initialized: row.initialized, setupAllowed: !row.initialized && row.pending, registrationMode: 'invite_only' };
+  return { initialized: row.initialized, setupAllowed: !row.initialized && row.pending, registrationMode: row.initialized ? 'open' : 'invite_only' };
 }
 
 /**

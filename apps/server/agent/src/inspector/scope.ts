@@ -3,6 +3,7 @@ import { realpath, stat } from "node:fs/promises";
 import { executionSelectionSchema } from "@agent-workspace/contracts/chat";
 import { DurableError } from "../durable/errors.ts";
 import { getThread, validThreadId } from "../durable/threads.ts";
+import { authorizeHeaders, sameOrigin } from "../access.ts";
 
 const INSPECTOR_QUERY_KEYS: Record<string, true> = { threadId: true, path: true, staged: true, q: true };
 
@@ -37,4 +38,18 @@ export async function resolveInspectorRoot(url: URL, headers: Headers): Promise<
     if (root !== executionPath || !(await stat(root)).isDirectory()) throw new Error("Changed root");
     return root;
   } catch { throw new DurableError(412, "execution_unavailable", "当前执行目录不可用。"); }
+}
+
+/** Reuse current Session/directory authorization after bounded I/O, before releasing any projection. */
+export async function readInspectorProjection<T>(url: URL, headers: Headers, read: (root: string) => Promise<T>): Promise<T> {
+  const root = await resolveInspectorRoot(url, headers);
+  const before = await stat(root, { bigint: true });
+  const value = await read(root);
+  const current = await resolveInspectorRoot(url, headers);
+  const after = await stat(current, { bigint: true });
+  if (current !== root || !after.isDirectory() || before.dev !== after.dev || before.ino !== after.ino || before.birthtimeNs !== after.birthtimeNs)
+    throw new DurableError(409, "execution_binding_changed", "Session execution directory changed while reading its projection.");
+  if (!sameOrigin(headers) || !authorizeHeaders(headers))
+    throw new DurableError(401, "access_required", "Agent access expired during inspection.");
+  return value;
 }

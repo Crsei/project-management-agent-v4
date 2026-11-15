@@ -48,6 +48,7 @@ import {
   type PmRightPanelSurfaceKind,
 } from "./right-panel-state";
 import "../../styles/inspector.css";
+import type { ChatInspectorRequest } from "../chat/chat-actions";
 
 const FilesPanel = lazy(() => import("../workspace/inspector/files-panel").then((module) => ({ default: module.FilesPanel })));
 const GitPanel = lazy(() => import("../workspace/inspector/git-panel").then((module) => ({ default: module.GitPanel })));
@@ -286,7 +287,7 @@ export function PmRightPanel({
   terminalVisible,
   terminalAvailable,
   onOpenTerminal,
-  onAttachImage,
+  openRequest,
 }: {
   threadId?: string;
   disabled: boolean;
@@ -299,7 +300,7 @@ export function PmRightPanel({
   terminalVisible: boolean;
   terminalAvailable: boolean;
   onOpenTerminal: () => void;
-  onAttachImage?: (file: File) => void | Promise<void>;
+  openRequest?: ChatInspectorRequest;
 }) {
   const t = useAgentText();
   const [state, dispatch] = useReducer(pmRightPanelReducer, EMPTY_RIGHT_PANEL_STATE);
@@ -333,6 +334,10 @@ export function PmRightPanel({
   useEffect(() => {
     if (terminalVisible) dispatch({ type: "add", kind: "terminal" });
   }, [terminalVisible]);
+  useEffect(() => {
+    if (disabled || !openRequest || openRequest.threadId !== threadId || openRequest.executionPath !== inspectorScope?.environment?.executionPath) return;
+    dispatch({ type: "add", kind: openRequest.kind });
+  }, [disabled, inspectorScope?.environment?.executionPath, openRequest, threadId]);
   useEffect(() => {
     const shell = marker.current?.parentElement;
     if (!shell) return;
@@ -524,7 +529,7 @@ export function PmRightPanel({
   </div>;
 
   const content = active
-    ? <InspectorScopeProvider scope={inspectorScope ?? { threadId }}>
+    ? <InspectorScopeProvider scope={{ ...(inspectorScope ?? { threadId }), openRequest: openRequest && openRequest.threadId === threadId && openRequest.executionPath === inspectorScope?.environment?.executionPath ? openRequest : undefined }}>
       {state.surfaces.map((surface) => {
         const Component = surfaceComponent(surface);
         const surfaceActive = surface.id === active.id;
@@ -537,7 +542,7 @@ export function PmRightPanel({
           aria-label={pmRightPanelSurfaceTitle(surface, t)}
         >
           <Suspense fallback={<p role="status" className="pm-right-panel-loading">{t("正在加载面板…", "Loading panel…")}</p>}>
-            {surface.kind === "terminal" ? surfaceActive && terminalVisible ? terminalSurface : <p className="inspector-empty">{t("终端已停靠底部或已分离。", "Terminal is docked below or detached.")}<button type="button" onClick={onOpenTerminal}>{t("在此附加", "Attach here")}</button></p> : Component ? surface.kind === "browser" ? <BrowserPanel active={surfaceActive} onAttachImage={onAttachImage} onTitleChange={(title) => dispatch({ type: "title", id: surface.id, title })} /> : <Component active={surfaceActive} /> : null}
+            {surface.kind === "terminal" ? surfaceActive && terminalVisible ? terminalSurface : <p className="inspector-empty">{t("终端已停靠底部或已分离。", "Terminal is docked below or detached.")}<button type="button" onClick={onOpenTerminal}>{t("在此附加", "Attach here")}</button></p> : Component ? surface.kind === "browser" ? <BrowserPanel active={surfaceActive} onTitleChange={(title) => dispatch({ type: "title", id: surface.id, title })} /> : <Component active={surfaceActive} /> : null}
           </Suspense>
         </section>;
       })}

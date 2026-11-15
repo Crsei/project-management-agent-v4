@@ -24,6 +24,8 @@ import { HOST_SOURCE_COMMIT, HOST_UPSTREAM_VERSION, verifyHost } from "../../ser
 import { createReceiptFixture } from "./install-e2e/fixtures.mjs";
 import { INSTALL_E2E_HARNESS } from "./install-e2e/evidence.mjs";
 import { desktopUpdatePolicy } from "../src/update-policy.mjs";
+import { BUNDLED_PM_SKILLS, readBundledPmResources } from "../../../packages/skill-resources/catalog.ts";
+import { fileURLToPath } from "node:url";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -54,7 +56,7 @@ async function snapshot(root, extra = {}) {
 }
 
 test("source selection excludes private, credential, generated and internal-history paths", () => {
-  for (const path of [".env", "apps/server/.env.agent", "apps/web/.envrc", "apps/desktop/credentials.json", "apps/desktop/token", "apps/desktop/signing.pfx", "apps/desktop/.cache/archive", "apps/desktop/.runtime/runtime", "apps/desktop/releases/installer.exe", "apps/web/node_modules/a/index.js", "vendor/x/target/binary", "docs/implementation/internal.md", ".git/config", ".local/evidence/report", "Home/credentials", "../README.md", "apps/../README.md", "apps\\server\\code.ts"]) {
+  for (const path of [".env", "apps/server/.env.agent", "apps/web/.envrc", "apps/desktop/credentials.json", "apps/desktop/token", "apps/desktop/signing.pfx", "apps/desktop/.cache/archive", "apps/desktop/.runtime/runtime", "apps/desktop/releases/installer.exe", "apps/web/node_modules/a/index.js", "vendor/x/target/binary", "docs/implementation/internal.md", "docs/agent-source/IMPLEMENTATION-PLAN.md", "docs/reference/turbo-rollout-plan.zh.md", "docs/frontend-design-adoption.md", "benchmarks/dovspace/PLAN.md", ".git/config", ".local/evidence/report", "Home/credentials", "../README.md", "apps/../README.md", "apps\\server\\code.ts"]) {
     assert.equal(publicSourcePath(path), false, path);
   }
   for (const path of ["LICENSE", "pnpm-lock.yaml", "turbo.json", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
@@ -88,6 +90,32 @@ async function fixtureGit(root, args) {
   const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(root, ".local/no-global-config"), HOME: join(root, ".local/home"), XDG_CONFIG_HOME: join(root, ".local/home") });
   return execute("git", ["-c", "user.name=Source fixture", "-c", "user.email=source-fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", `core.hooksPath=${join(root, ".local/empty-hooks")}`, ...args], { cwd: root, env: environment, windowsHide: true });
+}
+
+for (const gitBacked of [false, true]) {
+  test(`${gitBacked ? "Git" : "gitless"} source retains PM plugin installation inputs without private siblings`, async (t) => {
+    const root = await temporary(t), input = join(root, "input"), captured = join(root, "captured");
+    const plugin = "plugins/dovspace-pm/plugin.json", skill = "plugins/dovspace-pm/skills/task-planning/SKILL.md";
+    const entries = { [plugin]: '{"id":"dovspace-pm"}\n', [skill]: "# Synthetic task planning\n" };
+    await snapshot(input, entries);
+    if (gitBacked) {
+      await fixtureGit(input, ["init"]);
+      await fixtureGit(input, ["add", "--", "README.md", "apps", "plugins", "pnpm-lock.yaml"]);
+      await fixtureGit(input, ["commit", "-m", "Synthetic plugin source fixture"]);
+    }
+    await put(input, "plugins/dovspace-pm/.env", "PRIVATE_SYNTHETIC_SENTINEL");
+    await put(input, "plugins/dovspace-pm/.local/token", "PRIVATE_SYNTHETIC_SENTINEL");
+    const source = await captureSource(captured, input);
+    for (const [name, bytes] of Object.entries(entries)) {
+      assert.equal(source.files.find(file => file.path === name)?.sha256, hash(bytes));
+      assert.equal(await readFile(join(captured, name), "utf8"), bytes);
+    }
+    for (const name of ["plugins/dovspace-pm/.env", "plugins/dovspace-pm/.local/token"])
+      await assert.rejects(lstat(join(captured, name)), { code: "ENOENT" });
+    await requireUnchangedSource(source, input);
+    await put(input, skill, "# Changed installation input\n");
+    await assert.rejects(requireUnchangedSource(source, input), /Source changed/);
+  });
 }
 
 for (const gitBacked of [false, true]) {
@@ -129,7 +157,7 @@ for (const gitBacked of [false, true]) {
     })));
     const output = join(root, "materials");
     await mkdir(output);
-    const artifactName = "PM-Agent-v4-0.1.0-win-x64-unsigned.exe";
+    const artifactName = "Dovspace-0.1.0-win-x64-unsigned.exe";
     await put(output, artifactName, "Synthetic archive-writer installer fixture; not native evidence");
     for (const name of ["desktop-sbom.cdx.json", "desktop-osv.json", "desktop-vulnerabilities.sarif"])
       await put(output, name, '{"scope":"synthetic archive-writer material fixture"}\n');
@@ -498,6 +526,9 @@ async function archive(root, files) {
   await put(application, dependencyLayoutManifest, JSON.stringify({ schemaVersion: 1, contexts: [{ id: "electron", root: ".", dependencies, instances, absentDependencies: [], effectSingleton: null }] }));
   await mkdir(resources);
   await asarTools().createPackage(application, join(resources, "app.asar"));
+  for (const [path, content] of await readBundledPmResources(fileURLToPath(new URL("../../../", import.meta.url)))) {
+    await put(resources, `workspace-runtime/${path}`, content);
+  }
   await put(resources, `workspace-runtime/${dependencyLayoutManifest}`, JSON.stringify({ schemaVersion: 1, contexts: [
     { id: "pm", root: ".", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
     { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
@@ -534,6 +565,18 @@ test("final application refuses missing or mismatched maintenance application ve
   await assert.rejects(inspect());
 });
 
+test("final package inspection refuses each missing bundled PM Skill", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {});
+  for (const { sourcePath } of BUNDLED_PM_SKILLS) {
+    const filename = join(resources, "workspace-runtime", sourcePath);
+    const content = await readFile(filename);
+    await rm(filename);
+    await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), { code: "ENOENT" });
+    await writeFile(filename, content);
+  }
+});
+
 test("final ASAR inspection rejects Claude CLI metadata aliases inside the real archive", async (t) => {
   const root = await temporary(t);
   const resources = await archive(root, {
@@ -562,7 +605,7 @@ async function delivery(root, extraSources = {}) {
   const source = await snapshot(input, extraSources);
   const output = join(root, "delivery");
   await mkdir(output);
-  await put(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe", "unit installer bytes; not a real installer");
+  await put(output, "Dovspace-0.1.0-win-x64-unsigned.exe", "unit installer bytes; not a real installer");
   await put(output, "desktop-source.json", JSON.stringify(source));
   await createTar({ cwd: input, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]);
   await put(output, "desktop-legal.tar.gz", "unit legal archive bytes");
@@ -573,7 +616,7 @@ async function delivery(root, extraSources = {}) {
     schemaVersion: 3, version: "0.1.0", target: "win32-x64", signing: "unsigned",
     source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256 },
     installStamp, updates: desktopUpdatePolicy({ version: "0.1.0", platform: "win32", signing: "unsigned" }),
-    artifacts: [await fileRecord(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe")],
+    artifacts: [await fileRecord(output, "Dovspace-0.1.0-win-x64-unsigned.exe")],
     materials: await Promise.all(["desktop-source.json", "desktop-source.tar.gz", "desktop-legal.tar.gz", "desktop-install-stamp-win32-x64.json"].map((name) => fileRecord(output, name))),
     toolchain: { electron: "42.0.0" },
   };

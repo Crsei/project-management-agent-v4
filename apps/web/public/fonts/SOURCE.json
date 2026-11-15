@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "pathBase": "repository-root",
+  "scope": "Exact retained Inter font bytes and original OFL notice; not the MiSans redistribution review or final-artifact authorization.",
+  "reviewedOn": "2026-11-14",
+  "evidenceMethod": "Local byte lengths and Git blob SHA1 identities matched the official immutable-commit GitHub Contents API; SHA256 fingerprints identify the retained local bytes.",
+  "upstreams": {
+    "inter": {
+      "repository": "https://github.com/rsms/inter",
+      "releaseTag": "v4.1",
+      "commit": "e3a3d4c57d5ecc01453a575621882a384c1995a3",
+      "role": "Official font distribution source",
+      "evidenceUrls": [
+        "https://api.github.com/repos/rsms/inter/git/ref/tags/v4.1",
+        "https://api.github.com/repos/rsms/inter/contents/docs/font-files/InterVariable.woff2?ref=e3a3d4c57d5ecc01453a575621882a384c1995a3",
+        "https://api.github.com/repos/rsms/inter/contents/LICENSE.txt?ref=e3a3d4c57d5ecc01453a575621882a384c1995a3"
+      ]
+    }
+  },
+  "licenses": [
+    {
+      "id": "inter-ofl",
+      "spdxId": "OFL-1.1",
+      "path": "apps/web/public/fonts/Inter-LICENSE.txt",
+      "copyright": "Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+      "bytes": 4380,
+      "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+      "source": {
+        "upstream": "inter",
+        "path": "LICENSE.txt",
+        "gitBlobSha1": "9b2ca37b3ffc77391d8b2ebef4a974ef32bf46ea"
+      }
+    }
+  ],
+  "assets": [
+    {
+      "path": "apps/web/src/assets/fonts/InterVariable.woff2",
+      "bytes": 352240,
+      "sha256": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+      "source": {
+        "upstream": "inter",
+        "path": "docs/font-files/InterVariable.woff2",
+        "gitBlobSha1": "5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212"
+      },
+      "licenseRef": "inter-ofl",
+      "relationship": "Byte-identical to the recorded official file; no local font conversion is claimed."
+    }
+  ],
+  "limitations": [
+    "The exact official v4.1 file is identified by its Git blob and bytes; the font's internal version string is not used as a release or download identity.",
+    "MiSans-Regular.woff2, MiSans-Medium.woff2 and MiSans-Semibold.woff2 are not covered by Inter's OFL. MISANS-GRANT remains OPEN in THIRD_PARTY_NOTICES.md.",
+    "This source record does not establish unknown asset rights, final-package notice coverage or permission to publish the application."
+  ]
+}

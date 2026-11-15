@@ -34,8 +34,13 @@ export function createCreationStore(key: string, storage: CreationStorage, liste
   }
   function save(change: (current: CreationDrafts) => CreationDrafts, durable: boolean): boolean {
     refresh();
-    if (corrupt) return false;
     const next = change(value);
+    if (corrupt) {
+      // Storage may reject even reads (disabled/private mode). Non-durable edits and
+      // server-confirmed results still advance in memory; durability remains unavailable.
+      if (!durable) { value = next; failed = true; notify(); }
+      return false;
+    }
     try {
       const text = JSON.stringify(next);
       storage.setItem(key, text);

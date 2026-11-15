@@ -10,6 +10,7 @@ export type MemberInvitationDto = {
   email: string;
   role: MemberRole;
   projectIds: string[] | null;
+  teamIds: string[];
   status: InvitationStatus;
   version: number;
   expiresAt: string;
@@ -26,6 +27,8 @@ export type InvitationInspectDto = {
   email: string;
   role: MemberRole;
   projectIds: string[] | null;
+  teamIds: string[];
+  teams: { id: string; name: string }[];
   expiresAt: string;
   accountExists: boolean;
 };

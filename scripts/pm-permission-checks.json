@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "registry": "docs/reference/pm-agent-permission-registry.zh.md",
+  "registry": "internal permission registry (not distributed; path intentionally omitted)",
   "phases": {
     "unit": {
       "proof": "Schema, local identity, native file/journal and safe audit behavior; no PostgreSQL or real client proof.",

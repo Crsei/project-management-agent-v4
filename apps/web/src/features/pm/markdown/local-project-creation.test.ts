@@ -56,6 +56,52 @@ test('unfinished path entry survives refresh without corrupting recovery storage
   assert.equal(store.persistenceError(), true);
 });
 
+test('automatic project paths survive reopening without losing a pending original request', () => {
+  const draft = {
+    ...newCreationDraft('auto-path', defaultConfiguration, { entity: 'project' }),
+    localDirectory: { mode: 'auto' as const, path: '/authorized/RunLedger' },
+    attempt: {
+      ...prepareCreationAttempt({ entity: 'project', title: 'RunLedger' }, 'original-auto-key'),
+      phase: 'sending' as const,
+      localDirectory: { mode: 'existing' as const, path: '/authorized/RunLedger' },
+    },
+  };
+  let saved = JSON.stringify({ [draft.draftId]: draft });
+  const store = createCreationStore('auto-path-recovery', { getItem: () => saved, setItem: (_key, value) => { saved = value; } });
+  assert.equal(store.persistenceError(), false);
+  const restored = store.getSnapshot()[draft.draftId]!;
+  assert.deepEqual(restored.localDirectory, draft.localDirectory);
+  assert.deepEqual(restored.attempt, { ...draft.attempt, phase: 'unknown' });
+  assert.throws(() => editCreationDraft(restored, { body: 'replacement' }), /frozen/);
+  assert.equal(store.update(current => current), true);
+  assert.deepEqual(decodeCreationDrafts(saved)[draft.draftId], restored);
+});
+
+test('unfinished automatic paths remain editable after reopening but malformed journals still block writes', () => {
+  const draft = { ...newCreationDraft('auto-input', defaultConfiguration, { entity: 'project' }), localDirectory: { mode: 'auto' as const, path: '' } };
+  let saved = JSON.stringify({ [draft.draftId]: draft });
+  const storage = { getItem: () => saved, setItem: (_key: string, value: string) => { saved = value; } };
+  const store = createCreationStore('auto-input-recovery', storage);
+  assert.equal(store.persistenceError(), false);
+  assert.equal(store.update(current => ({ ...current, [draft.draftId]: editCreationDraft(current[draft.draftId]!, { localDirectory: { mode: 'auto', path: '/authorized/new-project' } }) })), true);
+  assert.deepEqual(decodeCreationDrafts(saved)[draft.draftId]!.localDirectory, { mode: 'auto', path: '/authorized/new-project' });
+  saved = JSON.stringify({ [draft.draftId]: { ...draft, localDirectory: { mode: 'invalid', path: '' } } });
+  const invalid = createCreationStore('invalid-recovery', storage);
+  const original = saved;
+  assert.equal(invalid.persistenceError(), true);
+  assert.equal(invalid.commit(() => ({})), false);
+  assert.equal(saved, original);
+});
+
+test('non-durable updates still advance when browser storage rejects reads and writes', () => {
+  const draft = newCreationDraft('draft-one', defaultConfiguration, { entity: 'project' });
+  const store = createCreationStore('blocked', { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } });
+  assert.equal(store.persistenceError(), true);
+  assert.equal(store.update(() => ({ 'draft-one': draft })), false);
+  assert.equal(store.getSnapshot()['draft-one']!.draftId, 'draft-one');
+  assert.equal(store.getSnapshot()['draft-one']!.updatedAt, draft.updatedAt);
+});
+
 test('all nine entity kinds keep native field mapping and project folder inputs do not leak into task fields', () => {
   for (const kind of entityKinds) {
     const draft = newCreationDraft(`draft-${kind}`, defaultConfiguration, { entity: kind });

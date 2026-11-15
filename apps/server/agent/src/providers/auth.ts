@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ProviderAuthState, ProviderAuthStartInput } from "@agent-workspace/contracts/provider";
 import { getStoredInstance, listStoredInstances, providerContext, providerDataDirectory, updateProviderInstance } from "./instances.ts";
 import { getNativeProviderAdapter } from "./driver-registry.ts";
-import { probeProviderInstance, sanitizeProviderMessage } from "./catalog.ts";
+import { invalidateProviderStatus, probeProviderInstance, sanitizeProviderMessage } from "./catalog.ts";
 import type { ProviderAuthController } from "@t3tools/provider-core/server/auth";
 import { closeMcpAppSessionsForInstance } from "../mcp-apps/live.ts";
 
@@ -89,6 +89,7 @@ export function authorizeProviderAuthSessionInvalidation(
 }
 /** Credential/installer writes invalidate every local account sharing the proven resource, not its session identity. */
 export function invalidateProviderResourcePeers(instanceId: string, installation = false): void {
+  invalidateProviderStatus(instanceId);
   for (const peer of listStoredInstances()) {
     if (peer.instanceId === instanceId || !sharesResources(instanceId, key(peer.instanceId), installation)) continue;
     const binding = resourceBindings.get(key(peer.instanceId));
@@ -128,16 +129,18 @@ export function beginProviderMaintenance(instanceId: string): () => void {
   if (holders.some(id => sharesResources(instanceId, id, true)))
     throw Object.assign(new Error("A shared native installation is busy."), { status: 409 });
   const operationKey = key(instanceId);
+  invalidateProviderStatus(instanceId);
   maintenanceOperations.add(operationKey);
   let released = false;
-  return () => { if (!released) { released = true; maintenanceOperations.delete(operationKey); } };
+  return () => { if (!released) { released = true; invalidateProviderStatus(instanceId); maintenanceOperations.delete(operationKey); } };
 }
 export function beginProviderAccountOperation(instanceId: string): () => void {
   requireAccountIdle(instanceId);
   const operationKey = key(instanceId);
+  invalidateProviderStatus(instanceId);
   logoutOperations.add(operationKey);
   let released = false;
-  return () => { if (!released) { released = true; logoutOperations.delete(operationKey); } };
+  return () => { if (!released) { released = true; invalidateProviderStatus(instanceId); logoutOperations.delete(operationKey); } };
 }
 /** Attach a source controller to its admitted local mutation, or reserve a direct caller exclusively. */
 export function beginProviderHostMutation(instanceId: string, installation: boolean): () => void {
@@ -148,11 +151,13 @@ export function beginProviderHostMutation(instanceId: string, installation: bool
   const current = getStoredInstance(instanceId);
   if (!current) throw Object.assign(new Error("Unknown Provider account mutation target."), { status: 404 });
   const releaseOuter = ownOuter ? undefined : installation ? beginProviderMaintenance(instanceId) : beginProviderAccountOperation(instanceId);
+  invalidateProviderStatus(instanceId);
   hostMutations.set(operationKey, { installation, revision: current.revision });
   let released = false;
   return () => {
     if (released) return;
     released = true;
+    invalidateProviderStatus(instanceId);
     hostMutations.delete(operationKey);
     releaseOuter?.();
   };
@@ -189,6 +194,7 @@ function emit(flowKey: string, flow: Flow): void {
   for (const listener of listeners.get(flowKey) ?? []) listener({ ...flow.state });
 }
 export function resetAuthState(instanceId: string): void {
+  invalidateProviderStatus(instanceId);
   const flowKey = key(instanceId);
   const flow = flows.get(flowKey);
   if (flow && active(flow.state)) {

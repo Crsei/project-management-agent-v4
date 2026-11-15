@@ -132,7 +132,7 @@ foreach ($base in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
   if (Test-Path -LiteralPath $base) {
     foreach ($key in Get-ChildItem -LiteralPath $base) {
       $value=Get-ItemProperty -LiteralPath $key.PSPath
-      if ($value.DisplayName -eq 'PM Agent v4' -or (Inside $request.installRoot ([string]$value.InstallLocation))) {
+      if (.DisplayName -eq 'Dovspace' -or (Inside $request.installRoot ([string]$value.InstallLocation))) {
         if ($base.StartsWith('HKLM:')) { throw 'Per-machine Dovspace installation is outside isolated E2E ownership' }
         $registry += [ordered]@{key=$key.Name;displayName=$value.DisplayName;version=$value.DisplayVersion;installLocation=$value.InstallLocation;uninstallString=$value.UninstallString}
       }
@@ -151,7 +151,7 @@ foreach ($folder in @([Environment]::GetFolderPath('Desktop'),[Environment]::Get
     foreach ($file in Get-ChildItem -LiteralPath $folder -Filter '*.lnk' -Recurse -Force) {
       if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Linked shortcut path' }
       $shortcut=$shell.CreateShortcut($file.FullName)
-      if ($file.BaseName -eq 'PM Agent v4' -or (Inside $request.installRoot $shortcut.TargetPath)) {
+      if (.BaseName -eq 'Dovspace' -or (Inside $request.installRoot $shortcut.TargetPath)) {
         $shortcuts += [ordered]@{path=$file.FullName;target=$shortcut.TargetPath;arguments=$shortcut.Arguments}
       }
     }

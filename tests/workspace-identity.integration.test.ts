@@ -49,6 +49,45 @@ describe('workspace identity: real HTTP authorization, CAS, receipts and minimal
     assert.deepEqual((await fixture.request(`${root()}/core/files/${project.id}`)).body, source.body);
   });
 
+  it('stores organization details only for workspace administrators and never leaks their values', async () => {
+    const reader = await fixture.member('Organization reader');
+    await grant(reader.user.id, ['domain.read']);
+    const initialIdentity = await identity();
+    const initialOrganization = await fixture.request<{ taxId: string | null; businessAddress: string | null; version: number }>(`${root()}/organization`);
+    assert.equal(initialOrganization.status, 200, JSON.stringify(initialOrganization.body));
+    assert.deepEqual({ taxId: initialOrganization.body.taxId, businessAddress: initialOrganization.body.businessAddress, version: initialOrganization.body.version },
+      { taxId: null, businessAddress: null, version: initialIdentity.version });
+    assert.equal((await fixture.request(`${root()}/organization`, { cookie: reader.cookie })).status, 403);
+
+    const command = update(initialIdentity, 'Organization saved');
+    const response = await fixture.send({ ...command, payload: { ...command.payload, taxId: '  CN-91310000-EXAMPLE  ', businessAddress: '  123 Example Street, Demo City  ' } });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const organization = await fixture.request<{ taxId: string | null; businessAddress: string | null; version: number }>(`${root()}/organization`);
+    assert.equal(organization.status, 200, JSON.stringify(organization.body));
+    assert.deepEqual({ taxId: organization.body.taxId, businessAddress: organization.body.businessAddress, version: organization.body.version },
+      { taxId: 'CN-91310000-EXAMPLE', businessAddress: '123 Example Street, Demo City', version: initialIdentity.version + 1 });
+
+    const publicIdentity = await identity();
+    assert.equal(Object.hasOwn(publicIdentity, 'taxId'), false);
+    assert.equal(Object.hasOwn(publicIdentity, 'businessAddress'), false);
+    const event = await fixture.pool.query<{ payload: Record<string, unknown> }>('SELECT payload FROM outbox WHERE command_id=$1', [command.commandId]);
+    assert.equal(JSON.stringify(event.rows[0]!.payload).includes('CN-91310000-EXAMPLE'), false);
+    assert.equal(JSON.stringify(event.rows[0]!.payload).includes('Example Street'), false);
+    assert.equal(event.rows[0]!.payload.organizationUpdated, true);
+
+    const clear = update(publicIdentity, 'Organization cleared');
+    const cleared = await fixture.send({ ...clear, payload: { ...clear.payload, taxId: null, businessAddress: null } });
+    assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+    const empty = await fixture.request<{ taxId: string | null; businessAddress: string | null }>(`${root()}/organization`);
+    assert.deepEqual({ taxId: empty.body.taxId, businessAddress: empty.body.businessAddress }, { taxId: null, businessAddress: null });
+
+    const current = await identity();
+    for (const patch of [{ taxId: 'x'.repeat(65) }, { businessAddress: 'x'.repeat(301) }]) {
+      const invalid = update(current, 'Invalid organization');
+      assert.equal((await fixture.send({ ...invalid, payload: { ...invalid.payload, ...patch } })).status, 400);
+    }
+  });
+
   it('CAS admits one writer, rejects stale/missing versions, and persists only one outbox event per original command', async () => {
     const initial = await identity();
     const commands = [update(initial, 'CAS writer A'), update(initial, 'CAS writer B')];

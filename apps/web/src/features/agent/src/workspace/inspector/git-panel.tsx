@@ -14,10 +14,12 @@ import type {
   GitStatusResponse,
 } from "@agent-workspace/contracts/inspector";
 import { errorMessage } from "./api";
-import { InspectorExecution, useInspectorUrl } from "./scope";
+import { InspectorExecution, useInspectorScope, useInspectorUrl } from "./scope";
 import { workspaceClient } from "@agent/src/network";
 import { DiffView } from "./diff-view";
 import { useAgentText, type AgentText } from "../../i18n";
+import { useMessageContextDraft } from "../../chat/message-context";
+import { ContextCodeView } from "./context-code-view";
 
 type DiffMode = "staged" | "worktree";
 
@@ -68,6 +70,13 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 function GitRootPanel({ active }: { active: boolean }) {
   const t = useAgentText();
   const inspectUrl = useInspectorUrl();
+  const scope = useInspectorScope();
+  const messageContext = useMessageContextDraft();
+  const [pullRequestUrl, setPullRequestUrl] = useState("");
+  const [pullRequestPending, setPullRequestPending] = useState(false);
+  const [pullRequestError, setPullRequestError] = useState<string>();
+  const pullRequestBusy = useRef(false);
+  const mounted = useRef(false);
   const [status, setStatus] = useState<GitStatusResponse | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +89,7 @@ function GitRootPanel({ active }: { active: boolean }) {
 
   const statusRequest = useRef<AbortController | null>(null);
   const diffRequest = useRef<AbortController | null>(null);
+  const consumedOpenRequest = useRef<string | undefined>(undefined);
 
   const loadStatus = useCallback(async () => {
     statusRequest.current?.abort();
@@ -164,11 +174,23 @@ function GitRootPanel({ active }: { active: boolean }) {
   useEffect(() => {
     const pendingStatus = statusRequest;
     const pendingDiff = diffRequest;
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       pendingStatus.current?.abort();
       pendingDiff.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const request = scope.openRequest;
+    if (!active || !request || request.kind !== "git" || request.threadId !== scope.threadId || request.executionPath !== scope.environment?.executionPath || consumedOpenRequest.current === request.id || loading || !status) return;
+    consumedOpenRequest.current = request.id;
+    const file = request.path ? status.files.find((item) => item.path === request.path || item.oldPath === request.path) : undefined;
+    if (!request.path) { setSelection(null); return; }
+    const mode: DiffMode = request.staged === undefined ? file?.unstaged ? "worktree" : file?.staged ? "staged" : "worktree" : request.staged ? "staged" : "worktree";
+    setSelection({ path: file?.path ?? request.path, mode });
+  }, [active, loading, scope.environment?.executionPath, scope.openRequest, scope.threadId, status]);
 
   function changeMode(mode: DiffMode) {
     setSelection((current) => (current && current.mode !== mode ? { ...current, mode } : current));
@@ -176,6 +198,22 @@ function GitRootPanel({ active }: { active: boolean }) {
 
   function selectDiff(path: string, mode: DiffMode) {
     setSelection({ path, mode });
+  }
+
+  async function addPullRequestReference() {
+    if (pullRequestBusy.current || !pullRequestUrl.trim()) return;
+    pullRequestBusy.current = true;
+    setPullRequestPending(true);
+    setPullRequestError(undefined);
+    try {
+      await messageContext.add({ contextId: crypto.randomUUID(), kind: "review-comment", source: { type: "pull-request", url: pullRequestUrl.trim() } });
+      if (mounted.current) setPullRequestUrl("");
+    } catch (cause) {
+      if (mounted.current) setPullRequestError(errorMessage(cause));
+    } finally {
+      pullRequestBusy.current = false;
+      if (mounted.current) setPullRequestPending(false);
+    }
   }
 
   const files = status?.files ?? [];
@@ -242,6 +280,16 @@ function GitRootPanel({ active }: { active: boolean }) {
         </p>
       ) : null}
 
+      {status?.repo && messageContext.available && <details className="rounded border border-border px-3 py-2 text-sm">
+        <summary className="cursor-pointer">{t("添加 Pull Request 引用", "Add a pull request reference")}</summary>
+        <form className="mt-2 space-y-2" onSubmit={event => { event.preventDefault(); void addPullRequestReference(); }}>
+          <p className="text-xs text-muted-foreground">{t("粘贴真实 PR 链接。仅引用你提供的 URL；不会查询或宣称远端状态。", "Paste a real PR link. This references your URL only; it does not query or claim remote PR status.")}</p>
+          <input type="url" required maxLength={4096} value={pullRequestUrl} disabled={pullRequestPending} onChange={event => setPullRequestUrl(event.target.value)} aria-label={t("Pull Request URL", "Pull request URL")} placeholder="https://…" className="w-full rounded border border-border bg-background px-2 py-1" />
+          {pullRequestError && <p role="alert" className="text-destructive">{pullRequestError}</p>}
+          <Button type="submit" size="xs" disabled={pullRequestPending || !pullRequestUrl.trim()}>{pullRequestPending ? t("正在核验…", "Resolving…") : t("添加到对话", "Add to chat")}</Button>
+        </form>
+      </details>}
+
       {statusError ? (
         <div className="inspector-empty" role="alert">
           <p style={{ margin: 0 }}>
@@ -272,11 +320,11 @@ function GitRootPanel({ active }: { active: boolean }) {
         </p>
       ) : null}
 
-      {status?.repo && files.length === 0 ? (
+      {status?.repo && files.length === 0 && !selection ? (
         <p className="inspector-empty">{t("工作区干净。", "The worktree is clean.")}</p>
       ) : null}
 
-      {status?.repo && files.length > 0 ? (
+      {status?.repo && (files.length > 0 || selection) ? (
         <div className="inspector-split">
           <div
             className="inspector-scroll"
@@ -397,12 +445,10 @@ function GitRootPanel({ active }: { active: boolean }) {
               {diffError}
             </div>
           ) : diff ? (
-            <DiffView
-              patch={diff.patch}
-              path={diff.path}
-              truncated={diff.truncated}
-              untracked={diff.untracked}
-            />
+            diff.patch.trim() && /^@@ /m.test(diff.patch) ? <div className="inspector-diff flex min-h-0 flex-1 flex-col">
+              {diff.truncated && <p className="inspector-muted px-3 py-2" role="status">{t("差异过大，仅显示前一部分内容。", "The diff is large; only the first part is shown.")}</p>}
+              <ContextCodeView snapshot={{ kind: "diff", path: diff.path, contents: diff.patch, staged: diff.staged }} />
+            </div> : <DiffView patch={diff.patch} path={diff.path} truncated={diff.truncated} untracked={diff.untracked} />
           ) : (
             <p className="inspector-empty">{t("正在读取差异…", "Reading diff…")}</p>
           )}

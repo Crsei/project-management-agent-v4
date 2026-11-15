@@ -5,10 +5,13 @@ import { getNativeProviderAdapter } from "./driver-registry.ts";
 import type { ProviderDriverStatus } from "./driver-adapter.ts";
 import { sanitizeErrorText } from "./verify.ts";
 import { canonicalProviderModelId } from "./t3code/config-mapping.ts";
-import { beginProviderStatus } from "./auth.ts";
+import { beginProviderStatus, isProviderAccountBusy } from "./auth.ts";
 import { OMP_STATUS_TIMEOUT_MS } from "@t3tools/provider-omp/server/status";
 
-const observations = new Map<string, { revision: number; status: ProviderDriverStatus }>();
+type ProviderObservation = { revision: number; checkedAt: number; models: ProviderModel[] } & ({ status: ProviderDriverStatus } | { error: string });
+// Directory browsing alone may reuse observations; execution and explicit checks stay fresh.
+export const PROVIDER_DIRECTORY_FRESHNESS_MS = 30_000;
+const observations = new Map<string, ProviderObservation>();
 const checks = new Map<string, { revision: number; promise: Promise<ProviderDriverStatus> }>();
 const cacheKey = (instanceId: string) => `${providerDataDirectory()}\0${instanceId}`;
 const portableCapabilities: ProviderCapabilities = {
@@ -16,6 +19,22 @@ const portableCapabilities: ProviderCapabilities = {
   modelTransition: "portable", portableHandoff: true,
 };
 
+/** Account cleanup also fences an in-flight result from republishing an invalidated identity. */
+export function invalidateProviderStatus(instanceId: string): void {
+  const key = cacheKey(instanceId);
+  observations.delete(key);
+  checks.delete(key);
+}
+
+function failedObservation(instance: StoredProviderInstance, error: unknown): ProviderObservation {
+  const previous = observations.get(cacheKey(instance.instanceId));
+  return {
+    revision: instance.revision, checkedAt: Date.now(),
+    models: previous?.revision === instance.revision ? previous.models
+      : instance.observations?.instanceRevision === instance.revision ? instance.observations.discoveredModels ?? [] : [],
+    error: sanitizeProviderMessage(instance, error instanceof Error ? error.message : "原生 Agent 检查失败；未推断安装或登录状态。"),
+  };
+}
 export function getProviderDefinition(instanceId: string) {
   const instance = getStoredInstance(instanceId);
   const adapter = instance && getNativeProviderAdapter(instance.driver);
@@ -40,7 +59,7 @@ export function getProviderModels(instanceId: string): ProviderModel[] {
   const models = new Map<string, ProviderModel>();
   const current = observations.get(cacheKey(instanceId));
   // A fresh original inventory, even an empty one, supersedes persisted discovery.
-  const inventory = current?.revision === instance.revision ? current.status.models
+  const inventory = current?.revision === instance.revision ? current.models
     : instance.observations?.instanceRevision === instance.revision ? instance.observations.discoveredModels ?? [] : [];
   for (const model of inventory) models.set(model.id, { ...model, source: model.source ?? "discovered" });
   for (const model of adapter.definition.supportsCustomModels === false ? [] : instance.customModels ?? []) {
@@ -95,11 +114,15 @@ export async function readNativeProviderStatus(instanceId: string, insideAccount
   const key = cacheKey(instanceId);
   const pending = checks.get(key);
   if (pending?.revision === instance.revision) return pending.promise;
-  const release = beginProviderStatus(instanceId, insideAccountOperation);
-  const promise = Promise.resolve().then(() => adapter.check(providerContext(instance),
+  let release: () => void;
+  try { release = beginProviderStatus(instanceId, insideAccountOperation); }
+  catch (error) { observations.set(key, failedObservation(instance, error)); throw error; }
+  const isCurrent = (): boolean => cacheKey(instanceId) === key && getStoredInstance(instanceId)?.revision === instance.revision
+    && checks.get(key)?.promise === promise;
+  const promise: Promise<ProviderDriverStatus> = Promise.resolve().then(() => adapter.check(providerContext(instance),
     AbortSignal.timeout(instance.driver === "omp" ? OMP_STATUS_TIMEOUT_MS : 30_000))).then(status => {
-    if (getStoredInstance(instanceId)?.revision !== instance.revision)
-      throw Object.assign(new Error("Agent configuration changed during status inspection."), { status: 409 });
+    if (!isCurrent())
+      throw Object.assign(new Error("Agent configuration or account changed during status inspection."), { status: 409 });
     const safe: ProviderDriverStatus = {
       ...status,
       ...(status.message ? { message: sanitizeProviderMessage(instance, status.message) } : {}),
@@ -108,8 +131,11 @@ export async function readNativeProviderStatus(instanceId: string, insideAccount
         ...(status.installation.error ? { error: sanitizeProviderMessage(instance, status.installation.error) } : {}),
       },
     };
-    observations.set(key, { revision: instance.revision, status: safe });
+    observations.set(key, { revision: instance.revision, checkedAt: Date.now(), models: safe.models, status: safe });
     return safe;
+  }).catch(error => {
+    if (isCurrent()) observations.set(key, failedObservation(instance, error));
+    throw error;
   }).finally(() => {
     release();
     if (checks.get(key)?.promise === promise) checks.delete(key);
@@ -118,10 +144,9 @@ export async function readNativeProviderStatus(instanceId: string, insideAccount
   return promise;
 }
 
-export async function probeProviderInstance(instanceId: string, insideAccountOperation = false): Promise<ProviderInstance> {
-  const instance = getStoredInstance(instanceId);
-  const adapter = instance && getNativeProviderAdapter(instance.driver);
-  if (!instance || !adapter) throw new Error("Unknown native Agent instance.");
+function providerInstanceSnapshot(instance: StoredProviderInstance, observation?: ProviderObservation): ProviderInstance {
+  const instanceId = instance.instanceId;
+  const adapter = getNativeProviderAdapter(instance.driver)!;
   const common = {
     ...publicInstanceConfig(instance), authMode: "agent" as const,
     modelsSource: "mixed" as const, capabilities: portableCapabilities,
@@ -132,8 +157,8 @@ export async function probeProviderInstance(instanceId: string, insideAccountOpe
     ...common, models: getProviderModels(instanceId), authStatus: "unknown", nativeSessionReady: false, configured: false, credentialSource: null,
     canLogin: false, canLogout: false, authMethods: [], message: "此 Agent 已停用；没有启动检查、登录或执行。",
   };
-  try {
-    const status = await readNativeProviderStatus(instanceId, insideAccountOperation);
+  if (observation && "status" in observation) {
+    const status = observation.status;
     const installed = status.installation.status === "installed" || status.installation.status === "not-applicable";
     return {
       ...common, models: getProviderModels(instanceId), installation: status.installation,
@@ -150,19 +175,48 @@ export async function probeProviderInstance(instanceId: string, insideAccountOpe
       ...(status.email ? { email: status.email } : {}),
       ...(status.message ? { message: status.message } : {}),
       ...(status.capabilities ? { capabilities: status.capabilities } : {}),
-      authCheckedAt: new Date().toISOString(),
+      authCheckedAt: new Date(observation.checkedAt).toISOString(),
     };
-  } catch (error) {
+  } else {
     return {
       ...common, models: getProviderModels(instanceId), authStatus: "unknown", nativeSessionReady: false, configured: false,
       credentialSource: null, canLogin: false, canLogout: false, authMethods: [],
-      installation: { status: "unknown", checkedAt: new Date().toISOString() },
-      message: sanitizeProviderMessage(instance, error instanceof Error ? error.message : "原生 Agent 检查失败；未推断安装或登录状态。"),
+      installation: { status: "unknown", ...(observation ? { checkedAt: new Date(observation.checkedAt).toISOString() } : {}) },
+      ...(observation ? { authCheckedAt: new Date(observation.checkedAt).toISOString(), message: observation.error } : {}),
     };
   }
 }
 
+export async function probeProviderInstance(instanceId: string, insideAccountOperation = false): Promise<ProviderInstance> {
+  const instance = getStoredInstance(instanceId);
+  if (!instance || !getNativeProviderAdapter(instance.driver)) throw new Error("Unknown native Agent instance.");
+  if (!instance.enabled) return providerInstanceSnapshot(instance);
+  try {
+    await readNativeProviderStatus(instanceId, insideAccountOperation);
+    const observation = observations.get(cacheKey(instanceId));
+    return providerInstanceSnapshot(instance, observation?.revision === instance.revision ? observation : undefined);
+  } catch (error) {
+    const observation = observations.get(cacheKey(instanceId));
+    return providerInstanceSnapshot(instance, observation?.revision === instance.revision && "error" in observation
+      ? observation : failedObservation(instance, error));
+  }
+}
+
+async function readProviderDirectoryInstance(instance: StoredProviderInstance): Promise<ProviderInstance> {
+  if (!instance.enabled) return providerInstanceSnapshot(instance);
+  // A cached ready account is never presented as usable while credentials/installations mutate.
+  if (isProviderAccountBusy(instance.instanceId))
+    return { ...providerInstanceSnapshot(instance), message: "The native Agent is busy." };
+  const observation = observations.get(cacheKey(instance.instanceId));
+  if (observation?.revision !== instance.revision) return probeProviderInstance(instance.instanceId);
+  if (Date.now() - observation.checkedAt >= PROVIDER_DIRECTORY_FRESHNESS_MS) {
+    // Failure is recorded as unknown by the same fresh-check path, with the same retry window.
+    void readNativeProviderStatus(instance.instanceId).catch(() => undefined);
+  }
+  return providerInstanceSnapshot(instance, observation);
+}
+
 export async function listProviderInstances(): Promise<ProviderInstance[]> {
   return Promise.all(listStoredInstances().filter(instance => getNativeProviderAdapter(instance.driver))
-    .map(instance => probeProviderInstance(instance.instanceId)));
+    .map(readProviderDirectoryInstance));
 }

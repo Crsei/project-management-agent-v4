@@ -164,8 +164,8 @@ function NotificationFields({ value, onChange, applied }: {
         descriptionId={disabled ? `${id}-message-reason` : undefined}
       />
       {disabled && <p id={`${id}-message-reason`} className="text-sm leading-6 text-muted-foreground">{t(
-        "当前值未知：服务尚无消息投递、提及识别或通知偏好接口；未读取到可配置的订阅状态，未选中不代表“不接收”。",
-        "Current value unknown: the service has no message delivery, mention detection, or notification-preferences API. No subscription state is available; an unselected option does not mean “Nothing”.",
+        "这些消息订阅选项尚无偏好读写接口，当前值未知；未选中不代表“不接收”。站内个人提及、显式关注和任务完成定向通知已有独立规则，不由此处开关配置；私信尚未提供。",
+        "These message subscription options have no preferences read/write API, so their values are unknown; an unselected option does not mean “Nothing”. In-app personal mentions, explicit task watches, and completion notifications follow existing rules, not these controls. Direct messages are not available.",
       )}</p>}
     </div>
 
@@ -292,25 +292,31 @@ function ServiceNotificationSettings() {
   return <div className="space-y-6">
     <SettingsNotice>
       <p id={`${id}-unavailable`}>{t(
-        "通知偏好暂不可用：当前后端仅提供真实工作区变更活动，没有任务通知邮件、私信／提及通知、移动推送或通知偏好的读写接口。所有订阅值未知，此页不会创建订阅，也不会伪造保存成功。",
-        "Notification preferences are unavailable. The backend provides real workspace change activity, but no task notification email, direct-message/mention alerts, mobile push, or notification-preferences read/write API. All subscription values are unknown. This page does not create subscriptions or pretend to save them.",
+        "已有站内个人通知：新增有效个人提及、显式关注任务的变更，以及任务真正进入已完成类别后的定向通知。此页的消息订阅、任务通知邮件、移动推送等偏好尚无读写接口，订阅值未知；私信、团队／工作区广播和每日摘要也尚未提供。本页不会创建订阅或伪造保存成功。",
+        "In-app personal notifications already cover newly added valid personal mentions, changes to explicitly watched tasks, and routed notifications when a task truly enters the completed category. This page has no read/write API for message subscriptions, task notification email, mobile push, or other preferences, so subscription values are unknown. Direct messages, team/workspace broadcasts, and daily digests are not available. This page creates no subscriptions and never pretends to save them.",
       )}</p>
+      {workspaceSlug && <nav aria-label={t("通知与活动入口", "Notification and activity navigation")} className="mt-2 flex flex-wrap gap-x-6">
+        <Link
+          to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications?section=notifications`}
+          className="inline-flex min-h-11 items-center rounded-control font-medium text-primary hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >{t("打开个人通知收件箱", "Open personal notification inbox")}</Link>
+        <Link
+          to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`}
+          className="inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >{t("查看工作区活动", "View workspace activity")}</Link>
+      </nav>}
     </SettingsNotice>
     <NotificationFields value={null} />
     <Button disabled aria-describedby={`${id}-unavailable`}>{t("更新通知", "Update notifications")}</Button>
     <SettingsNotice>
       <p>{t(
-        "通知偏好不会关闭用于同步工作区数据的服务器发送事件（SSE）。即使将消息通知设为“不接收”，数据同步也应继续运行。",
-        "Notification preferences never disable server-sent events (SSE) used to synchronize workspace data. Even a “Nothing” message preference must leave data synchronization running.",
+        "个人通知可显式标记已读、未读或归档；打开通知或目标不会自动标已读。工作区活动是独立的只读变更时间线，不是个人收件箱。本页不改变用于同步工作区数据的服务器发送事件（SSE）。",
+        "Personal notifications can be explicitly marked read, unread, or archived; opening a notification or its target does not mark it read. Workspace activity is a separate read-only change timeline, not the personal inbox. This page never changes server-sent events (SSE) used to synchronize workspace data.",
       )}</p>
       <p className="mt-2">{t(
-        "真实活动是服务变更记录，不是邮箱；后端尚未提供已读或归档状态。",
-        "Real activity contains service change records, not mail. The backend does not provide read or archive state.",
+        "任务与文档已有“变更记录”入口；“已阅这些变更”仅保存本人对所示变更水位的已阅位置。通知已读、变更已阅、配置工作流中的任务完成和人工验收相互独立，打开页面或 Agent 执行成功不会替代这些操作。",
+        "Tasks and documents already provide Change history. Mark these changes reviewed saves only your own review watermark for the changes shown. Notification read state, reviewed changes, task completion in the configured workflow, and manual acceptance are independent. Opening a page or a successful Agent run never substitutes for these actions.",
       )}</p>
-      {workspaceSlug && <Link
-        to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`}
-        className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >{t("查看真实工作区活动", "View real workspace activity")}</Link>}
     </SettingsNotice>
   </div>
 }
@@ -383,7 +389,7 @@ function NotificationCategoryLinks({ mode }: SettingsPageProps) {
   return <nav aria-labelledby={`${id}-heading`} className="space-y-3">
     <h3 id={`${id}-heading`} className="text-sm font-medium">{t("按事件查看通知选项", "Notification options by event")}</h3>
     <p className="text-sm leading-6 text-muted-foreground">{mode === "service"
-      ? t("四类事件共 14 个选项。正式服务未提供偏好读取、保存或投递合同；各页展示未知状态和禁用原因。", "Four event categories contain 14 options. The real service has no preferences read/save or delivery contract; each page shows unknown states and disabled reasons.")
+      ? t("四类事件共 14 个订阅选项，均未提供偏好读写接口；各页展示未知状态和禁用原因。已有站内个人提及、显式关注和完成通知不由这些控件配置。", "Four event categories contain 14 subscription options without preferences read/write APIs; each page shows unknown states and disabled reasons. Existing in-app personal mentions, explicit watches, and completion notifications are not configured by these controls.")
       : t("四类事件共 14 个独立演示选项；每页的草稿和已应用预览仅在该页面内存中保留，离页后重置。", "Four event categories contain 14 independent demo options. Each page keeps its own draft and applied preview in memory and resets when you leave.")}</p>
     <div className="grid min-w-0 gap-3 sm:grid-cols-2">
       {categories.map(category => <Link key={category.slug} to={`${root}/${category.slug}`} className="min-w-0 space-y-1 rounded-module border bg-surface p-4 outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring">
@@ -399,7 +405,9 @@ export function SettingsNotifications({ mode }: SettingsPageProps) {
 
   return <SettingsSection
     title={t("通知总览", "Notification overview")}
-    description={t("查看四类事件通知，并保留桌面与移动端的提醒预览。所有选项均与工作区数据同步独立。", "Review four event categories alongside desktop and mobile alert previews. All options are separate from workspace data synchronization.")}
+    description={mode === "service"
+      ? t("查看已有的站内个人通知入口，以及尚未提供的消息、邮件、推送与事件订阅选项。通知与工作区数据同步相互独立。", "Find the existing in-app personal inbox and review unavailable message, email, push, and event subscription options. Notifications are separate from workspace data synchronization.")
+      : t("预览四类事件通知及桌面与移动端提醒；只在本页内存中演示，不发送通知或保存真实订阅。", "Preview four event categories and desktop/mobile alerts in this page’s memory only, without sending notifications or saving real subscriptions.")}
   >
     <NotificationCategoryLinks mode={mode} />
     {mode === "service" ? <ServiceNotificationSettings /> : <LabNotificationSettings />}

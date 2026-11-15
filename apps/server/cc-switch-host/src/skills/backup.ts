@@ -1,11 +1,14 @@
 /** Translated from vendor/cc-switch/src-tauri/src/services/skill.rs (uninstall backup helpers). */
+import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { BACKUP_RETAIN_COUNT } from "../constants.ts";
 import { AppError } from "../errors.ts";
 import { emptyAppFlags, APP_IDS, type AppId, type AppFlags, type InstalledSkill, type SkillBackupEntry } from "../types.ts";
+import { requireNativeReadPath } from "../host-context.ts";
+import { parseBundledSkillSource } from "../database/skills.ts";
 import { copyDirRecursive, pathEntryExists, removePath, writeJsonFileAtomic } from "./fs.ts";
-import { computeDirHash } from "./hash.ts";
+import { computeDirHash, computePiDeploymentHash } from "./hash.ts";
 import {
   appSkillsDir,
   backupDir,
@@ -112,6 +115,8 @@ function parseInstalledSkill(value: unknown): InstalledSkill {
   if (readmeUrl !== undefined) skill.readmeUrl = readmeUrl;
   const contentHash = optionalString(object.contentHash, "contentHash", "skill");
   if (contentHash !== undefined) skill.contentHash = contentHash;
+  const source = parseBundledSkillSource(object.source);
+  if (source) skill.source = source;
 
   return skill;
 }
@@ -360,6 +365,15 @@ export function restoreFromBackup(
   const restorePath = path.join(ssotDir(), directory);
   if (pathEntryExists(restorePath)) {
     throw new AppError("CONFLICT", `Restore target already exists: ${restorePath}`);
+  }
+  if (metadata.skill.source) {
+    const source = metadata.skill.source;
+    if (computePiDeploymentHash(backupSkillDir) !== source.treeHash ||
+        createHash("sha256").update(readFileSync(path.join(backupSkillDir, "SKILL.md"))).digest("hex") !== source.sha256)
+      throw new AppError("CONFLICT", "The bundled Skill backup was edited; restore cancelled.");
+    requireNativeReadPath(currentApp, appSkillsDir(currentApp));
+    if (pathEntryExists(path.join(appSkillsDir(currentApp), directory)))
+      throw new AppError("CONFLICT", "A native Skill already occupies the bundled restore target; it was preserved.");
   }
 
   const apps = emptyAppFlags();

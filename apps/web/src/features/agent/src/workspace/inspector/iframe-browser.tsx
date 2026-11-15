@@ -144,8 +144,8 @@ export function IframeBrowserPanel({ active, onVisit, recents, onRemoveRecent, o
       hasRecents={recents.length > 0}
       viewport={viewport}
       onViewportChange={setViewport}
-      pickDisabledReason={t("元素选择需要桌面版浏览器。", "Element picking requires the desktop app.")}
-      captureDisabledReason={t("截图需要桌面版浏览器。", "Screenshots require the desktop app.")}
+      pickDisabledReason={t("Web 沙箱无法读取跨域 iframe 元素；元素选择需要本地桌面版。", "The Web sandbox cannot read cross-origin iframe elements; picking requires the local desktop app.")}
+      captureDisabledReason={t("Web 沙箱不支持跨域 iframe 截图；不会启动服务器浏览器。请使用本地桌面版。", "The Web sandbox cannot capture cross-origin iframes and does not start a server browser. Use the local desktop app.")}
       pipDisabledReason={t("浮动预览需要桌面版浏览器。", "Floating preview requires the desktop app.")}
     />
     {error && <p className="inspector-browser-error" role="alert">{error}</p>}

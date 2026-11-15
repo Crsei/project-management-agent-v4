@@ -7,8 +7,9 @@ import { z } from 'zod';
 import { privateDirectory } from './private-files.ts';
 import { serviceOrigin } from './auth.ts';
 import { pluginCapabilities, PLUGIN_OPERATION_POLICY } from './plugin-capabilities.ts';
+import { readBundledPmResource, readBundledPmSkills } from '../skill-resources/catalog.ts';
 
-const sourceRoot = fileURLToPath(new URL('../../plugins/dovspace-pm/', import.meta.url));
+const resourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const ownerFile = '.dovspace-owned.json';
 const pluginName = 'dovspace-pm';
 const pluginSchemaId = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
@@ -69,24 +70,19 @@ async function regularText(filename: string): Promise<string> {
 }
 
 /** All adapters consume this one authoring source and the existing application registry. */
-export async function generatePluginFiles(originValue: string): Promise<Map<string, string>> {
+export async function generatePluginFiles(originValue: string, root = resourceRoot): Promise<Map<string, string>> {
   const origin = pluginOrigin(originValue), url = `${origin}/mcp`;
-  const manifest = portableManifest.parse(JSON.parse(await regularText(path.join(sourceRoot, 'plugin.json'))));
+  const manifest = portableManifest.parse(JSON.parse(await readBundledPmResource(root, 'plugins/dovspace-pm/plugin.json')));
   const mcp = { $schema: mcpSchemaId, mcpServers: { [pluginName]: { type: 'streamable-http', url } } };
   validatePortablePlugin(manifest, mcp);
   const resources = new Map<string, string>([
     ['plugin.json', json(manifest)], ['mcp.json', json(mcp)],
-    ['LICENSE', await regularText(path.join(sourceRoot, 'LICENSE'))],
-    ['README.md', await regularText(path.join(sourceRoot, 'README.md'))],
+    ['LICENSE', await readBundledPmResource(root, 'plugins/dovspace-pm/LICENSE')],
+    ['README.md', await readBundledPmResource(root, 'plugins/dovspace-pm/README.md')],
     ['capabilities.json', json(pluginCapabilities())],
   ]);
-  const skillsDirectory = path.join(sourceRoot, 'skills');
-  if (!(await lstat(skillsDirectory)).isDirectory() || (await lstat(skillsDirectory)).isSymbolicLink()) throw new Error('Unsafe skills source.');
-  for (const entry of (await readdir(skillsDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name, 'en'))) {
-    if (!entry.isDirectory() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.name)) throw new Error('Invalid skill directory in source.');
-    const skill = await regularText(path.join(skillsDirectory, entry.name, 'SKILL.md'));
-    if (!skill.startsWith(`---\nname: ${entry.name}\n`) || !/\ndescription: .{1,1024}\n/.test(skill)) throw new Error('Invalid Skill source metadata.');
-    resources.set(`skills/${entry.name}/SKILL.md`, skill);
+  for (const skill of await readBundledPmSkills(root)) {
+    resources.set(`skills/${skill.id}/SKILL.md`, skill.content);
   }
   const files = new Map<string, string>();
   for (const prefix of ['portable', 'codex/plugin', 'claude', 'pi']) {

@@ -3,7 +3,7 @@ import { roadmapDeliveryScopeSchema } from '../../../../../packages/contracts/sr
 import { appPreviews } from './app-preview.ts';
 import { appPreviewActionSchema } from '../../../../../packages/contracts/src/task-app-preview.ts';
 import { workflowStore } from "../task-workflows/store.ts";
-import { resolveProviderRuntime } from '../providers/runtime.ts';
+import { resolveProviderRuntime, type ProviderRuntime } from '../providers/runtime.ts';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
@@ -11,18 +11,22 @@ import type { UIMessage } from 'ai';
 import { deliveryActionSchema, deliveryScopeSchema, prepareDeliverySchema } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { DeliveryError, TaskCodeDeliveryService } from '../../../../../packages/application/src/task-code-delivery.ts';
 import { DurableError } from '../durable/errors.ts';
-import { getActiveChat, getChatGeneration, listChatGenerations, submitChat } from '../durable/chat-runtime.ts';
-import { ensureThread, getThread, getThreadBranch, updateThread } from '../durable/threads.ts';
+import { getActiveChat, submitChat } from '../durable/chat-runtime.ts';
+import { CHAT_FORMAT, ensureThread, getThread, getThreadBranch, getThreadHistory, saveFormattedMessage, updateThread } from '../durable/threads.ts';
 import { deliveryStore, deliveryTaskRevision, resolveChatExecutionScope } from './binding.ts';
 import { authorizeDelivery } from './authority.ts';
 import { git, preflightPrepare, reconcileCommit, commitTree, prepareWorktree, pushTree, readRemoteHead, readTree, testTree, verifyWorktree } from './git.ts';
 import { DeliveryGitHub } from './github.ts';
 import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { executionSelectionSchema } from '@agent-workspace/contracts/chat';
+import { taskBriefStageSchema } from '@agent-workspace/contracts/task-brief';
+import { deliveryGeneration, readTaskExecutionBrief, recordTaskExecutionInputProvenance, taskExecutionInput, taskExecutionPrompt } from './brief.ts';
+import type { TaskExecutionBrief } from '../../../../../packages/contracts/src/task-execution-brief.ts';
 
 const active = new Set<string>();
 const github = new DeliveryGitHub();
 export function deliveryService(headers: Headers) {
+  const inputs = new Map<string, { runtime: ProviderRuntime; brief: TaskExecutionBrief; text: string }>();
   return new TaskCodeDeliveryService({
     ...deliveryStore,
     expectedTaskRevision: deliveryTaskRevision,
@@ -31,8 +35,11 @@ export function deliveryService(headers: Headers) {
     preflightTask: (task, base) => checkRoadmapBase(task, base, headers),
     preflightAction: async (v, action) => {
       if (action.action === 'develop') {
-        await resolveProviderRuntime({ providerInstanceId: action.providerInstanceId, modelName: action.model });
+        const runtime = await resolveProviderRuntime({ providerInstanceId: action.providerInstanceId, modelName: action.model });
         await checkRoadmapBase(await authorizeDelivery(v, true, headers), v.baseBranch, headers, v.git?.baseSha);
+        const brief = await readTaskExecutionBrief(v.id, action.purpose ?? 'development', headers, false);
+        if (brief.taskVersion.changed || brief.repository.status !== 'observed') throw new DeliveryError('task_changed', '当前需求或仓库无法核对；请重新读取并重新规划。');
+        inputs.set(v.id, { runtime, brief, text: taskExecutionPrompt(brief, action.instruction ?? '', runtime) });
       }
       if (action.action === 'commit') { await git(v.git!.directory, 'config', 'user.name'); await git(v.git!.directory, 'config', 'user.email'); }
       if (action.action === 'push') await readRemoteHead(v);
@@ -45,23 +52,22 @@ export function deliveryService(headers: Headers) {
     }, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
     findPr: v => github.find(v), createPr: v => github.create(v), feedback: v => github.feedback(v),
     busy: v => !!getActiveChat(v.threadId),
-    generation: v => {
-      const receipt = v.generationId ? getChatGeneration(v.generationId) : null;
-      const generation = receipt && [v.threadId, ...(v.previousThreadIds ?? [])].includes(receipt.threadId) && receipt.request.idempotencyKey === v.generationKey
-        ? receipt : listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey);
-      return generation ? { id: generation.id, status: generation.status } : null;
-    },
+    generation: deliveryGeneration,
     develop: async (v, providerInstanceId, model) => {
       const selection = executionSelectionSchema.safeParse(v.executionSelection);
       if (!selection.success || selection.data.agentWorkspaceId === null) throw new DurableError(412, 'session_cutover_required', '交付缺少新版 Agent 目录选择；请明确创建新的 Session。');
       ensureThread(v.threadId, `${v.taskId} · ${v.title}`, selection.data);
       const thread = getThread(v.threadId)!;
       const next = updateThread(v.threadId, { revision: thread.revision, settings: { ...thread.settings, providerInstanceId, model, modelOptions: [] } });
+      const input = inputs.get(v.id);
+      if (!input) throw new DeliveryError('task_brief_missing', '没有派发前已核验的完整阶段简报。');
+      const message = taskExecutionInput(input.brief, input.text);
+      await recordTaskExecutionInputProvenance(input.brief, message.id, headers);
       const request = await submitChat({ id: v.threadId, idempotencyKey: v.generationKey!, trigger: 'submit-message', messages: [
         ...getThreadBranch(v.threadId).map(entry => ({ id: entry.id, ...entry.content }) as UIMessage),
-        { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text: `${v.developmentPurpose === 'analysis' ? '只读分析以下任务与代码，输出实现建议、风险、验收标准草稿；不要修改文件或运行有写入副作用的命令。' : '在本次独立工作目录中开发并验证下面任务。'}遵守仓库 AGENTS.md。不要提交、推送、创建 PR、合并、部署或修改 PM 任务状态；这些步骤由用户在任务交付入口分别确认。不要读取或输出凭据。先检查工作目录与现有改动，不覆盖他人内容。完成后说明代码变更、实际运行的验证、失败和未验证项。\n\n任务 ${v.taskId}（版本 ${v.taskRevision}）\n${v.title}\n\n${v.description}\n\n本次节点要求：${v.developmentInstruction ?? ''}` }] },
+        message,
       ], pmReferences: [{ workspaceId: v.workspaceId, projectId: v.projectId, kind: 'issue', id: v.taskId, revision: deliveryTaskRevision(v) }],
-      config: { providerInstanceId, modelName: model, threadSettingsRevision: next.revision } }, undefined, headers);
+      config: { providerInstanceId, modelName: model, threadSettingsRevision: next.revision } }, input.runtime, headers);
       return request.id;
     },
   }, active);
@@ -72,6 +78,14 @@ export async function createDeliverySession(value: TaskCodeDelivery, headers: He
   ensureThread(value.threadId, `${value.taskId} · ${value.title}`, selection.data);
   const snapshot = await resolveChatExecutionScope(getThread(value.threadId)!, headers, 'inspect');
   updateThread(value.threadId, { executionEnvironment: snapshot.environment });
+  const messageId = `delivery-handoff:${value.id}:${value.threadId}`;
+  if (getThreadHistory(value.threadId).messages.some(message => message.id === messageId)) return;
+  const brief = await readTaskExecutionBrief(value.id, 'recovery', headers, false);
+  const message = taskExecutionInput(brief, taskExecutionPrompt(brief, ''), messageId);
+  await recordTaskExecutionInputProvenance(brief, message.id, headers);
+  const { id, ...content } = message;
+  const parent = getThreadBranch(value.threadId).at(-1)?.id ?? null;
+  saveFormattedMessage(value.threadId, { id, parent_id: parent, format: CHAT_FORMAT, content }, true);
 }
 export const taskDeliveryRoutes = new Hono();
 taskDeliveryRoutes.use('/task-deliveries/*', bodyLimit({ maxSize: 32 * 1024 }));
@@ -90,6 +104,10 @@ taskDeliveryRoutes.post('/task-deliveries', async c => {
   return c.json(await deliveryService(c.req.raw.headers).prepare(input));
 });
 taskDeliveryRoutes.get('/task-deliveries/:id', async c => c.json(await deliveryService(c.req.raw.headers).inspect(z.uuid().parse(c.req.param('id')))));
+taskDeliveryRoutes.get('/task-deliveries/:id/brief', async c => {
+  const query = z.strictObject({ stage: taskBriefStageSchema }).parse(c.req.query());
+  return c.json(await readTaskExecutionBrief(z.uuid().parse(c.req.param('id')), query.stage, c.req.raw.headers));
+});
 taskDeliveryRoutes.post('/task-deliveries/:id/actions', async c => {
   const id = z.uuid().parse(c.req.param('id')), action = deliveryActionSchema.parse(await c.req.json());
   if (action.action !== 'refresh' && workflowStore.readRun(id)) {
@@ -97,6 +115,7 @@ taskDeliveryRoutes.post('/task-deliveries/:id/actions', async c => {
     if (value) await authorizeDelivery(value, true, c.req.raw.headers);
     throw new DeliveryError('workflow_managed', '此交付由工作流管理，不能手动穿插修改。');
   }
+  if (action.action === 'new-session') taskExecutionPrompt(await readTaskExecutionBrief(id, 'recovery', c.req.raw.headers, false), '');
   const result = await deliveryService(c.req.raw.headers).act(id, action);
   if (action.action === 'new-session') await createDeliverySession(result, c.req.raw.headers);
   return c.json(result);

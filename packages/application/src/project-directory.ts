@@ -3,6 +3,7 @@ import { DomainError } from '../../domain/src/core.ts';
 import type { Entity } from '../../domain/src/core.ts';
 import type { DashboardRecord } from '../../domain/src/dashboard.ts';
 import type { ProjectDirectory, ProjectDirectoryProject, ProjectIdentity, ProjectTeam, ProjectTeamAssignment } from '../../domain/src/project-directory.ts';
+import type { ProjectParticipation } from '../../domain/src/people.ts';
 import { assertProjectWritable, assertRule } from '../../domain/src/planning.ts';
 import { getMembership, requireCapability } from './access.ts';
 import type { DashboardReadContext } from './dashboard-read.ts';
@@ -139,6 +140,26 @@ export const projectDirectoryCommands: CommandRegistry = {
       return updated;
     },
   },
+  RestoreProjectTeam: {
+    payload: z.strictObject({}),
+    async handler(ctx): Promise<DashboardRecord<ProjectTeam>> {
+      await workspaceManager(ctx);
+      assertRule(ctx.command.targetId, 'target_required');
+      const team = await readDashboardRecord<ProjectTeam>(ctx, ctx.command.targetId, 'project_team');
+      checkRecordVersion(ctx, team);
+      assertRule(team.data.archivedAt !== null, 'team_not_archived');
+      // Restore organization only. Stale roster references never restore access.
+      const active = await ctx.sql.query<{ id: string }>(`SELECT m.user_id AS id FROM memberships m JOIN users u ON u.id=m.user_id
+        WHERE m.workspace_id=$1 AND m.user_id=ANY($2::uuid[]) AND m.revoked_at IS NULL AND u.disabled_at IS NULL`, [ctx.workspaceId, team.data.memberIds]);
+      const ids = new Set(active.rows.map(row => row.id));
+      const updated = await updateDashboardRecord(ctx, team, { ...team.data, archivedAt: null,
+        memberIds: team.data.memberIds.filter(id => ids.has(id)),
+        maintainerIds: team.data.maintainerIds.filter(id => ids.has(id) && team.data.memberIds.includes(id)),
+      });
+      await emitDashboardEvent(ctx, 'ProjectTeamRestored', updated);
+      return updated;
+    },
+  },
   SetProjectTeams: {
     payload: projectTeamsPayload,
     async handler(ctx): Promise<DashboardRecord<ProjectTeamAssignment>> {
@@ -191,6 +212,8 @@ export async function readProjectDirectory(ctx: DashboardReadContext): Promise<P
   }
   const assignments = await ctx.sql.query<AssignmentReadRow>(`SELECT id,project_id,version,data FROM dashboard_records
     WHERE workspace_id=$1 AND project_id=ANY($2::text[]) AND kind='project_team_assignment' AND owner_id IS NULL`, [ctx.workspaceId, [...visible]]);
+  const participations = await ctx.sql.query<{ id: string; project_id: string; version: number; data: ProjectParticipation }>(`SELECT id,project_id,version,data FROM dashboard_records
+    WHERE workspace_id=$1 AND project_id=ANY($2::text[]) AND kind='project_participation' AND owner_id IS NULL`, [ctx.workspaceId, [...visible]]);
   const associatedIds = [...new Set(assignments.rows.flatMap(row => row.data.teamIds))];
   // Never use listDashboardRecords for workspace teams on a project-scoped read.
   const teams = await ctx.sql.query<TeamReadRow>(`SELECT id,data FROM dashboard_records WHERE workspace_id=$1 AND id=ANY($2::uuid[])
@@ -206,9 +229,15 @@ export async function readProjectDirectory(ctx: DashboardReadContext): Promise<P
       WHERE m.workspace_id=$1 AND m.user_id=ANY($2::uuid[]) AND m.revoked_at IS NULL AND u.disabled_at IS NULL
       AND 'domain.read'=ANY(m.capabilities) AND (m.project_ids IS NULL OR $3=ANY(m.project_ids)) ORDER BY u.name,m.user_id`, [ctx.workspaceId, [...ids], project.id]);
     const byId = new Map(identities.rows.map(identity => [identity.id, identity]));
+    const participation = participations.rows.find(row => row.project_id === project.id);
+    const participants = await ctx.sql.query<ProjectIdentity>(`SELECT m.user_id AS id,u.name FROM memberships m JOIN users u ON u.id=m.user_id
+      WHERE m.workspace_id=$1 AND m.user_id=ANY($2::uuid[]) AND m.revoked_at IS NULL AND u.disabled_at IS NULL
+      AND 'domain.read'=ANY(m.capabilities) AND (m.project_ids IS NULL OR $3=ANY(m.project_ids)) ORDER BY u.name,m.user_id`, [ctx.workspaceId, participation?.data.memberIds ?? [], project.id]);
     const view: ProjectDirectoryProject = {
       projectId: project.id,
       identities: identities.rows,
+      participants: participants.rows,
+      participation: participation ? { id: participation.id, version: participation.version } : null,
       teams: associated.map(team => ({ id: team.id, name: team.data.name, members: team.data.memberIds.flatMap(id => { const identity = byId.get(id); return identity ? [identity] : []; }) })),
       assignment: assignment ? { id: assignment.id, version: assignment.version } : null,
     };

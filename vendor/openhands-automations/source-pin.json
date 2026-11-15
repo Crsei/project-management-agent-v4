@@ -1,5 +1,5 @@
 {
-  "sourceRepository": "/data2-HDD-SATA-20T/Digital_avatar/haoweiyao/OpenHands",
+  "sourceRepository": "https://github.com/OpenHands/OpenHands",
   "sourceCommit": "b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1",
   "agentCanvas": {
     "name": "@openhands/agent-canvas",

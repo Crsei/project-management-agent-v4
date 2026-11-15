@@ -25,6 +25,7 @@ import {
   getChatGeneration,
   getChatRecoveryCandidate,
   listChatGenerations,
+  lookupChatSubmission,
   readChatEvents,
   startChatRuntime,
   stopChatRuntime,
@@ -56,6 +57,12 @@ import { resolveAgentExecution } from "./agent-execution.ts";
 import { startPmProviderApplication, stopPmProviderApplication } from "../providers/t3code/application.ts";
 import { providerApplicationOptions } from "../providers/t3code/production.ts";
 import { chatOnlyEnvironment } from './execution.testkit.ts';
+import type { ChatContextInput } from "@agent-workspace/contracts/message-context";
+import { contextDigest, resolveChatContextItems } from "./message-context.ts";
+import { createPmVisibilityProjector } from "../pm-visibility.ts";
+import type { ChatAttachment } from "@t3tools/contracts";
+import { providerAttachmentsDirectory, resolveAttachmentPath } from "../providers/t3code/upstream-services/attachments.ts";
+import { resolveProviderRuntime } from "../providers/runtime.ts";
 
 let directory: string;
 let fixtureSelection: ExecutionSelection;
@@ -1081,6 +1088,9 @@ test("normal chat fork preserves an immutable historical boundary, uses native c
     },
     true,
   );
+  await stopChatRuntime();
+  await assert.rejects(forkChatGeneration(generation.id, { idempotencyKey: "fork-source" }), { code: "chat_runtime_stopping" });
+  await startChatRuntime();
   const fork = await forkChatGeneration(generation.id, { idempotencyKey: "fork-source" });
   assert.deepEqual(
     await forkChatGeneration(generation.id, { idempotencyKey: "fork-source" }),
@@ -1543,7 +1553,7 @@ test("archive, deletion and model edits win over a pending submission before acc
   const provider = await localProvider();
   try {
     const cases = [
-      { id: "archived-before-accept", code: "thread_archived", mutate: (id: string) => updateThread(id, { status: "archived" }) },
+      { id: "archived-before-accept", code: "thread_archived", mutate: (id: string) => updateThread(id, { status: "archived", lifecycleRevision: getThread(id)!.lifecycleRevision ?? 0 }) },
       { id: "deleted-before-accept", code: "thread_deleted", mutate: (id: string) => deleteThread(id) },
       { id: "edited-before-accept", code: "stale_settings", mutate: (id: string) => updateThread(id, {
         settings: { ...getThread(id)!.settings, systemPrompt: "A newer instruction" },
@@ -1570,12 +1580,12 @@ test("restoring a thread is required before retrying an interrupted generation",
     await provider.started;
     await cancelChat(generation.id);
     const before = getThreadHistory("chat-thread");
-    onProviderCheck = () => updateThread("chat-thread", { status: "archived" });
+    onProviderCheck = () => updateThread("chat-thread", { status: "archived", lifecycleRevision: getThread("chat-thread")!.lifecycleRevision ?? 0 });
     await assert.rejects(continueChat(generation.id, true), { code: "thread_archived" });
     assert.deepEqual(getThreadHistory("chat-thread"), before);
     assert.equal(getChatGeneration(generation.id)!.continuationId, undefined);
     assert.equal(provider.prompts.length, 1);
-    updateThread("chat-thread", { status: "regular" });
+    updateThread("chat-thread", { status: "regular", lifecycleRevision: getThread("chat-thread")!.lifecycleRevision ?? 0 });
     hold.resolve();
     const continued = await continueChat(generation.id, true);
     await drain(continued.id);
@@ -1767,6 +1777,7 @@ test("directory selection requires CAS and freezes on first execution while meta
 
 test("accepted input context is immutable, audit-only and independent of assistant output identity", async () => {
   const provider = await localProvider();
+  try {
   configure();
   const first = await submitChat(request(), undefined, new Headers({ cookie: "never-persist-this-cookie" }));
   await drain(first.id);
@@ -1785,6 +1796,13 @@ test("accepted input context is immutable, audit-only and independent of assista
   const duplicate = await submitChat({ ...request(), idempotencyKey: "lost-response-new-key" });
   assert.equal(duplicate.id, first.id);
   assert.equal(provider.prompts.length, 1);
+  assert.equal(lookupChatSubmission("chat-thread", "lost-response-new-key").status, "accepted");
+  assert.equal(lookupChatSubmission("chat-thread", "lost-response-new-key").generationId, first.id);
+  await stopChatRuntime();
+  await startChatRuntime();
+  assert.equal(lookupChatSubmission("chat-thread", "lost-response-new-key").generationId, first.id);
+  assert.equal((await submitChat({ ...request(), idempotencyKey: "lost-response-new-key" })).id, first.id);
+  assert.equal(provider.prompts.length, 1, "Original-key recovery must not dispatch the accepted input again.");
   await assert.rejects(submitChat({ ...request(), idempotencyKey: "altered", messages: [
     { ...request().messages[0]!, parts: [{ type: "text", text: "mutated same input" }] },
   ] }), { code: "idempotency_conflict" });
@@ -1800,7 +1818,7 @@ test("accepted input context is immutable, audit-only and independent of assista
   assert.deepEqual(getThreadHistory("chat-thread").messages.find(message => message.id === "user-1")!.turnContext, binding);
   deleteThread("chat-thread");
   assert.equal(readRecord("chat:execution-grants", first.executionGrantId!), null);
-  await provider.close();
+  } finally { await provider.close(); }
 });
 
 function pmReferenceFixture(deniedProjects = new Set<string>()) {
@@ -2076,4 +2094,254 @@ test("revoked source transfer is omitted from model context and never reintroduc
   const legacyFork = await forkChatGeneration(next.id);
   assert.doesNotMatch(JSON.stringify(getThreadHistory(legacyFork.threadId)), /PRIVATE_TRANSFER_BODY/);
   await provider.close();
+});
+
+test("all native context classes reach the Provider and immutable history across restart", async () => {
+  const provider = await localProvider();
+  const headers = new Headers({ host: "localhost" });
+  try {
+    const run = codexAdapter.run;
+    codexAdapter.run = async (context, options) => {
+      if (context.execution?.threadId === "context-source") {
+        options.onEvent?.({ type: "item.upsert", item: { id: "selected-command", type: "command_execution", status: "completed", text: "BEFORE_NATIVE_UNSELECTED ACTUAL_COMMAND_SNAPSHOT AFTER_NATIVE_UNSELECTED" } });
+        options.onEvent?.({ type: "item.upsert", item: { id: "selected-change", type: "file_change", status: "completed", fileName: "reported.ts",
+          changes: [{ path: "reported.ts", operation: "update", diff: "--- a/reported.ts\n+++ b/reported.ts\n@@ -1 +1 @@\n-native-before\n+NATIVE_DIFF_EXCERPT" }] } });
+        options.onEvent?.({ type: "item.upsert", item: { id: "selected-search", type: "file_search", status: "completed",
+          results: [{ path: "reported.ts", line: 7, text: "NATIVE_SEARCH_EXCERPT" }] } });
+      }
+      return run(context, options);
+    };
+    configure("context-source");
+    const original = request("context-source", "source-input");
+    original.messages[0]!.metadata = undefined;
+    const source = await submitChat(original, undefined, headers);
+    await drain(source.id);
+    const halfLine = await resolveChatContextItems(source.threadId, [{ contextId: "precise-response", kind: "response",
+      source: { type: "response", threadId: source.threadId, messageId: source.messageId }, selectedText: "完成的部" }], headers);
+    assert.equal(halfLine[0]!.text, "完成的部", "A highlighted half-line is not widened to the full response.");
+    await assert.rejects(resolveChatContextItems(source.threadId, [{ contextId: "forged-response", kind: "response",
+      source: { type: "response", threadId: source.threadId, messageId: source.messageId }, selectedText: "CLIENT_FABRICATED_EXCERPT" }], headers), { code: "context_selection_changed" });
+    await assert.rejects(resolveChatContextItems(source.threadId, [{ contextId: "forged-native-output", kind: "terminal",
+      source: { type: "native-output", threadId: source.threadId, generationId: source.id, itemId: "selected-command" }, text: "CLIENT_FABRICATED_NATIVE_OUTPUT" }], headers), { code: "context_selection_changed" });
+    for (const [itemId, excerpt] of [["selected-change", "NATIVE_DIFF_EXCERPT"], ["selected-search", "NATIVE_SEARCH_EXCERPT"]] as const) {
+      const resolved = await resolveChatContextItems(source.threadId, [{ contextId: `context-${itemId}`, kind: "response",
+        source: { type: "response", threadId: source.threadId, messageId: source.messageId, itemId }, selectedText: excerpt }], headers);
+      assert.equal(resolved[0]!.text, excerpt, "Structured saved native diff/search text is a real quote source.");
+    }
+    configure("context-target");
+    await writeFile(join(directory, "selected.txt"), "line one\nVERIFIED_FILE_SELECTION\nline three\n");
+    const contextItems: ChatContextInput[] = [
+      { contextId: "command-context", kind: "terminal", source: { type: "native-output", threadId: source.threadId, generationId: source.id, itemId: "selected-command" }, text: "ACTUAL_COMMAND_SNAPSHOT" },
+      { contextId: "file-context", kind: "review-comment", source: { type: "file", path: "selected.txt", contentDigest: contextDigest("line one\nVERIFIED_FILE_SELECTION\nline three\n") }, selection: { startLine: 2, endLine: 2 } },
+      { contextId: "preview-context", kind: "preview-annotation", source: { type: "browser", url: "https://preview.invalid/page", captureId: "actual-capture" }, text: "USER_BROWSER_SELECTION" },
+      { contextId: "element-context", kind: "element", source: { type: "browser", url: "https://preview.invalid/page", selector: "main > button", tagName: "BUTTON", rect: { x: 2, y: 3, width: 40, height: 20 } }, text: "ACTUAL_PICKER_TEXT" },
+      { contextId: "thread-context", kind: "thread", source: { type: "thread", threadId: source.threadId, headMessageId: source.messageId } },
+      { contextId: "environment-context", kind: "environment", source: { type: "environment", hostId: "local" } },
+      { contextId: "response-context", kind: "response", source: { type: "response", threadId: source.threadId, messageId: source.messageId, generationId: source.id }, selection: { startLine: 1, endLine: 1 } },
+    ];
+    const input = request("context-target", "context-input");
+    input.messages[0]!.metadata = undefined;
+    input.contextItems = contextItems;
+    const resolved = await resolveChatContextItems(input.id, contextItems, headers);
+    assert.equal(resolved[2]!.provenance, "user-browser-snapshot");
+    const generation = await submitChat(input, undefined, headers);
+    await drain(generation.id);
+    const accepted = getThreadHistory(input.id).messages.find(message => message.id === "context-input")!.turnContext!.contextItems!;
+    assert.deepEqual(accepted.map(item => item.contextId), contextItems.map(item => item.contextId));
+    const prompt = provider.prompts.at(-1)!.prompt;
+    for (const marker of ["ACTUAL_COMMAND_SNAPSHOT", "VERIFIED_FILE_SELECTION", "USER_BROWSER_SELECTION", "ACTUAL_PICKER_TEXT", source.messageId, '"hostId": "local"']) assert.ok(prompt.includes(marker), marker);
+    assert.doesNotMatch(prompt, /BEFORE_NATIVE_UNSELECTED|AFTER_NATIVE_UNSELECTED/, "Native terminal excerpts are not widened or silently ignored.");
+    assert.equal(networkRequests.length, 0, "No browser URL or remote source was fetched.");
+    await stopChatRuntime(); closeStore();
+    assert.deepEqual(getThreadHistory(input.id).messages.find(message => message.id === "context-input")!.turnContext!.contextItems, accepted);
+    await assert.rejects(submitChat({ ...input, idempotencyKey: "cannot-mutate-context", contextItems: [] }, undefined, headers), { code: "turn_context_conflict" });
+    assert.equal(provider.prompts.length, 2);
+  } finally { await provider.close(); }
+});
+
+test("file resolver is read-only, send rechecks changed content, and accepted metadata is never replaced by current file text", async () => {
+  const provider = await localProvider(), headers = new Headers({ host: "localhost" });
+  try {
+    configure("file-context");
+    const filename = join(directory, "frozen.txt");
+    await writeFile(filename, "ORIGINAL_SELECTED_BYTES\n");
+    const item: ChatContextInput = { contextId: "frozen-file", kind: "review-comment", source: { type: "file", path: "frozen.txt", contentDigest: contextDigest("ORIGINAL_SELECTED_BYTES\n") } };
+    await resolveChatContextItems("file-context", [item], headers);
+    assert.equal(listChatGenerations("file-context").length, 0);
+    assert.equal(getThreadHistory("file-context").messages.length, 0);
+    await writeFile(filename, "NEW_FILE_BYTES\n");
+    const input = request("file-context", "file-input"); input.messages[0]!.metadata = undefined; input.contextItems = [item];
+    await assert.rejects(submitChat(input, undefined, headers), { code: "context_source_changed" });
+    assert.equal(provider.prompts.length, 0);
+    await writeFile(filename, "ORIGINAL_SELECTED_BYTES\n");
+    const generation = await submitChat({ ...input, idempotencyKey: "fresh-after-explicit-source-review" }, undefined, headers);
+    await drain(generation.id);
+    await writeFile(filename, "CURRENT_FILE_MUST_NOT_REPLACE_HISTORY\n");
+    const projector = await createPmVisibilityProjector(input.id, headers);
+    const history = projector.history(getThreadHistory(input.id).messages);
+    assert.match(JSON.stringify(history), /ORIGINAL_SELECTED_BYTES/);
+    assert.doesNotMatch(JSON.stringify(history), /CURRENT_FILE_MUST_NOT_REPLACE_HISTORY/);
+  } finally { await provider.close(); }
+});
+
+test("deleted cross-Session sources redact context and derived output and force portable native handoff", async () => {
+  const provider = await localProvider(), headers = new Headers({ host: "localhost" });
+  try {
+    configure("deletable-source");
+    const input = request("deletable-source", "source-input"); input.messages[0]!.metadata = undefined;
+    const source = await submitChat(input, undefined, headers); await drain(source.id);
+    configure("referencing-target");
+    const selected = request("referencing-target", "reference-input"); selected.messages[0]!.metadata = undefined;
+    selected.contextItems = [{ contextId: "source-reference", kind: "response", source: { type: "response", threadId: source.threadId, generationId: source.id, messageId: source.messageId }, comment: "PRIVATE_SOURCE_COMMENT" }];
+    const target = await submitChat(selected, undefined, headers); await drain(target.id);
+    deleteThread(source.threadId);
+    assert.ok(getThreadHistory("referencing-target").messages.some(message => message.id === "reference-input"));
+    const projection = await createPmVisibilityProjector("referencing-target", headers);
+    assert.equal(projection.nativeContextContaminated, true);
+    const projected = projection.history(getThreadHistory("referencing-target").messages);
+    const context = projected.find(message => message.id === "reference-input")!.turnContext!.contextItems![0]!;
+    assert.equal(context.visibility, "unavailable"); assert.deepEqual(context.source, { type: "unavailable" }); assert.equal(context.input, undefined);
+    assert.doesNotMatch(JSON.stringify(projected), /PRIVATE_SOURCE_COMMENT/);
+    const next = await submitChat({ id: "referencing-target", messages: [...getThreadBranch("referencing-target").map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "after-deletion", role: "user", parts: [{ type: "text", text: "Only use currently readable material." }] }] }, undefined, headers);
+    await drain(next.id);
+    assert.equal(getChatGeneration(next.id)!.handoff!.mode, "portable");
+    assert.doesNotMatch(provider.prompts.at(-1)!.prompt, /PRIVATE_SOURCE_COMMENT/);
+  } finally { await provider.close(); }
+});
+
+test("thread context transfers original attachment bytes and stops projecting them after source deletion", async () => {
+  const provider = await localProvider(), headers = new Headers({ host: "localhost" });
+  const received: (readonly ChatAttachment[])[] = [];
+  const run = codexAdapter.run;
+  codexAdapter.run = async (context, options) => { received.push(options.attachments ?? []); return run(context, options); };
+  try {
+    configure("attachment-source");
+    const original = request("attachment-source", "attachment-input");
+    original.messages[0]!.metadata = undefined;
+    original.messages[0]!.parts = [{ type: "text", text: "SOURCE_PRIVATE_TASK_MARKER" },
+      { type: "file", mediaType: "text/plain", filename: "source.txt", url: "data:text/plain;base64,U09VUkNFX0ZJTEVfQllURVM=" }];
+    const source = await submitChat(original, undefined, headers); await drain(source.id);
+    configure("attachment-target");
+    const selected = await resolveChatContextItems("attachment-target", [{ contextId: "selected-thread", kind: "thread",
+      source: { type: "thread", threadId: source.threadId, headMessageId: source.messageId } }], headers);
+    assert.equal(selected[0]!.attachments!.length, 1);
+    const target = request("attachment-target", "target-input"); target.messages[0]!.metadata = undefined;
+    target.contextItems = selected.flatMap(item => item.input ? [item.input] : []);
+    const generation = await submitChat(target, undefined, headers); await drain(generation.id);
+    assert.equal(received[1]!.length, 1);
+    assert.deepEqual(received[1], received[0]);
+    const file = resolveAttachmentPath({ attachmentsDir: providerAttachmentsDirectory(), attachment: received[1]![0]! });
+    assert.equal(await readFile(file!, "utf8"), "SOURCE_FILE_BYTES");
+    const fork = await forkChatGeneration(generation.id, { idempotencyKey: "attachment-preserving-portable-fork" }, headers);
+    const forkHead = getThreadHistory(fork.threadId).headId!;
+    const forkReference = await resolveChatContextItems(target.id, [{ contextId: "server-created-fork-source", kind: "thread",
+      source: { type: "thread", threadId: fork.threadId, headMessageId: forkHead } }], headers);
+    assert.equal(forkReference[0]!.attachments!.length, 1, "A real server-created fork seed remains an accepted reference source.");
+    const forkInput = { id: fork.threadId, messages: [...getThreadBranch(fork.threadId).map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "fork-current-input", role: "user" as const, parts: [{ type: "text" as const, text: "Read the inherited source file without replaying historical tasks." }] }] };
+    const forked = await submitChat(forkInput, undefined, headers); await drain(forked.id);
+    assert.equal(getChatGeneration(forked.id)!.handoff!.mode, "portable");
+    assert.deepEqual(received[2], received[1], "Portable forks carry the actual inherited file, not merely its label.");
+    assert.equal(await readFile(resolveAttachmentPath({ attachmentsDir: providerAttachmentsDirectory(), attachment: received[2]![0]! })!, "utf8"), "SOURCE_FILE_BYTES");
+    deleteThread(source.threadId);
+    const next = await submitChat({ id: target.id, messages: [...getThreadBranch(target.id).map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "new-current-input", role: "user", parts: [{ type: "text", text: "Use only current readable sources." }] }] }, undefined, headers);
+    await drain(next.id);
+    assert.equal(getChatGeneration(next.id)!.handoff!.mode, "portable");
+    assert.equal(received[3]!.length, 0);
+    assert.doesNotMatch(provider.prompts.at(-1)!.prompt, /SOURCE_PRIVATE_TASK_MARKER/);
+    const forkAfterDelete = await submitChat({ id: fork.threadId, messages: [...getThreadBranch(fork.threadId).map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "fork-after-source-delete", role: "user", parts: [{ type: "text", text: "Use only current readable data." }] }] }, undefined, headers);
+    await drain(forkAfterDelete.id);
+    assert.equal(getChatGeneration(forkAfterDelete.id)!.handoff!.mode, "portable");
+    assert.equal(received[4]!.length, 0, "Copied historical bytes remain permission-dependent.");
+    deleteThread(target.id);
+    assert.ok(getThreadHistory(fork.threadId).messages.some(message => (message.content.metadata as { custom?: { forkContext?: boolean } } | undefined)?.custom?.forkContext),
+      "Deleting a fork source must not delete destination history.");
+    const forkProjection = await createPmVisibilityProjector(fork.threadId, headers);
+    assert.equal(JSON.stringify(forkProjection.history(getThreadHistory(fork.threadId).messages)).includes("U09VUkNFX0ZJTEVfQllURVM="), false);
+  } finally { await provider.close(); }
+});
+
+test("explicit continuation preserves selected snapshots and real screenshot correlation without replaying original user instructions", async () => {
+  const hold = Promise.withResolvers<void>(), provider = await localProvider(hold.promise), headers = new Headers({ host: "localhost" });
+  const received: (readonly ChatAttachment[])[] = [];
+  const run = codexAdapter.run;
+  codexAdapter.run = async (context, options) => { received.push(options.attachments ?? []); return run(context, options); };
+  try {
+    configure("context-continuation");
+    const input = request("context-continuation", "original-input");
+    input.messages[0]!.parts = [{ type: "text", text: "DO_NOT_REPLAY_ORIGINAL_INSTRUCTION" },
+      { type: "file", mediaType: "image/png", filename: "capture.png", url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5V8AAAAASUVORK5CYII=" }];
+    input.messages[0]!.metadata = { custom: { contextAttachments: [{ attachmentId: "capture-image", partIndex: 1 }] } };
+    input.contextItems = [{ contextId: "selected-preview", kind: "preview-annotation", source: { type: "browser", url: "https://not-fetched.invalid/", attachmentId: "capture-image" }, text: "SELECTED_BROWSER_DATA" }];
+    const generation = await submitChat(input, undefined, headers); await provider.started; await cancelChat(generation.id); hold.resolve();
+    const continued = await continueChat(generation.id, true, "explicit-selected-context-recovery", undefined, headers); await drain(continued.id);
+    const original = getThreadHistory(input.id).messages.find(message => message.id === generation.inputMessageId)!;
+    const recovery = getThreadHistory(input.id).messages.find(message => message.id === continued.inputMessageId)!;
+    assert.deepEqual(recovery.turnContext!.contextItems, original.turnContext!.contextItems);
+    assert.equal(Array.isArray(recovery.content.parts) && recovery.content.parts[1]?.type, "file");
+    assert.deepEqual(received[1], received[0]);
+    assert.match(provider.prompts.at(-1)!.prompt, /SELECTED_BROWSER_DATA/);
+    assert.doesNotMatch(provider.prompts.at(-1)!.prompt, /DO_NOT_REPLAY_ORIGINAL_INSTRUCTION/);
+  } finally { hold.resolve(); await stopChatRuntime(); await provider.close(); }
+});
+
+test("source deletion after admission but before the queued native launch fails explicitly without a Provider turn", async () => {
+  const provider = await localProvider(), headers = new Headers({ host: "localhost" });
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  let holding: Promise<unknown> | undefined;
+  try {
+    configure("queued-context-source");
+    const original = request("queued-context-source", "source-input"); original.messages[0]!.metadata = undefined;
+    const source = await submitChat(original, undefined, headers); await drain(source.id);
+    configure("queued-context-target");
+    holding = withThreadExecution("queued-context-target", async () => { entered.resolve(); await release.promise; });
+    await entered.promise;
+    const input = request("queued-context-target", "queued-input"); input.messages[0]!.metadata = undefined;
+    input.contextItems = [{ contextId: "source-response", kind: "response", source: { type: "response", threadId: source.threadId, messageId: source.messageId, generationId: source.id } }];
+    const generation = await submitChat(input, undefined, headers);
+    assert.equal(getChatGeneration(generation.id)!.status, "queued");
+    deleteThread(source.threadId); release.resolve(); await holding; await drain(generation.id);
+    assert.equal(getChatGeneration(generation.id)!.status, "failed");
+    assert.equal(provider.prompts.length, 1);
+    assert.ok(getThreadHistory(input.id).messages.some(message => message.id === input.messages[0]!.id));
+  } finally { release.resolve(); await holding; await stopChatRuntime(); await provider.close(); }
+});
+
+test("portable handoff preflights historical files before accepting a new text-only input", async () => {
+  const provider = await localProvider(), headers = new Headers({ host: "localhost" });
+  try {
+    configure("historical-file-preflight");
+    const first = request("historical-file-preflight", "file-input"); first.messages[0]!.metadata = undefined;
+    first.messages[0]!.parts.push({ type: "file", mediaType: "text/plain", filename: "original.txt", url: "data:text/plain;base64,b3JpZ2luYWw=" });
+    const original = await submitChat(first, undefined, headers); await drain(original.id);
+    const runtime = await resolveProviderRuntime({ providerInstanceId: "chat-local", modelName: "chat-model" });
+    const next: ChatRequest = { id: first.id, idempotencyKey: "unsupported-portable-files", messages: [...getThreadBranch(first.id).map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "new-text-only", role: "user", parts: [{ type: "text", text: "Continue with the selected new Provider." }] }] };
+    await assert.rejects(submitChat(next, { ...runtime, driver: "cursor", capabilities: { ...runtime.capabilities, nativeResume: false, nativeFork: false } }, headers), { code: "unsupported_attachment" });
+    assert.equal(listChatGenerations(first.id).length, 1);
+    assert.equal(getThreadHistory(first.id).messages.some(message => message.id === "new-text-only"), false);
+    assert.equal(provider.prompts.length, 1, "No accepted or late failing native turn is created for unsupported inherited payload.");
+    const entered = Promise.withResolvers<void>(), run = codexAdapter.run;
+    codexAdapter.run = async (context, options) => {
+      const paused = Promise.withResolvers<void>(), abort = () => paused.resolve();
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted) abort();
+      entered.resolve();
+      try { await paused.promise; return await run(context, options); }
+      finally { options.signal?.removeEventListener("abort", abort); }
+    };
+    const latest = await submitChat({ id: first.id, messages: [...getThreadBranch(first.id).map(message => ({ id: message.id, ...message.content }) as UIMessage),
+      { id: "latest-text-with-no-files", role: "user", parts: [{ type: "text", text: "Continue from the current native boundary." }] }] }, undefined, headers);
+    await entered.promise; await cancelChat(latest.id);
+    const count = listChatGenerations(first.id).length, turns = provider.prompts.length;
+    await assert.rejects(continueChat(latest.id, true, "unsupported-portable-continuation", {
+      ...runtime, driver: "cursor", capabilities: { ...runtime.capabilities, nativeResume: false, nativeFork: false },
+    }, headers), { code: "unsupported_attachment" });
+    assert.equal(listChatGenerations(first.id).length, count);
+    assert.equal(getChatGeneration(latest.id)!.continuationId, undefined);
+    assert.equal(provider.prompts.length, turns, "Recovery preflights historical payloads before accepting or dispatching.");
+  } finally { await provider.close(); }
 });

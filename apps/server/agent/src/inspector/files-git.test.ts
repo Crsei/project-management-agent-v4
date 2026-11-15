@@ -37,6 +37,8 @@ const { accessGuard } = await import("../access.ts");
 const { ensureThread, freezeThreadExecution } = await import("../durable/threads.ts");
 const { closeStore } = await import("../durable/store.ts");
 const { openAgentWorkspace, resolveAgentWorkspaceExecution, updateAgentWorkspace } = await import("../agent-workspaces.ts");
+// The resolver imports execution/store modules and must share the fixture module-loading boundary above.
+const { contextDigest, resolveChatContextItems } = await import("../durable/message-context.ts");
 const app = new Hono().use("/api/*", accessGuard).route("/api", inspectorRoutes);
 const fixtures = new Map<string, { workspace: AgentWorkspace; threadId: string }>();
 let currentDirectory = projectDir;
@@ -532,4 +534,49 @@ test("rejects an enclosing repository and treats pathspec magic literally in an 
   } finally {
     await rm(outer, { recursive: true, force: true });
   }
+});
+
+test("review context binds exact file/patch bytes and ranges, rejecting stale reads without fetching PR URLs", async () => {
+  const contextRepo = path.join(repoDir, "selected-context"); await mkdir(contextRepo);
+  await runGit(contextRepo, ["init", "--quiet"]);
+  await writeFile(path.join(contextRepo, "selected.txt"), "line-one\nline-two\n");
+  await runGit(contextRepo, ["add", "--", "selected.txt"]);
+  await runGit(contextRepo, ["-c", "user.name=Context Test", "-c", "user.email=context@example.invalid", "commit", "--quiet", "-m", "fixture"]);
+  await writeFile(path.join(contextRepo, "selected.txt"), "line-one\nline-two-changed\n");
+  await runGit(contextRepo, ["add", "--", "selected.txt"]);
+  const threadId = directoryFixture(contextRepo).threadId, headers = new Headers({ host: "localhost" });
+  const file = await getJson<InspectorFileResponse>("/api/inspector/file?path=selected.txt", contextRepo);
+  const diff = await getJson<GitDiffResponse>("/api/inspector/git/diff?path=selected.txt&staged=true", contextRepo);
+  assert.equal(file.status, 200); assert.equal(diff.status, 200);
+  const input = { contextId: "verified-patch", kind: "review-comment" as const,
+    source: { type: "diff" as const, path: "selected.txt", staged: true, contentDigest: contextDigest(diff.body.patch) },
+    selection: { startLine: 1, endLine: diff.body.patch.split("\n").length } };
+  const accepted = await resolveChatContextItems(threadId, [input], headers);
+  assert.equal(accepted[0]!.text, diff.body.patch);
+  const patchLines = diff.body.patch.split("\n"), deleted = patchLines.indexOf("-line-two") + 1, added = patchLines.indexOf("+line-two-changed") + 1;
+  assert.ok(deleted > 0 && added > deleted);
+  const mixed = await resolveChatContextItems(threadId, [{ ...input, contextId: "verified-mixed-patch",
+    selection: { startLine: deleted, endLine: added }, diffSelection: { start: 2, end: 2, side: "deletions", endSide: "additions" } }], headers);
+  assert.equal(mixed[0]!.text, "-line-two\n+line-two-changed");
+  await assert.rejects(resolveChatContextItems(threadId, [{ ...input, selection: { startLine: deleted, endLine: deleted },
+    diffSelection: { start: 2, end: 2, side: "additions" } }], headers), { code: "context_selection_changed" });
+  const reverse = await resolveChatContextItems(threadId, [{ ...input, selection: { startLine: deleted, endLine: added },
+    diffSelection: { start: 2, end: 2, side: "additions", endSide: "deletions" } }], headers);
+  assert.equal(reverse[0]!.text, mixed[0]!.text, "Native reverse drag preserves its real endpoint sides and normalized raw range.");
+  await assert.rejects(resolveChatContextItems(threadId, [{ ...input, diffSelection: { start: 2, end: 2, side: "additions" } }], headers), { code: "context_selection_changed" });
+  await assert.rejects(resolveChatContextItems(threadId, [{ contextId: "file-is-not-a-diff", kind: "review-comment",
+    source: { type: "file", path: "selected.txt", contentDigest: contextDigest(file.body.content) },
+    selection: { startLine: 2, endLine: 2 }, diffSelection: { start: 2, end: 2, side: "new" } }], headers), { code: "invalid_context_selection" });
+  await assert.rejects(resolveChatContextItems(threadId, [{ contextId: "url-is-not-a-diff", kind: "review-comment",
+    source: { type: "pull-request", url: "https://unqueried.invalid/repository/pull/42" },
+    diffSelection: { start: 2, end: 2, side: "new" } }], headers), { code: "invalid_context_selection" });
+  await writeFile(path.join(contextRepo, "selected.txt"), "CHANGED_PATCH\n");
+  await runGit(contextRepo, ["add", "--", "selected.txt"]);
+  await assert.rejects(resolveChatContextItems(threadId, [input], headers), { code: "context_source_changed" });
+  await assert.rejects(resolveChatContextItems(threadId, [{ contextId: "stale-file", kind: "review-comment",
+    source: { type: "file", path: "selected.txt", contentDigest: contextDigest(file.body.content) }, selection: { startLine: 2, endLine: 2 } }], headers), { code: "context_source_changed" });
+  const pr = await resolveChatContextItems(threadId, [{ contextId: "explicit-pr", kind: "review-comment",
+    source: { type: "pull-request", url: "https://unqueried.invalid/repository/pull/42" }, comment: "Explicit operator URL" }], headers);
+  assert.equal(pr[0]!.provenance, "user-provided-url");
+  assert.match(pr[0]!.text, /remote metadata not queried/);
 });

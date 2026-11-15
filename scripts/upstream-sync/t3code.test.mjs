@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import test from "node:test";
-import { loadProfile, recordGeneration, verifyGeneration, verifyArtifacts } from "./t3code.mjs";
+import { loadProfile, planSupplementalGeneration, recordGeneration, recordWorktreeGeneration, verifyGeneration, verifyArtifacts } from "./t3code.mjs";
 import { replayMcpSkillsAdaptations, validateAdaptationManifest, validateAdaptationStructure } from "../../vendor/t3code/scripts/mcp-skills-adaptations.mjs";
 
 const oldPin = "1".repeat(40), nextPin = "2".repeat(40), supplementalPin = "3".repeat(40);
@@ -52,6 +52,7 @@ async function emittedArtifact(root, { stampedCommit = nextPin, shippedCommit } 
 }
 
 async function fixture(t, options = {}) {
+  const oldPin = options.pins?.production ?? "1".repeat(40), nextPin = options.pins?.target ?? "2".repeat(40), supplementalPin = options.pins?.supplemental ?? "3".repeat(40);
   const root = await mkdtemp(path.join(os.tmpdir(), "t3-generation-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const packageName = options.packageName ?? "@t3tools/contracts";
@@ -145,7 +146,7 @@ async function fixture(t, options = {}) {
     adapter_boundaries: [], runtime_resources: { static_source_resource_edges: [] },
   };
   if (options.dependencyUpdate || options.aliasUpdate) manifest.external_lock_closure = { source_path: "pnpm-lock.yaml", yaml_document_index: 1, snapshots: [] };
-  const derivedName = "apps/server/agent/src/mcp-derived.ts";
+  const derivedName = options.derivedName ?? "apps/server/agent/src/mcp-derived.ts";
   const derivedImports = [
     ...(options.adaptationPackages ? ['import "@agent-workspace/contracts";', 'import "@agent-workspace/client-runtime";'] : []),
     ...(options.derivedImport ? [`import ${JSON.stringify(options.derivedImport)};`] : []),
@@ -849,4 +850,372 @@ test("packaged source identity validates provenance file rows rather than trusti
   await put(f.root, artifact.manifestPath, json(manifest));
   const result = await verifyArtifacts({ root: f.root, targetCommit: nextPin });
   assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_PROVENANCE"));
+});
+
+async function worktreePlan(f, selected) {
+  const profile = await loadProfile(f.root);
+  const files = [];
+  for (const output of profile.outputs) {
+    const bytes = await readFile(path.join(f.root, output.path));
+    files.push({ path: output.path, sha256: hash(bytes), bytes: bytes.length, mode: output.mode });
+  }
+  const plan = {
+    purpose: "local-authoring", project: "t3code", upstreamCommit: nextPin, targetCommit: nextPin,
+    changes: [], approvedSourcePaths: [], worktreeSnapshot: { version: 1, files },
+    approvedOutputHashes: {}, approvedExistingOutputs: {}, reviews: [],
+  };
+  for (const name of selected) {
+    const output = profile.outputs.find(entry => entry.path === name);
+    const snapshot = files.find(entry => entry.path === name);
+    plan.approvedOutputHashes[name] = snapshot.sha256;
+    plan.approvedExistingOutputs[name] = { recordedSha256: output.sha256, snapshotSha256: snapshot.sha256 };
+    plan.reviews.push({ outputPath: name, disposition: "integrated", reason: "Reviewed exact local task output and every retained derivation input", inputs: (output.inputs ?? []).map(({ path, commit, sha256 }) => ({ path, commit, sha256 })) });
+  }
+  return plan;
+}
+
+test("snapshot authoring preserves every unselected expected fingerprint and source edge despite inherited drift", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  const unrelated = `${base}packages/contracts/src/index.ts`;
+  await put(f.root, unrelated, 'import "./unrelated-missing.ts";\nexport const inherited = true;\n');
+  await put(f.root, f.derivedName, "export const reviewedTask = true;\n");
+  const beforeInventory = await get(f.root, `${base}sync-inventory.json`);
+  const beforeLedger = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  const beforeImports = await get(f.root, `${base}sync-imports.json`);
+  const beforeManifest = await get(f.root, `${base}source-manifest.json`);
+  const plan = await worktreePlan(f, [f.derivedName]);
+  const result = await recordWorktreeGeneration({ root: f.root, targetCommit: nextPin, plan, readBlob: f.readBlob, listTree: f.listTree });
+  assert.deepEqual(result.blockers, []);
+  const afterInventory = await get(f.root, `${base}sync-inventory.json`);
+  const generated = new Set(["source-manifest.json", "mcp-skills-adaptations.json", "sync-imports.json"].map(name => base + name));
+  for (const old of beforeInventory.files.filter(entry => !generated.has(entry.destination))) assert.deepEqual(afterInventory.files.find(entry => entry.destination === old.destination), old);
+  assert.deepEqual(afterInventory.runtimeResources, beforeInventory.runtimeResources);
+  const afterLedger = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  for (const old of beforeLedger.outputs.filter(entry => entry.destination !== f.derivedName)) assert.deepEqual(afterLedger.outputs.find(entry => entry.destination === old.destination), old);
+  assert.deepEqual(afterLedger.sources, beforeLedger.sources);
+  const afterImports = await get(f.root, `${base}sync-imports.json`);
+  assert.deepEqual(afterImports.edges.filter(edge => edge.source !== f.derivedName), beforeImports.edges.filter(edge => edge.source !== f.derivedName));
+  assert.ok(!afterImports.edges.some(edge => edge.specifier === "./unrelated-missing.ts"), "Inherited unreviewed imports cannot be silently accepted");
+  const afterManifest = await get(f.root, `${base}source-manifest.json`);
+  assert.deepEqual(afterManifest.files, beforeManifest.files);
+  assert.equal(afterManifest.upstream.commit, nextPin);
+  const verification = await verifyGeneration({ root: f.root, readBlob: f.readBlob, listTree: f.listTree });
+  assert.ok(verification.blockers.some(entry => entry.path === unrelated), "The unchanged verifier still reports unrelated drift");
+});
+
+test("snapshot authoring requires exact recorded/snapshot/post identities and the complete original derivation mapping", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  await put(f.root, f.derivedName, "export const reviewedTask = true;\n");
+  const plan = await worktreePlan(f, [f.derivedName]);
+  const before = await readFile(path.join(f.root, `${base}mcp-skills-adaptations.json`));
+  const call = () => recordWorktreeGeneration({ root: f.root, targetCommit: nextPin, plan, readBlob: f.readBlob, listTree: f.listTree });
+  const originalReview = structuredClone(plan.reviews[0]);
+  plan.reviews[0].inputs.pop();
+  assert.ok((await call()).blockers.some(entry => entry.code === "BLOCKED_DERIVED_REVIEW"));
+  assert.deepEqual(await readFile(path.join(f.root, `${base}mcp-skills-adaptations.json`)), before);
+  plan.reviews[0] = originalReview;
+  const proof = plan.approvedExistingOutputs[f.derivedName];
+  plan.approvedExistingOutputs[f.derivedName] = { ...proof, recordedSha256: "0".repeat(64) };
+  await assert.rejects(call(), /Snapshot preimage proof required/);
+  plan.approvedExistingOutputs[f.derivedName] = proof;
+  plan.approvedOutputHashes[f.derivedName] = "0".repeat(64);
+  await assert.rejects(call(), /Stale snapshot output approval/);
+  plan.approvedOutputHashes[f.derivedName] = hash(await readFile(path.join(f.root, f.derivedName)));
+  plan.reviews[0].inputs.push({ path: "LICENSE", commit: nextPin, sha256: hash(f.next.get("LICENSE")) });
+  assert.ok((await call()).blockers.some(entry => entry.code === "BLOCKED_DERIVED_REVIEW"), "Source registry cannot be expanded by extra review tuples");
+  assert.deepEqual(await readFile(path.join(f.root, `${base}mcp-skills-adaptations.json`)), before);
+});
+
+test("snapshot authoring refuses unknown outputs, unbound metadata, source pin changes and corrupt old recipes before writes", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  await put(f.root, f.derivedName, "export const reviewedTask = true;\n");
+  const plan = await worktreePlan(f, [f.derivedName]);
+  const call = targetCommit => recordWorktreeGeneration({ root: f.root, targetCommit, plan, readBlob: f.readBlob, listTree: f.listTree });
+  const before = await readFile(path.join(f.root, `${base}source-manifest.json`));
+  await assert.rejects(call(oldPin), /unchanged production pin/);
+  plan.approvedOutputHashes["apps/server/agent/src/unknown.ts"] = "0".repeat(64);
+  await assert.rejects(call(nextPin), /Unsupported snapshot output/);
+  delete plan.approvedOutputHashes["apps/server/agent/src/unknown.ts"];
+  const inventoryBytes = await readFile(path.join(f.root, `${base}sync-inventory.json`));
+  const inventory = await get(f.root, `${base}sync-inventory.json`);
+  inventory.files.find(entry => entry.destination === `${base}mcp-skills-adaptations.json`).sha256 = "0".repeat(64);
+  await put(f.root, `${base}sync-inventory.json`, json(inventory));
+  await assert.rejects(call(nextPin), /Unproven original metadata binding/);
+  await put(f.root, `${base}sync-inventory.json`, inventoryBytes);
+  const recipePath = inventory.files.find(entry => entry.patch).patch.path;
+  await put(f.root, recipePath, Buffer.concat([await readFile(path.join(f.root, recipePath)), Buffer.from("\n")]));
+  await assert.rejects(call(nextPin), /Invalid original snapshot recipe/);
+  assert.deepEqual(await readFile(path.join(f.root, `${base}source-manifest.json`)), before);
+});
+
+async function supplementalFixture(t, derivedName) {
+  const pins = { production: "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c", supplemental: "d53873b6a4799e87afd63c8d288ef0089f5a3748", target: "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c" };
+  const sourcePath = "apps/web/src/context-chip.tsx";
+  const f = await fixture(t, { pins, derivedName, nextText: "export const upstream = 1;\n", targetFiles: { [sourcePath]: "export const nativeChip = true;\n" } });
+  const candidate = `${f.root}-supplemental-candidate`;
+  t.after(() => rm(candidate, { recursive: true, force: true }));
+  await cp(f.root, candidate, { recursive: true });
+  const output = "apps/web/src/context-chip.tsx", local = "apps/server/agent/src/accepted-context.ts";
+  const bytes = Buffer.from("export const adaptedChip = true;\n"), localBytes = Buffer.from("export const localAuthority = true;\n");
+  await put(candidate, output, bytes);
+  await put(candidate, local, localBytes);
+  const reviews = {
+    baseline: { outputs: [], hostInputs: [] }, dependencies: [],
+    outputs: [
+      { path: output, sha256: hash(bytes), mode: 0o644, kind: "derived", reason: "Explicit native-context UI adaptation", inputs: [{ path: sourcePath, commit: pins.target, sha256: hash(f.next.get(sourcePath)) }] },
+      { path: local, sha256: hash(localBytes), mode: 0o644, kind: "local", reason: "PM-owned local authorization, not copied upstream", inputs: [] },
+    ],
+  };
+  const call = async () => {
+    const result = await planSupplementalGeneration({ root: candidate, originalRoot: f.root, targetCommit: pins.target, reviews, readBlob: f.readBlob, listTree: f.listTree });
+    if (!result.blockers.length) for (const entry of result.plannedFiles) await put(candidate, entry.path, entry.content);
+    return result;
+  };
+  return { ...f, pins, candidate, output, local, reviews, call };
+}
+
+test("supplemental UI enrollment preserves production, supplemental inputs and all unselected recipes while replaying exact selected bytes", async t => {
+  const f = await supplementalFixture(t);
+  const originalManifest = await get(f.root, `${base}source-manifest.json`);
+  const originalAdaptations = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  const originalInventory = await get(f.root, `${base}sync-inventory.json`);
+  assert.deepEqual((await f.call()).blockers, []);
+  const manifest = await get(f.candidate, `${base}source-manifest.json`);
+  const adaptations = await get(f.candidate, `${base}mcp-skills-adaptations.json`);
+  const inventory = await get(f.candidate, `${base}sync-inventory.json`);
+  assert.deepEqual(manifest.upstream, originalManifest.upstream);
+  assert.deepEqual(manifest.files, originalManifest.files);
+  assert.equal(manifest.upstream.commit, f.pins.production);
+  assert.equal(adaptations.baselineCommit, f.pins.production);
+  assert.deepEqual(adaptations.sources.slice(0, 2), originalAdaptations.sources);
+  for (const entry of originalAdaptations.outputs) assert.deepEqual(adaptations.outputs.find(value => value.destination === entry.destination), entry);
+  for (const entry of originalInventory.files.filter(entry => !["source-manifest.json", "mcp-skills-adaptations.json", "sync-imports.json"].some(leaf => entry.destination === `${base}${leaf}`))) assert.deepEqual(inventory.files.find(value => value.destination === entry.destination), entry);
+  assert.deepEqual(inventory.runtimeResources, originalInventory.runtimeResources);
+  assert.equal(adaptations.outputs.find(entry => entry.destination === f.output).provenance, "adapted-upstream");
+  assert.equal(adaptations.outputs.find(entry => entry.destination === f.local).recipe.kind, "local-bytes");
+  assert.deepEqual((await verifyGeneration({ root: f.candidate, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+  assert.throws(() => validateAdaptationManifest(adaptations), /identity mismatch/, "Legacy fixed-pin replay is not weakened by modern enrollment");
+  assert.deepEqual(await get(f.root, `${base}sync-inventory.json`), originalInventory, "Immutable original authority is not rewritten");
+});
+
+async function preservedPmFixture(t) {
+  const f = await supplementalFixture(t), name = "apps/server/pm/src/app.ts";
+  const recorded = Buffer.from("export const existingLocalRoutes = 1;\n");
+  const snapshot = Buffer.from("export const existingLocalRoutes = 2;\n");
+  const entry = { destination: name, provenance: "local-integration", reason: "Existing local PM route host", license: "Existing repository terms", inputs: [], sha256: hash(recorded), bytes: recorded.length, mode: 0o644, recipe: { kind: "local-bytes", base64: recorded.toString("base64") } };
+  for (const root of [f.root, f.candidate]) {
+    const adaptations = await get(root, `${base}mcp-skills-adaptations.json`);
+    adaptations.outputs.push(entry);
+    const bytes = json(adaptations);
+    await put(root, `${base}mcp-skills-adaptations.json`, bytes);
+    const inventory = await get(root, `${base}sync-inventory.json`);
+    Object.assign(inventory.files.find(value => value.destination === `${base}mcp-skills-adaptations.json`), { sha256: hash(bytes), bytes: bytes.length });
+    await put(root, `${base}sync-inventory.json`, json(inventory));
+    await put(root, name, snapshot);
+  }
+  f.reviews.baseline.outputs.push({ path: name, recordedSha256: entry.sha256, snapshotSha256: hash(snapshot), reason: "Independently reviewed preexisting local-only drift; preserve frozen bytes, not a PM feature edit" });
+  const selected = { path: name, sha256: hash(snapshot), mode: entry.mode, kind: "local", inputs: [], reason: "Metadata-only preservation of the exact independently frozen local PM host" };
+  f.reviews.outputs.push(selected);
+  return { ...f, name, snapshot, selected };
+}
+
+test("supplemental enrollment preserves an independently frozen local PM host without permitting feature edits", async t => {
+  const f = await preservedPmFixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  assert.deepEqual(await readFile(path.join(f.candidate, f.name)), f.snapshot);
+  assert.deepEqual(await readFile(path.join(f.root, f.name)), f.snapshot);
+  const entry = (await get(f.candidate, `${base}mcp-skills-adaptations.json`)).outputs.find(value => value.destination === f.name);
+  assert.equal(entry.sha256, hash(f.snapshot));
+  assert.equal(entry.provenance, "local-integration");
+  assert.deepEqual(entry.inputs, []);
+  assert.deepEqual((await verifyGeneration({ root: f.candidate, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+});
+
+test("frozen PM host preservation refuses changed postimages, absent baseline review, derivation and other PM paths", async t => {
+  const f = await preservedPmFixture(t);
+  const before = await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`));
+  const third = Buffer.from("export const unapprovedFeature = true;\n");
+  await put(f.candidate, f.name, third);
+  f.selected.sha256 = hash(third);
+  await assert.rejects(f.call(), /Frozen PM host preservation requires/);
+  await put(f.candidate, f.name, f.snapshot);
+  f.selected.sha256 = hash(f.snapshot);
+  const approval = f.reviews.baseline.outputs.pop();
+  await assert.rejects(f.call(), /Frozen PM host preservation requires/);
+  f.reviews.baseline.outputs.push(approval);
+  f.selected.kind = "derived";
+  f.selected.inputs = f.reviews.outputs[0].inputs;
+  await assert.rejects(f.call(), /Frozen PM host preservation requires/);
+  f.selected.kind = "local";
+  f.selected.inputs = [];
+  f.selected.path = "apps/server/pm/src/another-route.ts";
+  await put(f.candidate, f.selected.path, f.snapshot);
+  await assert.rejects(f.call(), /Protected supplemental output/);
+  assert.deepEqual(await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`)), before);
+});
+
+test("supplemental UI can adapt the existing attachment bridge without upgrading its ordered source lineage", async t => {
+  for (const name of ["apps/server/agent/src/providers/t3code/execution.ts", "apps/server/agent/src/providers/t3code/execution.test.ts"]) {
+    const f = await supplementalFixture(t, name);
+    const before = await get(f.root, `${base}mcp-skills-adaptations.json`);
+    const prior = before.outputs.find(entry => entry.destination === name);
+    const bytes = Buffer.from("export const adaptedMcp = true;\nexport const attachmentBridge = true;\n");
+    await put(f.candidate, name, bytes);
+    f.reviews.outputs.push({ path: name, sha256: hash(bytes), mode: 0o644, kind: "derived", reason: "Explicit attachment bridge adaptation retaining the fixed native protocol", inputs: prior.inputs });
+    assert.deepEqual((await f.call()).blockers, []);
+    const after = await get(f.candidate, `${base}mcp-skills-adaptations.json`);
+    const adapted = after.outputs.find(entry => entry.destination === name);
+    assert.deepEqual(adapted.inputs, prior.inputs);
+    assert.equal(adapted.recipe.primaryInput, prior.recipe.primaryInput);
+    assert.equal(adapted.sha256, hash(bytes));
+    assert.equal(after.baselineCommit, before.baselineCommit);
+    assert.deepEqual((await verifyGeneration({ root: f.candidate, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+  }
+});
+
+test("attachment bridge exception rejects source changes and never opens other Provider outputs", async t => {
+  const name = "apps/server/agent/src/providers/t3code/execution.ts";
+  const f = await supplementalFixture(t, name);
+  const prior = (await get(f.root, `${base}mcp-skills-adaptations.json`)).outputs.find(entry => entry.destination === name);
+  const selected = { path: name, sha256: prior.sha256, mode: prior.mode, kind: "derived", reason: "Explicit fixed-lineage attachment bridge review", inputs: prior.inputs };
+  f.reviews.outputs.push(selected);
+  const before = await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`));
+  for (const inputs of [[...prior.inputs].reverse(), prior.inputs.slice(0, 1), [...prior.inputs, ...f.reviews.outputs[0].inputs]]) {
+    selected.inputs = inputs;
+    await assert.rejects(f.call(), /Pinned attachment bridge must retain/);
+  }
+  selected.inputs = [];
+  selected.kind = "local";
+  await assert.rejects(f.call(), /Pinned attachment bridge must retain/);
+  selected.inputs = prior.inputs;
+  selected.kind = "derived";
+  selected.removedInputs = [{ ...prior.inputs[0], disposition: "no-longer-derived", reason: "Not allowed for this fixed bridge" }];
+  await assert.rejects(f.call(), /Pinned attachment bridge must retain/);
+  delete selected.removedInputs;
+  selected.path = "apps/server/agent/src/providers/t3code/new-bridge.ts";
+  await put(f.candidate, selected.path, await readFile(path.join(f.candidate, name)));
+  await assert.rejects(f.call(), /Protected supplemental output/);
+  assert.deepEqual(await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`)), before);
+});
+
+test("supplemental enrollment refuses stale mapped source, output hash, protected paths and undeclared dependencies before metadata writes", async t => {
+  const f = await supplementalFixture(t);
+  const before = await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`));
+  const selected = f.reviews.outputs[0], correctHash = selected.sha256, correctInputHash = selected.inputs[0].sha256;
+  selected.inputs[0].sha256 = "0".repeat(64);
+  await assert.rejects(f.call(), /Immutable source hash\/blob\/mode mismatch/);
+  selected.inputs[0].sha256 = correctInputHash;
+  selected.sha256 = "0".repeat(64);
+  await assert.rejects(f.call(), /Stale supplemental output approval/);
+  selected.sha256 = correctHash;
+  const correctPath = selected.path;
+  selected.path = "scripts/upstream-sync.mjs";
+  await assert.rejects(f.call(), /Protected supplemental output/);
+  selected.path = "apps/server/agent/src/providers/t3code/application.ts";
+  await assert.rejects(f.call(), /Protected supplemental output/);
+  selected.path = correctPath;
+  const dependency = Buffer.from('import "unapproved-package";\nexport const adaptedChip = true;\n');
+  await put(f.candidate, selected.path, dependency);
+  selected.sha256 = hash(dependency);
+  const result = await f.call();
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_DEPENDENCY_REVIEW"));
+  assert.deepEqual(await readFile(path.join(f.candidate, `${base}mcp-skills-adaptations.json`)), before);
+});
+
+test("modern supplemental desktop outputs require exact selected recipes; legacy pin guard still rejects the generation", async t => {
+  const f = await supplementalFixture(t);
+  const desktop = "apps/desktop/src/preview/manager.mjs";
+  const bytes = Buffer.from("export const explicitPicker = true;\n");
+  await put(f.candidate, desktop, bytes);
+  f.reviews.outputs.push({ path: desktop, sha256: hash(bytes), mode: 0o644, kind: "local", reason: "Explicitly reviewed real desktop picker bridge", inputs: [] });
+  assert.deepEqual((await f.call()).blockers, []);
+  const adaptations = await get(f.candidate, `${base}mcp-skills-adaptations.json`);
+  assert.ok(validateAdaptationStructure(adaptations));
+  assert.throws(() => validateAdaptationManifest(adaptations), /identity mismatch/);
+  assert.deepEqual((await verifyGeneration({ root: f.candidate, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+});
+
+test("supplemental replacement cannot silently discard prior derivation inputs", async t => {
+  const f = await supplementalFixture(t);
+  const prior = (await get(f.root, `${base}mcp-skills-adaptations.json`)).outputs.find(entry => entry.destination === f.derivedName);
+  const selected = f.reviews.outputs[0];
+  selected.path = f.derivedName;
+  await put(f.candidate, selected.path, "export const adaptedChip = true;\n");
+  await assert.rejects(f.call(), /Explicit mapped-input removal review required/);
+  selected.removedInputs = prior.inputs.map(input => ({ path: input.path, commit: input.commit, sha256: input.sha256, disposition: "no-longer-derived", reason: "Reviewed complete replacement by the selected latest native-context implementation" }));
+  assert.deepEqual((await f.call()).blockers, []);
+  const generation = (await get(f.candidate, `${base}source-manifest.json`)).generation;
+  assert.deepEqual(generation.reviews.find(entry => entry.outputPath === selected.path).removedInputs, selected.removedInputs);
+  assert.deepEqual((await verifyGeneration({ root: f.candidate, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+});
+
+test("distributed source gate accepts a third registered source without a host inventory owner and still refuses byte drift", async t => {
+  const f = await supplementalFixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  const names = [
+    "scripts/check-sources.mjs", "vendor/t3code/scripts/host-inputs.mjs",
+    "vendor/t3code/scripts/mcp-skills-adaptations.mjs", "vendor/cc-switch/scripts/provenance.mjs",
+    "vendor/cc-switch/scripts/closure.mjs", "vendor/openhands-extensions/scripts/provenance.mjs",
+  ];
+  for (const name of names) await put(f.candidate, name, await readFile(new URL(`../../${name}`, import.meta.url)));
+  const required = [".node-version", "package.json", "scripts/doctor.mjs", "apps/server/agent/scripts/build.mjs", "apps/server/agent/scripts/package.mjs", "apps/server/agent/scripts/external-agent-packages.mjs", "apps/server/agent/scripts/verify-artifact.mjs", "vendor/t3code/scripts/host-inputs.mjs"];
+  const inventory = await get(f.candidate, `${base}sync-inventory.json`);
+  inventory.runtimeResources.hostBuildInputs = [];
+  for (const name of required) {
+    if (name !== "vendor/t3code/scripts/host-inputs.mjs") await put(f.candidate, name, name.endsWith("package.json") ? "{}\n" : "// inert test fixture; never executed\n");
+    inventory.runtimeResources.hostBuildInputs.push({ path: name, sha256: hash(await readFile(path.join(f.candidate, name))) });
+  }
+  await put(f.candidate, `${base}sync-inventory.json`, json(inventory));
+  assert.ok(inventory.files.every(entry => entry.destination.startsWith(base)), "Host adaptation outputs have no duplicate vendor inventory ownership");
+  const check = () => spawnSync(process.execPath, ["scripts/check-sources.mjs"], { cwd: f.candidate, encoding: "utf8" });
+  const accepted = check();
+  assert.match(accepted.stdout, /\[sources\] T3 Code:/);
+  assert.notEqual(accepted.status, 0, "This isolated T3 fixture deliberately has no OpenHands source inputs; it is not full source acceptance");
+  assert.match(accepted.stderr, /openhands-extensions.*source-manifest\.json/);
+  await put(f.candidate, f.output, "unapproved post-record bytes\n");
+  const refused = check();
+  assert.doesNotMatch(refused.stdout, /\[sources\] T3 Code:/);
+  assert.match(refused.stderr, /Pinned source output drift/);
+});
+
+test("new output ownership refreshes unchanged consumer edges across the complete import graph", async t => {
+  const f = await supplementalFixture(t), consumer = f.derivedName;
+  const bytes = Buffer.from('import "../../../web/src/context-chip";\nexport const adaptedMcp = true;\n');
+  await put(f.root, consumer, bytes);
+  await put(f.candidate, consumer, bytes);
+  const adaptations = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  const entry = adaptations.outputs.find(value => value.destination === consumer);
+  entry.sha256 = hash(bytes); entry.bytes = bytes.length;
+  entry.recipe.splices = [{ start: 0, before: splitLines(f.supplement.get("apps/web/src/mcp.ts")), after: splitLines(bytes) }];
+  await put(f.root, `${base}mcp-skills-adaptations.json`, json(adaptations));
+  const inventory = await get(f.root, `${base}sync-inventory.json`);
+  const asset = inventory.files.find(value => value.destination === `${base}mcp-skills-adaptations.json`);
+  const data = await readFile(path.join(f.root, asset.destination));
+  asset.sha256 = hash(data); asset.bytes = data.length;
+  const imports = await get(f.root, `${base}sync-imports.json`);
+  imports.edges.push({ source: consumer, line: 1, specifier: "../../../web/src/context-chip", kind: "import", usage: "runtime", disposition: "pm-host-boundary", target: f.output });
+  await put(f.root, `${base}sync-imports.json`, json(imports));
+  const importAsset = inventory.files.find(value => value.destination === `${base}sync-imports.json`);
+  const importBytes = await readFile(path.join(f.root, importAsset.destination));
+  importAsset.sha256 = hash(importBytes); importAsset.bytes = importBytes.length;
+  await put(f.root, `${base}sync-inventory.json`, json(inventory));
+  assert.deepEqual((await f.call()).blockers, []);
+  const graph = await get(f.candidate, `${base}sync-imports.json`);
+  assert.equal(graph.edges.find(edge => edge.source === consumer).disposition, "vendored-source");
+  assert.match(graph.parser, /^typescript@/);
+});
+
+test("full supplemental graph preserves source-spelled directory and root URL resource targets", async t => {
+  const f = await supplementalFixture(t);
+  const bytes = Buffer.from('export const localDirectory = new URL("./", import.meta.url);\nexport const rootDirectory = new URL("../../../../", import.meta.url);\n');
+  await put(f.candidate, f.local, bytes);
+  f.reviews.outputs.find(entry => entry.path === f.local).sha256 = hash(bytes);
+  assert.deepEqual((await f.call()).blockers, []);
+  const graph = await get(f.candidate, `${base}sync-imports.json`);
+  const resources = graph.edges.filter(edge => edge.source === f.local && edge.kind === "import-meta-resource");
+  assert.equal(resources.find(edge => edge.specifier === "./").target, "apps/server/agent/src/");
+  assert.equal(resources.find(edge => edge.specifier === "../../../../").target, "./");
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomBytes, createHash } from 'node:crypto';
 import { chmod, link, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
@@ -208,4 +208,57 @@ test('login rejects redirects without forwarding credentials and does not echo s
     assert.ok(!result.stdout.includes(fixturePassword) && !result.stderr.includes(fixturePassword));
     assert.match(result.stderr, /CLI_AUTH_FAILED/);
   } finally { await Promise.all([f.close(), target.close()]); }
+});
+
+test('real PTY login releases stdin without EOF after success, denial and cancellation', { timeout: 90_000 }, async () => {
+  const f = await fixture();
+  const run = async (mode: 'email-option' | 'email-prompt' | 'denied' | 'cancelled') => {
+    const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+    const command = [process.execPath, entrypoint, 'login', ...(mode === 'email-prompt' ? [] : ['--email', fixtureEmail])].map(quote).join(' ');
+    const child = spawn('script', ['--quiet', '--return', '--command', command, '/dev/null'], { env: f.environment, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    let output = '', sentEmail = false, sentPassword = false, closed = false;
+    child.once('close', () => { closed = true; });
+    const data = (chunk: Buffer) => {
+      output += chunk.toString();
+      if (!sentEmail && mode === 'email-prompt' && output.includes('Email: ')) {
+        sentEmail = true;
+        child.stdin.write(`${fixtureEmail}\r`);
+      }
+      if (!sentPassword && output.includes('Password: ')) {
+        sentPassword = true;
+        child.stdin.write(mode === 'cancelled' ? '\x03' : `${mode === 'denied' ? 'wrong-disposable-password' : fixturePassword}\r`);
+      }
+    };
+    child.stdout.on('data', data);
+    child.stderr.on('data', data);
+    try {
+      // This real child-process deadline detects the known no-EOF liveness bug;
+      // the awaited condition is process exit, never an arbitrary settling sleep.
+      const [code] = await once(child, 'close', { signal: AbortSignal.timeout(15_000) });
+      assert.equal(child.stdin.writableEnded, false, 'No EOF was supplied before observing child exit');
+      assert.equal(sentPassword, true);
+      assert.equal(code, mode === 'denied' || mode === 'cancelled' ? 1 : 0, output);
+      assert.ok(!output.includes(fixturePassword) && !output.includes('wrong-disposable-password'));
+      if (mode === 'denied') assert.match(output, /CLI_AUTH_FAILED/);
+      if (mode === 'cancelled') assert.match(output, /CLI_LOGIN_CANCELLED/);
+      return output;
+    } finally {
+      // Cleanup cannot turn a failed timeout into a successful PTY exit.
+      if (!closed) {
+        try { process.kill(-child.pid!, 'SIGTERM'); } catch { /* Already exited. */ }
+        await once(child, 'close');
+      }
+      child.stdin.destroy();
+    }
+  };
+  try {
+    for (const mode of ['email-option', 'email-prompt', 'denied', 'cancelled'] as const) {
+      const output = await run(mode);
+      if (mode === 'email-option' || mode === 'email-prompt') {
+        const session = await authenticate(f.origin, f.environment);
+        assert.ok(!output.includes(session.token));
+        await logoutCli(f.environment);
+      } else await assert.rejects(readFile(f.filename), { code: 'ENOENT' });
+    }
+  } finally { await f.close(); }
 });

@@ -9,29 +9,20 @@ import {
   type GenericThreadHistoryAdapter,
   type MessageStorageEntry,
 } from "@assistant-ui/react";
-import { createSimpleTitleAdapter } from "@assistant-ui/core/react";
 import { workspaceClient } from "../network";
 import { agentText } from "../i18n-text.ts";
-import type { ChatGenerationView, RemoteThread } from "@agent-workspace/contracts/chat";
+import type { RemoteThread } from "@agent-workspace/contracts/chat";
 import { chatStreams } from "./transport";
 import { acceptRemoteThread, acceptRemoteThreads, reportThreadError, threadExecutionSelection } from "../pm/state";
 import { acceptInitializedThread, acceptThreadSettings } from "../../hooks/use-chat-settings";
+import { HISTORY_PAGE_SIZE, loadCompleteHistory, type HistoryPage } from "./history-pagination";
+import { deleteAgentSession, setAgentSessionStatus } from "./session-lifecycle";
+import { createStoredThreadTitleReader, storedThreadTitle } from "./stored-thread-title";
 
-type Entry = {
-  id: string;
-  parent_id: string | null;
-  format: string;
-  content: Record<string, unknown>;
-};
-type HistoryResponse = {
-  headId: string | null;
-  messages: Entry[];
-  activeGenerationId?: string;
-  latestGeneration?: ChatGenerationView;
-};
 
 type HistoryLoadOutcome =
-  | { status: "idle" | "loading" }
+  | { status: "idle" }
+  | { status: "loading"; loadedCount?: number; totalCount?: number }
   | { status: "loaded"; messageCount: number }
   | { status: "error"; message: string };
 const idleHistory: HistoryLoadOutcome = { status: "idle" };
@@ -40,6 +31,7 @@ export type HistoryLoadStore = {
   snapshot: (id: string) => HistoryLoadOutcome;
   begin: (id: string) => symbol;
   isCurrent: (id: string, request: symbol) => boolean;
+  progress: (id: string, request: symbol, loaded: number, total: number) => void;
   finish: (id: string, request: symbol, outcome: HistoryLoadOutcome) => void;
 };
 
@@ -70,6 +62,10 @@ export function createHistoryLoadStore(): HistoryLoadStore {
       return request;
     },
     isCurrent: (id, request) => requests.get(id) === request,
+    progress(id, request, loaded, total) {
+      if (requests.get(id) !== request) return;
+      publish(id, { status: "loading", loadedCount: loaded, totalCount: total });
+    },
     finish(id, request, outcome) {
       if (requests.get(id) !== request) return;
       requests.delete(id);
@@ -102,6 +98,7 @@ const metadata = (thread: RemoteThread) => {
   acceptThreadSettings(thread);
   return {
     ...thread,
+    title: storedThreadTitle(thread),
     lastMessageAt: thread.lastMessageAt ? new Date(thread.lastMessageAt) : undefined,
   };
 };
@@ -131,6 +128,7 @@ export function createServerThreadAdapter(historyStatus: HistoryLoadStore): Remo
         for (const thread of body.threads) acceptThreadSettings(thread);
         return { threads: body.threads.map((thread) => ({
           ...thread,
+          title: storedThreadTitle(thread),
           lastMessageAt: thread.lastMessageAt ? new Date(thread.lastMessageAt) : undefined,
         })) };
       } catch (error) {
@@ -149,31 +147,11 @@ export function createServerThreadAdapter(historyStatus: HistoryLoadStore): Remo
       );
     },
     rename: (id, title) => patch(id, { title }),
-    archive: (id) => patch(id, { status: "archived" }),
-    unarchive: (id) => patch(id, { status: "regular" }),
+    archive: async (id) => { acceptRemoteThread(await setAgentSessionStatus(id, "archived")); },
+    unarchive: async (id) => { acceptRemoteThread(await setAgentSessionStatus(id, "regular")); },
     updateCustom: (id, custom) => patch(id, { custom }),
-    async delete(id) {
-      await workspaceClient.json(`/api/chat/threads/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-    },
-    async generateTitle(id, messages) {
-      const title = await createSimpleTitleAdapter().generateTitle(messages);
-      await patch(id, { title });
-      type TitleChunk = { readonly path: readonly number[] } & (
-        | { type: "part-start"; part: { type: "text" } }
-        | { type: "text-delta"; textDelta: string }
-        | { type: "part-finish" }
-      );
-      return new ReadableStream<TitleChunk>({
-        start(controller) {
-          controller.enqueue({ type: "part-start", path: [0], part: { type: "text" } });
-          controller.enqueue({ type: "text-delta", path: [0], textDelta: title });
-          controller.enqueue({ type: "part-finish", path: [0] });
-          controller.close();
-        },
-      });
-    },
+    delete: deleteAgentSession,
+    generateTitle: createStoredThreadTitleReader(workspaceClient),
     unstable_useAdapters: function useServerHistory() {
       const aui = useAui();
       const localId = useAuiState((state) => state.threadListItem.id);
@@ -218,8 +196,13 @@ export function createServerThreadAdapter(historyStatus: HistoryLoadStore): Remo
                 if (!remoteId) return { messages: [] };
                 const request = historyStatus.begin(localId);
                 try {
-                  const body = await workspaceClient.json<HistoryResponse>(
-                    `/api/chat/threads/${encodeURIComponent(remoteId)}/history?format=${encodeURIComponent(formatAdapter.format)}`,
+                  const body = await loadCompleteHistory(
+                    (before) => {
+                      const params = new URLSearchParams({ format: formatAdapter.format, limit: String(HISTORY_PAGE_SIZE) });
+                      if (before) params.set("before", before);
+                      return workspaceClient.json<HistoryPage>(`/api/chat/threads/${encodeURIComponent(remoteId!)}/history?${params}`);
+                    },
+                    (loaded, total) => historyStatus.progress(localId, request, loaded, total),
                   );
                   if (historyStatus.isCurrent(localId, request)) {
                     if (body.activeGenerationId)

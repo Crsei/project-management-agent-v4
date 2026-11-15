@@ -1,5 +1,4 @@
-import { z } from "zod"
-import type { Command, Entity, MemberDirectoryAccess, MemberDirectoryMember, MemberRole, Workspace } from "../../../../../../packages/contracts/src/client.ts"
+import type { Command, Entity, MemberDirectoryAccess, MemberDirectoryMember, Workspace } from "../../../../../../packages/contracts/src/client.ts"
 
 export type ProjectShareScope = "unavailable" | "revoked" | "inherited" | "direct" | "none"
 export type ProjectShareScopeDraft = {
@@ -65,14 +64,6 @@ export function projectShareMemberCommand(workspace: Workspace | null, project: 
   }
 }
 
-/** New invitations have exactly this project; Admin is intentionally not a project role. */
-export function projectShareInvitationCommand(workspace: Workspace | null, project: Entity, email: string, role: MemberRole, enabled: boolean, commandId: string): Command<"CreateMemberInvitation"> {
-  requireShareManagement(workspace, project)
-  if (!enabled) throw new Error("SMTP invitations are not configured or their status is unavailable.")
-  if (project.data.archivedAt || project.data.archived === true) throw new Error("Invitations require an unarchived project.")
-  if (role !== "guest" && role !== "member") throw new Error("Only Guest or Member templates can be invited to this project.")
-  return { commandId, commandType: "CreateMemberInvitation", expectedVersions: {}, payload: { email: z.email().max(254).parse(email.trim().toLowerCase()), role, projectIds: [project.id] } }
-}
 
 export function projectShareUrl(origin: string, workspaceId: string, projectId: string): string {
   return new URL(`/pm/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}`, origin).href

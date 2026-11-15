@@ -6,11 +6,12 @@ import { agentStorageSettings, saveAgentStorageSettings, type AgentDirectoryConf
 import { agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsUpdateSchema, type AgentScope } from '../../../../packages/contracts/src/agent-file-areas.ts';
 import type { Actor } from '../../../../packages/domain/src/core.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
+import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import type { Workspace } from '../../../../packages/pm-core/index.ts';
 import { getMembership } from '../../../../packages/application/src/access.ts';
 import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
-type RouteContext = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace> };
+type RouteContext = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string, sql?: SqlExecutor) => Promise<Workspace> };
 const workspaceParams = agentScopeSchema.pick({ workspaceId: true });
 const projectParams = agentScopeSchema.extend({ projectId: z.string().regex(/^PRJ-\d+$/) });
 
@@ -20,7 +21,9 @@ export function registerAgentFileAreaRoutes(app: FastifyInstance, options: Route
     try {
       await sql.query('BEGIN'); await lockWorkspace(sql, scope.workspaceId);
       await recheckMcpRequest(sql, request);
-      const result = await operation({ sql, actor, config: options.config, workspace: options.workspace });
+      // Authorization already owns a business connection and the workspace lock.
+      // Reuse it for workspace readiness checks instead of exhausting the pool.
+      const result = await operation({ sql, actor, config: options.config, workspace: workspaceId => options.workspace(workspaceId, sql) });
       await recheckMcpRequest(sql, request);
       await sql.query('COMMIT');
       return result;

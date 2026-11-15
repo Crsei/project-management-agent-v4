@@ -5,6 +5,7 @@ import { after, test, type TestContext } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { RemoteSettings, RemoteThread } from "@agent-workspace/contracts/chat";
+import type { ProviderInstance } from "@agent-workspace/contracts/provider";
 
 // Resolve the Web app's existing aliases without changing product imports for Node tests.
 const agentRoot = new URL("../", import.meta.url).href;
@@ -31,7 +32,7 @@ after(() => resolver.deregister());
 // Module-loading boundary: a static import runs before the test-only alias resolver is registered.
 const { acceptInitializedThread, acceptThreadSettings, flushThreadSettings, loadThreadSettings, useChatSettings } =
   await import("./use-chat-settings.ts");
-const { acceptRemoteThread } = await import("../src/pm/state.ts");
+const { acceptRemoteThread, availableProviderModel, canSendThread, refreshProviders, usePmChatState } = await import("../src/pm/state.ts");
 
 function chatSettings(threadId?: string, initialize?: () => Promise<string>, draftId = "new") {
   const capture: { current?: {
@@ -57,7 +58,7 @@ const originalSettings: RemoteSettings = {
 };
 function thread(id: string, settings = originalSettings, revision = 0): RemoteThread {
   return {
-    remoteId: id, status: "regular", revision, settings: structuredClone(settings),
+    remoteId: id, status: "regular", revision, lifecycleRevision: 1, settings: structuredClone(settings),
     executionSelection: { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null },
     createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
     sidebar: {
@@ -255,4 +256,149 @@ test("failed first-session creation retains the chosen model/options until expli
   assert.equal(creations, 2);
   assert.deepEqual(server.thread.settings, { ...initial.settings, ...chosen });
   assert.equal((await flushThreadSettings(initial.remoteId)).ready, true);
+});
+
+test("provider refresh coalesces requests, retains usable snapshots, and fails closed for sending", async t => {
+  const provider: ProviderInstance = {
+    instanceId: "picker-provider", driver: "codex", label: "Codex", enabled: true, config: {}, secretConfigKeys: [],
+    authMode: "agent", authStatus: "unknown", nativeSessionReady: true, configured: false, credentialSource: null,
+    models: [{ id: "picker-model", label: "Picker model", temperature: false, isDefault: true }],
+    modelsSource: "discovered", canLogin: false, canLogout: false,
+  };
+  const snapshot = () => {
+    let current: { providers: ProviderInstance[]; providersLoaded: boolean; providersLoading: boolean; providerError?: string } | undefined;
+    function Probe() { current = usePmChatState(); return null; }
+    renderToStaticMarkup(createElement(Probe));
+    assert.ok(current);
+    return current;
+  };
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  let requests = 0;
+  let response = Promise.withResolvers<Response>();
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/agent/api/providers");
+    requests++;
+    return response.promise;
+  };
+  const canSend = () => canSendThread("catalog-draft", undefined, provider.instanceId, provider.models[0]!.id);
+  const initial = refreshProviders();
+  assert.equal(refreshProviders(), initial);
+  assert.equal(snapshot().providersLoaded, false);
+  assert.equal(snapshot().providersLoading, true);
+  assert.equal(canSend(), false);
+  response.resolve(Response.json({ providers: [provider] }));
+  await initial;
+  assert.equal(requests, 1);
+  assert.equal(snapshot().providersLoaded, true);
+  assert.equal(snapshot().providersLoading, false);
+  assert.equal(canSend(), true);
+  const previousProviders = snapshot().providers;
+
+  response = Promise.withResolvers<Response>();
+  const background = refreshProviders();
+  assert.equal(refreshProviders(), background);
+  assert.equal(snapshot().providersLoaded, true);
+  assert.equal(snapshot().providersLoading, true);
+  assert.equal(snapshot().providers, previousProviders);
+  assert.equal(availableProviderModel(provider.instanceId, "picker-model")?.id, "picker-model");
+  assert.equal(canSend(), false, "Refreshing never weakens the execution guard");
+  response.reject(new TypeError("Provider catalog network failed"));
+  await background;
+  assert.equal(requests, 2);
+  assert.equal(snapshot().providers, previousProviders);
+  assert.equal(snapshot().providersLoaded, true);
+  assert.match(snapshot().providerError ?? "", /network failed/);
+  assert.equal(availableProviderModel(provider.instanceId, "picker-model")?.id, "picker-model");
+  assert.equal(canSend(), false, "A retained catalog is selectable, not permission to send");
+
+  for (const status of [401, 403]) {
+    response = Promise.withResolvers<Response>();
+    const unauthorized = refreshProviders();
+    response.resolve(Response.json({ error: "Provider access denied" }, { status }));
+    await unauthorized;
+    assert.deepEqual(snapshot().providers, []);
+    assert.equal(snapshot().providersLoaded, false);
+    assert.equal(snapshot().providersLoading, false);
+    assert.equal(availableProviderModel(provider.instanceId, "picker-model"), undefined);
+    assert.equal(canSend(), false);
+
+    response = Promise.withResolvers<Response>();
+    const recovery = refreshProviders();
+    response.resolve(Response.json({ providers: [provider] }));
+    await recovery;
+    assert.equal(snapshot().providersLoaded, true);
+    assert.equal(snapshot().providerError, undefined);
+    assert.equal(canSend(), true);
+  }
+
+  response = Promise.withResolvers<Response>();
+  const empty = refreshProviders();
+  response.resolve(Response.json({ providers: [] }));
+  await empty;
+  assert.deepEqual(snapshot().providers, []);
+  assert.equal(snapshot().providersLoaded, true, "A successfully empty catalog is loaded, not an initial fetch");
+  assert.equal(snapshot().providersLoading, false);
+  assert.equal(snapshot().providerError, undefined);
+  assert.equal(canSend(), false);
+});
+
+test("a favorite mutation refresh cannot settle with a pre-mutation provider revision", async t => {
+  let revision = 1;
+  let favorites: string[] = [];
+  const stale = Promise.withResolvers<Response>();
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  let reads = 0;
+  const response = () => Response.json({ providers: [{
+    instanceId: "favorite-race", revision, modelPreferences: { favorites: [...favorites] },
+  }] });
+  globalThis.fetch = async (_input, init) => {
+    if (init?.method === "PUT") {
+      const write = JSON.parse(String(init.body)) as { revision: number; favorites: string[] };
+      if (write.revision !== revision) return Response.json({ error: "Revision conflict" }, { status: 409 });
+      revision++;
+      favorites = write.favorites;
+      return response();
+    }
+    return ++reads === 1 ? stale.promise : response();
+  };
+  const beforeWrite = response();
+  const background = refreshProviders();
+  await fetch("/agent/api/providers/favorite-race", { method: "PUT", body: JSON.stringify({ revision: 1, favorites: ["chosen-model"] }) });
+  const refreshed = refreshProviders({ afterMutation: true });
+  stale.resolve(beforeWrite);
+  await Promise.all([background, refreshed]);
+  let current: ProviderInstance | undefined;
+  function Probe() { current = usePmChatState().providers.find(provider => provider.instanceId === "favorite-race"); return null; }
+  renderToStaticMarkup(createElement(Probe));
+  assert.equal(current?.revision, 2);
+  assert.deepEqual(current?.modelPreferences?.favorites, ["chosen-model"]);
+  const next = await fetch("/agent/api/providers/favorite-race", { method: "PUT", body: JSON.stringify({ revision: current?.revision, favorites: [] }) });
+  assert.equal(next.status, 200);
+});
+
+test("a pending model save and its later failure stay scoped to the originating thread", async t => {
+  const initial = thread("picker-save-origin");
+  const other = thread("picker-save-other", { ...originalSettings, model: "other-model" });
+  const { server } = sessionServer(t, initial);
+  acceptThreadSettings(initial);
+  acceptThreadSettings(other);
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  server.onPut = async () => {
+    entered.resolve();
+    await release.promise;
+    return Response.json({ error: "Model save failed" }, { status: 503 });
+  };
+  const saving = saveThreadSettings({ model: "pending-model" }, initial.remoteId);
+  const rejected = assert.rejects(saving, /Model save failed/);
+  await entered.promise;
+  assert.equal((await flushThreadSettings(other.remoteId)).ready, true);
+  assert.deepEqual((await flushThreadSettings(other.remoteId)).settings, other.settings);
+  release.resolve();
+  await rejected;
+  await assert.rejects(flushThreadSettings(initial.remoteId), /Model save failed/);
+  assert.equal((await flushThreadSettings(other.remoteId)).ready, true);
+  assert.deepEqual((await flushThreadSettings(other.remoteId)).settings, other.settings);
 });

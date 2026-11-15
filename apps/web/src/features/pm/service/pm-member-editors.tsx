@@ -1,13 +1,16 @@
 import { useState } from "react"
 import { z } from "zod"
-import type { CommandPayloadMap, MemberDirectoryAccess, MemberDirectoryMember, MemberInvitationDto, MemberRole, SelfProfile } from "@contracts"
+import type { CommandPayloadMap, MemberDirectoryAccess, MemberDirectoryMember, MemberInvitationDto, SelfProfile } from "@contracts"
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { InvitationStatus } from "@/views/pm/people-views"
 import { usePmCommand, usePmService } from "./pm-service"
-import { Choice, CommandNotice, Field, Form, entityReference, lines, makeCommand, useDraftState, useText, uuid } from "./pm-ui"
+import { Choice, CommandNotice, Field, Form, makeCommand, useDraftState, useText, uuid } from "./pm-ui"
 import { invitationRecord } from "./pm-member-model"
+import { useTeamDirectory } from "./pm-team-hooks"
+import { ExistingAccountPicker, MemberCapabilityPreview, MemberScopeFields } from "./member-access-fields"
+import { InvitationBatchForm } from "./member-invitation-form"
 
 const capabilities = ["domain.read", "directory.read", "audit.read", "intent.propose", "intent.decide", "planning.edit", "planning.lifecycle", "workitem.cancel_reopen", "delivery.write", "delivery.submit", "delivery.review", "workitem.complete", "access.manage"] as const
 const roleOptions = [{ value: "admin", label: "Admin" }, { value: "member", label: "Member" }, { value: "guest", label: "Guest" }]
@@ -17,26 +20,26 @@ export function MemberRoleExplanation() {
   return <p className="text-sm text-muted-foreground">{t("角色是显式能力模板：Admin 管理整个工作区；Member 可提议、规划、交付和提交；Guest 只读。角色不隐含审核或完成权。Custom 表示现有自定义能力，只有明确保存模板才会替换。团队归属不授予权限。", "Roles are explicit capability templates: Admin manages the whole workspace; Member can propose, plan, deliver and submit; Guest is read-only. Roles never imply review or completion rights. Custom preserves existing grants until you explicitly save a template. Team membership grants no access.")}</p>
 }
 
-function ScopeFields({ whole, setWhole, projects, setProjects, admin = false }: { whole: boolean; setWhole: (value: boolean) => void; projects: string; setProjects: (value: string) => void; admin?: boolean }) {
-  const t = useText()
-  return <><label className="flex gap-2 text-sm"><input type="checkbox" checked={admin || whole} disabled={admin} onChange={event => setWhole(event.target.checked)} />{t("整个工作区", "Whole workspace")}</label>{admin && <p className="text-xs text-muted-foreground">{t("Admin 必须覆盖整个工作区。", "Admin requires workspace-wide scope.")}</p>}{!admin && !whole && <Field label={t("授权项目 ID（每行一项；团队不会自动授权）", "Authorized project IDs (one per line; teams do not grant access)")} value={projects} onChange={setProjects} multiline required />}</>
-}
 
 export function MemberAccessForm({ member, all, mode, disabled }: { member?: MemberDirectoryMember; all: readonly MemberDirectoryMember[]; mode: "role" | "capabilities"; disabled: boolean }) {
   const t = useText()
   const command = usePmCommand()
+  const directory = useTeamDirectory()
+  const projectOptions = directory.error ? [] : (directory.data?.projects ?? []).filter(project => project.canManage)
   const scope = `member-access:${member?.userId ?? "new"}:${mode}`
   const [base, setBase] = useDraftState<MemberDirectoryAccess | null>(scope, "base", member?.access ?? null)
   const [userId, setUserId] = useDraftState(scope, "userId", member?.userId ?? "")
   const [selected, setSelected] = useDraftState<string[]>(scope, "capabilities", member?.access?.capabilities ?? ["domain.read", "directory.read"])
   const [role, setRole] = useDraftState(scope, "role", member?.role === "admin" || member?.role === "member" || member?.role === "guest" ? member.role : "")
   const [whole, setWhole] = useDraftState(scope, "whole", member?.access?.projectIds === null || !member)
-  const [projects, setProjects] = useDraftState(scope, "projects", member?.access?.projectIds?.join("\n") ?? "")
+  const [projects, setProjects] = useDraftState<string[]>(scope, "project-selection", member?.access?.projectIds ?? [])
   const [saved, setSaved] = useState(false)
+  const [accountValid, setAccountValid] = useState(false)
   const fresh = all.find(item => item.userId === userId)?.access ?? null
   const expected = base ?? fresh
   const conflict = !!base && !!fresh && fresh.version > base.version
-  const locked = disabled || command.pending || !!command.unknownCommand
+  const locked = disabled || command.pending || !!command.unknownCommand || !directory.data || !!directory.error
+  const invalidScope = !(mode === "role" && role === "admin") && !whole && (!projects.length || projects.some(id => !projectOptions.some(project => project.id === id)))
   const saveResult = (value: unknown) => {
     const access = z.object({ version: z.number(), capabilities: z.array(z.enum(capabilities)), projectIds: z.array(z.string()).nullable(), revokedAt: z.string().nullable() }).parse(value)
     setBase(access)
@@ -44,9 +47,11 @@ export function MemberAccessForm({ member, all, mode, disabled }: { member?: Mem
   }
   return <div className="space-y-4"><MemberRoleExplanation />
     {conflict && <div role="status" className="space-y-2 rounded border p-3 text-sm"><p>{t("授权已更新，原草稿未丢失。当前能力：", "Access changed; your original draft is retained. Current grants: ")}{fresh.capabilities.join(", ")} · {fresh.projectIds?.join(", ") ?? t("整个工作区", "Whole workspace")}</p><Button variant="outline" disabled={locked} onClick={() => { setBase(fresh); setSaved(false) }}>{t("保留草稿，采用当前版本", "Keep draft, use current version")}</Button></div>}
+    {directory.error && <p role="alert">{t("项目范围读取失败，暂停授权操作。", "Project scope could not be read; access changes are disabled.")}<Button variant="outline" onClick={() => { void directory.refetch() }}>{t("重试", "Retry")}</Button></p>}
     <Form label={mode === "role" ? t("保存角色模板", "Save role template") : t("保存成员能力", "Save member capabilities")} disabled={locked || conflict} onSubmit={async () => {
+      if (invalidScope || !userId || !member && !accountValid) throw new Error(t("请选择当前有效的账号及授权项目。", "Select a currently available account and project scope."))
       const id = uuid.parse(userId)
-      const projectIds = mode === "role" && role === "admin" || whole ? null : z.array(entityReference).min(1).parse([...new Set(lines(projects))])
+      const projectIds = mode === "role" && role === "admin" || whole ? null : projects
       const body = mode === "role"
         ? makeCommand("SetMemberRole", { userId: id, role: z.enum(["admin", "member", "guest"]).parse(role), projectIds })
         : makeCommand("SetWorkspaceMember", { userId: id, capabilities: z.array(z.enum(capabilities)).parse(selected), projectIds })
@@ -55,9 +60,10 @@ export function MemberAccessForm({ member, all, mode, disabled }: { member?: Mem
       const receipt = await command.execute(body)
       if (receipt.status === "committed") saveResult(receipt.result)
     }}>
-      <Field label={t("已创建账号的用户 UUID（不发送邀请邮件）", "Existing account UUID (does not send invitation email)")} value={userId} onChange={value => { setUserId(value); setBase(null); setSaved(false) }} required disabled={!!member} />
+      {member ? <p className="text-sm">{member.name}{member.email ? ` · ${member.email}` : ""}</p> : <ExistingAccountPicker selected={userId} onValidity={setAccountValid} onSelect={value => { setUserId(value); setBase(all.find(item => item.userId === value)?.access ?? null); setSaved(false) }} disabled={locked} />}
       {mode === "role" ? <Choice label={t("显式应用模板（会替换当前能力）", "Explicitly apply template (replaces existing capabilities)")} value={role} onChange={value => { setRole(value); setSaved(false) }} options={[{ value: "", label: t("Custom · 请选择模板", "Custom · choose a template") }, ...roleOptions]} /> : <fieldset className="grid gap-2"><legend className="text-sm">{t("独立能力", "Independent capabilities")}</legend>{capabilities.map(capability => <label key={capability} className="flex gap-2 text-sm"><input type="checkbox" checked={selected.includes(capability)} onChange={event => { setSelected(event.target.checked ? [...selected, capability] : selected.filter(value => value !== capability)); setSaved(false) }} />{capability}</label>)}</fieldset>}
-      <ScopeFields whole={whole} setWhole={setWhole} projects={projects} setProjects={setProjects} admin={mode === "role" && role === "admin"} />
+      <MemberCapabilityPreview before={expected?.revokedAt ? [] : expected?.capabilities ?? []} {...(mode === "role" ? { role } : { after: selected })} />
+      <MemberScopeFields whole={whole} setWhole={setWhole} projects={projects} setProjects={setProjects} options={projectOptions} admin={mode === "role" && role === "admin"} />
     </Form>
     {saved && <p role="status">{t("授权已确认保存。", "Access change confirmed.")}</p>}
     {mode === "capabilities" && expected && <Form label={t("撤销成员访问", "Revoke member access")} disabled={locked || conflict || !!expected.revokedAt} onSubmit={async () => {
@@ -116,33 +122,8 @@ export function MemberSelfProfileEditor({ profile, disabled }: { profile: SelfPr
   </div>
 }
 
-export function MemberInvitationForm({ disabled, enabled }: { disabled: boolean; enabled: boolean }) {
-  const t = useText()
-  const command = usePmCommand()
-  const [email, setEmail] = useDraftState("member-invitation", "email", "")
-  const [role, setRole] = useDraftState<MemberRole>("member-invitation", "role", "member")
-  const [whole, setWhole] = useDraftState("member-invitation", "whole", true)
-  const [projects, setProjects] = useDraftState("member-invitation", "projects", "")
-  const [savedId, setSavedId] = useState<string | null>(null)
-  return <div className="space-y-3"><details className="text-sm text-muted-foreground"><summary className="cursor-pointer">{t("角色模板与授权范围说明", "Role templates and access scope")}</summary><div className="pt-2"><MemberRoleExplanation /></div></details>
-    {!enabled && <p role="status" className="text-sm">{t("SMTP 邮件适配器未配置或状态不可用，无法创建或重发邮件邀请。不会创建虚假的待发送记录。", "SMTP is not configured or unavailable. Email invitations cannot be created or resent; no fake pending records are created.")}</p>}
-    <Form label={t("发送邀请邮件", "Send invitation email")} disabled={disabled || !enabled || command.pending || !!command.unknownCommand} onSubmit={async () => {
-      const body = makeCommand("CreateMemberInvitation", { email: z.email().parse(email.trim()), role, projectIds: role === "admin" || whole ? null : z.array(entityReference).min(1).parse([...new Set(lines(projects))]) })
-      const receipt = await command.execute(body)
-      if (receipt.status !== "committed") return
-      const saved = receipt.result as MemberInvitationDto
-      setSavedId(saved.id)
-      setEmail("")
-    }}>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("受邀邮箱", "Invitation email")} value={email} onChange={value => { setEmail(value); setSavedId(null) }} type="email" required />
-        <Choice label={t("角色模板", "Role template")} value={role} onChange={value => setRole(z.enum(["admin", "member", "guest"]).parse(value))} options={roleOptions} />
-      </div>
-      <ScopeFields whole={whole} setWhole={setWhole} projects={projects} setProjects={setProjects} admin={role === "admin"} />
-      <p className="text-xs text-muted-foreground">{t("SMTP 接受不代表收件箱送达；受邀人需用链接确认邮箱对应账号。", "SMTP acceptance does not confirm inbox delivery. The recipient must accept the link using the account for this email.")}</p>
-    </Form>
-    {savedId && <p role="status" className="break-all text-sm">{t("邀请记录已确认，邮件状态以列表为准：", "Invitation record confirmed; consult the list for email status: ")}{savedId}</p>}
-  </div>
+export function MemberInvitationForm(props: { disabled: boolean; enabled: boolean; defaultProjectId?: string; defaultTeamIds?: readonly string[]; onInvited?: () => void | Promise<void> }) {
+  return <InvitationBatchForm {...props} />
 }
 
 export type InvitationOperation = { kind: "revoke" | "resend"; invitation: MemberInvitationDto }

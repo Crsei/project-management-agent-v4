@@ -1,4 +1,7 @@
+// Picker focus and annotation attachment adapted from t3code 7379f1969b0f4b579327cf81299ef8cc3ddf8e9c
+// apps/web/src/components/preview/PreviewView.tsx (MIT; see LICENSE.t3code).
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMessageContextDraft } from "../../chat/message-context";
 import { useAgentText } from "../../i18n";
 import {
   normalizeBrowserAddress,
@@ -8,40 +11,37 @@ import {
 import { BrowserChrome } from "./browser-chrome";
 import { BrowserRecents } from "./browser-recents";
 import type { DesktopPreviewBridge, ElectronWebviewElement, PreviewState } from "./preview-bridge";
+import { PreviewAnnotationDialog, type PendingPreviewAnnotation } from "./preview-annotation-dialog";
 
 const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
-
-async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  return new File([blob], name, { type: blob.type || "image/png" });
-}
 
 /**
  * Electron runtime: one renderer-mounted <webview> per Browser surface. The
  * main process owns the session, navigation, screenshots, picker and PiP.
  */
-export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAttachImage, onTitleChange, recents, onRemoveRecent, onClearRecents }: {
+export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onTitleChange, recents, onRemoveRecent, onClearRecents }: {
   bridge: DesktopPreviewBridge;
   active: boolean;
   onVisit: (url: string) => void;
   onMetadata: (url: string, metadata: { title?: string; faviconUrl?: string }) => void;
-  onAttachImage?: (file: File) => void | Promise<void>;
   onTitleChange?: (title: string) => void;
   recents: BrowserRecentEntry[];
   onRemoveRecent: (url: string) => void;
   onClearRecents: () => void;
 }) {
   const t = useAgentText();
+  const contextDraft = useMessageContextDraft();
   const tabId = useRef(`browser:${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`).current;
   const addressRef = useRef<HTMLInputElement | null>(null);
   const activated = useRef(false);
   const crashRecovery = useRef(0);
+  const webviewRef = useRef<ElectronWebviewElement | null>(null);
   const [partition, setPartition] = useState<string | null>(null);
   const [preload, setPreload] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [address, setAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [contextError, setContextError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [viewport, setViewport] = useState<BrowserViewport>("fit");
   const [loading, setLoading] = useState(false);
@@ -51,6 +51,7 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
   const [picking, setPicking] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [pipOpen, setPipOpen] = useState(false);
+  const [annotation, setAnnotation] = useState<PendingPreviewAnnotation | null>(null);
 
   useEffect(() => {
     if (!active || activated.current) return;
@@ -100,8 +101,9 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
   }, [bridge, tabId]);
 
   const registerWebview = useCallback((node: HTMLElement | null) => {
+    webviewRef.current = node as ElectronWebviewElement | null;
     if (!node) return;
-    const webview = node as ElectronWebviewElement;
+    const webview = webviewRef.current!;
     const register = () => {
       let id = 0;
       try { id = webview.getWebContentsId(); } catch { return; }
@@ -111,26 +113,11 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
     webview.addEventListener("dom-ready", register);
     register();
     return () => {
+      if (webviewRef.current === webview) webviewRef.current = null;
       webview.removeEventListener("did-attach", register);
       webview.removeEventListener("dom-ready", register);
     };
   }, [bridge, tabId]);
-
-  const attachImage = async (dataUrl: string, name: string, message: string) => {
-    if (onAttachImage) {
-      await onAttachImage(await dataUrlToFile(dataUrl, name));
-      setNotice(message);
-      return;
-    }
-    const anchor = document.createElement("a");
-    anchor.href = dataUrl;
-    anchor.download = name;
-    anchor.style.display = "none";
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    setNotice(t("图片已下载。", "The image was downloaded."));
-  };
 
   const openAddress = async (raw: string) => {
     const result = normalizeBrowserAddress(raw);
@@ -176,35 +163,47 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
     void bridge.reload(tabId).catch((cause) => { setLoading(false); setError(errorMessage(cause)); });
   };
 
+  const prepareAnnotation = (snapshot: PendingPreviewAnnotation["snapshot"], draft: PendingPreviewAnnotation["draft"]) => {
+    if (!draft.isCurrent()) throw new Error(t("会话已切换，捕获的页面上下文未添加。", "The session changed; captured page context was not added."));
+    setAnnotation({ contextId: crypto.randomUUID(), attachmentId: crypto.randomUUID(), snapshot, draft });
+  };
+
   const capture = async () => {
-    if (!currentUrl || capturing) return;
+    if (!currentUrl || capturing || picking || annotation || !contextDraft.available) return;
+    const draft = contextDraft;
     setCapturing(true);
-    setError(null);
+    setContextError(null);
+    setNotice(null);
     try {
-      const result = await bridge.capture(tabId);
-      await attachImage(result.dataUrl, "browser-screenshot.png", t("截图已加入消息附件。", "Screenshot added to the message."));
+      prepareAnnotation(await bridge.capture(tabId), draft);
     } catch (cause) {
-      setError(errorMessage(cause));
+      setContextError(errorMessage(cause));
     } finally {
       setCapturing(false);
     }
   };
 
   const pick = async () => {
-    if (!currentUrl || picking) return;
+    if (!currentUrl || picking || capturing || annotation || !contextDraft.available) return;
+    const draft = contextDraft;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPicking(true);
-    setError(null);
+    setContextError(null);
+    setNotice(null);
     try {
+      // Focus the embedder's webview as well as main's WebContents so Esc reaches the picker.
+      webviewRef.current?.focus();
       const result = await bridge.pick(tabId);
       if ("cancelled" in result) {
         setNotice(t("已取消元素选择。", "Element selection cancelled."));
         return;
       }
-      await attachImage(result.dataUrl, "browser-element.png", t("已选择页面元素并加入消息附件。", "Selected element added to the message."));
+      prepareAnnotation(result, draft);
     } catch (cause) {
-      setError(errorMessage(cause));
+      setContextError(errorMessage(cause));
     } finally {
       setPicking(false);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     }
   };
 
@@ -236,6 +235,10 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
 
   const live = Boolean(currentUrl && partition);
   const noUrlReason = t("先打开一个页面。", "Open a page first.");
+  const contextUnavailable = t("当前消息尚未就绪，无法添加页面上下文。", "The current message is not ready to receive page context.");
+  const contextBusy = Boolean(picking || capturing || annotation);
+  const actionDisabledReason = !live ? noUrlReason : !contextDraft.available ? contextUnavailable : annotation
+    ? t("请先加入或取消当前批注。", "Attach or cancel the current annotation first.") : undefined;
   return <div className="inspector-panel">
     <BrowserChrome
       address={address}
@@ -257,18 +260,19 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
       hasRecents={recents.length > 0}
       viewport={viewport}
       onViewportChange={setViewport}
-      onPick={live && !picking ? () => { void pick(); } : undefined}
+      onPick={live && !contextBusy && contextDraft.available ? () => { void pick(); } : undefined}
       pickActive={picking}
-      pickDisabledReason={picking ? t("正在选择元素，按 Esc 取消。", "Picking elements; press Esc to cancel.") : noUrlReason}
-      onCapture={live && !capturing ? () => { void capture(); } : undefined}
+      pickDisabledReason={actionDisabledReason ?? (picking ? t("正在选择元素，按 Esc 取消。", "Picking elements; press Esc to cancel.") : capturing ? t("正在截图。", "Capturing screenshot.") : undefined)}
+      onCapture={live && !contextBusy && contextDraft.available ? () => { void capture(); } : undefined}
       captureBusy={capturing}
-      captureDisabledReason={noUrlReason}
+      captureDisabledReason={actionDisabledReason ?? (contextBusy ? t("请先完成当前页面捕获。", "Finish the current page capture first.") : undefined)}
       onTogglePiP={live ? () => { void togglePiP(); } : undefined}
       pipOpen={pipOpen}
       pipDisabledReason={noUrlReason}
       onDevTools={live ? () => { void bridge.openDevTools(tabId).catch((cause) => setError(errorMessage(cause))); } : undefined}
     />
     {error && <p className="inspector-browser-error" role="alert">{error}</p>}
+    {contextError && <p className="inspector-browser-error" role="alert">{contextError}</p>}
     {notice && <p className="inspector-browser-notice" role="status">{notice}</p>}
     {currentUrl
       ? <div className="inspector-browser">
@@ -286,5 +290,10 @@ export function NativeBrowserPanel({ bridge, active, onVisit, onMetadata, onAtta
         </div>
       </div>
       : <BrowserRecents recents={recents} onOpen={(url) => { void openAddress(url); }} onRemove={onRemoveRecent} t={t} />}
+    {annotation && <PreviewAnnotationDialog key={annotation.contextId} pending={annotation} onClose={() => setAnnotation(null)} onAttached={warning => {
+      setAnnotation(null);
+      if (warning) setContextError(warning);
+      else setNotice(t("页面上下文已加入消息，尚未发送。", "Page context was attached to the message; it has not been sent."));
+    }} />}
   </div>;
 }

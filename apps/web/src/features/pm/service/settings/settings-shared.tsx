@@ -2,11 +2,10 @@ import { useId, type ReactNode } from "react"
 
 export type SettingsPageProps = { mode: "service" | "lab" }
 
-export function SettingsSection({ title, description, children, wide = false }: {
+export function SettingsSection({ title, description, children }: {
   title: string
   description?: string
   children: ReactNode
-  wide?: boolean
 }) {
   const headingId = useId()
   return <section aria-labelledby={headingId} className="min-w-0">
@@ -14,7 +13,7 @@ export function SettingsSection({ title, description, children, wide = false }: 
       <h2 id={headingId} className="text-lg font-semibold">{title}</h2>
       {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
     </header>
-    <div className={`min-w-0 space-y-6 ${wide ? "" : "max-w-xl"}`}>{children}</div>
+    <div className="min-w-0 space-y-6">{children}</div>
   </section>
 }
 

@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify, parseArgs } from 'node:util';
-import { open, mkdir, mkdtemp, rm, lstat } from 'node:fs/promises';
+import { open, mkdir, mkdtemp, rm, lstat, readFile } from 'node:fs/promises';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -18,6 +18,8 @@ import { runtimeConfig } from '../packages/infrastructure/src/runtime-config.ts'
 import { exportLocalProjectCheckpoint, restoreLocalProjectCheckpoint, captureLocalProjectCheckpoint, localProjectCheckpointSha256 } from '../packages/infrastructure/src/project-storage-checkpoint.ts';
 import { readProjectLocation } from '../packages/pm-core/project-locations.ts';
 import { readStoredBlob } from '../packages/infrastructure/src/project-blobs.ts';
+import { captureAgentStoppedState, createAgentBackup, restoreAgentBackup, verifyAgentBackup } from '../apps/server/agent/src/maintenance/agent-backup.ts';
+import { createStoppedRecoverySet, writeStoppedRecoverySet } from '../apps/server/agent/src/maintenance/recovery-set.ts';
 
 const exec = promisify(execFile);
 async function dockerWithFiles(args, stdio) {
@@ -29,8 +31,12 @@ async function dockerWithFiles(args, stdio) {
   });
 }
 async function main() {
-  const { values } = parseArgs({ strict: true, options: { stopped: { type: 'boolean' }, verify: { type: 'boolean' } } });
-  if (!values.stopped) throw new Error('--stopped must attest API, Worker and every external Markdown writer are stopped');
+  const { values } = parseArgs({ strict: true, options: { stopped: { type: 'boolean' }, verify: { type: 'boolean' }, 'agent-source': { type: 'string' }, 'agent-secrets': { type: 'string' } } });
+  if (!values.stopped) throw new Error('--stopped must attest PM API, Worker, external Markdown writers, Agent and owned native writers are stopped for the complete barrier');
+  if (Boolean(values['agent-source']) !== Boolean(values['agent-secrets']) || values['agent-secrets'] && !['include', 'exclude'].includes(values['agent-secrets']))
+    throw new Error('A complete Agent recovery set requires explicit --agent-source /absolute/stopped-data --agent-secrets include|exclude.');
+  const barrierId = randomUUID(), barrierStartedAt = new Date().toISOString();
+  const agentState = values['agent-source'] ? captureAgentStoppedState(values['agent-source'], true, values['agent-secrets']) : null;
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
   const database = new URL(process.env.DATABASE_URL);
   if (database.hostname !== '127.0.0.1' || database.port !== (process.env.POSTGRES_PORT ?? '55444') || database.pathname !== '/project_management' || database.username !== 'project_management' || database.search) throw new Error('Only the dedicated local PostgreSQL public schema is supported');
@@ -83,10 +89,16 @@ async function main() {
     if (binding?.state !== 'active') throw new Error('Backup requires the original active storage binding');
     const blobsDirectory = path.join(directory, 'blobs');
     const backup = await exportBlobBackup({ pool, source: { provider: source, locator: sourceLocator }, directory: blobsDirectory, databaseDumpSha256, coreManifestSha256, stopped: true, readObject: entry => readStoredBlob({ sql: pool, legacy: bindBlobStore(pool, sourceLocator, source), resolveProject: (workspaceId, projectId) => readProjectLocation(path.join(coreRoot, workspaceId), projectId) }, entry) });
+    const agentManifest = values['agent-source'] ? await createAgentBackup({ source: values['agent-source'], bundle: path.join(directory, 'agent'), secrets: values['agent-secrets'], stopped: true }) : null;
+    const agentManifestSha256 = agentManifest ? (await hashCheckpointFile(path.join(directory, 'agent/manifest.json'))).sha256 : null;
     const report = { formatVersion: 3, createdAt: new Date().toISOString(), directory, databaseSchema: 'public', databaseDumpSha256, coreManifestSha256, blobManifestSha256: backup.manifestSha256, sourceBinding: backup.manifest.source, objects: backup.manifest.entries.length, coreFiles: checkpoint.manifest.core.length, projectRoots: checkpoint.manifest.projects.length, verification: null };
 
     if (values.verify) {
       verificationRoot = await mkdtemp(path.join(tmpdir(), 'pm-backup-verify-'));
+      if (agentManifest) {
+        restoreAgentBackup({ bundle: path.join(directory, 'agent'), target: path.join(verificationRoot, 'agent'), stopped: true });
+        verifyAgentBackup({ bundle: path.join(directory, 'agent'), target: path.join(verificationRoot, 'agent'), stopped: true });
+      }
       const targetCore = path.join(verificationRoot, 'core');
       const targetBlobRoot = path.join(verificationRoot, 'blobs');
       await restoreLocalProjectCheckpoint({ directory: filesDirectory, manifest: checkpoint.manifest, expectedManifestSha256: coreManifestSha256, targetCoreRoot: targetCore, targetProjectsRoot: path.join(verificationRoot, 'projects'), stopped: true });
@@ -134,6 +146,20 @@ async function main() {
       report.verification = { status: 'passed', restoredIntoIsolatedDatabase: true, restoredIntoNewBlobAndCoreRoots: true, storageEpoch: restoredBinding.epoch, httpVerifiedArtifacts, notCurrentlyReadableArtifacts, coreWorkspaces, outboundServicesFenced: true, productionCredentialPolicyApproved: false };
     }
     if (localProjectCheckpointSha256(await captureLocalProjectCheckpoint(coreRoot)) !== coreManifestSha256) throw new Error('Source roots changed during the stopped backup');
+    if (agentState && captureAgentStoppedState(values['agent-source'], true, values['agent-secrets']).fingerprint !== agentState.fingerprint)
+      throw new Error('Agent source changed during the common stopped recovery barrier.');
+    const finalClients = (await exec('docker', [...pg, 'psql', '-U', 'project_management', '-d', 'project_management', '-At', '-c', "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name='project-management' AND pid<>pg_backend_pid()"])).stdout.trim();
+    if (finalClients !== '0') throw new Error('Source PM writers reconnected during the stopped recovery barrier.');
+    if (agentManifest) {
+      const applicationVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
+      const recoverySet = createStoppedRecoverySet({ applicationVersion,
+        quiescence: { barrierId, startedAt: barrierStartedAt, endedAt: new Date().toISOString(), writers: ['pm-api', 'pm-worker', 'pm-markdown-editors', 'agent', 'owned-native-processes'], operatorConfirmedStopped: true, sourceRechecked: true },
+        components: { databaseDumpSha256, coreManifestSha256, blobManifestSha256: backup.manifestSha256, agentManifestSha256, chatFilesSha256: null },
+        agent: { sourceStoreId: agentManifest.sourceIdentity.storeId, restoreEpoch: agentManifest.sourceIdentity.restoreEpoch, sourceFingerprint: agentState.fingerprint, secrets: agentManifest.secrets },
+        exclusions: agentManifest.exclusions });
+      await writeStoppedRecoverySet(directory, recoverySet);
+      report.recoverySet = recoverySet;
+    }
     const file = await open(path.join(directory, 'manifest.json'), 'wx', 0o600);
     try { await file.writeFile(JSON.stringify(report, null, 2) + '\n'); await file.sync(); }
     finally { await file.close(); }

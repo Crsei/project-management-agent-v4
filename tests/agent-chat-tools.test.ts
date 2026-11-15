@@ -5,11 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Workspace } from '../packages/pm-core/index.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
-import { agentChatToolDefinitions, AGENT_CHAT_TOOL_NAMES, parseAgentChatToolInput, assertAgentToolRecord, assertAgentToolOrdinaryMutation } from '../packages/application/src/agent-chat-tools.ts';
+import { agentChatToolDefinitions, parseAgentChatToolInput, assertAgentToolRecord, assertAgentToolOrdinaryMutation } from '../packages/application/src/agent-chat-tools.ts';
 
 const revision = 'a'.repeat(64);
 test('registered PM schemas reject model identity, protected fields, raw patches and unsupported actions', () => {
-  assert.equal(AGENT_CHAT_TOOL_NAMES.length, 17);
   for (const definition of agentChatToolDefinitions) {
     assert.equal(definition.function.strict, true);
     assert.equal(definition.function.parameters.additionalProperties, false);

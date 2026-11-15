@@ -4,8 +4,9 @@ import type { FolderTerminalRequest } from "../../pm/execution-terminals";
 import { agentText } from "../../i18n-text.ts";
 import { useAgentText } from "../../i18n";
 import { inspectUrl } from "./api";
+import type { ChatInspectorRequest } from "../../chat/chat-actions";
 
-export type InspectorScope = { threadId?: string; environment?: ExecutionEnvironment; onOpenTerminal?: (request: FolderTerminalRequest) => void };
+export type InspectorScope = { threadId?: string; environment?: ExecutionEnvironment; onOpenTerminal?: (request: FolderTerminalRequest) => void; openRequest?: ChatInspectorRequest };
 const ScopeContext = createContext<InspectorScope | null>(null);
 export function InspectorScopeProvider({ scope, children }: { scope: InspectorScope; children: ReactNode }) {
   return <ScopeContext.Provider value={scope}>{children}</ScopeContext.Provider>;

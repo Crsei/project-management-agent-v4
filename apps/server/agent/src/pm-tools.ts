@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { PmAuthorizedOperation, PmToolCallRecord, PmToolInvocation, PmToolTarget, PmToolLinkage, PmToolCallProjection } from "@agent-workspace/contracts/pm-tools";
 import { pmToolCallRecordSchema, pmToolInvocationSchema, pmToolTargetSchema, pmWorkspaceDiscoverySchema, pmToolReconcileResultSchema } from "@agent-workspace/contracts/pm-tools";
-import { listRecords, readRecord, writeRecord } from "./durable/store.ts";
+import { PM_TOOL_APPROVAL_AUTHORITY_HEADER } from "@agent-workspace/contracts/pm-tools";
+import { getDatabase, listRecords, readRecord, writeRecord } from "./durable/store.ts";
 import { emitNativeOutput } from "./durable/native-output.ts";
 import { getThread } from "./durable/threads.ts";
 import { authorizePmTarget } from "./durable/pm-context.ts";
@@ -12,11 +13,16 @@ import { DurableError } from "./durable/errors.ts";
 import { observePmCoreChanges } from "./pm-core-changes/index.ts";
 import { assertMcpIdentity, assertMcpThread, mcpIdentityFromHeaders, mcpIdentityHeaders, pmBrowser, type McpInvocationIdentity } from "./mcp/identity.ts";
 import { autoApproveApprovals } from "./approval-mode.ts";
-import { AGENT_CHAT_TOOL_REGISTRY, agentChatToolDefinitions } from "../../../../packages/application/src/agent-chat-tools.ts";
+import { AGENT_CHAT_TOOL_REGISTRY, agentChatToolDefinitions, parseAgentChatToolInput } from "../../../../packages/application/src/agent-chat-tools.ts";
+import { DomainError } from "../../../../packages/domain/src/core.ts";
 import { createPmToolLinkageBearer, createPmToolReconcileBearer, pmToolRequestHash, PM_TOOL_RECONCILE_PATH } from "../../../../packages/infrastructure/src/pm-tool-service-auth.ts";
-import { createPmVisibilityProjector } from "./pm-visibility.ts";
+import { createPmVisibilityProjector, type PmVisibilityProjector } from "./pm-visibility.ts";
 import { updatePmNativeOutput } from "./durable/native-output.ts";
 import { normalizePmToolResult } from "./pm-outcomes.ts";
+import { pmUrl, pmFetch, assertTargetCeiling, storedTarget, delegatedHeaders, assertResponseIdentity, signedHeaders } from "./pm-tool-transport.ts";
+import { callCollaborationGenerationTool, isCollaborationTool, listCollaborationGenerationTools } from "./collaboration/tools.ts";
+import { getCollaborationGenerationContext } from "./collaboration/runs.ts";
+import { capturePmApprovalCapabilities, assertPmApprovalCapabilitiesCurrent, assertPmApprovalNotCancelled, pmApprovalDecisionFingerprint, type PmApprovalCapabilityGuard } from "./collaboration/approval-capabilities.ts";
 
 const namespace = "pm-tool-calls";
 type Input = PmToolInvocation;
@@ -24,6 +30,7 @@ export type StoredPmToolCall = {
   record: PmToolCallRecord; delegation?: McpInvocationIdentity; targetCeiling?: PmToolTarget;
   requestHash?: string;
   executionId?: string;
+  approvalCapabilities?: PmApprovalCapabilityGuard;
   request: Input & { threadId: string; messageId: string; generationId: string; linkage?: PmToolLinkage };
 };
 type Stored = StoredPmToolCall;
@@ -44,6 +51,16 @@ type Context = {
   /** Request-local live Chat authorization; never copied into a stored request. */
   authorizeExecution: (action: "tool") => Promise<void>;
 };
+async function readApprovalDecision(request: Request): Promise<string | undefined> {
+  const text = await request.text();
+  if (!text.trim()) return undefined;
+  if (text.length > 1024) throw new DurableError(400, "invalid_approval_decision", "Approval decision input is too large.");
+  let body: unknown;
+  try { body = JSON.parse(text); } catch { throw new DurableError(400, "invalid_approval_decision", "Approval decision must be JSON."); }
+  const parsed = z.strictObject({ decisionFingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(body);
+  if (!parsed.success) throw new DurableError(400, "invalid_approval_decision", "Use the original decision fingerprint.");
+  return parsed.data.decisionFingerprint;
+}
 
 /** Only PM's write tools change business state; read tools never appear as changes. */
 const changeDefinitions: Record<string, { kind: PmChangeKind; label: string }> = {
@@ -60,10 +77,25 @@ const changeDefinitions: Record<string, { kind: PmChangeKind; label: string }> =
   pm_restore_task: { kind: "archive", label: "恢复任务" },
   pm_delete_task: { kind: "delete", label: "删除任务" },
   pm_transition_task: { kind: "status", label: "更改任务状态" },
+  pm_create_entity: { kind: "create", label: "创建实体" },
+  pm_update_entity: { kind: "update", label: "更新实体" },
+  pm_save_entity_body: { kind: "update", label: "保存正文" },
+  pm_save_entity_source: { kind: "update", label: "保存源码" },
+  pm_archive_entity: { kind: "archive", label: "归档实体" },
+  pm_restore_entity: { kind: "archive", label: "恢复实体" },
+  pm_delete_entity: { kind: "delete", label: "删除实体" },
+  pm_transition_entity: { kind: "status", label: "更改实体状态" },
+  pm_save_view: { kind: "update", label: "保存视图" },
+  pm_save_configuration: { kind: "update", label: "保存配置" },
+  pm_preview_migration: { kind: "create", label: "创建迁移预览" },
+  pm_apply_migration: { kind: "update", label: "应用迁移" },
+  pm_restore_migration: { kind: "update", label: "恢复迁移" },
 };
 /** Destructive tools require an explicit approval before PM may be called unless auto-approve is configured. */
 export const destructivePmToolNames: Readonly<Record<string, true>> = {
   pm_archive_task: true, pm_restore_task: true, pm_delete_task: true, pm_transition_task: true,
+  pm_archive_entity: true, pm_restore_entity: true, pm_delete_entity: true, pm_transition_entity: true,
+  pm_apply_migration: true, pm_restore_migration: true,
 };
 /** Failed and unknown outcomes are never reported as applied; pending work is only proposed. */
 const changeStates: Record<PmToolCallRecord["status"], PmChangeState> = { pending_approval: "proposed", running: "running", succeeded: "applied", failed: "failed", unknown: "unknown" };
@@ -81,28 +113,40 @@ function changeSummary(label: string, targetId: string | null, request: unknown)
   const target = targetId ?? argumentHint(request);
   return target ? `${label} · ${target}` : label;
 }
+/** Every centrally registered write has a truthful resource change, not an invented core entity. */
+function changeDefinition(name: string): { kind: PmChangeKind; label: string } | undefined {
+  const defined = changeDefinitions[name];
+  if (defined) return defined;
+  if (!AGENT_CHAT_TOOL_REGISTRY.some(tool => tool.name === name && tool.write)) return undefined;
+  const action = name.split("_")[1];
+  const kind: PmChangeKind = action === "create" ? "create" : action === "delete" ? "delete"
+    : action === "archive" || action === "restore" ? "archive" : "update";
+  return { kind, label: name };
+}
 /**
  * Projects one persisted call into the shared change contract.
  * Missing before/after data is omitted, never reconstructed, and a result source's
  * revision has no slot in `PmChangeSet`, so it is not smuggled into another field.
  */
 export function projectPmToolChange(record: PmToolCallRecord, request?: unknown): PmChangeSet | null {
-  const definition = changeDefinitions[record.name];
+  const definition = changeDefinition(record.name);
   if (!definition) return null;
   const result = record.result;
-  const entity = result && result.kind !== "comment" && result.kind !== "relation" && result.kind !== "workspaces" ? result.items[0] : undefined;
+  const entity = result && (result.kind === "project" || result.kind === "task" || result.kind === "document" ||
+    result.kind === "cycle" || result.kind === "milestone" || result.kind === "module" || result.kind === "requirement" ||
+    result.kind === "release" || result.kind === "goal" || result.kind === "query" || result.kind === "lifecycle") ? result.items[0] : undefined;
   const comment = result?.kind === "comment" ? result.items[0] : undefined;
   const relation = result?.kind === "relation" ? result.items[0] : undefined;
-  const source = result && result.items.length === 0 ? result.sources[0] : undefined;
-  const targetId = result?.receipt?.targetId ?? entity?.id ?? comment?.taskId ?? relation?.sourceId ?? source?.entityId ?? null;
+  const source = !entity && !comment && !relation ? result?.sources[0] : undefined;
+  const targetId = result?.receipt?.targetId ?? entity?.id ?? comment?.taskId ?? relation?.sourceId ?? source?.entityId ?? record.changeSet?.targetId ?? null;
   const fields = record.changeSet?.fields;
   return {
     id: record.operationId,
     kind: definition.kind,
     state: changeStates[record.status],
     targetId,
-    targetTitle: entity?.title ?? source?.title ?? null,
-    projectId: entity?.projectId ?? comment?.projectId ?? source?.projectId ?? null,
+    targetTitle: entity?.title ?? source?.title ?? record.changeSet?.targetTitle ?? null,
+    projectId: entity?.projectId ?? comment?.projectId ?? source?.projectId ?? record.changeSet?.projectId ?? record.target?.projectId ?? null,
     summary: changeSummary(definition.label, targetId, record.arguments ?? request),
     ...(fields && fields.length > 0 ? { fields } : {}),
     receiptId: result?.receipt?.operationId ?? null,
@@ -113,15 +157,12 @@ export function projectPmToolChange(record: PmToolCallRecord, request?: unknown)
   };
 }
 
-function pmUrl(workspaceId: string | null, action = ""): URL {
-  const base = new URL(process.env.PM_API_URL?.trim() || "http://127.0.0.1:4194");
-  if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new Error("Invalid PM API origin");
-  return new URL(workspaceId === null ? action : `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/agent-tools${action}`, base.origin);
-}
-function pmHeaders(headers?: Headers): Headers {
-  const result = new Headers({ "content-type": "application/json" });
-  for (const name of ["cookie", "authorization", "x-pm-tool-linkage"]) { const value = headers?.get(name); if (value) result.set(name, value); }
-  return result;
+export type PmToolCallChange = Pick<PmToolCallRecord, "operationId" | "threadId" | "generationId" | "status">;
+const pmToolCallObservers = new Set<(change: Readonly<PmToolCallChange>) => void>();
+/** Observes already-committed original identities only; no payload, replay, dispatch or approval authority. */
+export function subscribePmToolCalls(listener: (change: Readonly<PmToolCallChange>) => void): () => void {
+  pmToolCallObservers.add(listener);
+  return () => { pmToolCallObservers.delete(listener); };
 }
 function publish(record: PmToolCallRecord): void {
   if (!record.generationId) return;
@@ -148,6 +189,15 @@ function save(value: Stored): void {
       certainty: !incoming.result && retained.result ? retained.certainty : incoming.certainty };
   }
   writeRecord(namespace, value.record.operationId, value);
+  // Current PM saves are standalone commits. Never expose an ambient transaction's speculative state.
+  if (pmToolCallObservers.size && !getDatabase().isTransaction) {
+    const { operationId, threadId, generationId, status } = value.record;
+    const change: Readonly<PmToolCallChange> = Object.freeze({ operationId, threadId, generationId, status });
+    for (const listener of pmToolCallObservers) {
+      try { listener(change); }
+      catch { /* An execution observer cannot reject or overwrite the durable PM operation. */ }
+    }
+  }
   publish(value.record);
 }
 /** A process restart cannot prove whether an in-flight or unproven legacy failure committed. */
@@ -174,42 +224,6 @@ async function observeCreatedProject(record: PmToolCallRecord, headers?: Headers
     } catch { /* A completed or deleted generation cannot receive a live diagnostic. */ }
   }
 }
-async function pmFetch(workspaceId: string | null, action: string, headers: Headers | undefined, request?: unknown, onDispatch?: () => void): Promise<unknown> {
-  const url = pmUrl(workspaceId, action), effectiveHeaders = pmHeaders(headers);
-  const bodyText = request === undefined ? undefined : JSON.stringify(request);
-  const options: RequestInit = { method: request === undefined ? "GET" : "POST", headers: effectiveHeaders, ...(bodyText === undefined ? {} : { body: bodyText }), redirect: "error", signal: AbortSignal.timeout(30_000) };
-  onDispatch?.();
-  const response = await fetch(url, options);
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const parsed = z.object({ code: z.string().optional(), message: z.string().optional(), error: z.union([z.string(), z.object({ code: z.string().optional(), message: z.string().optional() })]).optional() }).safeParse(body);
-    const envelope = parsed.success ? parsed.data : undefined;
-    const detail = typeof envelope?.error === "object" ? envelope.error : undefined;
-    throw Object.assign(new Error(detail?.message ?? envelope?.message ?? (typeof envelope?.error === "string" ? envelope.error : `PM HTTP ${response.status}`)), { code: detail?.code ?? envelope?.code ?? `pm_http_${response.status}`, status: response.status });
-  }
-  return body;
-}
-function assertTargetCeiling(target: PmToolTarget, ceiling?: PmToolTarget): void {
-  if (ceiling && (target.workspaceId !== ceiling.workspaceId || ceiling.projectId !== null && target.projectId !== ceiling.projectId))
-    throw Object.assign(new Error("PM target exceeds the originating authorization ceiling"), { status: 403 });
-}
-function storedTarget(value: Stored): PmToolTarget {
-  const parsed = pmToolTargetSchema.safeParse(value.request.target);
-  if (!parsed.success || value.record.workspaceId !== parsed.data.workspaceId ||
-      !value.record.target || JSON.stringify(value.record.target) !== JSON.stringify(parsed.data))
-    throw Object.assign(new Error("The original operation has no verifiable explicit target; it cannot be replayed or approved."), { status: 409, code: "pm_tool_target_unverifiable" });
-  assertTargetCeiling(parsed.data, value.targetCeiling);
-  if (value.delegation) assertTargetCeiling(parsed.data, value.delegation.scope);
-  return parsed.data;
-}
-/** Rehydrate only non-secret grant identity; never approve under the browser's identity. */
-async function delegatedHeaders(value: Stored, headers?: Headers): Promise<Headers | undefined> {
-  if (!value.delegation) return headers;
-  if (value.request.linkage?.executionRoot === "external") await assertMcpIdentity(value.delegation);
-  else await assertMcpThread(value.delegation, value.record.threadId);
-  if (value.request.target) assertTargetCeiling(value.request.target, value.delegation.scope);
-  return mcpIdentityHeaders(value.delegation);
-}
 
 export async function discoverPmWorkspaces(headers?: Headers, delegation?: McpInvocationIdentity) {
   if (delegation) { await assertMcpIdentity(delegation); headers = await mcpIdentityHeaders(delegation); }
@@ -234,17 +248,35 @@ export async function listPmTools(headers?: Headers, delegation?: McpInvocationI
   })) }).parse(await pmFetch(null, "/api/v1/agent-tools", headers));
   return { tools: [discoveryTool, ...catalog.tools] };
 }
-function assertResponseIdentity(value: Stored, response: PmToolCallRecord): void {
-  if (response.operationId !== value.record.operationId || response.threadId !== value.record.threadId ||
-      response.messageId !== value.record.messageId || response.generationId !== value.record.generationId ||
-      response.name !== value.record.name || response.workspaceId !== value.record.workspaceId ||
-      JSON.stringify(response.target) !== JSON.stringify(value.record.target) ||
-      response.actorId !== value.record.actorId)
-    throw new Error("PM returned a mismatched operation or target");
+/** Shared business schemas apply before every transport's PM dispatch, not just inside PM. */
+function pmInputError(name: string, input: unknown): PmToolCallRecord["error"] {
+  if (name === "pm_list_workspaces") return z.strictObject({}).safeParse(input).success ? null
+    : { code: "agent_tool_invalid_input", message: "Invalid pm_list_workspaces arguments. Provide an empty arguments object." };
+  const tool = AGENT_CHAT_TOOL_REGISTRY.find(tool => tool.name === name);
+  if (!tool) return { code: "agent_tool_not_available", message: "This PM tool is not registered." };
+  try { parseAgentChatToolInput(tool.name, input); return null; }
+  catch (error) {
+    if (!(error instanceof DomainError)) throw error;
+    return { code: error.code, message: error.message };
+  }
+}
+/** A known read schema can reject an old invalid query, never establish a write's outcome. */
+function legacyQueryInputError(value: Stored): PmToolCallRecord["error"] {
+  if (value.record.name !== "pm_query" || value.request.name !== "pm_query" || value.record.result ||
+      !["running", "unknown", "failed"].includes(value.record.status) ||
+      value.record.certainty && (value.record.certainty.dispatch === "not_sent" || value.record.certainty.evidence !== "unresolved")) return null;
+  return pmInputError(value.request.name, value.request.arguments);
+}
+function rejectInput(value: Stored, error: NonNullable<PmToolCallRecord["error"]>, dispatch: "not_sent" | "possibly_sent"): void {
+  value.record = { ...value.record, status: "failed", result: null, commandIds: [],
+    certainty: { dispatch, evidence: "local_rejection" }, finishedAt: new Date().toISOString(),
+    error: { code: error.code, message: `${error.message} ${dispatch === "not_sent" ? "No PM command was sent." : "The original read was not replayed."} Correct arguments require a new operationId.` } };
+  save(value);
 }
 /** Internal proof only changes business certainty. It never grants access to the business payload. */
 async function reconcileProof(value: Stored): Promise<void> {
-  if (!value.record.actorId || !value.request.target || value.record.status === "pending_approval" || value.record.certainty?.dispatch === "not_sent") return;
+  if (!value.record.actorId || !value.request.target || value.record.status === "pending_approval" ||
+      value.record.certainty?.dispatch === "not_sent" || value.record.certainty?.evidence === "local_rejection" || legacyQueryInputError(value)) return;
   try {
     const requestHash = value.requestHash ?? pmToolRequestHash(value.request, value.record.actorId);
     const proof = { operationId: value.record.operationId, actorId: value.record.actorId, target: value.request.target, requestHash };
@@ -261,7 +293,7 @@ async function reconcileProof(value: Stored): Promise<void> {
     save(value);
   } catch { /* Missing service configuration or proof is not evidence of failure. */ }
 }
-async function reconcile(value: Stored, headers?: Headers): Promise<PmToolCallRecord> {
+async function reconcile(value: Stored, headers?: Headers, rejectAccessDenied = false): Promise<PmToolCallRecord> {
   if (value.record.name === "pm_list_workspaces") {
     const current = await discoverPmWorkspaces(await delegatedHeaders(value, headers));
     const historical = value.record.result;
@@ -270,34 +302,55 @@ async function reconcile(value: Stored, headers?: Headers): Promise<PmToolCallRe
       throw Object.assign(new Error("PM discovery history is no longer authorized"), { status: 403 });
     return value.record;
   }
-  await reconcileProof(value);
+  const invalidQuery = legacyQueryInputError(value);
+  if (!invalidQuery) await reconcileProof(value);
   const target = storedTarget(value);
   headers = await delegatedHeaders(value, headers);
   const authority = await authorizePmTarget(target, headers);
   if (authority.actorId !== value.record.actorId) throw Object.assign(new Error("Operation belongs to another PM actor"), { status: 403 });
-  if (value.record.status === "pending_approval" || value.record.certainty?.dispatch === "not_sent") return value.record;
+  if (invalidQuery) {
+    // Keep the original arguments/hash and require the same binding as a PM result.
+    assertResponseIdentity(value, { ...value.record, ...value.request, workspaceId: target.workspaceId });
+    if (value.requestHash && value.requestHash !== pmToolRequestHash(value.request, authority.actorId))
+      throw Object.assign(new Error("The original request hash does not match its operation"), { status: 409, code: "pm_tool_identity_conflict" });
+    rejectInput(value, invalidQuery, "possibly_sent");
+    return value.record;
+  }
+  if (value.record.status === "pending_approval" || value.record.certainty?.dispatch === "not_sent" || value.record.certainty?.evidence === "local_rejection") return value.record;
   try {
     const body = pmToolCallRecordSchema.parse(await pmFetch(target.workspaceId, "/result", await signedHeaders(value, headers), value.request));
     assertResponseIdentity(value, body);
     const normalized = normalizePmToolResult(body);
     value.record = { ...normalized, linkage: value.record.linkage ?? normalized.linkage, notices: value.record.notices, commandIds: normalized.commandIds ?? value.record.commandIds };
     save(value); await observeCreatedProject(value.record, headers);
-  } catch {
-    if (value.record.status !== "succeeded" && !(value.record.status === "failed" && value.record.certainty?.evidence === "pm_result") && value.record.certainty?.evidence !== "internal_proof") {
+  } catch (error) {
+    if (rejectAccessDenied && typeof error === "object" && error !== null && "status" in error &&
+        [401, 403].includes(Number(error.status))) throw error;
+    // Original success is immutable; a delivery error withholds content instead of changing that fact.
+    if (value.record.status === "succeeded") throw error;
+    if (!(value.record.status === "failed" && value.record.certainty?.evidence === "pm_result") && value.record.certainty?.evidence !== "internal_proof") {
       value.record = { ...value.record, status: "unknown", error: { code: "result_unavailable", message: "PM result could not be reconciled; do not redispatch this operation." }, finishedAt: null };
       save(value);
     }
   }
   return value.record;
 }
-async function signedHeaders(value: Stored, headers?: Headers): Promise<Headers> {
-  const result = new Headers(headers);
-  if (value.request.linkage && value.record.actorId) {
-    const hash = value.requestHash ?? pmToolRequestHash(value.request, value.record.actorId);
-    try { result.set("x-pm-tool-linkage", createPmToolLinkageBearer(value.record.actorId, hash, value.request.linkage)); }
-    catch (error) { if (value.delegation) throw error; /* Optional audit linkage never gates ordinary authenticated PM execution. */ }
+/** Server-owned original reconciliation; no new request identity, business dispatch or cancellation gate. */
+export async function reconcilePmToolCall(operationId: string, headers: Headers): Promise<PmToolCallProjection> {
+  const stored = readRecord<Stored>(namespace, operationId);
+  if (!stored) throw new DurableError(404, "pm_operation_not_found", "Operation not found");
+  if (stored.request.linkage?.executionRoot !== "external" && !getThread(stored.record.threadId))
+    throw new DurableError(404, "pm_thread_not_found", "Thread not found");
+  try { await reconcile(stored, headers); } catch (error) {
+    if (stored.record.status === "succeeded") {
+      const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
+      return { operationId: stored.record.operationId, threadId: stored.record.threadId,
+        messageId: stored.record.messageId, generationId: stored.record.generationId,
+        visibility: [401, 403, 404].includes(status) ? "redacted" : "unavailable" };
+    }
+    // Proof is preserved independently of current body visibility.
   }
-  return result;
+  return (await createPmVisibilityProjector(stored.record.threadId, headers, { operationIds: [stored.record.operationId] })).calls[0]!;
 }
 async function dispatch(value: Stored, headers?: Headers): Promise<PmToolCallRecord> {
   let sent = false;
@@ -306,7 +359,16 @@ async function dispatch(value: Stored, headers?: Headers): Promise<PmToolCallRec
     headers = await delegatedHeaders(value, headers);
     const authority = await authorizePmTarget(target, headers);
     if (authority.actorId !== value.record.actorId) throw Object.assign(new Error("Operation belongs to another PM actor"), { status: 403 });
+    const invalid = pmInputError(value.request.name, value.request.arguments);
+    if (invalid) { rejectInput(value, invalid, "not_sent"); return value.record; }
     const effectiveHeaders = await signedHeaders(value, headers);
+    // Only the persisted server-derived snapshot constrains dispatch; never accept one from tool/browser input.
+    effectiveHeaders.delete(PM_TOOL_APPROVAL_AUTHORITY_HEADER);
+    if (value.approvalCapabilities?.pmAuthority)
+      effectiveHeaders.set(PM_TOOL_APPROVAL_AUTHORITY_HEADER, value.approvalCapabilities.pmAuthority.fingerprint);
+    if (value.request.name === "pm_create_comment" && value.request.linkage?.collaboration && !effectiveHeaders.has("x-pm-tool-linkage"))
+      throw new DurableError(503, "collaboration_origin_unavailable", "Trusted Run comment origin cannot be signed; no PM comment was sent.");
+    if (value.approvalCapabilities) assertPmApprovalNotCancelled(value);
     const response = pmToolCallRecordSchema.parse(await pmFetch(target.workspaceId, "/call", effectiveHeaders, value.request, () => {
       value.record = { ...value.record, certainty: { dispatch: "possibly_sent", evidence: "unresolved" } };
       save(value);
@@ -327,20 +389,26 @@ function sameDelegation(left?: McpInvocationIdentity, right?: McpInvocationIdent
   return left?.grantId === right?.grantId && left?.actorId === right?.actorId && left?.version === right?.version &&
     left?.access === right?.access && JSON.stringify(left?.scope) === JSON.stringify(right?.scope);
 }
-async function readableRecord(value: Stored, headers?: Headers): Promise<PmToolCallRecord> {
+async function readableRecord(value: Stored, headers?: Headers, authorizeExecution?: Context["authorizeExecution"]): Promise<PmToolCallRecord> {
   const projected = (await createPmVisibilityProjector(value.record.threadId, headers ?? new Headers(), { operationIds: [value.record.operationId] })).calls[0];
+  await authorizeExecution?.("tool");
   if (!projected || projected.visibility !== "visible")
     throw Object.assign(new Error("PM content is not currently accessible."), { status: projected?.visibility === "redacted" ? 403 : 503 });
   return projected;
 }
 export async function callPmTool(providedContext: Context | ExternalPmToolContext, input: Input): Promise<PmToolCallRecord> {
-  const context: Context = providedContext.executionRoot === "external" ? { ...providedContext, threadId: "", messageId: "", generationId: "" } : providedContext as Context;
+  const originalContext: Context = providedContext.executionRoot === "external" ? { ...providedContext, threadId: "", messageId: "", generationId: "" } : providedContext as Context;
+  const collaboration = originalContext.executionRoot !== "external" ? getCollaborationGenerationContext(originalContext.generationId) : null;
+  if (collaboration && (collaboration.threadId !== originalContext.threadId || originalContext.inputMessageId && collaboration.inputMessageId !== originalContext.inputMessageId))
+    throw new DurableError(409, "collaboration_binding_mismatch", "PM origin does not belong to the original server-owned Run generation.");
+  const context: Context = collaboration ? { ...originalContext, targetCeiling: { workspaceId: collaboration.target.workspaceId, projectId: collaboration.target.projectId } } : originalContext;
+  if (input.name === operationResultTool.name) throw new Error("Operation recovery is a native control read, not a business invocation.");
   input = pmToolInvocationSchema.parse(input);
   const delegation = context.delegation ?? (context.headers ? mcpIdentityFromHeaders(context.headers) : null);
   if (input.target) {
     assertTargetCeiling(input.target, context.targetCeiling);
     if (delegation) assertTargetCeiling(input.target, delegation.scope);
-  } else z.strictObject({}).parse(input.arguments);
+  }
   await context.authorizeExecution("tool");
   let headers = context.headers;
   if (delegation) {
@@ -358,6 +426,10 @@ export async function callPmTool(providedContext: Context | ExternalPmToolContex
     ...(context.inputMessageId ? { inputMessageId: context.inputMessageId } : {}),
     ...(context.executionGrantId ? { executionGrantId: context.executionGrantId } : {}),
     clientKind: context.executionRoot === "external" ? "mcp" : "chat", policy: "full", enforcement: "audit-only",
+    ...(collaboration ? { collaboration: {
+      runId: collaboration.runId, agentId: collaboration.agentId, agentVersion: collaboration.agentVersion,
+      delegationId: collaboration.delegationId ?? null, target: collaboration.target,
+    } } : {}),
   } : undefined;
   let request: Stored["request"] = { ...input, threadId: context.threadId, messageId: context.messageId, generationId: context.generationId, ...(linkage ? { linkage } : {}) };
   if (existing) {
@@ -370,18 +442,21 @@ export async function callPmTool(providedContext: Context | ExternalPmToolContex
       if (authority.actorId !== existing.record.actorId) throw Object.assign(new Error("Operation belongs to another PM actor"), { status: 403 });
       context.onAuthorizedOperation?.(authority);
     }
+    if (legacyQueryInputError(existing)) await reconcile(existing, headers);
     const record = !input.target || delegation && (existing.record.status === "unknown" || existing.record.status === "running")
       ? await reconcile(existing, headers) : existing.record;
     await context.authorizeExecution("tool");
-    return input.target ? readableRecord(existing, headers) : record;
+    return input.target ? readableRecord(existing, headers, context.authorizeExecution) : record;
   }
   const authority = input.target ? await authorizePmTarget(input.target, headers) : undefined;
   // PM authorization awaited network I/O; recheck the live execution before admission.
+  if (collaboration && authority && collaboration.actorId !== authority.actorId) throw new DurableError(403, "collaboration_actor_changed", "Current PM actor does not match the originating Run.");
   await context.authorizeExecution("tool");
   let notices: PmToolCallRecord["notices"];
   if (linkage && authority && !delegation) {
     try { createPmToolLinkageBearer(authority.actorId, pmToolRequestHash(request, authority.actorId), linkage); }
     catch {
+      if (collaboration && input.name === "pm_create_comment") throw new DurableError(503, "collaboration_origin_unavailable", "Trusted Run comment origin requires the existing service signing key; no PM comment was sent.");
       delete request.linkage;
       notices = [{ code: "pm_linkage_unavailable", message: "Cross-service audit linkage is unavailable; existing PM authorization remains enforced." }];
     }
@@ -394,11 +469,13 @@ export async function callPmTool(providedContext: Context | ExternalPmToolContex
         JSON.stringify(existing.targetCeiling) !== JSON.stringify(context.targetCeiling) || authority?.actorId !== existing.record.actorId)
       throw new Error("operationId already belongs to another request");
     if (authority) context.onAuthorizedOperation?.(authority);
+    if (legacyQueryInputError(existing)) await reconcile(existing, headers);
     const record = !input.target || delegation && (existing.record.status === "unknown" || existing.record.status === "running")
       ? await reconcile(existing, headers) : existing.record;
     await context.authorizeExecution("tool");
-    return input.target ? readableRecord(existing, headers) : record;
+    return input.target ? readableRecord(existing, headers, context.authorizeExecution) : record;
   }
+  const invalid = pmInputError(input.name, input.arguments);
   const pending = !autoApproveApprovals() && destructivePmToolNames[input.name] === true;
   const value: Stored = { request, ...(delegation ? { delegation } : {}), ...(context.targetCeiling ? { targetCeiling: context.targetCeiling } : {}),
     ...(context.executionId ? { executionId: context.executionId } : {}),
@@ -407,8 +484,21 @@ export async function callPmTool(providedContext: Context | ExternalPmToolContex
       certainty: { dispatch: "not_sent", evidence: "unresolved" }, ...(linkage ? { linkage } : {}), ...(notices ? { notices } : {}),
       threadId: context.threadId, messageId: context.messageId, generationId: context.generationId, workspaceId: input.target?.workspaceId ?? null,
       ...(input.target ? { target: input.target } : {}), ...(authority ? { actorId: authority.actorId } : {}), createdAt: new Date().toISOString(), finishedAt: null } };
-  save(value);
+  if (pending && !invalid) {
+    value.approvalCapabilities = await capturePmApprovalCapabilities(value, headers);
+    await context.authorizeExecution("tool");
+    const prior = readRecord<Stored>(namespace, input.operationId);
+    if (prior) {
+      if (pmApprovalDecisionFingerprint(prior) !== pmApprovalDecisionFingerprint(value)) throw new DurableError(409, "approval_request_changed", "The operation was already accepted with different approval facts.");
+      return readableRecord(prior, headers, context.authorizeExecution);
+    }
+  }
+  if (invalid) rejectInput(value, invalid, "not_sent"); else save(value);
   if (authority) context.onAuthorizedOperation?.(authority);
+  if (invalid) {
+    await context.authorizeExecution("tool");
+    return input.target ? readableRecord(value, headers, context.authorizeExecution) : value.record;
+  }
   if (input.name === "pm_list_workspaces") {
     try {
       const discovery = await discoverPmWorkspaces(headers, delegation ?? undefined);
@@ -424,7 +514,7 @@ export async function callPmTool(providedContext: Context | ExternalPmToolContex
   if (pending) return value.record;
   await dispatch(value, headers);
   await context.authorizeExecution("tool");
-  return readableRecord(value, headers);
+  return readableRecord(value, headers, context.authorizeExecution);
 }
 
 /** External callers can only recover their original binding; an absent reservation never dispatches. */
@@ -447,12 +537,50 @@ export async function readPmToolOperation(operationId: string, context: External
   }
 }
 
+const operationResultInputSchema = z.strictObject({ arguments: z.strictObject({ operationId: z.uuid() }) });
+const operationResultTool = {
+  name: "pm_get_operation_result",
+  description: "Read the original target-bound PM operation in this Chat using only its operationId. The server reuses its persisted request and current authorization; never creates an operation, executes a business command, or retries an unknown write. Unknown stays unresolved without authoritative evidence.",
+  write: false,
+  inputSchema: z.toJSONSchema(operationResultInputSchema, { io: "input" }),
+};
+/** Generation control read: the model supplies an identity, never a reconstructed invocation. */
+async function readGenerationPmToolOperation(context: Context, operationId: string): Promise<PmToolCallRecord> {
+  await context.authorizeExecution("tool");
+  if (context.delegation) await assertMcpThread(context.delegation, context.threadId);
+  const value = readRecord<Stored>(namespace, operationId);
+  if (!value || value.record.threadId !== context.threadId || value.request.threadId !== context.threadId ||
+      value.request.linkage?.executionRoot === "external" || value.executionId !== context.executionId ||
+      JSON.stringify(value.targetCeiling) !== JSON.stringify(context.targetCeiling) ||
+      !sameDelegation(value.delegation, context.delegation))
+    throw new Error("Original operation not found or mismatched");
+  const target = storedTarget(value);
+  assertTargetCeiling(target, context.targetCeiling);
+  if (context.delegation) assertTargetCeiling(target, context.delegation.scope);
+  const headers = await delegatedHeaders(value, context.headers);
+  const authority = await authorizePmTarget(target, headers);
+  if (authority.actorId !== value.record.actorId) throw Object.assign(new Error("Operation belongs to another PM actor"), { status: 403 });
+  assertResponseIdentity(value, { ...value.record, ...value.request, workspaceId: target.workspaceId });
+  if (value.requestHash && value.requestHash !== pmToolRequestHash(value.request, authority.actorId))
+    throw new Error("The original request hash does not match its operation");
+  context.onAuthorizedOperation?.(authority);
+  await context.authorizeExecution("tool");
+  await reconcile(value, headers, true);
+  const record = await readableRecord(value, await delegatedHeaders(value, headers));
+  await context.authorizeExecution("tool");
+  if (context.delegation) await assertMcpThread(context.delegation, context.threadId);
+  return record;
+}
+
 /** The loopback endpoint exists only for this generation. Headers and authorization remain in memory. */
 export async function openPmToolBridge(context: Context): Promise<{ url: string; close: () => Promise<void> }> {
   const delegation = context.delegation ?? (context.headers ? mcpIdentityFromHeaders(context.headers) : null);
   if (delegation) context = { ...context, delegation };
+  const collaboration = getCollaborationGenerationContext(context.generationId);
+  if (collaboration) context = { ...context, targetCeiling: { workspaceId: collaboration.target.workspaceId, projectId: collaboration.target.projectId } };
   // JSON-RPC IDs are local to a transport; Pi supplies its generation-local namespace.
   const mcpCalls = new Map<string, { signature: string; operationId: string; result: Promise<PmToolCallRecord> }>();
+  const mcpSignatures = new Map<string, string>();
   const server: Server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     const address = server.address();
@@ -466,7 +594,9 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
     try {
       if (req.method === "GET" && req.url === "/tools/list") {
         await context.authorizeExecution("tool");
-        res.end(JSON.stringify(await listPmTools(context.headers, delegation ?? undefined)));
+        const catalog = await listPmTools(context.headers, delegation ?? undefined) as { tools: unknown[] };
+        const collaboration = delegation ? [] : await listCollaborationGenerationTools(context.generationId, context.headers);
+        res.end(JSON.stringify({ ...catalog, tools: [...catalog.tools, operationResultTool, ...collaboration] }));
         return;
       }
       if (req.method !== "POST" || !["/tools/call", "/tools/result", "/tools/mcp-call"].includes(req.url ?? "")) { res.writeHead(404).end(JSON.stringify({ error: "not_found" })); return; }
@@ -476,11 +606,31 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
       if (delegation) await assertMcpThread(delegation, context.threadId);
       if (req.url === "/tools/mcp-call") {
         const input = z.strictObject({ transportId: z.string().min(1).max(128), requestId: z.union([z.string().max(512), z.number().int(), z.null()]), name: z.string().min(1), arguments: z.unknown() }).parse(payload);
-        const argumentsEnvelope = z.strictObject({ target: pmToolTargetSchema.optional(), arguments: z.unknown() }).parse(input.arguments);
         const key = JSON.stringify([input.transportId, input.requestId]);
         const signature = JSON.stringify({ name: input.name, arguments: input.arguments });
+        const originalSignature = mcpSignatures.get(key);
+        if (originalSignature && originalSignature !== signature) throw new Error("MCP request ID already belongs to different tool arguments");
+        mcpSignatures.set(key, signature);
+        if (isCollaborationTool(input.name)) {
+          if (delegation) throw new DurableError(403, "collaboration_context_required", "External MCP delegation cannot acquire internal Run authority.");
+          await context.authorizeExecution("tool");
+          const result = await callCollaborationGenerationTool({
+            generationId: context.generationId, transportId: input.transportId, requestId: input.requestId,
+            name: input.name, arguments: input.arguments, ...(context.headers ? { headers: context.headers } : {}),
+          });
+          res.end(JSON.stringify(result));
+          return;
+        }
         let prior = mcpCalls.get(key);
         if (prior && prior.signature !== signature) throw new Error("MCP request ID already belongs to different tool arguments");
+        if (input.name === operationResultTool.name) {
+          const { arguments: { operationId } } = operationResultInputSchema.parse(input.arguments);
+          const result = readGenerationPmToolOperation(context, operationId);
+          mcpCalls.set(key, { signature, operationId, result });
+          res.end(JSON.stringify(await result));
+          return;
+        }
+        const argumentsEnvelope = z.strictObject({ target: pmToolTargetSchema.optional(), arguments: z.unknown() }).parse(input.arguments);
         if (prior) {
           // Wait for the original attempt, then reauthorize its durable receipt rather than its cached data.
           try { await prior.result; } catch { /* The original admission may have failed; the operationId remains unchanged. */ }
@@ -499,7 +649,7 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
       const stored = readRecord<Stored>(namespace, input.operationId);
       if (!stored || stored.record.threadId !== context.threadId ||
           JSON.stringify({ operationId: stored.request.operationId, name: stored.request.name, ...(stored.request.target ? { target: stored.request.target } : {}), arguments: stored.request.arguments }) !== JSON.stringify(input) ||
-          JSON.stringify(stored.targetCeiling) !== JSON.stringify(context.targetCeiling) || stored.delegation?.grantId !== delegation?.grantId)
+          JSON.stringify(stored.targetCeiling) !== JSON.stringify(context.targetCeiling) || !sameDelegation(stored.delegation, delegation))
         throw new Error("Original operation not found or mismatched");
       await reconcile(stored, context.headers);
       const record = await readableRecord(stored, await delegatedHeaders(stored, context.headers));
@@ -517,6 +667,43 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
     server.close((error) => error ? closed.reject(error) : closed.resolve());
     return closed.promise;
   } };
+}
+
+/** Inbox is a current projection of the original PM owner, never a second decision endpoint. */
+export async function listPendingPmApprovals(input: { workspaceId: string; projectId?: string; headers: Headers }) {
+  const items: Array<{ call: PmToolCallRecord; decisionFingerprint: string; capabilityFingerprint: string | null; respondable: boolean; unavailableReason: string | null }> = [];
+  const projectors = new Map<string, PmVisibilityProjector>();
+  for (const value of listRecords<Stored>(namespace)) {
+    if (value.record.status !== "pending_approval" || value.record.workspaceId !== input.workspaceId ||
+        input.projectId && value.request.target?.projectId !== input.projectId ||
+        value.request.linkage?.executionRoot !== "external" && !getThread(value.record.threadId)) continue;
+    try {
+      const target = storedTarget(value);
+      const browserAuthority = await authorizePmTarget(target, input.headers);
+      if (browserAuthority.actorId !== value.record.actorId || value.delegation && browserAuthority.actorId !== value.delegation.actorId) continue;
+      let projector = projectors.get(value.record.threadId);
+      if (!projector) {
+        projector = await createPmVisibilityProjector(value.record.threadId, input.headers);
+        projectors.set(value.record.threadId, projector);
+      }
+      const call = projector.calls.find(item => item.operationId === value.record.operationId);
+      if (!call || call.visibility !== "visible" || call.status !== "pending_approval") continue;
+      let unavailableReason: string | null = null;
+      try {
+        if (value.delegation?.access === "read-only") throw new Error("Read-only delegation");
+        await assertPmApprovalCapabilitiesCurrent(value, await delegatedHeaders(value, input.headers));
+      } catch {
+        unavailableReason = "The original capability snapshot or delegation is no longer current. Open the original operation to reject or reconcile it; approval is disabled.";
+      }
+      const latest = readRecord<Stored>(namespace, value.record.operationId);
+      if (!latest || latest.record.status !== "pending_approval" || pmApprovalDecisionFingerprint(latest) !== pmApprovalDecisionFingerprint(value)) continue;
+      items.push({ call, decisionFingerprint: pmApprovalDecisionFingerprint(value), capabilityFingerprint: value.approvalCapabilities?.manifest?.fingerprint ?? null,
+        respondable: unavailableReason === null, unavailableReason });
+    } catch {
+      // Revoked/unavailable content is omitted, not exposed as an approval card with saved arguments.
+    }
+  }
+  return items;
 }
 
 export const pmToolRoutes = new Hono();
@@ -561,11 +748,12 @@ pmToolRoutes.get("/pm-tools/calls/:operationId", async (c) => {
   return c.json((await createPmVisibilityProjector(stored.record.threadId, c.req.raw.headers, { operationIds: [stored.record.operationId] })).calls[0]);
 });
 pmToolRoutes.post("/pm-tools/calls/:operationId/reconcile", async (c) => {
-  const stored = readRecord<Stored>(namespace, c.req.param("operationId")); if (!stored) return c.json({ error: "Operation not found" }, 404);
-  if (stored.request.linkage?.executionRoot !== "external" && !getThread(stored.record.threadId)) return c.json({ error: "Thread not found" }, 404);
-  try { await reconcile(stored, c.req.raw.headers); } catch { /* Proof is preserved independently of current body visibility. */ }
   c.header("Cache-Control", "private, no-store");
-  return c.json((await createPmVisibilityProjector(stored.record.threadId, c.req.raw.headers, { operationIds: [stored.record.operationId] })).calls[0]);
+  try { return c.json(await reconcilePmToolCall(c.req.param("operationId"), c.req.raw.headers)); }
+  catch (error) {
+    if (error instanceof DurableError && error.status === 404) return c.json({ error: error.message }, 404);
+    throw error;
+  }
 });
 pmToolRoutes.post("/pm-tools/calls/:operationId/approve", async (c) => {
   const stored = readRecord<Stored>(namespace, c.req.param("operationId")); if (!stored) return c.json({ error: "Operation not found" }, 404);
@@ -575,8 +763,14 @@ pmToolRoutes.post("/pm-tools/calls/:operationId/approve", async (c) => {
     return c.json({ error: "Only the originating PM actor may approve this delegated operation" }, 403);
   const authority = await authorizePmTarget(storedTarget(stored), await delegatedHeaders(stored, c.req.raw.headers));
   if (authority.actorId !== stored.record.actorId) return c.json({ error: "Only the originating PM actor may approve this operation" }, 403);
+  const decision = await readApprovalDecision(c.req.raw);
+  if (decision && decision !== pmApprovalDecisionFingerprint(stored)) throw new DurableError(409, "approval_request_changed", "The action, parameters, target or capability facts changed since this decision was displayed.");
+  if (stored.record.status !== "pending_approval") return c.json({ error: "Operation is not awaiting approval", code: "approval_not_pending" }, 409);
+  await assertPmApprovalCapabilitiesCurrent(stored, await delegatedHeaders(stored, c.req.raw.headers));
   const latest = readRecord<Stored>(namespace, c.req.param("operationId"));
   if (!latest || latest.record.status !== "pending_approval") return c.json({ error: "Operation is not awaiting approval", code: "approval_not_pending" }, 409);
+  if (pmApprovalDecisionFingerprint(latest) !== pmApprovalDecisionFingerprint(stored)) throw new DurableError(409, "approval_request_changed", "The original approval facts changed before the claim.");
+  assertPmApprovalNotCancelled(latest);
   // Claim the original operation before any await so a concurrent approval cannot dispatch it twice.
   latest.record = { ...latest.record, status: "running", result: null, error: null, finishedAt: null };
   save(latest);
@@ -590,8 +784,11 @@ pmToolRoutes.post("/pm-tools/calls/:operationId/reject", async (c) => {
     return c.json({ error: "Only the originating PM actor may reject this delegated operation" }, 403);
   const authority = await authorizePmTarget(storedTarget(stored), await delegatedHeaders(stored, c.req.raw.headers));
   if (authority.actorId !== stored.record.actorId) return c.json({ error: "Only the originating PM actor may reject this operation" }, 403);
+  const decision = await readApprovalDecision(c.req.raw);
+  if (decision && decision !== pmApprovalDecisionFingerprint(stored)) throw new DurableError(409, "approval_request_changed", "The action, parameters, target or capability facts changed since this decision was displayed.");
   const latest = readRecord<Stored>(namespace, c.req.param("operationId"));
   if (!latest || latest.record.status !== "pending_approval") return c.json({ error: "Operation is not awaiting approval", code: "approval_not_pending" }, 409);
+  if (pmApprovalDecisionFingerprint(latest) !== pmApprovalDecisionFingerprint(stored)) throw new DurableError(409, "approval_request_changed", "The original approval facts changed before the decision.");
   latest.record = { ...latest.record, status: "failed", certainty: { dispatch: "not_sent", evidence: "local_rejection" }, result: null, error: { code: "approval_rejected", message: "The operation was rejected; no PM write was performed." }, finishedAt: new Date().toISOString() };
   save(latest);
   return c.json(latest.record);

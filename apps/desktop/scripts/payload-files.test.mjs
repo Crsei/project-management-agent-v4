@@ -55,10 +55,13 @@ test("component accounting is a deterministic disjoint PM/Agent/Electron/runtime
     ["resources/desktop-runtime/postgres/bin/postgres.exe", "runtime", 29],
     ["resources/app.asar", "electron", 31],
     ["resources/app.asar.unpacked/node_modules/native.node", "electron", 37],
-    ["PM Agent v4.exe", "electron", 41],
+    ["Dovspace.exe", "electron", 41],
     ["locales/zh-CN.pak", "electron", 43],
     ["resources/workspace-runtime/apps/web/dist/index.html", "shared", 47],
     ["resources/workspace-runtime/packages/agent-contracts/src/index.ts", "shared", 53],
+    ["resources/workspace-runtime/packages/skill-resources/catalog.ts", "shared", 12],
+    ["resources/workspace-runtime/.agents/skills/pm-plan-draft/SKILL.md", "shared", 14],
+    ["resources/workspace-runtime/plugins/dovspace-pm/skills/task-planning/SKILL.md", "shared", 16],
     ["resources/workspace-runtime/licenses/desktop-web/NOTICE", "shared", 59],
     ["resources/workspace-runtime/desktop-dependency-layout.json", "shared", 61],
     ["resources/workspace-runtime/apps/desktop/package.json", "shared", 2],
@@ -83,14 +86,14 @@ test("component accounting is a deterministic disjoint PM/Agent/Electron/runtime
   assert.equal(Object.values(report.topLevel).reduce((sum, count) => sum + count, 0), report.files);
   assert.equal(Object.values(report.topLevelBytes).reduce((sum, bytes) => sum + bytes, 0), report.bytes);
   assert.deepEqual(Object.keys(report.classification.categories), Object.keys(expected));
-  assert.deepEqual(Object.keys(report.topLevel), ["PM Agent v4.exe", "locales", "resources", "unknown.dll"]);
+  assert.deepEqual(Object.keys(report.topLevel), ["Dovspace.exe", "locales", "resources", "unknown.dll"]);
   assert.deepEqual(await inspectPayloadFiles(root), report);
 });
 
 test("macOS bundle classification keeps framework, app, PM, Agent and runtime bytes separate", async (t) => {
   const root = await fixture(t);
   await put(root, "Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework", "framework");
-  await put(root, "Contents/MacOS/PM Agent v4", "shell");
+  await put(root, "Contents/MacOS/Dovspace", "shell");
   await put(root, "Contents/Resources/app.asar", "archive");
   await put(root, "Contents/Resources/en.lproj/locale.pak", "locale");
   await put(root, "Contents/Resources/workspace-runtime/node_modules/package/index.js", "pm");

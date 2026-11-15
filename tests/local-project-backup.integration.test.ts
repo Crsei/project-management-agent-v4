@@ -146,7 +146,7 @@ it('LP-A08: stopped real SQL/core/project/blob backup restores into entirely new
       const mount = readProjectLocation(join(restoredCore, project.workspaceId), project.projectId);
       assert.ok(mount);
       assert.ok(mount.root.startsWith(restoredProjects + '/')); assert.equal(mount.storageId, project.storageId);
-      assert.equal(await readFile(join(mount.root, '.pm/core/projects', `${project.projectId}.md`), 'utf8'), projects.find(item => item.record.id === project.projectId)!.record.raw);
+      assert.equal(await readFile(join(mount.storageRoot, '.pm/core/projects', `${project.projectId}.md`), 'utf8'), projects.find(item => item.record.id === project.projectId)!.record.raw);
     }
     assert.deepEqual((await restoredPool.query('SELECT id,data,version FROM entities ORDER BY id')).rows, sqlBefore);
     const auditAfter = (await restoredPool.query('SELECT project_id,command_id,dedupe_key,changes FROM project_audit ORDER BY id')).rows;
@@ -158,7 +158,7 @@ it('LP-A08: stopped real SQL/core/project/blob backup restores into entirely new
     const restoredMount = readProjectLocation(join(restoredCore, f.workspaceId), a.record.id)!;
     const objectKey = restoredArtifact.artifactVersion.data.objectKey;
     assert.equal(typeof objectKey, 'string');
-    assert.deepEqual(await readFile(join(restoredMount.root, '.pm/attachments', objectKey as string)), restoredBytes);
+    assert.deepEqual(await readFile(join(restoredMount.storageRoot, '.pm/attachments', objectKey as string)), restoredBytes);
     const restoredDownload = await fetch(`${origin}${prefix}/artifact-versions/${restoredArtifact.artifactVersion.id}/content`, { headers: { cookie: restoredCookie } });
     assert.equal(restoredDownload.status, 200); assert.deepEqual(Buffer.from(await restoredDownload.arrayBuffer()), restoredBytes);
     for (const path of [f.coreRoot, f.blobRoot, ...f.parents]) await assert.rejects(lstat(path), { code: 'ENOENT' });

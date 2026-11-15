@@ -89,7 +89,7 @@ export class TaskCodeDeliveryService {
         if (input.action === 'refresh') return value;
         fail('agent_workspace_required', '历史交付仅保留收据；请明确选择 Agent 目录并创建新 Session 后再执行。');
       }
-      if (input.action !== 'refresh' && task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision)) fail('task_changed', '任务版本已改变；不能使用旧需求继续执行或发布。');
+      if (input.action !== 'refresh' && input.action !== 'new-session' && task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision)) fail('task_changed', '任务版本已改变；请重新读取并重新规划，不能使用旧需求继续执行或发布。');
       if (!value.git) fail('prepare_unknown', '分支准备尚未确认，请人工核对原操作。');
       if (task.root !== value.git!.root) fail('execution_directory_changed', 'Agent 目录与原交付仓库不同，停止原交付。');
       await this.ports.verify(value);
@@ -113,7 +113,7 @@ export class TaskCodeDeliveryService {
       await this.ports.preflightAction?.(value, input);
       if (input.action === 'develop') {
         value.generationKey = crypto.randomUUID();
-        value.worktreeWriteConfirmed = input.allowWorktreeWrite === true && input.purpose !== 'analysis';
+        value.worktreeWriteConfirmed = input.allowWorktreeWrite === true && (input.purpose ?? 'development') === 'development';
         value.developmentPurpose = input.purpose ?? 'development';
         value.developmentInstruction = input.instruction ?? '';
       }
@@ -127,7 +127,7 @@ export class TaskCodeDeliveryService {
           case 'test': {
             const result = await this.ports.test(value, input.command);
             const after = await this.ports.tree(value);
-            value.test = { command: input.command, fingerprint: tree.fingerprint, passed: result.exitCode === 0 && tree.fingerprint === after.fingerprint, ...result, at: new Date().toISOString() };
+            value.test = { command: input.command, fingerprint: tree.fingerprint, taskRevision: this.ports.expectedTaskRevision?.(value) ?? value.taskRevision, head: tree.head, passed: result.exitCode === 0 && tree.fingerprint === after.fingerprint, ...result, at: new Date().toISOString() };
             value.step = 'tested'; break;
           }
           case 'commit': value.head = await this.ports.commit(value); value.step = 'committed'; break;
@@ -162,7 +162,11 @@ export class TaskCodeDeliveryService {
       if (pr) { value.pr = pr; value.step = 'pr'; delete value.pending; }
     }
     // Unknown tests/commits/prepares are not blindly re-executed or inferred from a clean tree.
-    if (value.pr) value.feedback = await this.ports.feedback(value);
+    if (value.pr) {
+      const feedback = await this.ports.feedback(value);
+      const tree = await this.ports.tree(value);
+      value.feedback = { ...feedback, taskRevision: this.ports.expectedTaskRevision?.(value) ?? value.taskRevision, fingerprint: tree.fingerprint };
+    }
     if (!value.pending) delete value.error;
     return this.save(value);
   }

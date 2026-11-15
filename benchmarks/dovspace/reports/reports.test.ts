@@ -7,6 +7,7 @@ import { parseBenchmarkConfig } from '../benchmark.config.ts';
 import type { RunResult } from '../schemas/types.ts';
 import { aggregateExperiment, evaluateFairness, failureCategory, publicExperimentConfiguration, readExperiment, readRunResult, renderComparison, renderRunReport, summarizeRuns, verifiedSuccess, writeExperimentReport } from './index.ts';
 import { costPerSuccess, summarizeMetric } from './statistics.ts';
+import { makeEvent, observationsFromEvents } from '../runners/telemetry.ts';
 
 function run(overrides: Partial<RunResult> = {}): RunResult {
   return {
@@ -16,7 +17,7 @@ function run(overrides: Partial<RunResult> = {}): RunResult {
     checkpointScore: 1, phaseResults: [{ id: 'answer', passed: true, checks: [{ id: 'knowledge', passed: true, required: true, score: 1, evidence: ['artifacts/answer.json'] }], evidence: ['trace.jsonl'] }],
     usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: null, cacheWriteTokens: null, modelCalls: 1, toolCalls: 2, costUsd: 0.1 },
     timeMs: 5000, unexpectedMutations: [], artifacts: { answer: 'artifacts/answer.json' },
-    reproducibility: { fixtureId: 'fixture-raw', fixtureSemanticHash: 'a'.repeat(64), modelConfigHash: 'b'.repeat(64), budgetHash: 'c'.repeat(64), permissionsHash: 'd'.repeat(64), environmentHash: 'e'.repeat(64), effectiveModelSettingsHash: 'f'.repeat(64) }, failure: null,
+    reproducibility: { controlTransport: 'http', fixtureId: 'fixture-raw', fixtureSemanticHash: 'a'.repeat(64), modelConfigHash: 'b'.repeat(64), budgetHash: 'c'.repeat(64), permissionsHash: 'd'.repeat(64), environmentHash: 'e'.repeat(64), effectiveModelSettingsHash: 'f'.repeat(64) }, failure: null,
     humanInterventions: { count: null, definition: 'Unplanned operator instructions, excluding scheduled injections', reason: 'Not observed by this unit fixture' },
     rework: { count: null, denominator: null, proportion: null, definition: 'Identical failed-PM-mutation retry proxy, not general coding rework', reason: 'Not observed by this unit fixture' },
     ...overrides,
@@ -95,6 +96,23 @@ test('fair comparison requires fixed model configuration independent resets and 
   assert.equal(evaluateFairness([run(), run()], { arms: ['raw'], taskIds: ['K02'], repetitions: 2 }).valid, false);
 });
 
+test('transport controls are matched independently from PM treatment and legacy unknowns', () => {
+  const runs = pairedRuns();
+  runs[1]!.reproducibility.controlTransport = 'cli';
+  assert.equal(evaluateFairness(runs, design).valid, false);
+  assert.match(evaluateFairness(runs, design).issues.join('\n'), /control transport differs/);
+  runs[0]!.reproducibility.controlTransport = 'cli';
+  assert.equal(evaluateFairness(runs, design).valid, true);
+  const configuration = publicExperimentConfiguration(parseBenchmarkConfig({ controlTransport: 'http' }));
+  const mismatched = aggregateExperiment(runs, { experimentId: 'mismatched-transport', design, configuration });
+  assert.equal(mismatched.fairness.valid, false);
+  assert.match(mismatched.fairness.issues.join('\n'), /fixed experiment configuration/);
+  for (const run of runs) delete run.reproducibility.controlTransport;
+  assert.equal(evaluateFairness(runs, design).valid, false);
+  assert.match(evaluateFairness(runs, design).issues.join('\n'), /historical unknowns/);
+  assert.equal(aggregateExperiment(runs, { experimentId: 'legacy', design }).overall.attempts, 2);
+});
+
 test('invalid fairness suppresses comparative advantage and small-n caveat is explicit', () => {
   const runs = pairedRuns();
   const valid = aggregateExperiment(runs, { experimentId: 'paired', design });
@@ -147,12 +165,34 @@ test('unconfigured attempts are not labelled observed real inference and detaile
   assert.deepEqual(summarizeRuns(toolFailures).failureKinds, { tool: 1, permission: 1 });
 });
 
+test('settings hashes alone do not prove requests and canonical request observations cannot evade fairness', () => {
+  const hashOnly = run({ usage: { ...run().usage, modelCalls: null } });
+  assert.deepEqual(aggregateExperiment([hashOnly], { experimentId: 'hash-only' }).inferenceObservation, { runsWithObservedModelRequest: 0, runsWithoutObservedModelRequest: 1 });
+  const observed = run({
+    usage: { ...run().usage, modelCalls: null },
+    reproducibility: { ...run().reproducibility, effectiveModelSettingsHash: null },
+    observations: observationsFromEvents([
+      makeEvent('run-raw', 'transport', 'provider_request', { requestId: 'request-only' }),
+      makeEvent('run-raw', 'transport', 'observation_complete', { providerRequests: true, pmTools: true }),
+    ]),
+  });
+  assert.deepEqual(aggregateExperiment([observed], { experimentId: 'observed-without-count' }).inferenceObservation, { runsWithObservedModelRequest: 1, runsWithoutObservedModelRequest: 0 });
+  const singleArm = { arms: ['raw'] as Array<'raw'>, taskIds: ['K02'], repetitions: 1 };
+  assert.ok(evaluateFairness([observed], singleArm).issues.some(issue => issue.includes('lack effective model-settings proof')));
+  observed.reproducibility.effectiveModelSettingsHash = 'f'.repeat(64);
+  assert.equal(evaluateFairness([observed], singleArm).valid, true);
+  observed.usage.modelCalls = 2;
+  assert.ok(evaluateFairness([observed], singleArm).issues.some(issue => issue.includes('contradict canonical transport')));
+});
+
 test('reproduction settings preserve explicit controls while excluding credentials and private roots', () => {
   const config = parseBenchmarkConfig({ model: 'explicit-fixed-model', providerEndpoint: 'https://example.test/v1', providerApiKey: 'unit-only-secret-not-an-actual-credential', modelOptions: { reasoningEffort: 'xhigh' }, budget: { maxDurationMinutes: 8, maxModelCalls: 18, maxToolCalls: 45, maxCostUsd: 2 } });
   const configuration = publicExperimentConfiguration(config);
   const serialized = JSON.stringify(configuration);
   assert.doesNotMatch(serialized, /unit-only-secret|providerApiKey|runtimeRoot|outputsRoot/);
   assert.equal(configuration.model, 'explicit-fixed-model');
+  assert.equal(configuration.controlTransport, 'http');
+  assert.equal(publicExperimentConfiguration(parseBenchmarkConfig({ controlTransport: 'cli' })).controlTransport, 'cli');
   assert.deepEqual(configuration.modelOptions, { reasoningEffort: 'xhigh' });
   const summary = aggregateExperiment(pairedRuns(), { experimentId: 'settings', design, configuration });
   assert.equal(summary.configuration?.budget.maxCostUsd, 2);
@@ -183,4 +223,21 @@ test('explicit protocol and grader calibration modes cannot be promoted to model
       await assert.rejects(readExperiment(directory), /calibration\/experiment documents cannot be imported/);
     }
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('guidance metrics preserve unknown coverage and mixed source-context versions invalidate fairness', () => {
+  const observed = { contextVersion: 2 as const, generatedArtifacts: 3, generatedBytes: 2048, sessions: 2, requirementChanges: 1, codeChangedLines: 7 };
+  const summary = summarizeRuns([run({ guidance: observed }), run()]);
+  assert.equal(summary.generatedContextBytes.total, null);
+  assert.equal(summary.generatedContextBytes.knownTotal, 2048);
+  assert.equal(summary.distinctSessions.knownTotal, 2);
+  assert.equal(summary.changedRequirementCodeLines.knownTotal, 7);
+  const paired = pairedRuns();
+  paired[1]!.guidance = observed;
+  const fairness = evaluateFairness(paired, design);
+  assert.equal(fairness.valid, false);
+  assert.ok(fairness.issues.some(issue => issue.includes('source-context protocol version')));
+  const report = renderRunReport(run({ guidance: observed }));
+  assert.match(report, /Source-context protocol: 2/);
+  assert.match(report, /Generated bytes are not provider token usage/);
 });

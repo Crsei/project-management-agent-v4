@@ -2,6 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, lstatSync, openSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { inventoryPersistence, namespacePolicy, registerPersistenceWriter } from "../durable/persistence-schema.ts";
+import { inspectThreadRetention } from "../durable/thread-retention.ts";
 
 type RecordRow = { namespace: string; key: string; value: string };
 type JsonObject = Record<string, unknown>;
@@ -15,10 +17,10 @@ export type SessionCutoverPlan = {
   namespaceInventory: { namespace: string; count: number; ownership: "session" | "business" | "credentials" | "settings-usage" | "workspaces" | "audit" | "unclassified" }[];
 };
 const sessionOwned: Record<string, true> = { "chat:history": true, "chat:sidebar": true, "chat:generations": true, "chat:events": true, "chat:requests": true, "chat:cancellations": true, "chat:imports": true, "native-output": true, "provider:t3code:continuations": true, "mcp-app-model-context-v1": true, "mcp-app-producing-items-v1": true, "mcp-app-private-assets-v1": true, "durable:workspaces": true, "durable:imports": true, "durable:forks": true, "durable:transfers": true, "durable:fork-keys": true };
-const business = /^(?:task-|pm-automation:|automation\.|pm-tool|pm-core|durable:(?:runs|requests|submissions|events))/;
+const business = /^(?:task-|pm-automation:|automation\.|collaboration:|pm-tool|pm-content|pm-quote|pm-core|durable:(?:runs|requests|submissions|events))/;
 const preservedMetadata: Record<string, true> = { "settings:chat-defaults": true, "settings:usage": true, "usage:turns": true, "usage:threads": true, "usage:launches": true, "usage:pricing": true, "pm-analysis:scratch-v1": true, "automation.schedules": true, "automation.watches": true, "automation.dispatches": true, "automation.recovery": true };
 const credentialNamespaces: Record<string, true> = { "mcp:tokens": true, "mcp:codes": true, "mcp:consents": true };
-const scanned = (namespace: string) => sessionOwned[namespace] === true || namespace === "chat:threads" || namespace === "mcp:grants" || namespace === "mcp:tool-receipts" || business.test(namespace);
+const scanned = (namespace: string) => sessionOwned[namespace] === true || namespace === "chat:threads" || namespace === "mcp:grants" || namespace === "mcp:tool-receipts" || business.test(namespace) || namespacePolicy(namespace)?.owner === "chat";
 function object(value: unknown): JsonObject | null { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null; }
 function mentions(value: unknown, ids: ReadonlySet<string>): boolean {
   if (typeof value === "string") return ids.has(value);
@@ -40,13 +42,22 @@ export function inventorySessionCutover(db: DatabaseSync, dataDirectory: string)
     : business.test(row.namespace) || row.namespace === 'mcp:grants' || row.namespace === 'mcp:tool-receipts' ? 'business'
     : credentialNamespaces[row.namespace] === true ? 'credentials' : preservedMetadata[row.namespace] === true ? 'settings-usage'
     : row.namespace === 'agent:workspaces:v1' || row.namespace === 'agent:scratch:v1' ? 'workspaces'
-    : row.namespace === 'agent:session-cutover' ? 'audit' : 'unclassified' }));
+    : row.namespace === 'agent:session-cutover' || namespacePolicy(row.namespace)?.owner === 'persistence' ? 'audit'
+    : namespacePolicy(row.namespace)?.owner === 'business' ? 'business'
+    : namespacePolicy(row.namespace)?.owner === 'chat' || namespacePolicy(row.namespace)?.owner === 'provider' ? 'session'
+    : namespacePolicy(row.namespace)?.owner === 'mcp' ? 'business'
+    : namespacePolicy(row.namespace)?.owner === 'settings' ? 'settings-usage' : 'unclassified' }));
   const records: RecordRow[] = [];
   for (const { namespace } of namespaces) if (scanned(namespace)) for (const row of db.prepare("SELECT namespace,key,value FROM records WHERE namespace=? ORDER BY key").all(namespace))
     records.push({ namespace: String(row.namespace), key: String(row.key), value: String(row.value) });
   const decoded = records.map(row => ({ ...row, data: JSON.parse(row.value) as unknown }));
   const candidates = decoded.filter(row => {
     if (row.namespace !== "chat:threads" || object(object(row.data)?.sessionCutover)?.version === 2) return false;
+    const thread = object(row.data);
+    if (thread?.deleted === true && thread.deletionState === "committed" &&
+        typeof thread.deletionOperationId === "string" && thread.deletionOperationId.length > 0 &&
+        Number.isSafeInteger(thread.lifecycleRevision) && Number(thread.lifecycleRevision) > 0)
+      return false; // Modern lifecycle tombstones intentionally have no execution selection; their acceptance identities remain authoritative.
     const version = object(object(row.data)?.executionSelection)?.version;
     return version === undefined || version === 1;
   });
@@ -57,7 +68,13 @@ export function inventorySessionCutover(db: DatabaseSync, dataDirectory: string)
   const all = new Set([...threads, ...generationSet]);
   const references: SessionCutoverPlan['references'] = [];
   const retained = new Set<string>();
-  const blockers: string[] = [];
+  const persistence = inventoryPersistence(db, { omitCredentialValues: true });
+  const blockers: string[] = [...persistence.blockers];
+  for (const id of candidateIds) {
+    const retention = inspectThreadRetention(db, id);
+    blockers.push(...retention.blockers);
+    for (const generationId of retention.retainedGenerationIds) retained.add(generationId);
+  }
   for (const row of decoded) {
     if (row.namespace !== "chat:threads") continue;
     const version = object(object(row.data)?.executionSelection)?.version;
@@ -105,14 +122,15 @@ export function inventorySessionCutover(db: DatabaseSync, dataDirectory: string)
     }
   }
   const unclassifiedNamespaces = namespaceInventory.filter(row => row.ownership === 'unclassified').map(({ namespace, count }) => ({ namespace, count }));
-  for (const row of unclassifiedNamespaces) blockers.push(`Unclassified namespace ${row.namespace} (${row.count} records); audit its ownership before any deletion. Values were not read.`);
-  const digest = createHash("sha256").update(JSON.stringify({ dataDirectory, namespaceInventory, candidateIds, deleteRecords, retained: [...retained].sort() }));
+  for (const row of unclassifiedNamespaces) blockers.push(`Unclassified namespace ${row.namespace} (${row.count} records); audit its ownership before any deletion. Payloads were not decoded.`);
+  const digest = createHash("sha256").update(JSON.stringify({ dataDirectory, namespaceInventory, candidateIds, deleteRecords, retained: [...retained].sort(), persistenceFingerprint: persistence.fingerprint }));
   for (const row of records) digest.update(row.namespace).update('\0').update(row.key).update('\0').update(row.value).update('\0');
   const fingerprint = digest.digest("hex");
   return { format: "agent-session-cutover-v2", dataDirectory, fingerprint, candidateIds, generationIds, retainedGenerationIds: [...retained].sort(), deleteRecords, references, blockers,
     unclassifiedNamespaces, namespaceInventory, retainedAttachmentIds };
 }
 export function applySessionCutover(db: DatabaseSync, expected: SessionCutoverPlan, dataDirectory: string): SessionCutoverPlan {
+  registerPersistenceWriter(db);
   db.exec("BEGIN IMMEDIATE");
   try {
     const current = inventorySessionCutover(db, dataDirectory);

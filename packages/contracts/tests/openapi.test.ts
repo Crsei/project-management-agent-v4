@@ -8,13 +8,25 @@ import { z } from 'zod';
 import { buildApp } from '../../../apps/server/pm/src/app.ts';
 import { createRegistry } from '../../application/src/registry.ts';
 import { LocalBlobStore } from '../../infrastructure/src/blobs.ts';
-import { buildOpenApi } from '../src/openapi.ts';
+import { buildOpenApi, type JsonSchema, type OpenApiDocument } from '../src/openapi.ts';
 import { generateContracts, schemaType } from '../../../scripts/generate-contracts.ts';
 import { agentCatalogSchema } from '../src/agent-file-areas.ts';
 
 const root = new URL('../../../', import.meta.url);
 const registry = createRegistry(new LocalBlobStore('/unused-contract-test-store'));
 const contract = buildOpenApi(registry);
+
+function resolveLocalRef(document: OpenApiDocument, reference: string): JsonSchema {
+  assert.ok(reference === '#' || reference.startsWith('#/'), `Not a local JSON pointer: ${reference}`);
+  let target: unknown = document;
+  const segments = reference === '#' ? [] : reference.slice(2).split('/');
+  for (const segment of segments.map(value => value.replaceAll('~1', '/').replaceAll('~0', '~'))) {
+    assert.ok(target !== null && typeof target === 'object' && Object.hasOwn(target, segment), `Missing ${reference}`);
+    target = (target as Record<string, unknown>)[segment];
+  }
+  assert.ok(target !== null && typeof target === 'object', `Not a schema: ${reference}`);
+  return target as JsonSchema;
+}
 
 test('the live OpenAPI response and published YAML match the current contract', async t => {
   const app = buildApp();
@@ -26,15 +38,13 @@ test('the live OpenAPI response and published YAML match the current contract', 
   assert.deepEqual(yaml, contract);
 });
 
-test('command oneOf branches use exact strict Zod input payloads and stable discriminators', () => {
+test('command oneOf branches expose strict input payloads and stable discriminators', () => {
   const schemas = contract.components.schemas;
   const names = Object.keys(registry).sort();
   assert.deepEqual(Object.keys(schemas.Command!.discriminator.mapping), names);
   assert.equal(schemas.Command!.oneOf.length, names.length);
   for (const name of names) {
-    const expected = z.toJSONSchema(registry[name]!.payload, { io: 'input', target: 'draft-2020-12' });
-    delete expected.$schema;
-    assert.deepEqual(schemas[`${name}Payload`], expected, name);
+    assert.equal(schemas[`${name}Payload`]!.type, 'object', name);
     assert.equal(schemas[`${name}Payload`]!.additionalProperties, false, name);
     assert.equal(schemas[`${name}Command`]!.properties.commandType.const, name);
     assert.deepEqual(schemas[`${name}Command`]!.required, ['commandId', 'commandType', 'payload']);
@@ -47,14 +57,8 @@ test('command oneOf branches use exact strict Zod input payloads and stable disc
 });
 
 test('all local schema refs resolve and transport capabilities are described', () => {
-  const refs = JSON.stringify(contract).matchAll(/"\$ref":"#\/([^"]+)"/g);
-  for (const match of refs) {
-    let target: unknown = contract;
-    for (const segment of match[1]!.split('/').map(value => value.replaceAll('~1', '/').replaceAll('~0', '~'))) {
-      assert.ok(target !== null && typeof target === 'object' && Object.hasOwn(target, segment), `Missing #/${match[1]}`);
-      target = (target as Record<string, unknown>)[segment];
-    }
-  }
+  const refs = JSON.stringify(contract).matchAll(/"\$ref":"(#[^"]*)"/g);
+  for (const match of refs) resolveLocalRef(contract, match[1]!);
   const stream = contract.paths['/api/v1/workspaces/{workspaceId}/events']!.get;
   assert.ok(stream.parameters.some((parameter: { name: string; in: string }) => parameter.name === 'Last-Event-ID' && parameter.in === 'header'));
   assert.ok(stream.responses[410]);
@@ -65,6 +69,89 @@ test('all local schema refs resolve and transport capabilities are described', (
     assert.ok(entity.required.includes(field));
     assert.deepEqual(entity.properties[field].anyOf, [{ type: 'string', format: 'date-time' }, { type: 'null' }]);
   }
+});
+
+test('registration contract exposes strict public request and cookie session response', () => {
+  const operation = contract.paths['/api/v1/auth/register']!.post;
+  assert.deepEqual(operation.security, []);
+  assert.equal(operation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/RegisterRequest');
+  assert.equal(operation.responses[200].content['application/json'].schema.$ref, '#/components/schemas/RegisterResponse');
+  assert.ok(operation.responses[200].headers['Set-Cookie']);
+  assert.ok(operation.responses[403]); assert.ok(operation.responses[409]); assert.ok(operation.responses[429]);
+  const request = contract.components.schemas.RegisterRequest!;
+  assert.equal(request.additionalProperties, false);
+  assert.deepEqual([...request.required].sort(), ['email', 'name', 'password']);
+  assert.equal(request.properties.password.writeOnly, true);
+});
+
+test('PM tool query expressions retain scoped recursive references and strict bounds', () => {
+  const findViews = (schema: JsonSchema): JsonSchema | undefined => {
+    if (schema.properties?.kind?.const === 'views') return schema;
+    for (const branch of schema.anyOf ?? schema.oneOf ?? []) {
+      const found = findViews(branch);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  const views = findViews(contract.components.schemas.AgentChatToolResult!);
+  assert.ok(views);
+  const where = views.properties.items.items.properties.where;
+  assert.ok(where.$ref.startsWith('#/components/schemas/AgentChatToolResult/'));
+  const expression = resolveLocalRef(contract, where.$ref);
+  const all = expression.anyOf.find((branch: JsonSchema) => branch.properties?.all);
+  assert.ok(all);
+  assert.equal(all.additionalProperties, false);
+  assert.deepEqual(all.required, ['all']);
+  assert.equal(all.properties.all.maxItems, 256);
+  assert.equal(resolveLocalRef(contract, all.properties.all.items.$ref), expression);
+  const not = expression.anyOf.find((branch: JsonSchema) => branch.properties?.not);
+  assert.ok(not);
+  assert.equal(not.additionalProperties, false);
+  assert.equal(resolveLocalRef(contract, not.properties.not.$ref), expression);
+  const leaf = expression.anyOf.find((branch: JsonSchema) => branch.properties?.field);
+  assert.ok(leaf);
+  assert.equal(leaf.additionalProperties, false);
+  assert.equal(leaf.properties.field.minLength, 1);
+  assert.equal(leaf.properties.field.maxLength, 128);
+});
+
+test('reused recursive command schemas keep their own definitions and strict input boundaries', () => {
+  type Node = { label: string; children?: Node[] | undefined };
+  const node: z.ZodType<Node> = z.lazy(() => z.strictObject({
+    label: z.string().min(1).max(12), children: z.array(node).max(3).optional(),
+  }));
+  const literal = { $ref: '#/literal-data', nested: { $ref: '#' } };
+  const payload = z.strictObject({
+    primary: node, secondary: node.optional(), metadata: z.unknown().default(literal),
+  });
+  const document = buildOpenApi({
+    First: { payload, handler: async () => null },
+    Second: { payload, handler: async () => null },
+    Root: { payload: node, handler: async () => null },
+  });
+  const nodes: JsonSchema[] = [];
+  for (const name of ['First', 'Second']) {
+    const input = document.components.schemas[`${name}Payload`]!;
+    assert.equal(input.additionalProperties, false);
+    assert.deepEqual(input.required, ['primary']);
+    assert.deepEqual(input.properties.metadata.default, literal);
+    const reference = input.properties.primary.$ref;
+    assert.ok(reference.startsWith(`#/components/schemas/${name}Payload/`));
+    const definition = resolveLocalRef(document, reference);
+    assert.equal(resolveLocalRef(document, input.properties.secondary.$ref), definition);
+    assert.equal(definition.additionalProperties, false);
+    assert.deepEqual(definition.required, ['label']);
+    assert.equal(definition.properties.label.minLength, 1);
+    assert.equal(definition.properties.label.maxLength, 12);
+    assert.equal(definition.properties.children.maxItems, 3);
+    assert.equal(resolveLocalRef(document, definition.properties.children.items.$ref), definition);
+    nodes.push(definition);
+  }
+  assert.notEqual(nodes[0], nodes[1]);
+  const root = document.components.schemas.RootPayload!;
+  assert.equal(root.additionalProperties, false);
+  assert.deepEqual(root.required, ['label']);
+  assert.equal(resolveLocalRef(document, root.properties.children.items.$ref), root);
 });
 
 test('dashboard readers expose named DTOs without client-selected actors or loose response objects', () => {

@@ -1,4 +1,4 @@
-import { parseMarkdown, patchMarkdown } from '../../../../../../packages/pm-markdown/index.ts';
+import { parseMarkdown, patchMarkdown, titleLineIndex } from '../../../../../../packages/pm-markdown/index.ts';
 import { ProtocolError, type FileRecord, type ProtocolConfiguration } from '../../../../../../packages/pm-schema/index.ts';
 
 export interface DocumentBody { prefix: string; body: string }
@@ -17,6 +17,18 @@ export function splitDocumentBody(raw: string): DocumentBody | null {
 }
 
 export function bodyEditorText(body: string): string { return body.replace(/\r\n?/g, '\n'); }
+
+/** Inline task-description editing must preserve the authoritative H1 and frontmatter exactly. */
+export function splitTaskBody(raw: string): DocumentBody | null {
+  if (!splitDocumentBody(raw)) return null;
+  const titleLine = titleLineIndex(raw);
+  if (titleLine === undefined) return null;
+  const lines = raw.split(/(?<=\n)/);
+  const prefix = lines.slice(0, titleLine + 1).join('');
+  const rest = raw.slice(prefix.length);
+  const leading = /^(?:[ \t]*\r?\n)+/.exec(rest)?.[0] ?? '';
+  return { prefix: prefix + leading, body: rest.slice(leading.length) };
+}
 
 /** CodeMirror offsets count a CRLF as one character, protocol offsets count two. */
 export function bodyOffsetFromEditor(body: string, offset: number): number {

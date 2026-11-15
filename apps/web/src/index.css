@@ -33,7 +33,7 @@
     outline-offset: 2px;
   }
   ::selection {
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    background: color-mix(in srgb, var(--text-selection) 22%, transparent);
   }
   code,
   kbd,
@@ -161,10 +161,32 @@ html[data-desktop-shell] .pm-agent-chat[data-embedded="true"] .desktop-titlebar-
   text-align: center;
   overflow-wrap: anywhere;
 }
-.route-feedback > p { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 560px; }
-.route-feedback svg { width: 20px; height: 20px; flex-shrink: 0; }
-.route-feedback > :is(a, button) { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--control-radius); }
-.route-feedback > :is(a, button):hover { background: var(--surface-hover); }
+.route-feedback > :is(p, [role="status"]) { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 560px; }
+.route-feedback > :is(a:not([data-navigation-close]), button) { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--control-radius); }
+.route-feedback > :is(a:not([data-navigation-close]), button):hover { background: var(--surface-hover); }
+
+/* Existing Agent page-loading hooks retain their status text and source-owned
+   markup; only the decorative indicator is shared with the product loader. */
+:is(.settings-content > .settings-notice[data-kind="loading"], .settings-main > p[role="status"], .pm-agent-automation-empty[role="status"])::before {
+  content: "";
+  display: block;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  background: url("/dovspace.svg?v=20261115") center / contain no-repeat;
+  animation: dovspace-page-breathe 2s ease-in-out infinite;
+}
+.settings-content > .settings-notice[data-kind="loading"] > svg { display: none; }
+.settings-main > p[role="status"] { display: flex; align-items: center; gap: 10px; }
+.pm-agent-automation-empty[role="status"] { flex-direction: row; align-items: center; }
+@keyframes dovspace-page-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+html[data-pm-motion="reduce"] :is(.settings-content > .settings-notice[data-kind="loading"], .settings-main > p[role="status"], .pm-agent-automation-empty[role="status"])::before { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.settings-content > .settings-notice[data-kind="loading"], .settings-main > p[role="status"], .pm-agent-automation-empty[role="status"])::before { animation: none; }
+}
 
 /* 路由离场：导航时克隆旧页面覆盖层，仅淡出并轻微上移，不阻塞新页面渲染。 */
 @keyframes pm-page-exit {

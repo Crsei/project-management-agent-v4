@@ -24,7 +24,7 @@ export function ProjectCollectionRows({ props, onSelect }: { props: ProjectColle
   if (props.variant === "compact") return <ProjectListFourSurface props={props} onSelect={onSelect} />
 
   const columns: ProjectColumn[] = [
-    { key: "owner", label: en ? "Owner" : "负责人", width: 13.43, sortKey: config?.sortableKeys?.includes("owner") ? "owner" : undefined, cell: (project) => project.owner ? <span className={styles.ownerCell}><Avatar name={project.owner.name} size={24} className={styles.ownerAvatar} /><span title={project.owner.name}>{project.owner.name}</span></span> : <span className={styles.muted}>—</span> },
+    { key: "owner", label: en ? "Owner" : "负责人", width: 13.43, sortKey: config?.sortableKeys?.includes("owner") ? "owner" : undefined, cell: (project) => project.ownerContent ?? (project.owner ? <span className={styles.ownerCell}><Avatar name={project.owner.name} size={24} className={styles.ownerAvatar} /><span title={project.owner.name}>{project.owner.name}</span></span> : <span className={styles.muted}>—</span>) },
     { key: "health", label: model.healthAssessmentLabel ?? model.healthLabel ?? (en ? "Health" : "健康度"), width: 12.47, sortKey: "health", cell: (project) => {
       if (project.healthAssessment !== undefined) {
         const assessment = project.healthAssessment
@@ -43,7 +43,7 @@ export function ProjectCollectionRows({ props, onSelect }: { props: ProjectColle
     { key: "milestone", label: en ? "Milestone" : "里程碑", width: 15.35, sortKey: config?.sortableKeys?.includes("milestone") ? "milestone" : "due", cell: (project) => <span className={styles.milestoneCell}><span className={styles.milestoneTitle} title={project.milestone?.title}>{project.milestone?.title ?? "—"}</span><span className={styles.milestoneDate}><CalendarDays aria-hidden="true" /><time dateTime={project.milestone?.date ?? undefined}>{project.milestone?.date ? dateFormatter.format(new Date(project.milestone.date)) : "—"}</time></span></span> },
     { key: "team", label: en ? "Team" : "团队", width: 12.47, sortKey: config?.sortableKeys?.includes("team") ? "team" : undefined, cell: (project) => {
       const names = project.teams === undefined ? project.teamId : project.teams?.map(team => team.name).join(", ")
-      return <span className={styles.teamCell} title={names ? `${names}${project.teamSize === null ? "" : ` · ${project.teamSize}${en ? " members" : " 位成员"}`}` : undefined}><span className={styles.teamIcon}><Users aria-hidden="true" /></span><span>{names || (project.teamSize === null ? "—" : `${project.teamSize}${en ? " members" : " 位成员"}`)}</span></span>
+      return <span className={styles.teamCell} title={names || undefined}><span className={styles.teamIcon}><Users aria-hidden="true" /></span><span>{names || (project.teams === null ? (en ? "Teams unavailable" : "团队不可用") : (en ? "No linked teams" : "未关联团队"))}</span></span>
     } },
     { key: "updated", label: en ? "Updated" : "更新于", width: 11.63, sortKey: "updated", cell: (project) => <span className={styles.updatedTime}><Clock3 aria-hidden="true" /><time dateTime={project.updatedAt ?? undefined} title={project.updatedAt ? fullDateFormatter.format(new Date(project.updatedAt)) + " UTC" : undefined}>{project.updatedAt ? dateFormatter.format(new Date(project.updatedAt)) : "—"}</time></span> },
   ]

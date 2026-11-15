@@ -41,7 +41,7 @@ test('new workspace creates independent persisted Nova content; concurrent origi
     for (const target of item.entity.links) assert.ok(snapshot.body.files.some(file => file.id === target), `Unresolved sample link ${target}`);
   }
   const location = await f.request<{ path: string; storageId: string }>(`/api/v1/workspaces/${first.workspaceId}/local-projects/projects/${project.id}/location`);
-  assert.equal(await readFile(join(location.body.path, '.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
+  assert.equal(await readFile(join(location.body.path, '.dovspace/.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
   const otherKey = randomUUID();
   const other = await workspaceClient.createWorkspace({ name: 'Nova workspace two', expectedActorId: f.owner.id }, otherKey, { signal: f.signal });
   ready(other);
@@ -57,7 +57,7 @@ test('new workspace creates independent persisted Nova content; concurrent origi
   assert.equal(originalWorkspace.body.files.length, 0, 'An existing workspace with no sample intent stays empty');
   const mismatch = await f.request('/api/v1/workspaces', { method: 'POST', headers: { 'Idempotency-Key': key }, body: { name: 'Changed frozen name', expectedActorId: f.owner.id } });
   assert.equal(mismatch.status, 409);
-  const deletedPath = join(location.body.path, '.pm/core/projects', `${project.id}.md`);
+  const deletedPath = join(location.body.path, '.dovspace/.pm/core/projects', `${project.id}.md`);
   await rm(deletedPath);
   assert.equal((await f.request('/api/v1/workspaces')).status, 200);
   const replay = await workspaceClient.createWorkspace(original, key, { signal: f.signal });

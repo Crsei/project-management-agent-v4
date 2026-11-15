@@ -2,18 +2,29 @@
 import type { DatabaseSync } from "node:sqlite";
 import { DEFAULT_SKILL_REPOS } from "../constants.ts";
 import { databaseError } from "../errors.ts";
-import { APP_IDS, emptyAppFlags, type AppId, type AppFlags, type InstalledSkill, type SkillRepo } from "../types.ts";
+import { APP_IDS, emptyAppFlags, type AppId, type AppFlags, type BundledSkillSource, type InstalledSkill, type SkillRepo } from "../types.ts";
 
 const SELECT = `SELECT id, name, description, directory, repo_owner, repo_name, repo_branch,
  readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_grokbuild,
  enabled_opencode, enabled_hermes, installed_at, content_hash, updated_at,
- enabled_mcode, enabled_agy, enabled_kimi, enabled_dsh FROM skills`;
+ enabled_mcode, enabled_agy, enabled_kimi, enabled_dsh, source_json FROM skills`;
 
 type Row = Record<string, unknown>;
 
 function bool(row: Row, key: string): boolean {
   return row[key] === 1 || row[key] === true || row[key] === "1";
 }
+/** Unknown or malformed provenance never promotes a local/GitHub Skill to a builtin. */
+export function parseBundledSkillSource(value: unknown): BundledSkillSource | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  if (source.sourceLabel !== "Dovspace" || typeof source.sourcePath !== "string" ||
+      !/^(?:\.agents\/skills|plugins\/dovspace-pm\/skills)\/[a-z0-9-]+\/SKILL\.md$/.test(source.sourcePath) ||
+      typeof source.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(source.sha256) ||
+      typeof source.treeHash !== "string" || !/^[0-9a-f]{64}$/.test(source.treeHash)) return undefined;
+  return { sourceLabel: "Dovspace", sourcePath: source.sourcePath, sha256: source.sha256, treeHash: source.treeHash };
+}
+
 
 function rowToSkill(row: Row): InstalledSkill {
   const apps = emptyAppFlags();
@@ -21,6 +32,8 @@ function rowToSkill(row: Row): InstalledSkill {
     // Pi/OMP skill flags are native-directory observations, not database columns.
     apps[app] = app === "pi" || app === "omp" ? false : bool(row, `enabled_${app}`);
   }
+  let source: BundledSkillSource | undefined;
+  try { source = parseBundledSkillSource(JSON.parse(String(row.source_json))); } catch { /* no trusted provenance */ }
   return {
     id: String(row.id),
     name: String(row.name),
@@ -34,6 +47,7 @@ function rowToSkill(row: Row): InstalledSkill {
     installedAt: Number(row.installed_at ?? 0),
     ...(row.content_hash != null ? { contentHash: String(row.content_hash) } : {}),
     updatedAt: Number(row.updated_at ?? 0),
+    ...(source ? { source } : {}),
   };
 }
 
@@ -59,8 +73,8 @@ export class SkillsDao {
       (id, name, description, directory, repo_owner, repo_name, repo_branch,
        readme_url, enabled_claude, enabled_codex, enabled_gemini, enabled_grokbuild,
        enabled_opencode, enabled_hermes, installed_at, content_hash, updated_at,
-       enabled_mcode, enabled_agy, enabled_kimi, enabled_dsh)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`)
+       enabled_mcode, enabled_agy, enabled_kimi, enabled_dsh, source_json)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)`)
       .run(
         skill.id, skill.name, skill.description ?? null, skill.directory, skill.repoOwner ?? null,
         skill.repoName ?? null, skill.repoBranch ?? null, skill.readmeUrl ?? null,
@@ -68,6 +82,7 @@ export class SkillsDao {
         skill.apps.grokbuild ? 1 : 0, skill.apps.opencode ? 1 : 0, skill.apps.hermes ? 1 : 0,
         skill.installedAt, skill.contentHash ?? null, skill.updatedAt,
         skill.apps.mcode ? 1 : 0, skill.apps.agy ? 1 : 0, skill.apps.kimi ? 1 : 0, skill.apps.dsh ? 1 : 0,
+        skill.source ? JSON.stringify(skill.source) : null,
       );
   }
 

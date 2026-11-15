@@ -50,7 +50,7 @@ export function TraceRow({ icon, title, description, status, trailing, defaultOp
     onOpenChange?.(next);
   };
   return <Collapsible open={open} onOpenChange={change} className={`${styles.traceRow} ${className ?? ""}`}>
-    <CollapsibleTrigger className={styles.traceTrigger}>
+    <CollapsibleTrigger className={styles.traceTrigger} title={typeof title === "string" ? title : undefined}>
       <TraceLine
         icon={icon}
         title={title}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NativeOutputItem } from "@agent-workspace/contracts/output";
-import { assistantMessageKind, canRespondToInteraction, createOutputDisclosureStore, generationIndicator, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails } from "./output-presenter.ts";
+import { assistantMessageKind, canRespondToInteraction, changedFileSummary, createOutputDisclosureStore, generationIndicator, isCompletedAutoApproval, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, semanticToolSummary } from "./output-presenter.ts";
 
 const item = (id: string, type: NativeOutputItem["type"], extra: Partial<NativeOutputItem> = {}): NativeOutputItem => ({ id, type, status: "completed", ...extra });
 const identities = (items: NativeOutputItem[]) => presentOutputItems(items).map(row => "items" in row ? [row.kind, row.items.map(entry => entry.id)] : [row.kind, row.item.id]);
@@ -52,14 +52,14 @@ test("reasoning previews use the first available line without heading wrappers o
   assert.equal(reasoningPreview([item("plain", "reasoning", { text: "Inspect foo_bar and *.ts" })]), "Inspect foo_bar and *.ts");
 });
 
-test("consecutive independent tools keep individual identities/statuses; danger and association boundaries stay visible", () => {
-  const first = item("one", "file_search", { status: "running" });
-  const second = item("two", "dynamic_tool", { status: "pending" });
+test("only completed adjacent tools group; live tools remain individually visible", () => {
+  const first = item("one", "file_search");
+  const second = item("two", "dynamic_tool");
   const grouped = presentOutputItems([first, second]);
   assert.equal(grouped.length, 1);
   assert.equal(grouped[0]!.kind, "tools");
-  if (grouped[0]!.kind === "tools") assert.deepEqual(grouped[0]!.items.map(entry => [entry.id, entry.status]), [["one", "running"], ["two", "pending"]]);
-  for (const boundary of [item("failed", "dynamic_tool", { status: "failed", error: "Permission denied" }), item("exit", "command_execution", { exitCode: 2 }), item("waiting", "dynamic_tool", { status: "waiting" }), item("answer", "assistant_message"), item("input", "user_input_request"), item("plan", "todo_list")]) {
+  if (grouped[0]!.kind === "tools") assert.deepEqual(grouped[0]!.items.map(entry => [entry.id, entry.status]), [["one", "completed"], ["two", "completed"]]);
+  for (const boundary of [item("running", "command_execution", { status: "running" }), item("pending", "dynamic_tool", { status: "pending" }), item("failed", "dynamic_tool", { status: "failed", error: "Permission denied" }), item("exit", "command_execution", { exitCode: 2 }), item("waiting", "dynamic_tool", { status: "waiting" }), item("answer", "assistant_message"), item("input", "user_input_request"), item("plan", "todo_list")]) {
     assert.deepEqual(identities([first, boundary, second]), [["tools", ["one"]], ["item", boundary.id], ["tools", ["two"]]]);
   }
   assert.equal(presentOutputItems([first, { ...second, parentItemId: "child" }]).length, 2);
@@ -157,4 +157,48 @@ test("hidden native results are standalone placeholders and cannot expose a summ
   assert.equal(reasoningPreview([hidden]), "");
   assert.equal(canRespondToInteraction(hidden, "running"), false);
   assert.equal(requiresVisibleDetails(hidden), true);
+});
+
+test("only explicit completed auto-approval records collapse, never unknown or unsafe requests", () => {
+  const approved = item("permission", "approval_request", {
+    request: { id: "permission", itemId: "permission", kind: "approval", title: "Permission", respondable: false, resolution: "auto_approved" },
+  });
+  assert.equal(isCompletedAutoApproval(approved), true);
+  assert.equal(requiresVisibleDetails(approved), false);
+  assert.deepEqual(identities([item("before", "file_search"), approved, item("after", "command_execution")]), [["tools", ["before", "permission", "after"]]]);
+  const variants: Partial<NativeOutputItem>[] = [
+    { status: "pending" }, { status: "running" }, { status: "waiting" }, { status: "unknown" },
+    { status: "failed" }, { status: "interrupted" }, { status: "cancelled" },
+    { error: "Response acknowledgement missing" }, { exitCode: 1 }, { visibility: "redacted" }, { visibility: "unavailable" },
+    { request: { ...approved.request!, respondable: true } },
+    { request: { ...approved.request!, resolution: undefined, title: "Native permission auto-approved", unavailableReason: "Auto-approved by configuration; no action required." } },
+    { request: { ...approved.request!, resolution: "approved" } },
+  ];
+  for (const extra of variants) {
+    const unsafe = { ...approved, ...extra };
+    assert.equal(requiresVisibleDetails(unsafe), true, JSON.stringify(extra));
+    assert.equal(presentOutputItems([unsafe])[0]!.kind, "item");
+  }
+});
+
+test("semantic tool labels retain exact inputs without treating shell text as an achieved outcome", () => {
+  assert.deepEqual(semanticToolSummary(item("read", "dynamic_tool", { toolName: "functions.read", input: { path: "src/file.ts:1-100" } })), { action: "read", target: "src/file.ts:1-100" });
+  assert.deepEqual(semanticToolSummary(item("cat", "command_execution", { input: { command: "cat README.md" } })), { action: "read", target: "README.md" });
+  const compound = "cat README.md && rm generated.tmp";
+  assert.deepEqual(semanticToolSummary(item("compound", "command_execution", { input: { command: compound } })), { action: "command", target: compound });
+  assert.deepEqual(semanticToolSummary(item("multiline", "command_execution", { input: "printf hi\nprintf bye" })), { action: "command", target: "printf hi" });
+  assert.deepEqual(semanticToolSummary(item("hidden", "dynamic_tool", { visibility: "redacted", toolName: "secret", input: { path: "/secret" } })), { action: "tool" });
+});
+
+test("changed files preserve observed order, deduplicate same-id updates, and exclude inaccessible payloads", () => {
+  const a = item("a", "file_change", { changes: [{ path: "src/a.ts", operation: "update", diff: "--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n+more" }] });
+  const b = item("b", "file_change", { fileName: "src/b.ts", additions: 3, deletions: 1 });
+  const later = item("c", "file_change", { status: "unknown", changes: [{ path: "src/a.ts", oldPath: "old.ts", operation: "rename" }] });
+  const files = changedFileSummary([a, b, { ...a }, later, item("hidden", "file_change", { visibility: "unavailable", fileName: "private.ts", additions: 100 }), item("title-only", "file_change", { title: "Not a path" })]);
+  assert.deepEqual(files.map(file => [file.path, file.additions, file.deletions, file.records.map(record => record.id)]), [["src/a.ts", 2, 1, ["a", "c"]], ["src/b.ts", 3, 1, ["b"]]]);
+  assert.equal(files[0]!.records[1]!.status, "unknown");
+  assert.equal(files[0]!.partialCounts, true);
+  assert.equal(files[1]!.partialCounts, undefined);
+  assert.equal(changedFileSummary([item("unknown-count", "file_change", { fileName: "file.ts" })])[0]!.additions, undefined);
+  assert.equal(changedFileSummary([item("binary", "file_change", { fileName: "image.png", diff: "Binary files differ" })])[0]!.additions, undefined);
 });

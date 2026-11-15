@@ -1,3 +1,6 @@
+// Annotation-preserving capture failure behavior adapts t3code 7379f1969b0f4b579327cf81299ef8cc3ddf8e9c
+// apps/desktop/src/preview/Manager.ts (MIT; see LICENSE.t3code). Host IPC/session policy is unchanged.
+import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   elementCropRect,
@@ -138,6 +141,7 @@ export class PreviewManager {
       loading: Boolean(pendingUrl),
       wc: null,
       webContentsId: null,
+      navigationRevision: 0,
       detach: null,
       captureQueue: Promise.resolve(),
       pick: null,
@@ -180,6 +184,9 @@ export class PreviewManager {
       this.refreshNavigation(tab);
       this.publish(tab);
     };
+    on("did-start-navigation", (_event, _url, _isInPlace, isMainFrame) => {
+      if (isMainFrame) tab.navigationRevision += 1;
+    });
     on("did-start-loading", () => {
       tab.loading = true;
       tab.navStatus = { kind: "loading", url: tab.url ?? "" };
@@ -199,6 +206,7 @@ export class PreviewManager {
     });
     on("did-navigate-in-page", (_event, url, isMainFrame) => {
       if (!isMainFrame) return;
+      tab.navigationRevision += 1;
       tab.url = url;
       if (!tab.loading) tab.navStatus = { kind: "success", url, title: tab.title };
       update();
@@ -352,9 +360,22 @@ export class PreviewManager {
     const tab = this.tabs.get(previewTabId(tabId));
     if (!tab) throw new Error("Unknown preview tab.");
     return this.serializeCapture(tab, async () => {
+      const wc = tab.wc;
+      if (!wc || wc.isDestroyed()) throw new Error("The preview page is not attached.");
+      const revision = tab.navigationRevision;
+      const snapshot = {
+        captureId: randomUUID(),
+        capturedAt: new Date().toISOString(),
+        url: wc.getURL(),
+        title: wc.getTitle(),
+      };
       const image = await this.#capturePage(tab);
+      if (tab.wc !== wc || wc.isDestroyed() || tab.navigationRevision !== revision) {
+        throw new Error("The preview page changed while capturing the screenshot.");
+      }
       const size = image.getSize();
-      return { dataUrl: image.toDataURL(), width: size.width, height: size.height };
+      if (image.isEmpty?.() || size.width <= 0 || size.height <= 0) throw new Error("The preview screenshot is empty.");
+      return { ...snapshot, dataUrl: image.toDataURL(), width: size.width, height: size.height };
     });
   }
 
@@ -392,25 +413,46 @@ export class PreviewManager {
         cleanup();
         try {
           const rect = normalizePreviewRect(payload?.rect, "element rect");
-          const dpr = typeof payload?.dpr === "number" && payload.dpr > 0 ? payload.dpr : 1;
-          const image = await this.serializeCapture(tab, () => this.#capturePage(tab));
-          const crop = elementCropRect(rect, dpr, image.getSize());
-          const cropped = crop ? image.crop(crop) : null;
-          if (!cropped) throw new Error("The selected element is outside the visible preview.");
-          wc.send(CANCEL_PICK);
-          resolve({
-            dataUrl: cropped.toDataURL(),
-            width: crop.width,
-            height: crop.height,
-            url: tab.url ?? wc.getURL(),
-            title: tab.title || wc.getTitle(),
+          const dpr = payload?.dpr;
+          if (!Number.isFinite(dpr) || dpr <= 0 || dpr > 16) throw new Error("Invalid preview device pixel ratio.");
+          const revision = tab.navigationRevision;
+          const picked = {
+            captureId: randomUUID(),
+            capturedAt: new Date().toISOString(),
+            url: wc.getURL(),
+            title: wc.getTitle(),
             selector: typeof payload?.selector === "string" ? payload.selector.slice(0, 512) : "",
             tagName: typeof payload?.tagName === "string" ? payload.tagName.slice(0, 64) : "",
             text: typeof payload?.text === "string" ? payload.text.slice(0, 2000) : "",
-            screenshotFailed: false,
-          });
+            rect,
+            devicePixelRatio: dpr,
+          };
+          try {
+            const image = await this.serializeCapture(tab, () => this.#capturePage(tab));
+            if (tab.wc !== wc || wc.isDestroyed() || tab.navigationRevision !== revision) {
+              throw new Error("The preview page changed while capturing the selected element.");
+            }
+            const size = image.getSize();
+            if (image.isEmpty?.() || size.width <= 0 || size.height <= 0) throw new Error("The preview screenshot is empty.");
+            const crop = elementCropRect(rect, dpr, size);
+            const cropped = crop ? image.crop(crop) : null;
+            if (!cropped || cropped.isEmpty?.()) throw new Error("The selected element is outside the visible preview.");
+            resolve({ ...picked, dataUrl: cropped.toDataURL(), width: crop.width, height: crop.height, screenshotFailed: false });
+          } catch (error) {
+            // The user's selected snapshot is real even when the optional image fails.
+            resolve({
+              ...picked,
+              dataUrl: null,
+              width: 0,
+              height: 0,
+              screenshotFailed: true,
+              screenshotError: error instanceof Error ? error.message : String(error),
+            });
+          } finally {
+            if (!wc.isDestroyed()) wc.send(CANCEL_PICK);
+          }
         } catch (error) {
-          wc.send(CANCEL_PICK);
+          if (!wc.isDestroyed()) wc.send(CANCEL_PICK);
           reject(error);
         }
       };
@@ -508,7 +550,7 @@ export class PreviewManager {
 
   dispose() {
     this.closePiP();
-    for (const tabId of [...this.tabs.keys()]) this.closeTab(tabId);
+    for (const tabId of this.tabs.keys()) this.closeTab(tabId);
     this.tabs.clear();
     this.configuredPartitions.clear();
     this.partition = null;

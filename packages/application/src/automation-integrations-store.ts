@@ -29,11 +29,25 @@ export async function readAutomationIntegrationReceipt(sql: SqlExecutor, context
   for (const projectId of row.project_ids) await authorizeAutomationIntegration(sql, context, actor, workspaceId, projectId);
   return { requestId, result: row.result, httpStatus: row.http_status };
 }
+
+/** Status-only proof for the original private request; never executes or returns stored business data. */
+export type AutomationIntegrationReceiptProof = { hash: string; outcome: 'committed' | 'rejected' | 'unknown'; projectIds: string[] };
+export async function inspectAutomationIntegrationReceipt(sql: SqlExecutor, actorId: string, workspaceId: string, requestId: string): Promise<AutomationIntegrationReceiptProof | null> {
+  const row = (await sql.query<{ request_hash: string; http_status: number; result: unknown; project_ids: string[] }>('SELECT request_hash,http_status,result,project_ids FROM automation_integration_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actorId, requestId])).rows[0];
+  if (!row) return null;
+  const result = row.result && typeof row.result === 'object' ? row.result as Record<string, unknown> : null;
+  const error = result?.error && typeof result.error === 'object' ? result.error as Record<string, unknown> : null;
+  // A persisted native error/result is application evidence; an observed network HTTP class is not.
+  const outcome = row.http_status === 200 && typeof result?.id === 'string' && typeof result.revision === 'number' ? 'committed'
+    : row.http_status !== 200 && typeof error?.code === 'string' && !/unknown|pending|unavailable/i.test(error.code) ? 'rejected' : 'unknown';
+  return { hash: row.request_hash, outcome, projectIds: row.project_ids };
+}
 /** Mutations and their immutable receipt commit under the existing workspace authorization lock. */
-export async function mutateAutomationIntegration<T>(context: AutomationIntegrationContext, actor: Actor, workspaceId: string, input: { requestId: string; [key: string]: unknown }, projects: string[], operation: (sql: PoolClient) => Promise<T>): Promise<T> {
+export async function mutateAutomationIntegration<T>(context: AutomationIntegrationContext, actor: Actor, workspaceId: string, input: { requestId: string; [key: string]: unknown }, projects: string[], operation: (sql: PoolClient) => Promise<T>, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<T> {
   const sql = await context.database().connect(); let result: unknown; let status = 200;
   try {
     await sql.query('BEGIN'); await assertAutomationIntegrationsAvailable(sql); await lockWorkspace(sql, workspaceId); await getMembership(sql, actor, workspaceId);
+    await checkAuthorization?.(sql);
     const prior = (await sql.query<ReceiptRow>('SELECT * FROM automation_integration_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, input.requestId])).rows[0];
     if (prior) {
       for (const projectId of prior.project_ids) await authorizeAutomationIntegration(sql, context, actor, workspaceId, projectId);

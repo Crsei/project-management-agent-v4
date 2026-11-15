@@ -410,10 +410,16 @@ test("live HTTP listeners without worker/database readiness are never declared r
 test("an unexpected running role exit reports only after owned teardown", { skip: !node24 }, async (t) => {
   const f = await fixture(t);
   const reported = deferred();
+  const invalidated = deferred();
+  f.server.onReadinessLost = () => invalidated.resolve({ ready: f.server.ready, count: f.server.processCount, failure: f.server.failure });
   f.server.onExit = (message) => reported.resolve({ message, count: f.server.processCount, running: f.server.running });
   await f.server.start(f.configuration);
   const agent = f.server.children.get("agent");
   agent.kill("SIGKILL");
+  const lost = await invalidated.promise;
+  assert.equal(lost.ready, false);
+  assert.ok(lost.count > 0, "readiness loss must notify before remaining owned processes/PostgreSQL finish stopping");
+  assert.match(lost.failure, /agent exited unexpectedly/);
   const result = await reported.promise;
   assert.match(result.message, /agent exited unexpectedly/);
   assert.equal(result.count, 0);

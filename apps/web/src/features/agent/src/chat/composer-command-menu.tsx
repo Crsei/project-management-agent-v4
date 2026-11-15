@@ -124,6 +124,11 @@ export function ComposerCommandMenu(props: {
           {props.status ?? t("没有匹配项。", "No matching entries.")}
         </p>
       )}
+      {props.items.some(item => item.type === "skill") && (
+        <p className="composer-command-note">
+          {t("来源位置由当前 Provider 报告；Dovspace 内置来源与安装状态可在 Skills 设置中核对。", "Locations are reported by the current Provider. Check Skills settings for Dovspace bundled provenance and installation status.")}
+        </p>
+      )}
       {props.items.length > 0 && props.truncated ? (
         <p className="composer-command-note">
           {t("结果已截断，继续输入以缩小范围。", "Results are truncated; keep typing to narrow them.")}
@@ -178,7 +183,14 @@ function ComposerCommandMenuItem(props: {
           props.item.label
         )}
       </span>
-      <span className="composer-command-description">{props.item.description}</span>
+      <span className="composer-command-details">
+        <span className="composer-command-description">{props.item.description}</span>
+        {props.item.type === "skill" && (
+          <span className="composer-command-source" title={props.item.skill.path}>
+            {t("来源位置", "Source location")}: {props.item.skill.path}
+          </span>
+        )}
+      </span>
       {skillSourceKind && SourceIcon && sourceLabel ? (
         <span className="composer-command-badge">
           <SourceIcon aria-hidden="true" />

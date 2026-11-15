@@ -6,9 +6,10 @@ import { ServiceCalendar } from "../components/service-calendar"
 import { ServiceGantt, type TimelineMilestone } from "../components/service-gantt"
 import { dateOnly, type ScheduleItem } from "../components/service-collection-shared"
 import { taskStateLabel } from "../markdown/task-status-label"
-import { usePmService } from "./pm-service"
+import { usePmService, useProjectDirectory } from "./pm-service"
 import { useText } from "./pm-ui"
 import { MilestoneReschedule } from "./dashboard-planning"
+import type { ProjectDirectoryProject } from "../../../../../../packages/domain/src/project-directory"
 
 export type CoreScheduleViewProps = {
   files: FileRecord[]
@@ -36,13 +37,15 @@ type CoreScheduleItem = ScheduleItem & {
 }
 
 /** Only saved, authorized native files resolve Timeline labels and formal task blockers. */
-export function createCoreTimelineMetadata({ files, contextFiles = files, configuration, projectId, en, actor }: {
+export function createCoreTimelineMetadata({ files, contextFiles = files, configuration, projectId, en, actor, people = [], workspaceId }: {
   files: readonly FileRecord[]
   contextFiles?: readonly FileRecord[]
   configuration?: ProtocolConfiguration
   projectId?: string
   en: boolean
   actor: { id: string; name: string } | null
+  people?: readonly ProjectDirectoryProject[]
+  workspaceId?: string
 }) {
   const resolver = createReferenceResolver([...contextFiles])
   const projectIds = new Set(projectId ? [projectId] : files.flatMap(file => file.entity.entity === "project" ? [file.id] : file.entity.project ? [file.entity.project] : []))
@@ -54,6 +57,7 @@ export function createCoreTimelineMetadata({ files, contextFiles = files, config
   function forFile(file: FileRecord): ScheduleItem["data"] {
     const entity = file.entity
     const id = entity.entity === "project" ? file.id : entity.project
+    const personId = entity.entity === "project" || entity.entity === "milestone" ? entity.owner : entity.assignee
     const state = configuration ? workflowFor(entity.entity, configuration)?.states.find(candidate => candidate.id === entity.status) : undefined
     const dependencies = entity.entity === "work_item" && usable(file) ? [...new Set(entity.blocked_by)].filter(targetId => {
       const target = resolver.resolveId(targetId).file
@@ -66,8 +70,9 @@ export function createCoreTimelineMetadata({ files, contextFiles = files, config
       projectTitle: projectTitle(id),
       statusLabel: state ? taskStateLabel(state, en) : entity.status,
       statusCategory: state?.category,
-      assigneeId: entity.assignee,
-      assigneeName: entity.assignee && entity.assignee === actor?.id ? actor.name : undefined,
+      assigneeId: personId,
+      assigneeName: personId ? personId === actor?.id ? actor.name : people.find(project => project.projectId === id)?.identities.find(person => person.id === personId)?.name : undefined,
+      assigneeHref: personId && workspaceId ? `/pm/${encodeURIComponent(workspaceId)}/members?person=${encodeURIComponent(personId)}` : undefined,
       dependencies,
     }
   }
@@ -83,8 +88,9 @@ export function createCoreTimelineMetadata({ files, contextFiles = files, config
 export function CoreScheduleView({ files, layout, onSelect, onPatch, canEdit, onCreate, today, showProject = false, contextFiles, configuration, projectId, toolbarTarget }: CoreScheduleViewProps) {
   const t = useText()
   const { locale } = useI18n()
-  const { actor } = usePmService()
-  const timeline = useMemo(() => layout === "gantt" ? createCoreTimelineMetadata({ files, contextFiles, configuration, projectId, en: locale === "en", actor }) : null, [files, contextFiles, configuration, projectId, locale, actor, layout])
+  const { actor, workspace } = usePmService()
+  const directory = useProjectDirectory()
+  const timeline = useMemo(() => createCoreTimelineMetadata({ files, contextFiles, configuration, projectId, en: locale === "en", actor, people: !directory.error ? directory.data?.projects : undefined, workspaceId: workspace?.id }), [files, contextFiles, configuration, projectId, locale, actor, directory.data, directory.error, workspace?.id])
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [milestoneDateId, setMilestoneDateId] = useState("")
@@ -106,15 +112,13 @@ export function CoreScheduleView({ files, layout, onSelect, onPatch, canEdit, on
       scheduleFields,
       scheduleReadOnly: (!scheduleFields.start && !scheduleFields.due) || !canEdit(file.id) || file.entity.archived === true || !!file.stale || !!file.error || !!file.diagnostics?.some(diagnostic => diagnostic.severity === "error"),
       data: {
-        ...(timeline ? timeline.forFile(file) : {
-          title: showProject && file.entity.project ? `${file.entity.project} · ${file.entity.title}` : file.entity.title,
-          status: file.entity.status,
-        }),
+        ...timeline.forFile(file),
+        ...(layout === "calendar" && showProject && file.entity.project ? { title: `${file.entity.project} · ${file.entity.title}` } : {}),
         startDate: startField ? file.entity[startField] : undefined,
         dueDate: hasDue ? file.entity.due : undefined,
       },
     }
-  }), [files, canEdit, showProject, timeline])
+  }), [files, canEdit, layout, showProject, timeline])
 
   async function schedule(item: CoreScheduleItem, startDate: string | null, dueDate: string | null) {
     if (saving.current) return

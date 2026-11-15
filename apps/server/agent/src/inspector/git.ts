@@ -10,7 +10,8 @@ import type {
 } from "@agent-workspace/contracts/inspector";
 import { InspectorPathError, resolveInsideRoot } from "./paths.ts";
 import { DurableError } from "../durable/errors.ts";
-import { resolveInspectorRoot } from "./scope.ts";
+import { readInspectorProjection } from "./scope.ts";
+import { nativeEnvironment } from "../native-environment.ts";
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_MAX_BUFFER = 4 * 1024 * 1024;
@@ -18,9 +19,13 @@ const GIT_MAX_BUFFER = 4 * 1024 * 1024;
 export const GIT_DIFF_LIMIT = 512 * 1024;
 
 class GitCommandError extends Error {
-  constructor(message: string) {
+  readonly exitCode: string | number | undefined;
+  readonly stderr: string;
+  constructor(message: string, exitCode?: string | number, stderr = "") {
     super(message);
     this.name = "GitCommandError";
+    this.exitCode = exitCode;
+    this.stderr = stderr;
   }
 }
 
@@ -28,12 +33,17 @@ interface GitResult {
   stdout: string;
 }
 
-function runGit(args: string[], cwd: string, allowNonZero = false): Promise<GitResult> {
+function runGit(args: string[], cwd: string, expectedExit?: "config-no-match" | "no-index-difference", input?: string): Promise<GitResult> {
   const { promise, resolve, reject } = Promise.withResolvers<GitResult>();
-  execFile(
+  // Repository projections must not inherit an unrelated Git directory/index
+  // from the service launcher or refresh the user's index as a read side effect.
+  const env: NodeJS.ProcessEnv = { ...nativeEnvironment(), LC_ALL: "C", GIT_OPTIONAL_LOCKS: "0" };
+  for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"])
+    delete env[key];
+  const child = execFile(
     "git",
-    ["--literal-pathspecs", ...args],
-    { cwd, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, encoding: "utf8" },
+    ["--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false", ...args],
+    { cwd, env, timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, encoding: "utf8" },
     (error, stdout, stderr) => {
       if (!error) {
         resolve({ stdout });
@@ -41,13 +51,18 @@ function runGit(args: string[], cwd: string, allowNonZero = false): Promise<GitR
       }
       const rawCode =
         typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-      if (allowNonZero && typeof rawCode === "number") {
+      if (rawCode === 1 && !error.killed && !error.signal && !stderr.trim() &&
+          (expectedExit === "no-index-difference" || expectedExit === "config-no-match" && !stdout)) {
         resolve({ stdout });
         return;
       }
-      reject(new GitCommandError((stderr.trim() || error.message).slice(0, 2000)));
+      reject(new GitCommandError((stderr.trim() || error.message).slice(0, 2000), rawCode ?? undefined, stderr));
     },
   );
+  if (input !== undefined && child.stdin) {
+    child.stdin.once("error", () => reject(new GitCommandError("Git attribute input could not be delivered.")));
+    child.stdin.end(input);
+  }
   return promise;
 }
 
@@ -56,8 +71,51 @@ async function repositoryRoot(root: string): Promise<string | null> {
     const { stdout } = await runGit(["rev-parse", "--show-toplevel"], root);
     const resolved = stdout.trim();
     return resolved.length > 0 && path.resolve(resolved) === path.resolve(root) ? resolved : null;
-  } catch {
-    return null;
+  } catch (error) {
+    // Only Git's explicit non-repository discovery result is a non-repository.
+    // Missing git, permissions, corrupt metadata, unsafe ownership and deadlines
+    // are real failures, not an empty successful status.
+    if (error instanceof GitCommandError && error.exitCode === 128 &&
+        /^fatal: not a git repository(?: \(|:)/m.test(error.stderr)) return null;
+    throw error;
+  }
+}
+
+async function requireInertWorktreeFilters(root: string, selectedPath?: string, includeIgnored = false): Promise<void> {
+  // These builtin reads do not convert content or execute filters. A globally
+  // installed driver (e.g. LFS) is not a reason to reject unrelated repositories:
+  // only an executable driver actually selected by a path attribute is unsafe.
+  const configured = await runGit(["config", "--null", "--name-only", "--get-regexp", "^filter\\..*\\.(clean|process)$"], root, "config-no-match");
+  if (!configured.stdout) return;
+  // Keep repository-wide indexed paths covered: Git may refresh index entries
+  // even for a pathspec-limited projection. Explicit targets must also be checked
+  // when ignored/untracked, and no-index fallback may inspect ignored descendants.
+  const files = await runGit(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root);
+  const ignored = includeIgnored
+    ? (await runGit(["ls-files", "-z", "--others", "--", selectedPath ?? "."], root)).stdout : "";
+  const paths = files.stdout + ignored + (selectedPath && selectedPath !== "." ? `${selectedPath}\0` : "");
+  if (!paths) return;
+  const selectedDrivers = new Set<string>();
+  for (const cached of [false, true]) {
+    const attributes = await runGit(["check-attr", ...(cached ? ["--cached"] : []), "-z", "--stdin", "filter"], root, undefined, paths);
+    const fields = attributes.stdout.split("\0");
+    if (fields.pop() !== "" || fields.length % 3 !== 0)
+      throw new GitCommandError("Git returned an incomplete attribute projection.");
+    for (let index = 0; index < fields.length; index += 3) {
+      if (fields[index + 1] !== "filter") throw new GitCommandError("Git returned an unexpected attribute projection.");
+      selectedDrivers.add(fields[index + 2]!);
+    }
+  }
+  // Names and values are read separately: config subsection names and command
+  // values may contain newlines, so key-newline-value output is ambiguous.
+  for (const key of new Set(configured.stdout.split("\0"))) {
+    if (!key) continue;
+    const match = /^filter\.([\s\S]+)\.(?:clean|process)$/.exec(key);
+    if (!match) throw new GitCommandError("Git returned an unexpected filter setting.");
+    if (!selectedDrivers.has(match[1]!)) continue;
+    const values = await runGit(["config", "--null", "--get-all", key], root, "config-no-match");
+    if (values.stdout.split("\0").some(value => value.length > 0))
+      throw new DurableError(409, "git_filter_unsupported", "Read-only Git inspection cannot execute a clean/process filter selected by this repository's path attributes. No status or diff was run.");
   }
 }
 
@@ -169,6 +227,7 @@ async function readStatus(root: string): Promise<GitStatusResponse> {
   if (!repoRoot) {
     return { repo: false, ahead: 0, behind: 0, files: [], truncated: false };
   }
+  await requireInertWorktreeFilters(root);
   const { stdout } = await runGit(
     // Only an exact selected repository root reaches this command.
     ["status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all", "--", "."],
@@ -194,17 +253,17 @@ function capPatch(patch: string): { patch: string; truncated: boolean } {
   return { patch: bytes.subarray(0, GIT_DIFF_LIMIT).toString("utf8"), truncated: true };
 }
 
-async function readDiff(
+export async function readDiff(
   root: string,
   relative: string,
   staged: boolean,
 ): Promise<GitDiffResponse | null> {
   if (!(await repositoryRoot(root))) return null;
-
   const target = relative.length > 0 ? relative : ".";
+  await requireInertWorktreeFilters(root, target);
   if (staged) {
     const { stdout } = await runGit(
-      ["diff", "--cached", "--no-renames", "--no-color", "--unified=3", "--", target],
+      ["diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "--unified=3", "--", target],
       root,
     );
     const capped = capPatch(stdout);
@@ -218,7 +277,7 @@ async function readDiff(
   }
 
   const { stdout } = await runGit(
-    ["diff", "--no-renames", "--no-color", "--unified=3", "--", target],
+    ["diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "--unified=3", "--", target],
     root,
   );
   if (stdout.length > 0) {
@@ -240,11 +299,12 @@ async function readDiff(
     return { path: relative, staged: false, patch: "", truncated: false, untracked: false };
   }
 
+  await requireInertWorktreeFilters(root, target, true);
   // `--no-index` exits with 1 whenever the inputs differ; that is expected.
   const untrackedDiff = await runGit(
-    ["diff", "--no-index", "--no-color", "--unified=3", "--", "/dev/null", target],
+    ["diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", "--", "/dev/null", target],
     root,
-    true,
+    "no-index-difference",
   );
   const capped = capPatch(untrackedDiff.stdout);
   return {
@@ -289,8 +349,7 @@ function respondFailure(c: Context, error: unknown): Response {
 export const gitRoutes = new Hono()
   .get("/git", async (c) => {
     try {
-      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
-      return c.json(await readStatus(root));
+      return c.json(await readInspectorProjection(new URL(c.req.url), c.req.raw.headers, readStatus));
     } catch (error) {
       return respondFailure(c, error);
     }
@@ -299,9 +358,10 @@ export const gitRoutes = new Hono()
     const stagedParam = (c.req.query("staged") ?? "").toLowerCase();
     const staged = stagedParam === "1" || stagedParam === "true";
     try {
-      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
-      const { relative } = await resolveInsideRoot(c.req.query("path") ?? "", root);
-      const diff = await readDiff(root, relative, staged);
+      const diff = await readInspectorProjection(new URL(c.req.url), c.req.raw.headers, async root => {
+        const { relative } = await resolveInsideRoot(c.req.query("path") ?? "", root);
+        return readDiff(root, relative, staged);
+      });
       if (!diff) {
         return c.json({ error: "当前目录不是 git 仓库。", code: "not_a_repo" }, 409);
       }

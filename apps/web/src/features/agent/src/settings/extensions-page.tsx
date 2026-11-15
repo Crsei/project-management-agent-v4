@@ -4,6 +4,7 @@ import { CcSwitchManagement, type ManagementContext, type ManagementEvent } from
 import { OpenHandsExtensionSurface, OpenHandsProviderSetupSurface } from "@pm/openhands-extensions";
 import { PmServiceProvider, usePmService } from "@/features/pm/service/pm-service";
 import { PmLoginPage } from "@/features/pm/service/pm-auth-page";
+import { BundledSkillsPanel } from "@/components/bundled-skills-panel";
 import { useAgentText } from "../i18n";
 import { useI18n } from "@/lib/i18n-provider";
 import { extensionJson, readExtensionEvents, uploadExtensionZip } from "./extensions-api";
@@ -37,6 +38,7 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const [transportBusy, setTransportBusy] = useState(0);
   const [panelBusy, setPanelBusy] = useState(false);
   const [nativeBusy, setNativeBusy] = useState(false);
+  const [bundledBusy, setBundledBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
   const [streamError, setStreamError] = useState<string>();
@@ -51,8 +53,12 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const loading = loadingScope === scopeKey || (!current && !error);
   const context = !loading && !error ? current?.context : undefined;
   const id = context?.id;
-  const locked = transportBusy > 0 || panelBusy || nativeBusy || dirty;
-  useEffect(() => { setGuard(transportBusy > 0 || panelBusy || nativeBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, nativeBusy, dirty, setGuard]);
+  const locked = transportBusy > 0 || panelBusy || nativeBusy || bundledBusy || dirty;
+  useEffect(() => { setGuard(transportBusy > 0 || panelBusy || nativeBusy || bundledBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, nativeBusy, bundledBusy, dirty, setGuard]);
+  const onBundledBusyChange = useCallback((busy: boolean) => {
+    setBundledBusy(busy);
+    if (busy) setGuard("busy");
+  }, [setGuard]);
   useEffect(() => { live.current = true; return () => { live.current = false; ++loadSequence.current; }; }, []);
 
   const load = useCallback(async () => {
@@ -195,10 +201,13 @@ function Management({ view }: { view: "mcp" | "skills" }) {
     </section>
     {!loading && !error && requestedContext === null && requestedProvider === null && !projectScope && current && !current.context && current.targets.length === 0 && <OpenHandsProviderSetupSurface view={view} locale={locale} onConfigureProvider={() => navigate("/agent/settings/providers")} />}
     {context && streamError && <SettingsNotice kind="error" onRetry={() => setStreamVersion(version => version + 1)}>{streamError}</SettingsNotice>}
-    {context?.kind === "native" && view === "skills" && <ExtensionNativeSkills key={`native-skills:${scopeKey}:${id}`} invoke={invoke} subscribe={subscribe} disabled={locked || !!streamError} onBusyChange={setNativeBusy} />}
-    {context && <CcSwitchManagement key={`management:${scopeKey}:${id}`} context={context} contexts={[context]} locale={locale} invoke={invoke} upload={upload} subscribe={subscribe} onDirtyChange={setDirty}>
-      <div inert={nativeBusy || undefined}><OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} /></div>
-    </CcSwitchManagement>}
+    {view === "skills" && <BundledSkillsPanel t={t} ownerKey={`${service.actor?.id ?? "anonymous"}:${service.actorEpoch}:${scopeKey}`} preferredProviderId={requestedProvider ?? undefined} disabled={transportBusy > 0 || panelBusy || nativeBusy || dirty || !!context && !!streamError} onBusyChange={onBundledBusyChange} />}
+    <div className="settings-extensions-page" inert={bundledBusy || undefined}>
+      {context?.kind === "native" && view === "skills" && <ExtensionNativeSkills key={`native-skills:${scopeKey}:${id}`} invoke={invoke} subscribe={subscribe} disabled={locked || !!streamError} onBusyChange={setNativeBusy} />}
+      {context && <CcSwitchManagement key={`management:${scopeKey}:${id}`} context={context} contexts={[context]} locale={locale} invoke={invoke} upload={upload} subscribe={subscribe} onDirtyChange={setDirty}>
+        <div inert={nativeBusy || undefined}><OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} /></div>
+      </CcSwitchManagement>}
+    </div>
   </div>;
 }
 function ScopedManagement({ view }: { view: "mcp" | "skills" }) {

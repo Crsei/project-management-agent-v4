@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router"
 import { ApiError, CommandOutcomeUnknown, type ArtifactVisibility, type Command, type CommandReceipt, type Entity } from "@contracts"
 import { z } from "zod"
 import { Check, Download, Eye, FolderOpen, LayoutGrid, Link2, List, ListFilter, MoreHorizontal, Search, SearchX, Upload, UploadCloud, X } from "lucide-react"
-import { Avatar } from "@/components/ui/avatar"
+import { HumanIdentity } from "../human-identity"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty } from "@/components/ui/empty"
@@ -190,7 +190,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   const locked = command.pending || !!command.unknownCommand
   const staged = (uploads.data ?? []).filter(row => row.data.ownerId === actor?.id && !row.data.consumedAt && Date.parse(typeof row.data.expiresAt === "string" ? row.data.expiresAt : "") > Date.now())
   const entries = useMemo(() => buildFileEntries(artifacts.data, versions.data), [artifacts.data, versions.data])
-  const identities = useMemo(() => new Map(directory.data?.projects.find(entry => entry.projectId === project.id)?.identities.map(identity => [identity.id, identity.name]) ?? []), [directory.data, project.id])
+  const identities = useMemo(() => new Map(!directory.error ? directory.data?.projects.find(entry => entry.projectId === project.id)?.identities.map(identity => [identity.id, identity.name]) ?? [] : []), [directory.data, directory.error, project.id])
   const uploaderOptions = useMemo(() => {
     const seen = new Map<string, string>()
     for (const entry of entries) {
@@ -593,6 +593,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
                       <span className={styles.fileMeta}>{entry.hidden && `${t("已隐藏", "Hidden")} · `}{entry.originalFileName} · {[formatFileSize(entry.size), uploaderName(entry.uploaderId), formatRelativeTime(entry.updatedAt, locale)].filter(Boolean).join(" · ")}{entry.versionCount > 1 ? ` · v${entry.versionCount}` : ""}</span>
                     </span>
                   </button>
+                  <div className="px-3 pb-2"><HumanIdentity userId={entry.uploaderId} projectId={project.id} size={20} /></div>
                   {menuButton}
                 </li>}</FileMenu>)}
               </ul>
@@ -601,12 +602,11 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
                   <thead><tr><th scope="col">{t("名称", "Name")}</th><th scope="col">{t("类型", "Type")}</th><th scope="col">{t("大小", "Size")}</th><th scope="col">{t("上传者", "Uploaded by")}</th><th scope="col">{t("日期", "Date")}</th><th scope="col"><span className="sr-only">{t("操作", "Actions")}</span></th></tr></thead>
                   <tbody>
                     {filtered.map(entry => {
-                      const uploader = uploaderName(entry.uploaderId)
                       return <FileMenu key={entry.id} entry={entry} t={t} onPreview={() => openPreview(entry, entry.latest.id)} onDownload={() => { void download(entry.latest) }} onCopyLink={() => copyLink(entry.latest)} canManage={canManage} canCopy={canCopy} locked={locked} onAction={mode => setLifecycleAction({ mode, artifact: entry.artifact, version: entry.latest, scope: actionScope })}>{menuButton => <tr data-pm-file>
                         <td><button type="button" className={styles.nameButton} title={`${entry.name} · ${entry.originalFileName}`} onClick={() => openPreview(entry, entry.latest.id)}><FileTypeIcon kind={entry.kind} size={14} /><span className={styles.nameText}>{entry.name}{entry.hidden && ` · ${t("已隐藏", "Hidden")}`}</span>{entry.versionCount > 1 && <span className={styles.versionBadge}>v{entry.versionCount}</span>}</button><small className={styles.fileMeta}>{entry.originalFileName}</small></td>
                         <td>{kindLabel(entry.kind, en)}</td>
                         <td className={styles.numeric}>{formatFileSize(entry.size) || "—"}</td>
-                        <td><span className={styles.uploader}>{uploader !== "—" && <Avatar name={uploader} size={24} />}<span>{uploader}</span></span></td>
+                        <td><HumanIdentity userId={entry.uploaderId} projectId={project.id} /></td>
                         <td className={styles.date} title={display.dateTime(entry.updatedAt)}>{formatRelativeTime(entry.updatedAt, locale)}</td>
                         <td className={styles.actions}>{menuButton}</td>
                       </tr>}</FileMenu>

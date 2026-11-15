@@ -3,6 +3,8 @@ import { bodyLimit } from "hono/body-limit";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { extensionBindSchema, extensionInvokeSchema, extensionProjectScopeSchema } from "@agent-workspace/contracts/extensions";
+import { createMcpPresets } from "@agent-workspace/contracts/mcp-presets";
+import { installBundledSkillsRequestSchema } from "@agent-workspace/contracts/bundled-skills";
 import { verifyAutomationServiceRequest } from "../../../../../packages/infrastructure/src/automation-execution-client.ts";
 import { DurableError } from "../durable/errors.ts";
 import { isExtensionMutationCommand, parseExtensionCommand } from "./commands.ts";
@@ -28,6 +30,20 @@ extensionRoutes.onError((error, c) => {
   return c.json({ error: "The configuration service is unavailable. No operation completion was inferred; read its authoritative state before retrying.", code: "extension_unavailable" }, 503);
 });
 extensionRoutes.get("/extensions/targets", c => c.json(getExtensionHost().targets()));
+extensionRoutes.get("/extensions/mcp/catalog", c => {
+  z.strictObject({}).parse(c.req.query());
+  return c.json({ platform: process.platform, presets: createMcpPresets(process.platform === "win32") });
+});
+extensionRoutes.get("/extensions/bundled-skills", async c => {
+  z.strictObject({}).parse(c.req.query());
+  return c.json(await getExtensionHost().bundledSkillsCatalog());
+});
+extensionRoutes.get("/extensions/providers/:providerInstanceId/bundled-skills", async c => {
+  z.strictObject({}).parse(c.req.query());
+  return c.json(await getExtensionHost().providerBundledSkills(c.req.param("providerInstanceId")));
+});
+extensionRoutes.post("/extensions/providers/:providerInstanceId/bundled-skills", bodyLimit({ maxSize: 32 * 1024 }), async c =>
+  c.json(await getExtensionHost().installProviderBundledSkills(c.req.param("providerInstanceId"), installBundledSkillsRequestSchema.parse(await c.req.json()))));
 extensionRoutes.post("/extensions/providers/:providerInstanceId/context", bodyLimit({ maxSize: 32 * 1024 }), async c => {
   z.strictObject({}).parse(await c.req.json());
   return c.json(await getExtensionHost().resolveProviderContext(c.req.param("providerInstanceId")));

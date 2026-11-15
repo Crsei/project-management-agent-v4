@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { acceptedChatContextSchema } from "./message-context.ts";
 
 export const pmReferenceKindSchema = z.enum(["issue", "project", "document"]);
 export type PmReferenceKind = z.infer<typeof pmReferenceKindSchema>;
@@ -47,6 +48,7 @@ export const turnContextSchema = z.strictObject({
   acceptedAt: z.iso.datetime(),
   pmReferences: z.array(pmReferenceResolutionSchema).max(50),
   executionGrantId: z.uuid().optional(),
+  contextItems: z.array(acceptedChatContextSchema).max(20).optional(),
 });
 export type TurnContext = z.infer<typeof turnContextSchema>;
 

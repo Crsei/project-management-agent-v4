@@ -13,6 +13,7 @@ import { ActivityTargetDetail } from "./activity-target-detail"
 import { useProjectAudit, usePmService } from "./pm-service"
 import { allowed, useText } from "./pm-ui"
 import styles from "./project-activity.module.css"
+import { HumanIdentity } from "./human-identity"
 
 export type ProjectAuditHistoryProps = { projectId: string }
 
@@ -95,6 +96,7 @@ export function ProjectAuditHistory({ projectId }: ProjectAuditHistoryProps) {
                   aria-label={`${actionLabel(entry)} · ${entry.targetKind} · ${entry.targetId} · ${t("在右侧打开详情", "Open detail on the right")}`}
                   onClick={() => setSelectedId(entry.id)}
                 >{content}</button> : <div className={styles.rowStatic}>{content}</div>}
+                {entry.actorId && <div className="px-4 pb-2"><HumanIdentity userId={entry.actorId} projectId={projectId} size={20} /></div>}
               </div>
             })}
           </div>

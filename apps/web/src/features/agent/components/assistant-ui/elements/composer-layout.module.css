@@ -75,3 +75,17 @@
 .historyError button:disabled {
   opacity: 0.6;
 }
+
+.contextPanels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(320px, 38dvh);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.contextPanels:empty {
+  display: none;
+}

@@ -49,6 +49,26 @@ test('authorized native audit/fact heads are journal-bound, not whole-table exem
   tampered.tables.project_audit![0]!.changes = [];
   assert.ok(diffSnapshots(before, tampered, { allowedEntityIds: ['TASK-001'] }).unexpectedMutations.some(mutation => mutation.domain === 'postgres' && mutation.identity === 'project_audit'));
 });
+test('registered read-only tool receipts do not become business mutations or exempt unknown tools and changed identities', () => {
+  const before = snapshot();
+  before.tables.workspaces = [{ id: 'owned' }];
+  before.tables.pm_agent_tool_operations = [];
+  const after = structuredClone(before);
+  const operation = { operation_id: 'brief-operation', workspace_id: 'owned', name: 'pm_task_brief', target: { workspaceId: 'owned', projectId: 'PRJ-001' }, status: 'succeeded', result: {} };
+  after.tables.pm_agent_tool_operations = [operation];
+  assert.deepEqual(diffSnapshots(before, after).unexpectedMutations, []);
+  for (const altered of [
+    { ...operation, name: 'pm_read_unregistered' },
+    { ...operation, name: 'pm_update_task' },
+    { ...operation, workspace_id: 'other', target: { workspaceId: 'other', projectId: 'PRJ-001' } },
+  ]) {
+    const rejected = { ...after, tables: { ...after.tables, pm_agent_tool_operations: [altered] } };
+    assert.ok(diffSnapshots(before, rejected).unexpectedMutations.some(mutation => mutation.identity === 'pm_agent_tool_operations'));
+  }
+  const retained = structuredClone(after);
+  retained.tables.pm_agent_tool_operations![0]!.operation_id = 'replacement-operation';
+  assert.ok(diffSnapshots(after, retained).unexpectedMutations.some(mutation => mutation.identity === 'pm_agent_tool_operations'));
+});
 test('platform signal SQL additions require exact accepted signed payload and linked trusted PM request', () => {
   const before = snapshot(), after = structuredClone(before);
   before.tables.workspaces = [{ id: 'owned' }]; after.tables.workspaces = [{ id: 'owned' }];

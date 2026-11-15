@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { LocalServer } from "./local-server.mjs";
 import { readSetupStatus } from "./first-run.mjs";
 import { PreviewManager } from "./preview/manager.mjs";
+import { startBrowserCliBridge } from "./preview/cli-bridge.mjs";
 import { isAllowedPreviewUrl } from "./preview/preview-policy.mjs";
 import { backupDesktop, restoreDesktop } from "./maintenance.mjs";
 import { captureWindowState, restoredWindowBounds } from "./window-state.mjs";
@@ -24,10 +25,13 @@ import {
   safeDesktopMessage, sameService, serviceRequestAllowed, trustedConnectionFrame, trustedWorkspaceFrame, workspacePartition,
 } from "./policy.mjs";
 
-app.setName("PM Agent v4");
+app.setName("Dovspace");
 app.setAppUserModelId("com.projectmanagementagent.v4");
+// The user data directory keeps its original name: rebranding the visible
+// product name must not migrate or orphan an existing local workspace.
 app.setPath("userData", join(app.getPath("appData"), "PM Agent v4"));
 const here = dirname(fileURLToPath(import.meta.url));
+const windowIcon = app.isPackaged ? undefined : join(here, "../build/icon.png");
 const connectionUrl = pathToFileURL(join(here, "connection.html")).href;
 const repository = resolve(here, "../../..");
 const serverRoot = app.isPackaged ? join(process.resourcesPath, "workspace-runtime") : repository;
@@ -58,6 +62,8 @@ let workspaceSession;
 let workspaceMode;
 let workspaceUrl;
 let previewManager;
+let browserCliBridge;
+let browserCliClosing = Promise.resolve();
 let allowQuit = false;
 let quitting = false;
 let quitPrompt = false;
@@ -191,6 +197,7 @@ function showConnection() {
   connectionWindow = new BrowserWindow({
     ...restoredWindowBounds(windowStates.connection, { width: 1080, height: 800, minWidth: 620, minHeight: 660 }, screen.getAllDisplays()),
     title: "工作区连接 — Dovspace", backgroundColor: "#fafaf9", autoHideMenuBar: true,
+    ...(windowIcon ? { icon: windowIcon } : {}),
     ...windowTitleBarOptions(process.platform, nativeTheme.shouldUseDarkColors ? "dark" : "light"),
     webPreferences: securePreferences("desktop-connection", join(here, "preload.cjs")),
   });
@@ -220,24 +227,27 @@ function showConnection() {
   return window;
 }
 
-async function externalLink(value) {
-  if (externalPrompt || quitting) return;
+async function externalLink(value, stillAllowed) {
+  if (externalPrompt || quitting || quitPrompt || stillAllowed && !stillAllowed()) return false;
   let url;
   try {
     url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return;
-  } catch { return; }
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
+  } catch { return false; }
   externalPrompt = true;
   try {
     const result = await dialog.showMessageBox({
-      type: "question", title: "Open your browser?", message: `Open ${url.hostname} outside PM Agent v4?`,
+      type: "question", title: "Open your browser?", message: `Open ${url.hostname} outside Dovspace?`,
       detail: "The system browser has a separate login session. No desktop local access token is passed to it.",
       buttons: ["Cancel", "Open in browser"], defaultId: 0, cancelId: 0,
     });
-    if (result.response === 1) await shell.openExternal(url.href);
+    if (result.response !== 1 || quitting || quitPrompt || stillAllowed && !stillAllowed()) return false;
+    await shell.openExternal(url.href);
+    return true;
   } catch (cause) {
     publish({ error: `Could not open your browser: ${safeDesktopMessage(cause)}` });
     showConnection();
+    return false;
   } finally { externalPrompt = false; }
 }
 
@@ -252,10 +262,12 @@ function constrainSession(targetSession, origin) {
 }
 
 async function createWorkspace(url, targetSession, mode) {
+  await closeBrowserCliBridge();
   const origin = new URL(url).origin;
   const window = new BrowserWindow({
     ...restoredWindowBounds(windowStates.workspace, { width: 1440, height: 980, minWidth: 900, minHeight: 640 }, screen.getAllDisplays()),
-    title: "PM Agent v4", backgroundColor: "#fafaf9", show: false, autoHideMenuBar: true,
+    title: "Dovspace", backgroundColor: "#fafaf9", show: false, autoHideMenuBar: true,
+    ...(windowIcon ? { icon: windowIcon } : {}),
     ...windowTitleBarOptions(process.platform, nativeTheme.shouldUseDarkColors ? "dark" : "light"),
     webPreferences: {
       ...securePreferences(undefined, join(here, "preload.workspace.cjs")),
@@ -346,12 +358,30 @@ async function createWorkspace(url, targetSession, mode) {
   if (workspaceWindow !== window || window.isDestroyed())
     throw new Error("The workspace window closed before it was ready. Reconnect to open it again.");
   window.show();
+  if (mode === "local") {
+    const server = localServer;
+    if (!server?.ready || server.stopping || server.failure) throw new Error("The local services are not ready for native Browser control.");
+    const bridge = await startBrowserCliBridge({
+      descriptorFile: join(app.getPath("userData"), "browser-cli.json"),
+      serviceUrl: `${origin}/agent`,
+      execute: (command, signal) => executeBrowserCli(command, signal, window, server),
+    });
+    if (quitting || quitPrompt || workspaceWindow !== window || window.isDestroyed() || localServer !== server || !server.ready || server.stopping || server.failure) {
+      await bridge.close();
+      throw new Error("The local workspace closed before its Browser bridge was ready.");
+    }
+    browserCliBridge = { window, server, bridge };
+    window.once("closed", () => {
+      if (browserCliBridge?.window === window) void closeBrowserCliBridge().catch(() => publish({ error: "Browser CLI descriptor cleanup failed; its listener was closed." }));
+    });
+  }
   if (connectionWindow && !connectionWindow.isDestroyed()) connectionWindow.hide();
 }
 
 async function closeWorkspace() {
   const previous = workspaceWindow;
   if (previous && !previous.isDestroyed()) await workspaceClose();
+  await closeBrowserCliBridge();
   previewManager?.dispose();
   const previousSession = workspaceSession;
   if (previousSession) {
@@ -490,6 +520,10 @@ async function connect(input) {
           void closeWorkspace().catch(cause => publish({ error: `${message}\nWorkspace cleanup did not complete: ${safeDesktopMessage(cause)}` })).finally(() => publish({}));
           showConnection();
         },
+        onReadinessLost: () => {
+          if (localServer === server && browserCliBridge?.server === server)
+            void closeBrowserCliBridge().catch(() => publish({ error: "Browser control was invalidated immediately; private descriptor cleanup failed." }));
+        },
       });
       localServer = server;
       const started = await server.start({ ...next });
@@ -600,7 +634,7 @@ async function requestQuit() {
   quitPrompt = true;
   publish({});
   try {
-    if (!(await confirmLocalStop("Quit PM Agent v4 and stop local background tasks?"))) return;
+    if (!(await confirmLocalStop("Quit Dovspace and stop local background tasks?"))) return;
     await finishQuit();
   } catch (cause) {
     publish({ error: `Could not confirm shutdown: ${safeDesktopMessage(cause)}` });
@@ -652,6 +686,96 @@ async function chooseWorkspaceDirectory(event) {
   }
 }
 
+function closeBrowserCliBridge() {
+  const current = browserCliBridge;
+  browserCliBridge = null;
+  if (current) {
+    // Abort the listener and pending native actions now, not in a later teardown
+    // queue after owned child processes or PostgreSQL finish stopping.
+    browserCliClosing = Promise.all([browserCliClosing.catch(() => undefined), current.bridge.close()]).then(() => undefined);
+  }
+  return browserCliClosing;
+}
+
+async function executeBrowserCli(command, signal, window, server) {
+  const available = () => workspaceWindow === window && !window.isDestroyed() && workspaceMode === "local" &&
+    localServer === server && server.ready && !server.stopping && !server.failure &&
+    command.serviceUrl === `${new URL(workspaceUrl).origin}/agent` && Boolean(previewManager) &&
+    !changingConnection && !maintenancePromise && !lifecyclePromise && !desktopUpdater?.busy && !quitting && !quitPrompt && !signal.aborted;
+  if (!available()) throw new Error("The matching trusted local desktop workspace is unavailable.");
+  const manager = previewManager;
+  const liveTab = () => {
+    const tab = manager.tabs.get(command.tabId);
+    if (!tab || !tab.wc || tab.wc.isDestroyed()) throw new Error("Browser tab has no live native webview.");
+    return tab;
+  };
+  switch (command.action) {
+    case "status": return { platform: process.platform, runtime: "electron_webview", local: true, available: true,
+      actions: ["list", "create", "state", "close", "navigate", "back", "forward", "reload", "stop", "capture", "pick", "cancel-pick", "pip-open", "pip-close", "devtools", "open-external"] };
+    case "list": return { tabs: [...manager.tabs.values()].map(tab => ({ ...manager.getState(tab.tabId), attached: Boolean(tab.wc && !tab.wc.isDestroyed()) })) };
+    case "state": return { state: manager.getState(command.tabId) };
+    case "create": {
+      if (manager.tabs.has(command.tabId)) throw new Error("Browser tab identity already exists; inspect it instead of replaying creation.");
+      const created = manager.createTab(command.tabId, { url: command.url });
+      // Only the existing trusted workspace preload can mount/register the native
+      // webview. A pending manager record is never reported as an attached browser.
+      const { promise, resolve: attached, reject } = Promise.withResolvers();
+      let settled = false;
+      const done = (error) => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        ipcMain.removeListener("desktop:preview-cli-attached", onAttached);
+        signal.removeEventListener("abort", cancelled);
+        window.removeListener("closed", cancelled);
+        if (error) reject(error); else attached();
+      };
+      const cancelled = () => done(new Error("Native Browser creation cancelled."));
+      const onAttached = (event, result) => {
+        if (!trustedWorkspace(event) || event.sender !== window.webContents || result?.tabId !== command.tabId) return;
+        if (result.ok !== true) done(new Error("Native Browser webview could not attach."));
+        else { try { liveTab(); done(); } catch (error) { done(error); } }
+      };
+      const timer = setTimeout(() => done(new Error("Native Browser webview attachment timed out.")), 15_000);
+      ipcMain.on("desktop:preview-cli-attached", onAttached);
+      signal.addEventListener("abort", cancelled, { once: true });
+      window.once("closed", cancelled);
+      window.webContents.send("desktop:preview-cli-create", { tabId: command.tabId, partition: created.partition, preload: created.preload });
+      try { if (signal.aborted) cancelled(); await promise; return { state: manager.getState(command.tabId), attached: true }; }
+      catch (error) { manager.closeTab(command.tabId); if (!window.isDestroyed()) window.webContents.send("desktop:preview-cli-close", { tabId: command.tabId }); throw error; }
+    }
+    case "close": {
+      const tab = manager.tabs.get(command.tabId);
+      if (!tab) throw new Error("Unknown Browser tab.");
+      const contents = tab.wc;
+      manager.closeTab(command.tabId);
+      if (contents && !contents.isDestroyed()) contents.close({ waitForBeforeUnload: false });
+      window.webContents.send("desktop:preview-cli-close", { tabId: command.tabId });
+      return { closed: true };
+    }
+    case "navigate": liveTab(); return { state: await manager.navigate(command.tabId, command.url) };
+    case "back": liveTab(); return { state: await manager.back(command.tabId) };
+    case "forward": liveTab(); return { state: await manager.forward(command.tabId) };
+    case "reload": liveTab(); return { state: await manager.reload(command.tabId) };
+    case "stop": liveTab(); return { state: await manager.stop(command.tabId) };
+    case "capture": liveTab(); return manager.capture(command.tabId);
+    case "pick": {
+      liveTab();
+      const cancel = () => { void manager.cancelPick(command.tabId); };
+      signal.addEventListener("abort", cancel, { once: true });
+      try { if (signal.aborted) return { cancelled: true }; return await manager.pick(command.tabId); }
+      finally { signal.removeEventListener("abort", cancel); }
+    }
+    case "cancel-pick": liveTab(); return manager.cancelPick(command.tabId);
+    case "pip-open": liveTab(); return manager.openPiP(command.tabId);
+    case "pip-close": liveTab(); if (manager.isPiPOpen(command.tabId)) manager.closePiP(); return { open: false };
+    case "devtools": liveTab(); await manager.openDevTools(command.tabId); return { open: true };
+    case "open-external":
+      if (!isAllowedPreviewUrl(command.url)) throw new Error("Only HTTP(S) links can be opened externally.");
+      return { opened: await externalLink(command.url, available) };
+    default: throw new Error("Unknown Browser native action.");
+  }
+}
+
 async function previewAction(event, input) {
   if (!trustedWorkspace(event)) throw new Error("Preview controls are available only in the trusted workspace window.");
   if (workspaceMode !== "local") throw new Error("Native preview is available only for the local workspace.");
@@ -676,8 +800,7 @@ async function previewAction(event, input) {
     case "devtools": await previewManager.openDevTools(input.tabId); return { open: true };
     case "open-external": {
       if (!isAllowedPreviewUrl(input.url)) throw new Error("Only http(s) preview links can be opened externally.");
-      await externalLink(input.url);
-      return { opened: true };
+      return { opened: await externalLink(input.url) };
     }
     default: throw new Error("Unknown preview action.");
   }
@@ -686,13 +809,15 @@ async function previewAction(event, input) {
 async function maintenance(action, input) {
   let password = input?.password;
   let trustedSourceAcknowledged = input?.trustedSourceAcknowledged === true;
-  if (input) { input.password = ""; input.trustedSourceAcknowledged = false; }
+  const stoppedWritersAcknowledged = input?.stoppedWritersAcknowledged === true;
+  if (input) { input.password = ""; input.trustedSourceAcknowledged = false; input.stoppedWritersAcknowledged = false; }
   if (changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting || quitPrompt || localRunning() || workspaceSession || workspaceWindow)
     throw new Error("Disconnect and stop all local services before backup or restore.");
   const restoring = action === "restore";
   if (typeof password !== "string" || password.length < (restoring ? (input.allowLegacyUnencrypted === true ? 0 : 1) : 12) || password.length > 1024 || Buffer.byteLength(password, "utf8") > 4096) throw new Error(restoring ? "Enter the backup password (at most 1024 characters)." : "Use a backup password between 12 and 1024 characters.");
   if (input.allowLegacyUnencrypted !== undefined && typeof input.allowLegacyUnencrypted !== "boolean") throw new Error("Invalid legacy restore confirmation.");
   if (restoring && !trustedSourceAcknowledged) throw new Error("Confirm the backup's trusted source for this restore operation; a valid password does not establish trusted authorship.");
+  if (!restoring && !stoppedWritersAcknowledged) throw new Error("Actually stop external Markdown editors, native CLI and every included writer, then acknowledge keeping them stopped for the entire backup. Owned-service stop alone is insufficient.");
   transientSecrets = [password];
   changingConnection = true; // Reserve the desktop while native dialogs are open too.
   const operation = (async () => {
@@ -703,7 +828,7 @@ async function maintenance(action, input) {
         message: restoring ? "Restore executes the supplied PostgreSQL SQL with the local application/server account's privileges. Only restore a backup from a source you trust." : "This encrypted backup includes private data, saved credentials and conversations.",
         detail: restoring
           ? `Encryption establishes key possession and detects alteration, not trusted authorship. Supplied SQL can have effects beyond the new destination. This confirmation applies only to this operation. Restore is limited to a NEW, EMPTY directory on the same operating system; existing workspaces are never overwritten.${allowLegacyUnencrypted ? " You also explicitly allowed an old UNENCRYPTED backup; keep its source private." : " Old unencrypted backups are rejected unless explicitly allowed."}`
-          : `Password-derived encryption protects private PM, registered project storage, managed Agent state, credentials and conversations, and detects alteration. It does not identify the archive's author. Global/external CLI credential homes are excluded. Keep the password separately; it cannot be recovered. Saved workspace: ${configuration.dataDir}`,
+          : `Password-derived encryption protects private PM, registered project storage, managed Agent state, credentials and conversations, and detects alteration. It does not identify the archive's author. You acknowledge external Markdown editors, native CLI and every included writer are actually stopped and remain stopped throughout export; this checkbox does not detect or stop external processes. Global/external CLI credential homes are excluded. Keep the password separately; it cannot be recovered. Saved workspace: ${configuration.dataDir}`,
         buttons: ["Cancel", restoring ? "I trust this source — choose backup and empty destination" : "Choose backup destination"], defaultId: 0, cancelId: 0,
       });
       if (confirmation.response !== 1 || quitting) return;
@@ -721,7 +846,7 @@ async function maintenance(action, input) {
       }
       publish({ status: "maintenance", message: restoring ? "Restoring into a new isolated workspace…" : "Creating the full workspace backup…", error: "", details: "" });
       const onProgress = message => publish({ message: typeof message === "string" ? message : message?.message || "Maintaining workspace data…" });
-      const result = await (restoring ? restoreDesktop : backupDesktop)({ serverRoot, runtimeRoot, ...options, password, ...(restoring ? { allowLegacyUnencrypted, trustedSourceAcknowledged: true } : {}), onProgress });
+      const result = await (restoring ? restoreDesktop : backupDesktop)({ serverRoot, runtimeRoot, ...options, password, ...(restoring ? { allowLegacyUnencrypted, trustedSourceAcknowledged: true } : { stoppedWritersAcknowledged }), onProgress });
       if (restoring) await saveConfiguration({ ...configuration, mode: "local", dataDir: result.dataDir, projectRoot: result.projectRoot });
       publish({ status: "idle", message: restoring ? "Restore complete. Connect Local to sign in to the restored workspace; no existing workspace was overwritten." : "Encrypted backup complete. Keep the backup and its password safe and separate.", details: restoring ? result.dataDir : result.directory, error: "", address: "", runtime: "" });
     } catch (cause) {

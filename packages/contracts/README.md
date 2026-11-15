@@ -70,7 +70,7 @@ await api.login({ email, password });
 
 `getReadiness` 把 503 的未就绪结果作为 Readiness 返回；capabilities 的 enabled 仅代表配置状态。`downloadArtifactVersion` 返回原始 Uint8Array 和下载头信息，不把存储的 mediaType 当作响应类型。
 
-`api.localProjects` 提供工作区 `settings/saveSettings`、受限 `directories`、`preview`、`initialize/initialization/recover`、项目 `location/migrate/relocate`。本地创建必须携带 `{input, directory}` 与固定 `Idempotency-Key`；`directory` 为已有绝对路径，或父绝对路径加新文件夹名。开启本地能力后，正式 `CreateProject` 和原生创建入口也必须携带 `localDirectory`。主机目录权限要求全局 `access.manage`，写入另要求 `planning.edit`，不能靠路径字符串扩权。
+`api.localProjects` 提供工作区 `settings/saveSettings`、`directories`、`probe`、`preview`、`initialize/initialization/recover`、项目 `location/migrate/relocate`。新建项目只提交一个 `{ mode:'auto', path }`，服务端经 `probe/preview` 解析为已有目录或新目录并冻结；也可继续使用显式 `existing`/`new`。开启本地能力后，正式 `CreateProject` 和原生创建入口也必须携带 `localDirectory`。主机目录权限要求全局 `access.manage`，写入另要求 `planning.edit`；项目存储不再受 `allowedRoots` 限制，但服务端仍拒绝符号链接、系统目录、不可写目录和路径逃逸。`probe` 识别 `.dovspace/.pm/project.json` 或 legacy `.pm/project.json` 标记：只有同工作区、原位置缺失且重绑校验通过的项目可找回，其他工作区或无效标记明确拒绝，不复制、不改 ID。
 
 本地操作返回 `LocalProjectAttempt`，不是 `CommandReceipt`；原 PM 命令仍按原 `commandId` 查询收据。结果未知时保留原键、输入和目录；查询 `not_found` 不允许另建意图。用户显式恢复可在核对不存在后重发完全相同的初始化输入/键，服务端仍按原键去重，客户端不会自动重试。目录迁移要求 `writersStopped:true`；`relocate` 必须明确 `mode:'move'|'rebind'`，后者仅找回已完整移动、原路径缺失且身份匹配的目录。
 

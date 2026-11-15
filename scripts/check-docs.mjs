@@ -15,10 +15,13 @@ const historicalRootDocuments = new Set([
   'SCENARIO-MATRIX.zh.md',
   'V3-AGENT-CHAT-TASKS.zh.md',
 ]);
+const internalDocumentDirectories = ['docs/agent-source', 'docs/implementation', 'docs/reference'];
+const internalDocuments = new Set(['benchmarks/dovspace/PLAN.md', 'docs/frontend-design-adoption.md']);
 const repositoryPath = file => path.relative(root, file).split(path.sep).join('/');
 const internalDocument = file => {
   const relative = repositoryPath(file);
-  return historicalRootDocuments.has(relative) || relative === 'docs/implementation' || relative.startsWith('docs/implementation/');
+  return historicalRootDocuments.has(relative) || internalDocuments.has(relative)
+    || internalDocumentDirectories.some(directory => relative === directory || relative.startsWith(`${directory}/`));
 };
 async function markdownFiles(directory) {
   const result = [];

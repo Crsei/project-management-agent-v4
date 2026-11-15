@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("desktopConnection", Object.freeze({
     if (action === "connect") input.configuration = options.configuration;
     if (action === "directory" || action === "reveal") input.field = options.field;
     if ((action === "backup" || action === "restore") && typeof options.password === "string") input.password = options.password;
+    if (action === "backup") input.stoppedWritersAcknowledged = options.stoppedWritersAcknowledged === true;
     if (action === "restore") input.allowLegacyUnencrypted = options.allowLegacyUnencrypted === true;
     if (action === "restore") input.trustedSourceAcknowledged = options.trustedSourceAcknowledged === true;
     return ipcRenderer.invoke("desktop:action", input);

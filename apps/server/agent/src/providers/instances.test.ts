@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { ProviderInstance, ProviderInstanceInput, ProviderTestResult } from "@agent-workspace/contracts/provider";
-import { getProviderModels, listProviderInstances, probeProviderInstance, resolveCatalogModel, resolveProviderModelOptions } from "./catalog.ts";
+import { getProviderModels, listProviderInstances, probeProviderInstance, PROVIDER_DIRECTORY_FRESHNESS_MS, readNativeProviderStatus, resolveCatalogModel, resolveProviderModelOptions } from "./catalog.ts";
 import { getNativeProviderAdapter, nativeProviderAdapters } from "./driver-registry.ts";
 import { resolveProviderRuntime } from "./runtime.ts";
 import { createProviderInstance, deleteProviderInstance, getStoredInstance, listStoredInstances, providerContext, providerEnvironment, publicInstanceConfig, recordProviderObservations, resetProviderInstance, updateProviderInstance } from "./instances.ts";
@@ -13,6 +13,7 @@ import { providerRoutes } from "./routes.ts";
 import type { ProviderDriverStatus } from "./driver-adapter.ts";
 import { collectAgentDiagnostics } from "../settings/diagnostics.ts";
 import { checkProviderConnection } from "./checks.ts";
+import { resetAuthState } from "./auth.ts";
 
 async function isolated(fn: (directory: string) => Promise<void>) {
   const previous = { ...process.env };
@@ -84,6 +85,136 @@ test("fresh seed cards never probe, authenticate, expose usable models or select
       assert.equal(nativeChecks, 0);
     } finally {
       for (const { adapter, check } of originals) adapter.check = check;
+    }
+  });
+});
+
+test("warm directory reads return real snapshots without waiting and failed refreshes replace readiness without hot retries", { timeout: 2_000 }, async t => {
+  await isolated(async () => {
+    const adapter = getNativeProviderAdapter("codex")!;
+    const originalCheck = adapter.check;
+    const instance = createProviderInstance({ instanceId: "directory-snapshot", driver: "codex", environment: [{ name: "FIXTURE_SECRET", value: "directory-fixture-secret", sensitive: true }] });
+    const ready: ProviderDriverStatus = { installation: { status: "installed" }, authentication: "authenticated",
+      nativeSessionReady: true, models: [], methods: [], canLogout: true };
+    const gate = Promise.withResolvers<ProviderDriverStatus>();
+    let refresh: Promise<ProviderDriverStatus> | undefined;
+    let checks = 0, now = Date.now();
+    t.mock.method(Date, "now", () => now);
+    adapter.check = async () => { checks++; return ready; };
+    try {
+      const first = (await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!;
+      assert.equal(first.nativeSessionReady, true);
+      assert.equal(checks, 1);
+      adapter.check = async () => { checks++; return gate.promise; };
+      now += 1_000;
+      const warm = (await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!;
+      assert.equal(warm.authCheckedAt, first.authCheckedAt);
+      assert.equal(checks, 1);
+      now += PROVIDER_DIRECTORY_FRESHNESS_MS;
+      const stale = (await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!;
+      refresh = readNativeProviderStatus(instance.instanceId);
+      assert.equal(stale.nativeSessionReady, true);
+      assert.equal(stale.authCheckedAt, first.authCheckedAt);
+      await Promise.all([listProviderInstances(), listProviderInstances()]);
+      assert.equal(checks, 2, "overlapping background/explicit reads share the in-flight native check");
+      const rejected = assert.rejects(refresh, /directory-fixture-secret/);
+      gate.reject(new Error("Native refresh failed with directory-fixture-secret"));
+      await rejected;
+      const failed = (await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!;
+      assert.equal(failed.nativeSessionReady, false);
+      assert.equal(failed.configured, false);
+      assert.equal(failed.authStatus, "unknown");
+      assert.notEqual(failed.authCheckedAt, first.authCheckedAt);
+      assert.doesNotMatch(JSON.stringify(failed), /directory-fixture-secret/);
+      now += 1_000;
+      const repeated = (await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!;
+      assert.equal(repeated.authCheckedAt, failed.authCheckedAt);
+      assert.equal(checks, 2, "a failed background check has the same conservative retry window");
+      adapter.check = async () => { checks++; return ready; };
+      assert.equal((await probeProviderInstance(instance.instanceId)).nativeSessionReady, true);
+      assert.equal(checks, 3, "explicit probes never reuse directory snapshots");
+      assert.equal((await checkProviderConnection(instance.instanceId)).ok, true);
+      assert.equal(checks, 4, "connection checks stay fresh");
+      await readNativeProviderStatus(instance.instanceId);
+      assert.equal(checks, 5, "execution's status entry point stays fresh");
+    } finally {
+      gate.resolve(ready);
+      await refresh?.catch(() => undefined);
+      adapter.check = originalCheck;
+    }
+  });
+});
+
+test("directory snapshots cannot cross configuration revisions, disable/enable or delete/recreate", { timeout: 2_000 }, async () => {
+  await isolated(async () => {
+    const adapter = getNativeProviderAdapter("codex")!;
+    const originalCheck = adapter.check;
+    let instance = createProviderInstance({ instanceId: "directory-revision", driver: "codex" });
+    const ready: ProviderDriverStatus = { installation: { status: "installed" }, authentication: "authenticated",
+      nativeSessionReady: true, models: [], methods: [], canLogout: true };
+    const unavailable: ProviderDriverStatus = { ...ready, authentication: "unauthenticated", nativeSessionReady: false, canLogout: false };
+    const entered = Promise.withResolvers<void>(), gate = Promise.withResolvers<ProviderDriverStatus>();
+    let pending: Promise<ProviderInstance[]> | undefined;
+    let checks = 0;
+    adapter.check = async () => { checks++; return ready; };
+    try {
+      assert.equal((await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, true);
+      instance = updateProviderInstance(instance.instanceId, { label: "Changed revision" }, instance.revision);
+      adapter.check = async () => { checks++; entered.resolve(); return gate.promise; };
+      let settled = false;
+      pending = listProviderInstances().then(providers => { settled = true; return providers; });
+      await entered.promise;
+      assert.equal(settled, false, "a revision without a real snapshot waits for its first observation");
+      gate.resolve(unavailable);
+      assert.equal((await pending).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, false);
+      assert.equal(checks, 2);
+      instance = updateProviderInstance(instance.instanceId, { enabled: false }, instance.revision);
+      assert.equal((await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, false);
+      assert.equal(checks, 2, "disabled instances do not inspect native accounts");
+      instance = updateProviderInstance(instance.instanceId, { enabled: true }, instance.revision);
+      adapter.check = async () => { checks++; return ready; };
+      assert.equal((await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, true);
+      assert.equal(checks, 3);
+      deleteProviderInstance(instance.instanceId);
+      const recreated = createProviderInstance({ instanceId: instance.instanceId, driver: "codex" });
+      assert.ok(recreated.revision > instance.revision);
+      adapter.check = async () => { checks++; return unavailable; };
+      assert.equal((await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, false);
+      assert.equal(checks, 4);
+    } finally {
+      gate.resolve(unavailable);
+      await pending;
+      adapter.check = originalCheck;
+    }
+  });
+});
+
+test("same-revision account cleanup fences an in-flight ready observation", { timeout: 2_000 }, async () => {
+  await isolated(async () => {
+    const adapter = getNativeProviderAdapter("codex")!;
+    const originalCheck = adapter.check;
+    const instance = createProviderInstance({ instanceId: "directory-account-reset", driver: "codex" });
+    const ready: ProviderDriverStatus = { installation: { status: "installed" }, authentication: "authenticated",
+      nativeSessionReady: true, models: [], methods: [], canLogout: true };
+    const entered = Promise.withResolvers<void>(), gate = Promise.withResolvers<ProviderDriverStatus>();
+    let pending: Promise<ProviderDriverStatus> | undefined;
+    adapter.check = async () => ready;
+    try {
+      assert.equal((await probeProviderInstance(instance.instanceId)).nativeSessionReady, true);
+      adapter.check = async () => { entered.resolve(); return gate.promise; };
+      pending = readNativeProviderStatus(instance.instanceId);
+      await entered.promise;
+      resetAuthState(instance.instanceId);
+      assert.equal(getStoredInstance(instance.instanceId)!.revision, instance.revision);
+      const rejected = assert.rejects(pending, { status: 409 });
+      gate.resolve(ready);
+      await rejected;
+      adapter.check = async () => ({ ...ready, nativeSessionReady: false, authentication: "unauthenticated" });
+      assert.equal((await listProviderInstances()).find(provider => provider.instanceId === instance.instanceId)!.nativeSessionReady, false);
+    } finally {
+      gate.resolve(ready);
+      await pending?.catch(() => undefined);
+      adapter.check = originalCheck;
     }
   });
 });
@@ -535,6 +666,11 @@ test("a fresh empty original inventory removes stale discovery without selecting
       assert.deepEqual((await probeProviderInstance(instance.instanceId)).models, []);
       assert.throws(() => resolveCatalogModel(instance.instanceId, "removed-native"), { code: "invalid_model" });
       assert.throws(() => resolveCatalogModel(instance.instanceId, ""), { code: "invalid_model" });
+      const emptyCheck = adapter.check;
+      adapter.check = async () => { throw new Error("Inventory refresh unavailable"); };
+      assert.deepEqual((await probeProviderInstance(instance.instanceId)).models, []);
+      assert.throws(() => resolveCatalogModel(instance.instanceId, "removed-native"), { code: "invalid_model" });
+      adapter.check = emptyCheck;
       await checkProviderConnection(instance.instanceId);
       assert.deepEqual(getStoredInstance(instance.instanceId)?.observations?.discoveredModels, []);
     } finally { adapter.check = originalCheck; }

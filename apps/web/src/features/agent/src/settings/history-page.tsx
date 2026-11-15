@@ -11,6 +11,7 @@ import { refreshThreadList } from "../chat/remote-adapter";
 import { acceptRemoteThread, acceptRemoteThreads, forgetRemoteThread, refreshAgentWorkspaces, usePmChatState } from "../pm/state";
 import { SettingsNotice, SettingsSection, useSettingsGuard } from "./settings-layout";
 import "./history-page.css";
+import { deleteAgentSession } from "../chat/session-lifecycle";
 
 function updatedLabel(t: AgentText, locale: string, value?: string) {
   if (!value) return t("时间未提供", "Time not provided");
@@ -57,21 +58,21 @@ export default function HistoryPage() {
     setNotice(undefined);
     let committed = false;
     try {
-      const { thread } = await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(listed.remoteId)}`);
-      if (thread.status !== "archived") throw new Error(t("此会话已不在归档中，请刷新列表后核对；没有执行本次操作。", "This session is no longer archived; refresh the list and check. No action was taken."));
       if (kind === "restore") {
+        const { thread } = await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(listed.remoteId)}`);
+        if (thread.status !== "archived") throw new Error(t("此会话已不在归档中，请刷新列表后核对；没有执行本次操作。", "This session is no longer archived; refresh the list and check. No action was taken."));
         const saved = await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`, {
-          method: "PUT", body: JSON.stringify({ status: "regular" }),
+          method: "PUT", body: JSON.stringify({ status: "regular", lifecycleRevision: thread.lifecycleRevision }),
         });
         acceptRemoteThread(saved.thread);
         setThreads((current) => current.map((item) => item.remoteId === saved.thread.remoteId ? saved.thread : item));
-        setNotice(t("会话已恢复，原始目录绑定、历史和设置保持不变。", "Session restored with its original folder binding, history and settings unchanged."));
+        setNotice(t("会话已恢复为可读历史；不会自动重绑目录、恢复原生执行或重放消息。", "Session restored as readable history; directories, native execution and messages are not automatically rebound or replayed."));
       } else {
-        await workspaceClient.json(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`, { method: "DELETE" });
-        forgetRemoteThread(thread.remoteId);
-        setThreads((current) => current.filter((item) => item.remoteId !== thread.remoteId));
+        await deleteAgentSession(listed.remoteId);
+        forgetRemoteThread(listed.remoteId);
+        setThreads((current) => current.filter((item) => item.remoteId !== listed.remoteId));
         setDeleting(undefined);
-        setNotice(t("会话已永久删除。此操作不会删除代码文件夹或撤销已发生的文件修改。", "Session permanently deleted. Code folders and existing file changes are not deleted."));
+        setNotice(t("会话已从可见历史删除；必要执行证据与删除标记保留，代码文件和已发生的副作用不撤销。", "Session removed from visible history; required execution evidence and tombstones are retained. Code and existing effects are not undone."));
       }
       committed = true;
       await refreshThreadList();
@@ -116,7 +117,7 @@ export default function HistoryPage() {
       })}</ul>
     </SettingsSection>
     {deleting && <Dialog open onOpenChange={(open) => { if (!open && !busyId) setDeleting(undefined); }}><DialogContent className="max-h-[90dvh] overflow-y-auto">
-      <DialogHeader><DialogTitle>{t("永久删除已归档会话？", "Permanently delete archived session?")}</DialogTitle><DialogDescription>{t(`“${deleting.title || "未命名会话"}”的已保存聊天历史将不可恢复。若仍有后台生成，删除会请求取消并等待服务端处理；这不会撤销已经发生的文件修改。`, `The saved chat history of “${deleting.title || "untitled session"}” cannot be recovered. If a background generation is still running, deletion requests cancellation and waits for the server to handle it; this does not undo file changes that already happened.`)}</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{t("删除已归档会话？", "Delete archived session?")}</DialogTitle><DialogDescription>{t(`“${deleting.title || "未命名会话"}”将从可见聊天历史移除，必要执行证据和删除标记仍保留。若有后台生成，本次确认仅允许停止核对到的精确 generation；未决副作用会阻止破坏性删除。`, `“${deleting.title || "untitled session"}” will be removed from visible chat history, retaining required execution evidence and tombstones. This confirmation allows stopping only the exact observed generation; unresolved effects block destructive deletion.`)}</DialogDescription></DialogHeader>
       <p className="text-sm">{t("原文件夹：", "Original folder: ")}{deletingWorkspace?.path ?? deleting.executionEnvironment?.sourcePath ?? t("仅对话", "Chat only")}</p>
       {actionError && <p role="alert" className="text-destructive text-sm">{actionError}</p>}
       <DialogFooter><Button type="button" variant="outline" disabled={!!busyId} onClick={() => setDeleting(undefined)}>{t("保留会话", "Keep session")}</Button><Button type="button" variant="destructive" disabled={!!busyId || loading || !!loadError} onClick={() => void mutate(deleting, "delete")}>{busyId ? t("正在删除…", "Deleting…") : t("确认永久删除", "Confirm permanent delete")}</Button></DialogFooter>

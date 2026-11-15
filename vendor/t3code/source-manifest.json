@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "stage": "M6/T18-reproducible-source-selection",
-  "copy_status": "new-generation-pending-integrated-verification",
+  "copy_status": "supplemental-ui-authoring-only-not-publication-evidence",
   "upstream": {
     "commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
     "head_confirmed": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
@@ -101997,9 +101997,10 @@
   "generation": {
     "previousCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
     "commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
-    "purpose": "local-authoring",
+    "purpose": "supplemental-ui",
     "supplementalCommits": [
-      "d53873b6a4799e87afd63c8d288ef0089f5a3748"
+      "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+      "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c"
     ],
     "reviews": [
       {
@@ -102346,10 +102347,746 @@
         "disposition": "integrated",
         "reason": "Reviewed preservation commit 7d9c39f2e5f682a41d53453a30ed031331d4b59d: independent absolute-folder AgentWorkspace, explicit PM-tool targets and retained Provider/MCP/Skills authorization/lifecycle boundaries. Covered by isolated Agent/backend/Web and real workspace/PTY restart verification.",
         "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-chip.tsx",
+        "disposition": "integrated",
+        "reason": "Native cva kind/state/shape table, useRender/mergeProps, label and action implementations are byte-equivalent except attribution, cn import, and local CSS import (candidate 1-105; upstream ContextChip 1-102). Genuine native reuse.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/ContextChip.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "35e9bee7a7bb1c1202f29fa5204894955b42f2565091c5cbb650ebb9bff87bac"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-chip-accents.ts",
+        "disposition": "integrated",
+        "reason": "Entire native accent table and variable helper retained; only two attribution lines added. Actual hue/chroma source is this module, not the host CSS adapter.",
+        "inputs": [
+          {
+            "path": "apps/web/src/lib/contextChipAccents.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "8edc470b081ad3fe28b50686092276f76c82d1e9a43db3e4fba67e78c05d73f4"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-chip-theme.css",
+        "disposition": "integrated",
+        "reason": "Local-only :root/.dark lightness and forced-colors adapter at 4-8. No palette literals, upstream contrast solver, stylesheet or asset is copied into this file. Native palette is an indirect dependency of its consumers.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-chip-parts.tsx",
+        "disposition": "integrated",
+        "reason": "Shell/popover/image/file/unresolved JSX/classes are adapted from contextChipParts; candidate 19-31 directly retains Unicode truncation and exact native Skill cube paths from composerInlineChip 1-13. Document extension/category table is adapted from pierre-icons (not its sprite); exact video extension list comes from shared/video. Palette is imported as a mapped dependency, not a direct input.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/contextChipParts.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "942dcebf4fb55ce9ca7c5f00d09d959476e9f3fcaf9ec517e432395c746e6bb2"
+          },
+          {
+            "path": "apps/web/src/pierre-icons.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "7d6b8e7a3f6958878b6ae2bced26e60f2c6b61d8c7d0c1fbc541ace4d369fd50"
+          },
+          {
+            "path": "packages/shared/src/video.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "1ace2d9bd98abc2169638c8270f74bb8c42b7be7b4988169fea1dfa27c884133"
+          },
+          {
+            "path": "apps/web/src/components/composerInlineChip.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "a2f8a91ab6974c0a1638403247ae9ad584819674e16c0a591ae1240aa8e3f967"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-presentation-registry.ts",
+        "disposition": "integrated",
+        "reason": "Native capability table, exhaustive definition checks and duplicate/required-handler registry are retained. Only imported kind tuple/type replaced with host-supported tuple. Not a look-alike registry.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/contextPresentationRegistry.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "8bf4de577eec4526b43c0fe1af8a77fb388709f45d7d3dafc4b6f45ff031d607"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/terminal-context-chip.tsx",
+        "disposition": "integrated",
+        "reason": "Native TerminalContextInlineChip detail/fallback JSX and classes retained exactly; only attribution and two relative import names differ. Genuine native details component, no recreated look-alike.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/chat/TerminalContextInlineChip.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "68c256b251a5f9347355e4e19f6403eed635b9560763be078b43bc662676f051"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-presentation.tsx",
+        "disposition": "integrated",
+        "reason": "Review/browser detail wrapper and screenshot fallback/classes match composerContextPresentation 135-166,288-333; registry handlers 364-496 adapted to canonical accepted records. Thread JSX/tooltip shell adapted from ThreadContextChip 33-67; environment presentation reduced to native shell/tooltip composition with local-only snapshot contents. Native response flat/clamped inline card and draft citation/action structure derive from AssistantCitationChip 53-175,254-291; local resolver/navigation/comment textarea replace upstream router/entity/speech internals.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/composerContextPresentation.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "6e0cb04daf85f51f74bfbed8c78dae394457c3c8991a5f4f836d76b18bc85b5b"
+          },
+          {
+            "path": "apps/web/src/components/ThreadContextChip.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "361cf8d4fa3120d4eef676fecfbe6f5fcbb6d373a9e097f32fd2492027cbedfc"
+          },
+          {
+            "path": "apps/web/src/components/EnvironmentContextChip.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "d23382bc2a2c6edced5e8be408731c1b007acf4544107f70ad659fd8dda346d0"
+          },
+          {
+            "path": "apps/web/src/components/chat/AssistantCitationChip.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "353b9b3909413e09298b8183f4f90e4d026ec37739cecc0f515466b5a29fa847"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/native-output-context.tsx",
+        "disposition": "integrated",
+        "reason": "Source activation uses native reduced-motion detection, deferred scroll and highlight intent (AssistantCitationSource 11-18,102-267), rewritten for host paged/folded native rows. Local output-reference action/resolver IDs and outline animation are host code; no LegendList, CSS Highlight registry, source observer or upstream stylesheet copied. Main separately reviewed final DOM-range containment and exact selection delta; no additional source input or dependency.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/chat/AssistantCitationSource.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "6e98ab52118fb3b50d239ca4940e07dbb90ab3f618e707bc701dfb6db9e25b38"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-context-store.ts",
+        "disposition": "integrated",
+        "reason": "New local owner/alias/selection-generation store and send/edit snapshot bookkeeping; no native store source copied. Registered presentation imports do not become direct inputs.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-context.tsx",
+        "disposition": "integrated",
+        "reason": "Local assistant-ui/provider boundary and read-only resolver adapter; thread guards, attachment upload and file-mention insertion use existing host wire packages. No upstream app stores/providers copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-source-navigation.ts",
+        "disposition": "integrated",
+        "reason": "Local SourceTarget external-store channel and encoded host DOM anchor identity; no native router or LegendList implementation copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-context-selector.tsx",
+        "disposition": "integrated",
+        "reason": "Local server session/history list and Local-environment resolver selector using existing dialogs/client; no native environment store, peer registration or thread selector copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-attachments.ts",
+        "disposition": "integrated",
+        "reason": "Local attachmentId-to-partIndex identity/order, queue reindex and canonical SDK correlation utilities; no native attachment store or byte/name inference source copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/user-context-text.tsx",
+        "disposition": "integrated",
+        "reason": "Local renderer for existing serialized file/Skill tokens, consuming mapped ContextChip and SkillContextIcon. Does not copy composerInlineChip SVG into this output, so no second direct source claim.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/composer-context-attachments.tsx",
+        "disposition": "integrated",
+        "reason": "Local actual-byte clipboard preparation/cache and assistant-ui attachment adapter; consumes mapped ImageChipButton/FileChip. Generic object-URL cleanup is host glue, not a copied upstream asset/runtime.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/composer-draft-actions.tsx",
+        "disposition": "integrated",
+        "reason": "Preimage delta extends existing host stash/restore/freeze paths with canonical context and attachment identity fields. Uses mapped components/interfaces, no upstream queue/stash implementation copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/history-navigation.tsx",
+        "disposition": "integrated",
+        "reason": "Delta adds subscription to local source-target channel, host jump/fold exposure and missing-source status. Existing host history reader remains owner; native source observer is not copied into this output.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-actions.tsx",
+        "disposition": "integrated",
+        "reason": "Delta renders saved native/PM/attachment records through mapped components and reindexes retained file objects during local queue edits; queue/steering implementation stays preimage host code.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/output-timeline.tsx",
+        "disposition": "integrated",
+        "reason": "Delta adds local NativeOutputContext actions/DOM anchors and source-target disclosure hooks around existing output rows. Preserve baseline local-integration/empty inputs; native source implementation is separately mapped, not a new direct input here.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/transport.ts",
+        "disposition": "integrated",
+        "reason": "Local DurableChatTransport delta carries top-level contextItems and canonical attachment correlations and consumes exact accepted draft snapshots; no native transport implementation copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/rich-composer.tsx",
+        "disposition": "integrated",
+        "reason": "Delta adds host Tiptap context atoms, structured clipboard/undo/attachment restoration and mapped ContextChip/SkillContextIcon consumption. SVG remains solely in mapped context-chip-parts; no direct upstream composer/Skill source is copied into this output. Real selected-answer UI reproduction: successful response resolution was overwritten by the external quote-removal editor transaction before context synchronization. Suppress editor-to-context writes during that runtime-owned quote transaction with the existing synchronization guard; real exact-excerpt native-card conversion passed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/rich-composer-document.ts",
+        "disposition": "integrated",
+        "reason": "Delta adds local ComposerContextPayload atoms and source-text-preserving serialization; existing host parser remains. No new upstream direct source.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/rich-composer.css",
+        "disposition": "integrated",
+        "reason": "Delta deletes old local reference-pill skin and adds two host atom-selection/margin rules. No native stylesheet copied; native utility classes live in separately derived components.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-context-store.test.ts",
+        "disposition": "integrated",
+        "reason": "Independent host tests use actual local store API and synthetic identities; source mapping local, tests not executed and no real-account evidence.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/context-attachments.test.ts",
+        "disposition": "integrated",
+        "reason": "Independent identity/order/equal-byte and retained-object regression fixtures for local utilities; no upstream test copied; unexecuted.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/rich-composer-document.test.ts",
+        "disposition": "integrated",
+        "reason": "Delta extends existing host schema tests with native/PM/attachment atoms and undo roundtrip fixtures; no upstream test copied; unexecuted.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+        "disposition": "integrated",
+        "reason": "Delta mounts local canonical context edit boundary, history/token renderer and prepared send snapshots into pre-existing assistant-ui thread. Preserve baseline local-integration/empty inputs; shared native components are indirect dependencies only.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/components/assistant-ui/elements/attachment.aui.tsx",
+        "disposition": "integrated",
+        "reason": "Delta replaces preimage attachment tiles with mapped FileChip/ImageChipButton/ContextChipAction and adds local canonical ID/clipboard binding. No upstream primitive copied into this output.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/components/assistant-ui/elements/quote.aui.tsx",
+        "disposition": "integrated",
+        "reason": "Delta replaces old quote display with shared mapped ResponseContextCard plus host source identity/clipboard handoff. Citation JSX remains directly mapped in context-presentation, not duplicated as this output input.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+        "disposition": "integrated",
+        "reason": "Delta mounts local draft provider/selector, injects theme variables from mapped module and removes obsolete image callback. Preserve baseline local-integration/empty inputs; no native ChatView or app provider copied. Preserve independently reviewed concurrent run-board separation; native context provider/theme/copy and draft guards retained by a reviewed three-way merge.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/drafts.ts",
+        "disposition": "integrated",
+        "reason": "Delta extends existing host unsent-draft guards and warning wording for context/PM records. Does not introduce native draft persistence source or a new database. Preserve independently reviewed concurrent run-board separation; native context provider/theme/copy and draft guards retained by a reviewed three-way merge.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/pm-composer-references.tsx",
+        "disposition": "integrated",
+        "reason": "Delta consumes mapped context chips in original PM context projector and retains source/revision warning and explicit reuse. No native PM source exists or is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/pm-reference-tray.tsx",
+        "disposition": "integrated",
+        "reason": "Local PM metadata/revision/availability adapter renders the shared native chip shell; no native data authority copied and no indirect primitive input inflated as direct.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/pm-reference-tray.module.css",
+        "disposition": "integrated",
+        "reason": "Deletes preimage local pill/status styling to use mapped native component styling; remaining layout CSS is host-owned and has no upstream direct input.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/pm-issue-workspace.tsx",
+        "disposition": "integrated",
+        "reason": "Small local atomic replaceReferences API validates existing PM count/identity and marks records unverified. No upstream PM or new source copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/chat/message-context-clipboard.ts",
+        "disposition": "integrated",
+        "reason": "Independent local WeakMap/selection-based structured clipboard format and source-token text reconstruction; no native citation serialization implementation copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/files-panel.tsx",
+        "disposition": "integrated",
+        "reason": "FileBrowserPanel 192-258 supplies native menu Add-to-chat/serialized mention interaction; candidate 560-573,639-641 adapts that action to existing host thread-guarded hook. File preview now consumes separately derived ContextCodeView (not direct extra inputs); preimage unrelated file-tree code retained.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/files/FileBrowserPanel.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "28da0dc0116c118f4df98b1c667cd50c47327850858d59211db280a1f7e756d3"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/git-panel.tsx",
+        "disposition": "integrated",
+        "reason": "Delta adds local user-provided PR URL form and consumes separately derived ContextCodeView. No new PR remote/store/upstream Git panel source copied; do not inflate ContextCodeView inputs as direct.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/context-code-view.tsx",
+        "disposition": "integrated",
+        "reason": "Genuine Pierre controlled selection, range-end side/line annotations and gutter state adapt AnnotatableCodeView 134-143,161-199,230-285. File onLineSelectionEnd/annotation placement adapts FilePreviewPanel 879-935,965-1016. Candidate 115-124 retains DiffCommentAnnotation 122-186 draft caret/selection classes, pointer boundary and cancel/submit interaction, replacing speech/PR editor with host read-only snapshot/comment/resolver. Native optional imports/styles not copied wholesale.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/diffs/AnnotatableCodeView.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "5aa0faeeb13d05458781de0a45c4fe0b702745d30f5d1dd450c741ed677a6165"
+          },
+          {
+            "path": "apps/web/src/components/diffs/DiffCommentAnnotation.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "6adba517cc1d972cd5ea85808c36b26aaac9e21cc1f094e073422e8bd07f3fc4"
+          },
+          {
+            "path": "apps/web/src/components/files/FilePreviewPanel.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "e2c6924930a89ed0dae2ebfd111b97234949648ef651084dc2c8e2950e54f50e"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/terminal-panel.tsx",
+        "disposition": "integrated",
+        "reason": "ThreadTerminalDrawer 392-434,805-838,882-915 directly supplies capture/menu/reread-same-selected-text action semantics; candidate 48-76,186-200 adapts them to existing xterm and resolver. Preimage PTY/socket/reconnect implementation retained; no Ghostty/WASM/font source or resource copied. Real PTY UI reproduction: generic object-menu triggers intentionally exclude xterm/native targets. Use the existing controlled ContextMenu API for the terminal-owned selection menu; preserve global native-target guards and same-selection/server provenance checks. Real menu/add/details smoke passed.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/ThreadTerminalDrawer.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "14ca61b6face1904f0f55106f973965fc8546bffd320cee3a9ab1be6b3674b1a"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/context-selection.ts",
+        "disposition": "integrated",
+        "reason": "File inclusive normalized endpoints and diff old/new-side selection semantics adapt reviewCommentContext 61-83,103-219; terminal 1-based rows/read selection adapt ThreadTerminalDrawer 392-400,805-829. Raw-patch parser, SHA256 binding and xterm exclusive-column correction are local rewrites, not claims of identical upstream algorithms.",
+        "inputs": [
+          {
+            "path": "apps/web/src/reviewCommentContext.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "01ef0fd9eba213594c3cf830ba2da5d0e4836bcaf095b574ccf5fbe5ed233519"
+          },
+          {
+            "path": "apps/web/src/components/ThreadTerminalDrawer.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "14ca61b6face1904f0f55106f973965fc8546bffd320cee3a9ab1be6b3674b1a"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/context-selection.test.ts",
+        "disposition": "integrated",
+        "reason": "Independent host patch-row, old/new-side, file bounds, xterm selection and digest regression fixtures; no upstream tests copied, not executed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/native-browser.tsx",
+        "disposition": "integrated",
+        "reason": "PreviewView 797-919 directly supplies original-focus capture/restore, webview DOM focus for Esc, picker cancellation and annotation retention intent. Candidate 166-207 adapts to pre-existing host bridge and shared draft hook; surrounding browser runtime is preimage host code, not a copied native PreviewView.",
+        "inputs": [
+          {
+            "path": "apps/web/src/components/preview/PreviewView.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "44bc8a8ce17c82162e01b80e6d57a5384bb83fbb777061c6e3dc83e7f5f23fb1"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/preview-annotation-dialog.tsx",
+        "disposition": "integrated",
+        "reason": "Directly adapted PickPreload 601-625 textarea/Attach row styling and comment snapshot at1693-1744; AnnotationKeyboard 11-16 Enter/Shift/IME rules; previewAnnotation PNG-prefix/failure behavior; imageCompression144-152 exact atob/Uint8Array/File decoding; PreviewView857-889 annotation-first optional-image ordering. Host Dialog, checkbox/errors and canonical attachmentId are local additions, not upstream generated CSS/assets.",
+        "inputs": [
+          {
+            "path": "apps/desktop/src/preview/PickPreload.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "92dcc94287dcdf77e498fc0b35f7a1acbcf3a6131017478cadd4f26c0762c640"
+          },
+          {
+            "path": "apps/desktop/src/preview/AnnotationKeyboard.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "c93040a8a5206dfe869413ebe9185c04bf594ee43363620ef1673ca636d2faa7"
+          },
+          {
+            "path": "apps/web/src/lib/previewAnnotation.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "e6202cc093edf1c35abe72bbffc9062830d1e587447c6d1fca84bfbc34e3956f"
+          },
+          {
+            "path": "apps/web/src/lib/imageCompression.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "906525e16098b51cbbdb1126307f44a3a4b49af998b9734c061bb6300401f0fb"
+          },
+          {
+            "path": "apps/web/src/components/preview/PreviewView.tsx",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "44bc8a8ce17c82162e01b80e6d57a5384bb83fbb777061c6e3dc83e7f5f23fb1"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/preview-bridge.ts",
+        "disposition": "integrated",
+        "reason": "Selective IPC contract adaptation for rect geometry, optional screenshot and retained-annotation result (ipc815-827,897-953), not wholesale native IPC copy. captureId/capturedAt, devicePixelRatio field exposure, smaller single-element shape and existing channel names are host additions; this IPC extraction does not directly supply the DPR field.",
+        "inputs": [
+          {
+            "path": "packages/contracts/src/ipc.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "7149fcb19518d2afcf3fec8df8c11bf4c8a387e3c9d856bb77e4d2bbd224b402"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/desktop/src/preview/manager.mjs",
+        "disposition": "integrated",
+        "reason": "Native Manager2387-2437 directly supplies annotation-preserving capture/crop-failure behavior; candidate413-458 rewrites it with existing host Promise/queue/IPC, retains original element payload and drops only optional image. New navigation revision/capture UUID/page metadata binding is local; no upstream Effect/manager runtime dependency imported.",
+        "inputs": [
+          {
+            "path": "apps/desktop/src/preview/Manager.ts",
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "sha256": "01e0356ab72690b5a5481c4f5dd856dea25a0baf190a7e2210136a51ac30504f"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/browser-panel.tsx",
+        "disposition": "integrated",
+        "reason": "Only removes old onAttachImage plumbing in preimage host runtime selector; no copied upstream source.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/workspace/inspector/iframe-browser.tsx",
+        "disposition": "integrated",
+        "reason": "Only clarifies existing unavailable iframe picker/capture reasons; no upstream browser implementation or new resource copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/desktop/src/preview-manager.test.mjs",
+        "disposition": "integrated",
+        "reason": "Extends pre-existing host FakeWebContents test harness with synthetic capture metadata/failure/race/cancel assertions. Independently authored tests, not native GUI or real-account acceptance and not executed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "packages/agent-contracts/package.json",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "packages/agent-contracts/src/message-context.ts",
+        "disposition": "integrated",
+        "reason": "Retain native terminal/review-comment/preview-annotation/element/thread/environment/response kind names, contextId identity, terminal selection/label and structured context association vocabulary. Host strict Zod input/accepted schemas replace Effect records; real PM/source authority, immutable hashes, one-based selection, canonical JSON identity, bounded user snapshot provenance, safe unavailable projection and existing-namespace persistence are host-authored. Existing image/file attachment and mention/skill transports are not recast as trusted context sources.",
+        "inputs": [
+          {
+            "commit": "7379f1969b0f4b579327cf81299ef8cc3ddf8e9c",
+            "path": "packages/contracts/src/composerContext.ts",
+            "sha256": "690caedf2ffcd8cb376320b5e86c7a9f188f35d27bb06c67fe9895d973228ce1"
+          }
+        ]
+      },
+      {
+        "outputPath": "packages/agent-contracts/src/chat.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "packages/agent-contracts/src/pm-references.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/chat.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/message-context.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/chat-runtime.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/chat-runtime.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/message-queue.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/message-queue.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/thread-retention.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/persistence-schema.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/persistence-schema.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/thread-actions.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/threads.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/durable/forks.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/pm-visibility.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/pm-visibility.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/inspector/files.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/inspector/git.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/inspector/terminal.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/inspector/files-git.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/inspector/terminal.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/chat-attachments.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/chat-attachments.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/runtime.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/driver-adapter.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/t3code/execution.ts",
+        "disposition": "integrated",
+        "reason": "Existing fixed-lineage native attachment bridge/real registry integration regression; complete ordered d538 inputs and primary recipe retained, no latest-source or Provider-pin upgrade. Admission/retention review covers the exact actual attachment transport.",
+        "inputs": [
+          {
+            "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+            "path": "apps/server/src/orchestration-v2/RunExecutionService.ts",
+            "sha256": "b45b3ce6f4eb80431f11888c9abab988d54efc96cd35a0c49bdb538291b166b2",
+            "bytes": 73651,
+            "gitBlobSha1": "11ab94cefa69b52bbed1ad22693cfda81d2c71e5",
+            "gitMode": "100644"
+          },
+          {
+            "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+            "path": "apps/server/src/mcpApps/McpAppModelContext.ts",
+            "sha256": "119fccddd2872d7b98f5664d50643a5342a493a60957e042a126254a99d5fd07",
+            "bytes": 3700,
+            "gitBlobSha1": "d50236ce6cd1b203aa0b8d3610de6a75abaea724",
+            "gitMode": "100644"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/server/agent/src/providers/t3code/execution.test.ts",
+        "disposition": "integrated",
+        "reason": "Existing fixed-lineage native attachment bridge/real registry integration regression; complete ordered d538 inputs and primary recipe retained, no latest-source or Provider-pin upgrade. Admission/retention review covers the exact actual attachment transport.",
+        "inputs": [
+          {
+            "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+            "path": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts",
+            "sha256": "fbbd557f806a4b8d5a52079b96158ec50c18d729db94fe6ea729a4a5e77349f1",
+            "bytes": 236899,
+            "gitBlobSha1": "e925c537f5c7a45fbc438e9d7cadcf69a1cbe519",
+            "gitMode": "100644"
+          },
+          {
+            "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+            "path": "apps/server/src/mcpApps/McpAppRequests.test.ts",
+            "sha256": "e717d3304f56adf50bed07b580ad61f25a5af502b12aa709fb349520a481389c",
+            "bytes": 9009,
+            "gitBlobSha1": "1fde091c06423330c27923a71f2f0e64af5d059d",
+            "gitMode": "100644"
+          },
+          {
+            "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+            "path": "apps/server/src/mcpApps/McpAppModelContext.test.ts",
+            "sha256": "c1573a384d377b7ec75e977e16e04f831e827929ce44d5e5430a6a8b2870c35b",
+            "bytes": 2770,
+            "gitBlobSha1": "bcd01e03dfa82b91de3760b65bec0a04e2da7b60",
+            "gitMode": "100644"
+          }
+        ]
+      },
+      {
+        "outputPath": "apps/server/agent/src/agents/cli-chat.test.ts",
+        "disposition": "integrated",
+        "reason": "Host-authored canonical context, real-source authorization, bounded snapshot identity, privacy/retention, existing persistence and attachment bridge behavior or its behavioral regression; independent admission/retention review applies. No copied upstream implementation is claimed.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/server/pm/src/app.ts",
+        "disposition": "integrated",
+        "reason": "PM-owned route, explicit OAuth/MCP exposure, current service-grant authorization ceiling and commit-time scope rechecks; not upstream application routing. Main independently reviewed the exact inherited diff: existing local registration/people/member-lifecycle route registration, response privacy headers and SetProjectParticipants metadata classification. Preserve frozen bytes only; native-context task does not modify, rebuild, restart or claim functional acceptance of PM/account lifecycle behavior. Existing domain/application delegation remains locally owned.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/routes.tsx",
+        "disposition": "integrated",
+        "reason": "Existing PM exports/router/assistant-ui integration; no upstream file copied. Main independently reviewed the exact inherited four-line router diff: existing registration page and PM_LAB_ENABLED-gated mobile demo. Preserve frozen bytes only and reconcile the two missing local-alias edges; no new routing/authentication behavior is authored or accepted here.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/right-panel.tsx",
+        "disposition": "integrated",
+        "reason": "Main-owned clean cutover: remove the obsolete image-only Browser callback, public prop and unused destructuring after structured message-context adoption. LSP traced the sole PmRightPanel consumer; it already uses the structured context provider. Existing PM panel behavior retained; no upstream implementation copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/desktop/src/preview-pick-preload.cjs",
+        "disposition": "integrated",
+        "reason": "Main fixed a reproduced native selection side effect: register capture listeners before page scripts, gate them by active selection, consume all gesture phases and select on click. Real Electron 45 headless webview returned structured fields and PNG with zero page actions, then restored ordinary input; cancellation verified. Existing payload contract retained, no upstream code copied.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/desktop/src/preview-pick-preload.test.mjs",
+        "disposition": "integrated",
+        "reason": "Main-owned behavioral regression using actual EventTarget and the production preload in a VM: selection cannot leak gesture/default actions into page handlers; ordinary interaction resumes; non-primary actions and Escape are isolated. Both cases fail on the unchanged original preload and pass after the fix. Automatically discovered by the existing desktop contracts test glob.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/settings/settings-layout.tsx",
+        "disposition": "integrated",
+        "reason": "Independent ParallelRunBoardPreservationReview: preserve exact safe board-origin settings return and labels, existing guards and settings behavior; unchanged local ownership and empty historical input list. Metadata-only preservation, not unrelated-feature acceptance.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/collaboration/data-model.ts",
+        "disposition": "integrated",
+        "reason": "User-approved minimal privacy fix: preserve the actual collaboration denial cause through existing invalidation; the outer board guard reacts only to WorkspaceClientError HTTP 401 access_required, not ordinary PM resource denial. Actual browser before/after with exact controlled server response schema proves cached sidebar removal and PM 403 isolation. PM-owned authorization projection, no copied upstream source or new grant.",
+        "inputs": []
+      },
+      {
+        "outputPath": "apps/web/src/features/agent/src/pm/run-board-data.ts",
+        "disposition": "integrated",
+        "reason": "User-approved minimal privacy fix: preserve the actual collaboration denial cause through existing invalidation; the outer board guard reacts only to WorkspaceClientError HTTP 401 access_required, not ordinary PM resource denial. Actual browser before/after with exact controlled server response schema proves cached sidebar removal and PM 403 isolation. PM-owned authorization projection, no copied upstream source or new grant.",
+        "inputs": []
       }
     ],
-    "reauthoringRevision": 0,
-    "evidence": "Authoring only; no builds, tests, install, runtime or publish authorization implied",
-    "previousAnalysis": "Prior implementation/consumer/family verification statements remain historical evidence, not acceptance of this generation"
+    "reauthoringRevision": 1,
+    "evidence": "Explicit independently reviewed baseline and supplemental UI authoring only. Source replay is distinct from tests, builds, browser acceptance and publication.",
+    "previousAnalysis": "Prior implementation/consumer/family verification statements remain historical evidence, not acceptance of this generation",
+    "maintenanceAssetReviews": [
+      {
+        "path": "vendor/t3code/scripts/mcp-skills-adaptations.mjs",
+        "recordedRecipeSha256": "85c5f2b8b7bc05b05b587d09ed32453db2853c8d0e3b99e54f91348da7773f8f",
+        "recordedSha256": "6d8df1e22df3d1f05c2b3bd2b3ee433cbaca73eb12dd1309074e6b20842736da",
+        "snapshotSha256": "7b55668957fe0ee788fe1cff047b2e148cf65f558c78374222f2a14336103fa8",
+        "reviewedSha256": "7b55668957fe0ee788fe1cff047b2e148cf65f558c78374222f2a14336103fa8",
+        "mode": 420,
+        "reason": "Independently reviewed modern-only exact desktop-output allowlist; legacy fixed-pin guards unchanged. Exact helper and original recipe reviewed in SourceTool-independent-review.json."
+      }
+    ]
   }
 }

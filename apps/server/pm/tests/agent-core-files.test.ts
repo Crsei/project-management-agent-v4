@@ -31,7 +31,7 @@ test('registered shared and independent core files preserve invalid raw content 
     const document = await workspace.createEntity({ entity: 'document', project: mounted.id, title: 'Mounted document' }, 'mounted-doc');
     await writeFile(path.join(local, 'README.md'), 'not managed');
     await writeFile(path.join(root, task.path), 'broken shared markdown');
-    await writeFile(path.join(local, '.pm/core', document.path.replace(`project-roots/${mounted.id}/`, '')), 'broken mounted markdown');
+    await writeFile(path.join(local, '.dovspace/.pm/core', document.path.replace(`project-roots/${mounted.id}/`, '')), 'broken mounted markdown');
     const read = async (projectId: string) => app.inject({ method: 'GET', url: `/api/v1/workspaces/${workspaceId}/agent-tools/core-files?projectId=${projectId}` });
     const first = await read(shared.id); assert.equal(first.statusCode, 200);
     const sharedFiles = first.json() as { files: { path: string; content: string }[]; complete: boolean };

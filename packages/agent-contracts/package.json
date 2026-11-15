@@ -7,6 +7,21 @@
   ],
   "type": "module",
   "exports": {
+    "./message-context": {
+      "types": "./dist/message-context.d.ts",
+      "development": "./src/message-context.ts",
+      "default": "./dist/message-context.js"
+    },
+    "./bundled-skills": {
+      "types": "./dist/bundled-skills.d.ts",
+      "development": "./src/bundled-skills.ts",
+      "default": "./dist/bundled-skills.js"
+    },
+    "./collaboration": {
+      "types": "./dist/collaboration.d.ts",
+      "development": "./src/collaboration.ts",
+      "default": "./dist/collaboration.js"
+    },
     "./extensions": {
       "types": "./dist/extensions.d.ts",
       "development": "./src/extensions.ts",
@@ -16,6 +31,16 @@
       "types": "./dist/mcp-apps.d.ts",
       "development": "./src/mcp-apps.ts",
       "default": "./dist/mcp-apps.js"
+    },
+    "./mcp-presets": {
+      "types": "./dist/mcp-presets.d.ts",
+      "development": "./src/mcp-presets.ts",
+      "default": "./dist/mcp-presets.js"
+    },
+    "./task-brief": {
+      "types": "./dist/task-brief.d.ts",
+      "development": "./src/task-brief.ts",
+      "default": "./dist/task-brief.js"
     },
     "./pm-tool-result": {
       "types": "./dist/pm-tool-result.d.ts",

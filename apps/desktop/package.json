@@ -2,7 +2,7 @@
   "name": "@agent-workspace/desktop",
   "version": "0.1.1-preview.2",
   "private": true,
-  "description": "Secure Electron host for the PM Agent v4 unified Web and local services",
+  "description": "Secure Electron host for the Dovspace unified Web and local services",
   "type": "module",
   "main": "dist/main.mjs",
   "scripts": {

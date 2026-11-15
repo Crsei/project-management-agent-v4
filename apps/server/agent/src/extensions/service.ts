@@ -1,9 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { extensionAppIds, extensionProjectScopeSchema, type ExtensionAppId, type ExtensionContext, type ExtensionDirectory, type ExtensionEvent, type ExtensionFailure, type ExtensionMcpDefinition, type ExtensionMcpManagement, type ExtensionProjectScope, type ExtensionDefinitionReference, type ResolvedExtensionDefinition } from "@agent-workspace/contracts/extensions";
+import { installBundledSkillsRequestSchema, type BundledSkillsCatalog, type InstallBundledSkillsRequest, type InstallBundledSkillsResult, type ProviderBundledSkillsState } from "@agent-workspace/contracts/bundled-skills";
+import { readBundledPmSkills } from "../../../../../packages/skill-resources/catalog.ts";
+import { workspaceRoot } from "../paths.ts";
+import { listStoredInstances } from "../providers/instances.ts";
 import { validateAutomationMcpEndpoint, validateAutomationPrivateHeaders } from "../../../../../packages/infrastructure/src/automation-integrations.ts";
 import { canonicalExtensionProviderPath, invalidateExtensionProviderBindings, listExtensionProviderTargets, listUnavailableExtensionProviderTargets, resolveRegisteredExtensionProviders, type ExtensionProviderBinding, type ExtensionProviderInvalidation, type ExtensionUnavailableProviderTarget } from "./provider-bindings.ts";
 import { isExtensionMutationCommand, parseExtensionCommand, type ExtensionCommand } from "./commands.ts";
@@ -51,7 +55,7 @@ function assertNativeApps(context: StoredExtensionContext, value: unknown): void
   for (const [app, enabled] of Object.entries(value)) if (enabled === true && !allowed.includes(app as typeof extensionAppIds[number])) throw new ExtensionError(403, "native_target_unbound", "An enabled application has no authorized native target in this context.");
 }
 
-/** One process-owned manager. Definitions and installation algorithms live exclusively in the copied Rust services. */
+/** One process-owned authority bridge; managed definitions/deployment live in the cc-switch TypeScript host. */
 export class ExtensionHost {
   private contexts?: Promise<Map<string, RuntimeContext>>;
   private registryQueue: Promise<void> = Promise.resolve();
@@ -59,6 +63,129 @@ export class ExtensionHost {
   private maintenanceEnding = false;
   private maintenanceQueue: Promise<void> = Promise.resolve();
   private stopped = false;
+
+  constructor(privateResourceRoot: string = workspaceRoot) { this.bundledResourceRoot = privateResourceRoot; }
+  private readonly bundledResourceRoot: string;
+
+  private async bundledResources() {
+    const resources = await readBundledPmSkills(this.bundledResourceRoot);
+    const skills = resources.map(({ content: _content, ...skill }) => ({ ...skill, sourceLabel: "Dovspace" as const }));
+    const bundleDigest = createHash("sha256").update(JSON.stringify(skills.map(({ id, sourcePath, sha256 }) => ({ id, sourcePath, sha256 })))).digest("hex");
+    return { resources, catalog: { skills, bundleDigest } satisfies BundledSkillsCatalog };
+  }
+  async bundledSkillsCatalog(): Promise<BundledSkillsCatalog> { return (await this.bundledResources()).catalog; }
+  private async bundledProviderOwner(binding: ExtensionProviderBinding): Promise<RuntimeContext | undefined> {
+    const owners = [...(await this.load()).values()].filter(runtime => runtime.stored.kind === "native" && runtime.stored.binding &&
+      writableRoots(binding).some(root => writableRoots(runtime.stored.binding!, runtime.stored.unifiedSkillsOwned).some(owned => overlaps(root, owned) || overlaps(owned, root))));
+    if (owners.length > 1 || owners[0] && !ownsProviderTarget(owners[0].stored.binding!, binding))
+      throw new ExtensionError(409, "native_root_owned", "The Provider overlaps an incompatible management context; reconcile its existing owner.");
+    const owner = owners[0];
+    if (owner) assertExtensionHostBindingCurrent({ binding: owner.stored.binding!, providerBinding: owner.stored.providerBinding, externalTargets: owner.stored.externalTargets });
+    return owner;
+  }
+  /** Inventory is a read: an unbound Provider never creates a management context or SSOT. */
+  async providerBundledSkills(providerInstanceId: string): Promise<ProviderBundledSkillsState> {
+    const { resources, catalog } = await this.bundledResources();
+    let binding: ExtensionProviderBinding;
+    let owner: RuntimeContext | undefined;
+    try {
+      binding = resolveRegisteredExtensionProviders([providerInstanceId]);
+      owner = await this.bundledProviderOwner(binding);
+    } catch {
+      const instance = listStoredInstances().find(item => item.instanceId === providerInstanceId);
+      const unavailable = listUnavailableExtensionProviderTargets().find(item => item.providerInstanceId === providerInstanceId);
+      const reason = !instance ? "This Provider no longer exists."
+        : !instance.enabled ? "This Provider is disabled; no native installation authority was granted."
+        : unavailable?.unavailableReason === "remote-server" ? "Remote OpenCode servers do not grant authority to install into this Agent host's filesystem."
+        : unavailable?.unavailableReason === "custom-config-file" ? "This custom OpenCode configuration file is not a manageable native target."
+        : listExtensionProviderTargets().some(item => item.providerInstanceId === providerInstanceId) ? "This Provider's native ownership requires reconciliation in Skills settings."
+        : "This Provider has no supported local native Skills target.";
+      return { providerInstanceId, bundleDigest: catalog.bundleDigest, skills: catalog.skills.map(skill => ({ ...skill, status: "unavailable", reason })), warnings: [reason] };
+    }
+    const app = binding.apps[0]!;
+    const warnings = [...binding.warnings, "Installation is a verified native file deployment, not proof that a running session loaded or can invoke the Skill."];
+    if (owner) warnings.push(`Updating this shared managed library updates every existing verified deployment in its bound applications: ${owner.stored.binding!.apps.join(", ")}. Associated Provider instances: ${owner.stored.binding!.providerInstanceIds.join(", ") || "external target owner"}. It is not a selected-Provider-only content update.`);
+    if (!owner) {
+      const skills = await Promise.all(catalog.skills.map(async skill => {
+        try {
+          await lstat(path.join(binding.appDirs[app]!, "skills", skill.id));
+          return { ...skill, status: "conflict" as const, reason: "A same-name native entry is not owned by the Dovspace managed library and was preserved." };
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") return { ...skill, status: "unavailable" as const, reason: "The native destination cannot be inspected safely." };
+          return { ...skill, status: "not-installed" as const };
+        }
+      }));
+      return { providerInstanceId, targetFingerprint: binding.bindingFingerprint, bundleDigest: catalog.bundleDigest, skills, warnings };
+    }
+    const states = z.array(z.object({ id: z.string(), status: z.enum(["not-installed", "installed", "update-available", "conflict"]), reason: z.string().optional() })).parse(
+      await owner.sidecar.invoke("inspect_bundled_skills", { skills: resources, app }));
+    if (states.length !== catalog.skills.length || catalog.skills.some(skill => states.filter(state => state.id === skill.id).length !== 1))
+      throw new ExtensionError(502, "sidecar_protocol_invalid", "The configuration service returned an incomplete bundled Skills inventory.");
+    return { providerInstanceId, targetFingerprint: binding.bindingFingerprint, bundleDigest: catalog.bundleDigest, skills: catalog.skills.map(skill => ({ ...skill, ...states.find(state => state.id === skill.id)! })), warnings };
+  }
+  async installProviderBundledSkills(providerInstanceId: string, rawInput: InstallBundledSkillsRequest): Promise<InstallBundledSkillsResult> {
+    const input = installBundledSkillsRequestSchema.parse(rawInput);
+    const { resources, catalog } = await this.bundledResources();
+    if (input.bundleDigest !== catalog.bundleDigest) throw new ExtensionError(409, "bundled_skills_catalog_changed", "The shipped Skills bundle changed. Refresh its inventory and review the current content before installing.");
+    const selected = input.skillIds.map(id => {
+      const skill = resources.find(item => item.id === id);
+      if (!skill) throw new ExtensionError(400, "bundled_skill_unknown", "Only the current shipped PM Skills may be installed.");
+      return skill;
+    });
+    const before = await this.providerBundledSkills(providerInstanceId);
+    let available = true;
+    try { resolveRegisteredExtensionProviders([providerInstanceId]); } catch { available = false; }
+    if (!available) return {
+      results: selected.map(skill => ({ id: skill.id, status: "unavailable", error: { code: "bundled_skill_target_unavailable", message: before.skills[0]!.reason! } })), state: before,
+    };
+    if (resolveRegisteredExtensionProviders([providerInstanceId]).bindingFingerprint !== input.targetFingerprint)
+      throw new ExtensionError(409, "bundled_skills_target_changed", "The selected Provider's revision or native target changed. Refresh and review its actual destination before installing.");
+    // Explicit confirmed installation may create/refresh the existing native owner.
+    const { context } = await this.resolveProviderContext(providerInstanceId);
+    const runtime = await this.require(context.id);
+    return this.serial(runtime, async () => {
+      if ((await this.load()).get(context.id) !== runtime) throw new ExtensionError(409, "context_binding_changed", "The native owner changed before installation; refresh its current state.");
+      const current = resolveRegisteredExtensionProviders([providerInstanceId]);
+      if (current.bindingFingerprint !== input.targetFingerprint)
+        throw new ExtensionError(409, "bundled_skills_target_changed", "The selected Provider's native authority changed while installation was queued. Refresh its state before installing.");
+      if (!ownsProviderTarget(runtime.stored.binding!, current)) throw new ExtensionError(409, "native_owner_stale", "The selected Provider changed its native target before installation.");
+      assertExtensionHostBindingCurrent({ binding: runtime.stored.binding!, providerBinding: runtime.stored.providerBinding, externalTargets: runtime.stored.externalTargets });
+      if ((await this.bundledResources()).catalog.bundleDigest !== input.bundleDigest)
+        throw new ExtensionError(409, "bundled_skills_catalog_changed", "The shipped Skills bundle changed while installation was queued. Refresh and review its current inventory.");
+      const settings = await runtime.sidecar.invoke("get_settings");
+      if (settings && typeof settings === "object" && "skillStorageLocation" in settings && settings.skillStorageLocation === "unified") await this.claimUnified(runtime);
+      const command = "install_bundled_skills";
+      this.publish(runtime, { event: "operation", data: { command, state: "running" } });
+      let dispatched = false;
+      try {
+        dispatched = true;
+        const results = z.array(z.object({
+          id: z.string(), status: z.enum(["installed", "updated", "unchanged", "conflict", "unavailable", "error"]),
+          error: z.object({ code: z.string(), message: z.string() }).optional(),
+        })).parse(await runtime.sidecar.invoke(command, { skills: selected, app: current.apps[0]! }));
+        if (results.length !== selected.length || selected.some(skill => results.filter(result => result.id === skill.id).length !== 1))
+          throw new ExtensionError(502, "sidecar_protocol_invalid", "The configuration service returned incomplete installation results; read the current inventory before retrying.");
+        const changed = results.some(result => result.status === "installed" || result.status === "updated");
+        const partial = results.some(result => ["conflict", "unavailable", "error"].includes(result.status));
+        const unconfirmed = results.some(result => result.status === "error");
+        if (changed || unconfirmed) {
+          const invalidation = this.invalidateProviders(runtime, command);
+          runtime.reloadRequired = true;
+          this.publish(runtime, { event: "changed", data: { command, ...invalidation, configurationSaved: unconfirmed ? "unconfirmed" : true, filesSynchronized: !partial, liveSessionsReloaded: false } });
+        }
+        this.publish(runtime, { event: "operation", data: { command, state: partial ? "partial" : "completed", reloadRequired: runtime.reloadRequired } });
+        return { results, state: await this.providerBundledSkills(providerInstanceId) };
+      } catch (error) {
+        if (dispatched) {
+          const invalidation = this.invalidateProviders(runtime, `${command}:unconfirmed`);
+          runtime.reloadRequired = true;
+          this.publish(runtime, { event: "changed", data: { command, ...invalidation, configurationSaved: "unconfirmed", filesSynchronized: false, liveSessionsReloaded: false } });
+        }
+        this.publish(runtime, { event: "operation", data: { command, state: "failed", reloadRequired: runtime.reloadRequired } });
+        throw error;
+      }
+    });
+  }
 
   private async load(): Promise<Map<string, RuntimeContext>> {
     if (this.stopped) throw new ExtensionError(503, "extension_host_stopping", "The extension host is stopping.");

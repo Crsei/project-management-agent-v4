@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { AgentWorkspace, ExecutionSelection, RemoteThread } from "@agent-workspace/contracts/chat";
 import type { PmWorkspaceDiscovery } from "@agent-workspace/contracts/pm-tools";
 import type { ProviderOptionSelection, ProvidersResponse } from "@agent-workspace/contracts/provider";
+import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import { getProviderModelTraits, resolveProviderModelSelection } from "@agent-workspace/client-runtime/providers";
 import type { Actor, Workspace } from "../../../../../../../packages/contracts/src/client";
 import { workspaceClient } from "../network";
@@ -28,6 +29,7 @@ type State = {
   catalogLoading: boolean;
   catalogError?: string;
   providers: ProvidersResponse["providers"];
+  providersLoaded: boolean;
   providersLoading: boolean;
   providerError?: string;
   threads: ReadonlyMap<string, RemoteThread>;
@@ -39,7 +41,7 @@ type State = {
 };
 let state: State = {
   workspaces: [], loading: true, catalog: null, catalogLoading: false,
-  providers: [], providersLoading: true, threads: new Map(), executionDrafts: new Map(),
+  providers: [], providersLoaded: false, providersLoading: true, threads: new Map(), executionDrafts: new Map(),
   identity: null, identityLoading: false,
 };
 const listeners = new Set<() => void>();
@@ -86,11 +88,13 @@ export function reportThreadError(error: unknown) {
   update({ threadError: error instanceof Error ? error.message : String(error) });
 }
 export function availableProviderModel(providerId: string, model: string) {
-  if (state.providersLoading || state.providerError) return undefined;
+  if (!state.providersLoaded) return undefined;
   const selection = resolveProviderModelSelection(state.providers, providerId, model);
   return selection.status === "selected" && selection.provider.nativeSessionReady ? selection.model : undefined;
 }
 export function canSendThread(localId: string, remoteId: string | undefined, providerId: string, model: string, modelOptions?: ProviderOptionSelection[]) {
+  // Browsing the last catalog is safe during refresh; execution still fails closed.
+  if (state.providersLoading || state.providerError) return false;
   const executionSelection = threadExecutionSelection(localId, remoteId);
   const provider = state.providers.find((item) => item.instanceId === providerId);
   const selected = availableProviderModel(providerId, model);
@@ -136,14 +140,26 @@ export async function refreshIdentity(): Promise<void> {
     update({ identityLoading: false, identityError: error instanceof Error ? error.message : String(error) });
   }
 }
-let providerRefreshSequence = 0;
-export async function refreshProviders(): Promise<void> {
-  const sequence = ++providerRefreshSequence;
-  update({ providersLoading: true });
-  try {
-    const response = await workspaceClient.json<ProvidersResponse>("/api/providers");
-    if (sequence === providerRefreshSequence) update({ providers: response.providers, providersLoading: false, providerError: undefined });
-  } catch (error) {
-    if (sequence === providerRefreshSequence) update({ providersLoading: false, providerError: error instanceof Error ? error.message : String(error) });
+let providerRefresh: Promise<void> | undefined;
+export function refreshProviders(options?: { afterMutation?: boolean }): Promise<void> {
+  if (providerRefresh) {
+    // A pre-write GET cannot acknowledge a later mutation; ordinary reads still coalesce.
+    return options?.afterMutation ? providerRefresh.then(() => refreshProviders()) : providerRefresh;
   }
+  const task = workspaceClient.json<ProvidersResponse>("/api/providers")
+    .then((response) => {
+      update({ providers: response.providers, providersLoaded: true, providersLoading: false, providerError: undefined });
+    })
+    .catch((error: unknown) => {
+      const unauthorized = error instanceof WorkspaceClientError && (error.status === 401 || error.status === 403);
+      update({
+        ...(unauthorized ? { providers: [], providersLoaded: false } : {}),
+        providersLoading: false,
+        providerError: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => { if (providerRefresh === task) providerRefresh = undefined; });
+  providerRefresh = task;
+  update({ providersLoading: true });
+  return task;
 }

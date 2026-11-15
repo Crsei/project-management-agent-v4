@@ -7,6 +7,8 @@ import './task-code-delivery.css';
 import { RadixSelect } from "@/components/ui/radix-select"
 import { executionSelectionSchema, type ExecutionSelection } from '@agent-workspace/contracts/chat';
 import { ExecutionSelectionField } from '@agent/src/pm/execution-workspace';
+import { TaskExecutionBriefPanel } from './TaskExecutionBriefPanel';
+import { guidanceReadFailure } from './task-brief-presentation';
 
 type Inspection = { delivery: TaskCodeDelivery; tree: DeliveryTree | null; taskChanged: boolean };
 type Props = DeliveryScope & { revision: string; disabled: boolean; en: boolean };
@@ -28,6 +30,14 @@ export function TaskCodeDeliveryPanel(props: Props) {
   const [providerWarning, setProviderWarning] = useState('');
   const requestId = useRef(crypto.randomUUID());
   const generation = useRef(0);
+  const reportError = useCallback((reason: unknown) => {
+    if (guidanceReadFailure(reason) === 'access') {
+      generation.current += 1;
+      setInspection(null); setLoaded(false); setProviders([]); setProviderId(''); setModel('');
+      setExecutionSelection(undefined); setAvailableSelection(null); setBusy(false);
+      setError('读取权限已失效，敏感交付内容已清理。 / Access expired; delivery content cleared.');
+    } else setError(reason instanceof Error ? reason.message : 'Delivery unavailable');
+  }, []);
   const t = (english: string, chinese: string) => en ? english : chinese;
   const v = inspection?.delivery;
   const tree = inspection?.tree;
@@ -51,11 +61,11 @@ export function TaskCodeDeliveryPanel(props: Props) {
     setProviderWarning('正在读取 Provider，不影响分支准备。');
     void workspaceClient.json<ProvidersResponse>('/api/providers', { signal: AbortSignal.timeout(20000) }).then(catalog => {
       if (generation.current === epoch) { setProviders(catalog.providers); setProviderWarning(''); }
-    }).catch(() => { if (generation.current === epoch) setProviderWarning('Provider 读取失败或超时，请重新展开面板重试；分支准备不受影响。'); });
+    }).catch(reason => { if (generation.current === epoch) { if (guidanceReadFailure(reason) === 'access') reportError(reason); else setProviderWarning('Provider 读取失败或超时，请重新展开面板重试；分支准备不受影响。'); } });
     void load().then(value => {
       if (generation.current !== epoch) return;
       setInspection(value); setLoaded(true);
-    }).catch(reason => { if (generation.current === epoch) setError(reason instanceof Error ? reason.message : 'Delivery unavailable'); }).finally(() => { if (generation.current === epoch) setBusy(false); });
+    }).catch(reason => { if (generation.current === epoch) reportError(reason); }).finally(() => { if (generation.current === epoch) setBusy(false); });
     return () => { generation.current += 1; };
     // Scope changes remount this component; closing invalidates outstanding reads.
   }, [expanded]);
@@ -67,7 +77,7 @@ export function TaskCodeDeliveryPanel(props: Props) {
       await workspaceClient.json(`/api/task-deliveries/${encodeURIComponent(v.id)}/actions`, { method: 'POST', body: JSON.stringify(action) });
       const next = await inspect(v.id);
       if (generation.current === epoch) setInspection(next);
-    } catch (reason) { if (generation.current === epoch) setError(reason instanceof Error ? reason.message : 'Delivery unavailable'); }
+    } catch (reason) { if (generation.current === epoch) reportError(reason); }
     finally { if (generation.current === epoch) setBusy(false); }
   };
   const prepare = async () => {
@@ -79,14 +89,14 @@ export function TaskCodeDeliveryPanel(props: Props) {
       const next = value.git ? await inspect(value.id) : { delivery: value, tree: null, taskChanged: false };
       if (generation.current === epoch) setInspection(next);
     } catch (reason) {
-      if (generation.current === epoch) setError(reason instanceof Error ? reason.message : 'Delivery unavailable');
+      if (generation.current === epoch) reportError(reason);
       // The original id is retained; never mint a fresh key after an unknown response.
     } finally { if (generation.current === epoch) setBusy(false); }
   };
   const refresh = async () => {
     if (v) return perform({ action: 'refresh' });
     setBusy(true); setError('');
-    try { setInspection(await load()); setLoaded(true); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Delivery unavailable'); } finally { setBusy(false); }
+    try { setInspection(await load()); setLoaded(true); } catch (reason) { reportError(reason); } finally { setBusy(false); }
   };
   return <details className="task-code-delivery" onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>{t('Code delivery · GitHub', '代码交付 · GitHub')}</summary>
@@ -104,8 +114,9 @@ export function TaskCodeDeliveryPanel(props: Props) {
       {!executionReady && <p role="status">{t('Select an available Agent Workspace folder explicitly. Missing, replaced, or old directory selections cannot execute; no folder or replacement session is chosen automatically. Closing or renaming a Workspace does not change existing execution bindings. PM document storage is not a source repository.', '请明确选择可用的 Agent Workspace 文件夹。缺失、被替换或旧版目录配置不能执行；不会自动选择目录或替换会话。关闭或重命名 Workspace 不改变已有执行绑定；PM 文档存储不是源码仓库。')}</p>}
       {!v && <><label>{t('Remote base branch', '远端基准分支')}<input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} placeholder={t('Enter the actual remote branch', '填写实际远端分支')} disabled={busy} /></label><button type="button" disabled={!loaded || blocked || !baseBranch.trim() || !executionReady} onClick={() => void prepare()}>{t('Create development branch', '创建独立开发分支')}</button></>}
       {v && <>
+        <TaskExecutionBriefPanel workspaceId={workspaceId} projectId={projectId} taskId={taskId} deliveryId={v.id} revision={revision} observationVersion={v.version} en={en} originalHref={`#task-delivery-operations-${v.id}`} onAccessFailure={reportError} />
         <dl><dt>{t('Stage', '阶段')}</dt><dd>{v.step}{v.pending ? ` · ${v.pending.action} ${t('unconfirmed', '待确认')}` : ''}</dd><dt>{t('Branch', '分支')}</dt><dd><code>{v.git?.branch ?? '—'}</code></dd><dt>{t('Working directory', '工作目录')}</dt><dd><code>{v.git?.directory ?? '—'}</code></dd><dt>HEAD</dt><dd><code>{tree?.head ?? v.head ?? '—'}</code></dd></dl>
-        <button type="button" disabled={blocked || !executionReady || !!v.generationId && v.generationStatus === 'running'} onClick={() => { if (selectedExecution && window.confirm(t('Create a new idle Chat session bound to this existing delivery worktree? Code, branches and delivery evidence remain unchanged. No model runs now.', '为已有交付 worktree 明确创建新的空闲 Chat 会话？保留代码、分支和交付证据，此时不会运行模型。'))) void perform({ action: 'new-session', executionSelection: selectedExecution, confirm: true }); }}>{t('Create replacement Chat session (no execution)', '新建替代 Chat 会话（不执行）')}</button>
+        <button type="button" disabled={busy || disabled || !!v.pending || !executionReady || !!v.generationId && v.generationStatus === 'running'} onClick={() => { if (selectedExecution && window.confirm(t('Create a new idle Chat session bound to this existing delivery worktree? Code, branches and delivery evidence remain unchanged. No model runs now.', '为已有交付 worktree 明确创建新的空闲 Chat 会话？保留代码、分支和交付证据，此时不会运行模型。'))) void perform({ action: 'new-session', executionSelection: selectedExecution, confirm: true }); }}>{t('Create replacement Chat session (no execution)', '新建替代 Chat 会话（不执行）')}</button>
         <label>Provider<RadixSelect value={providerId} disabled={!canDevelop} onChange={e => { setProviderId(e.target.value); setModel(''); }}><option value="">{t('Choose a configured Provider', '选择现有 Provider')}</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.configured || !p.nativeSessionReady}>{p.label}{!p.enabled || !p.configured || !p.nativeSessionReady ? ` · ${t('not ready', '未就绪')}` : ''}</option>)}</RadixSelect></label>
         <label>{t('Model', '模型')}<RadixSelect value={model} disabled={!canDevelop || !provider} onChange={e => setModel(e.target.value)}><option value="">{t('Choose a model', '选择模型')}</option>{provider?.models.map(m => <option key={m.id} value={m.id} disabled={!!m.disabledReason}>{m.label}</option>)}</RadixSelect></label>
         <button type="button" disabled={!canDevelop || !model || !provider?.nativeSessionReady} onClick={() => { if (window.confirm(t('Start the selected Provider? Codex may write/test only in this task worktree; network and out-of-scope permission requests remain denied. Commit, push and PR require separate confirmation.', '使用所选 Provider 开发？仅授权此任务 worktree 写入和测试；网络与越界权限请求仍拒绝，提交／推送／PR 仍需分别确认。'))) void perform({ action: 'develop', providerInstanceId: providerId, model, ...(provider?.driver === 'codex' ? { allowWorktreeWrite: true as const } : {}) }); }}>{t('Start Agent development', '启动 Agent 开发')}</button>
@@ -115,7 +126,7 @@ export function TaskCodeDeliveryPanel(props: Props) {
         <button type="button" disabled={blocked || !['developed', 'tested'].includes(v.step) || !command.trim()} onClick={() => { if (window.confirm(`${t('Execute in the delivery worktree (120 second limit)?', '在交付工作目录执行以下命令（上限 120 秒）？')}\n${command}`)) void perform({ action: 'test', command, confirm: true }); }}>{t('Run validation', '运行验证')}</button>
         {v.test && <p>{t('Validation', '验证')}: {v.test.passed ? t('Passed for recorded tree', '记录版本通过') : t('Failed or changed tree', '失败或执行期间内容变化')} · exit {v.test.exitCode ?? 'unknown'} · {v.test.at}{tree?.fingerprint !== v.test.fingerprint && v.step === 'tested' ? ` · ${t('STALE', '已过期')}` : ''}</p>}
         {tree && <details><summary>{t('Review exact changed files & diff', '审查待提交文件与差异')} ({tree.files.length})</summary><ul>{tree.files.map(file => <li key={file}><code>{file}</code></li>)}</ul><pre>{tree.diff || t('No tracked diff; inspect new files in the worktree.', '无已跟踪文件差异；新增文件请在工作目录审查。')}</pre></details>}
-        <div className="task-delivery-actions">
+        <div className="task-delivery-actions" id={`task-delivery-operations-${v.id}`}>
           <button type="button" disabled={blocked || v.step !== 'tested' || !v.test?.passed || !tree?.files.length || tree.fingerprint !== v.test.fingerprint} onClick={() => { if (tree && window.confirm(`${t('Commit exactly these files?', '确认提交以下全部文件？')}\n${tree.files.join('\n')}`)) void perform({ action: 'commit', fingerprint: tree.fingerprint, confirm: true }); }}>{t('Confirm commit', '确认提交')}</button>
           <button type="button" disabled={blocked || v.step !== 'committed'} onClick={() => { if (v.head && window.confirm(`${t('Push this commit to', '确认推送此提交到')} ${v.git?.owner}/${v.git?.repo} · ${v.git?.branch}\n${v.head}`)) void perform({ action: 'push', head: v.head, confirm: true }); }}>{t('Confirm push', '确认推送')}</button>
           <button type="button" disabled={blocked || v.step !== 'pushed'} onClick={() => { if (v.head && window.confirm(t('Create a Draft PR for this delivery? It will not merge or complete the task.', '确认为本次交付创建 Draft PR？不会自动合并或完成任务。'))) void perform({ action: 'draft-pr', head: v.head, confirm: true }); }}>{t('Create Draft PR', '创建 Draft PR')}</button>

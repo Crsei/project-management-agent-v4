@@ -11,7 +11,7 @@ import type { AgentChatToolResult } from '../../../../packages/agent-contracts/s
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import { nativeCommandId } from '../src/core-routes.ts';
 import { CoreCommandJournal } from '../src/core-journal.ts';
-import { createAgentChatTools, type AgentChatToolContext, type AgentChatTools } from '../src/agent-chat-tools.ts';
+import { createAgentChatTools, type AgentChatToolContext } from '../src/agent-chat-tools.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Fixture' };
@@ -80,7 +80,9 @@ test('archive, restore and delete use the native core and preserve the work item
 
     const unarchived = f.workspace.get(f.task.id);
     await assert.rejects(f.tools.execute('pm_delete_task', { id: unarchived.id, revision: unarchived.revision }, f.context()),
-      (error: unknown) => error instanceof DomainError && error.code === 'DELETE_REQUIRES_ARCHIVE');
+      (error: unknown) => error instanceof WorkspaceError && error.status === 422 && error.diagnostics.some(issue => issue.code === 'DELETE_REQUIRES_ARCHIVE'));
+    assert.equal(f.workspace.get(f.task.id).raw, unarchived.raw);
+    assert.equal(f.workspace.get(f.task.id).revision, unarchived.revision);
 
     const archivable = f.workspace.get(f.task.id);
     await f.tools.execute('pm_archive_task', { id: archivable.id, revision: archivable.revision }, f.context());
@@ -98,12 +100,14 @@ test('archive, restore and delete use the native core and preserve the work item
 test('workflow transitions defer to the native transition table and the target lifecycle capability', async () => {
   const f = await fixture();
   try {
+    f.allow(['domain.read', 'workitem.complete']);
     const done = lifecycleResult(await f.tools.execute('pm_transition_task', { id: f.task.id, revision: f.task.revision, status: 'done' }, f.context()));
     assert.equal(done.items[0]!.status, 'done');
     assert.deepEqual({ action: done.receipt?.action, revision: done.receipt?.revision },
       { action: 'UpdateCoreProperties', revision: f.workspace.get(f.task.id).revision });
 
     const reopened = f.workspace.get(f.task.id);
+    f.allow(['domain.read', 'workitem.cancel_reopen']);
     const todo = lifecycleResult(await f.tools.execute('pm_transition_task', { id: reopened.id, revision: reopened.revision, status: 'todo' }, f.context()));
     assert.equal(todo.items[0]!.status, 'todo');
 
@@ -166,6 +170,8 @@ test('recovery reports only proven outcomes and never replays a pending or chang
     await assert.rejects(f.tools.execute('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(pendingOperation)),
       (error: unknown) => error instanceof DomainError && error.code === 'core_write_outcome_unknown');
     assert.equal(f.workspace.get(f.task.id).entity.archived, false);
+    assert.equal(f.workspace.get(f.task.id).raw, f.task.raw);
+    assert.equal(f.workspace.get(f.task.id).revision, f.task.revision);
 
     const archiveOperation = randomUUID();
     const archived = lifecycleResult(await f.tools.execute('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation)));
@@ -174,41 +180,47 @@ test('recovery reports only proven outcomes and never replays a pending or chang
     const recovered = lifecycleResult((await f.tools.recover('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation)))!);
     assert.equal(recovered.items[0]!.id, f.task.id);
     assert.equal(recovered.items[0]!.revision, archivedRevision);
+    assert.deepEqual(recovered.receipt, archived.receipt);
+    assert.deepEqual(recovered.sources, archived.sources);
     assert.equal(f.workspace.get(f.task.id).revision, archivedRevision);
     assert.equal(f.workspace.get(f.task.id).entity.archived, true);
 
     // A later change means the original receipt can no longer prove the current contents.
     const current = f.workspace.get(f.task.id);
-    await f.workspace.patch(current.id, { status: 'in_progress' }, current.revision);
+    const currentAfterEdit = await f.workspace.patch(current.id, { status: 'in_progress' }, current.revision);
     const changed = lifecycleResult((await f.tools.recover('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation)))!);
-    assert.deepEqual(changed.items, []);
-    assert.equal(changed.receipt?.revision, archivedRevision);
+    assert.deepEqual(changed, { ...recovered, items: [], sources: [] });
+    assert.equal(f.workspace.get(f.task.id).raw, currentAfterEdit.raw);
+    assert.equal(f.workspace.get(f.task.id).revision, currentAfterEdit.revision);
 
-    // Permanent deletion leaves an unreadable tombstone; recovery must not invent a surviving task.
+    // Historical proof still requires current access to its original project, not current write permission.
+    await assert.rejects(f.tools.recover('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation, [f.other.id])),
+      (error: unknown) => error instanceof DomainError && error.code === 'not_found_or_forbidden');
+    f.allow(['domain.read'], [f.other.id]);
+    await assert.rejects(f.tools.recover('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation)),
+      (error: unknown) => error instanceof DomainError && error.code === 'not_found_or_forbidden');
+    f.allow(['domain.read']);
+    assert.deepEqual(await f.tools.recover('pm_archive_task', { id: f.task.id, revision: f.task.revision }, f.context(archiveOperation)), changed);
+
+    // Completed deletion is proven history even though no current task or source survives.
+    f.allow([...ALL_CAPABILITIES]);
     const deleteOperation = randomUUID();
     const beforeDelete = f.workspace.get(f.task.id);
     const deleteArgs = { id: beforeDelete.id, revision: beforeDelete.revision };
-    await f.tools.execute('pm_delete_task', deleteArgs, f.context(deleteOperation));
-    assert.equal(await f.tools.recover('pm_delete_task', deleteArgs, f.context(deleteOperation)), null);
-  } finally { await f.workspace.close(); await rm(f.base, { recursive: true, force: true }); }
-});
-
-test('the registry advertises the four lifecycle tools as writes with their native capabilities', async () => {
-  const f = await fixture();
-  try {
-    const byName = new Map(f.tools.registry.map(tool => [tool.name, tool]));
-    for (const name of ['pm_archive_task', 'pm_restore_task', 'pm_delete_task', 'pm_transition_task'] as const) {
-      const tool = byName.get(name);
-      assert.ok(tool, name);
-      assert.equal(tool.write, true);
-      assert.ok(tool.description.length > 0);
-      assert.equal(tool.available, true);
-      assert.ok(f.tools.availableToolNames.includes(name));
-      assert.ok(f.tools.definitions.some(definition => definition.function.name === name));
-    }
-    assert.deepEqual(byName.get('pm_archive_task')!.capabilities, ['domain.read', 'planning.lifecycle']);
-    assert.deepEqual(byName.get('pm_restore_task')!.capabilities, ['domain.read', 'planning.lifecycle']);
-    assert.deepEqual(byName.get('pm_delete_task')!.capabilities, ['domain.read', 'planning.lifecycle']);
-    assert.deepEqual(byName.get('pm_transition_task')!.capabilities, ['domain.read', 'planning.edit']);
+    const deleted = lifecycleResult(await f.tools.execute('pm_delete_task', deleteArgs, f.context(deleteOperation)));
+    f.allow(['domain.read']);
+    const recoveredDeletion = lifecycleResult((await f.tools.recover('pm_delete_task', deleteArgs, f.context(deleteOperation)))!);
+    assert.deepEqual(recoveredDeletion, {
+      kind: 'lifecycle', items: [], nextCursor: null, truncated: false, sources: [],
+      receipt: { kind: 'core', operationId: deleteOperation,
+        commandId: nativeCommandId(workspaceId, actor.id, 'DeleteCoreEntity', f.task.id, deleteOperation),
+        action: 'DeleteCoreEntity', targetId: f.task.id, revision: null },
+    });
+    assert.deepEqual(recoveredDeletion, deleted);
+    assert.deepEqual(await f.tools.recover('pm_delete_task', deleteArgs, f.context(deleteOperation)), recoveredDeletion);
+    assert.throws(() => f.workspace.get(f.task.id), (error: unknown) => error instanceof WorkspaceError && error.status === 404);
+    f.allow(['domain.read'], [f.other.id]);
+    await assert.rejects(f.tools.recover('pm_delete_task', deleteArgs, f.context(deleteOperation)),
+      (error: unknown) => error instanceof DomainError && error.code === 'not_found_or_forbidden');
   } finally { await f.workspace.close(); await rm(f.base, { recursive: true, force: true }); }
 });

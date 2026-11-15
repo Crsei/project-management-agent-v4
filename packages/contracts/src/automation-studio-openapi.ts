@@ -21,7 +21,7 @@ export function automationStudioPaths(): Record<string, Record<string, unknown>>
     [base + '/definitions/{id}/status']: { post: endpoint('setAutomationStudioDefinitionStatus', studioDefinitionSchema, [id], studioStatusSchema) },
     [base + '/definitions/{id}/run']: { post: endpoint('runAutomationStudioDefinition', studioExecutionSchema, [id], studioDispatchSchema) },
     [base + '/definitions/{id}/test']: { post: endpoint('testAutomationStudioDefinition', studioExecutionSchema, [id], studioDispatchSchema) },
-    [base + '/executions']: { get: endpoint('listAutomationStudioExecutions', studioPageSchema(studioExecutionSchema), [cursor, { name: 'definitionId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } }]) },
+    [base + '/executions']: { get: endpoint('listAutomationStudioExecutions', studioPageSchema(studioExecutionSchema), [cursor, { name: 'definitionId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } }, { name: 'projectId', in: 'query', required: false, description: 'Authorized project filter applied before pagination. A cursor outside that same project/definition selection yields no records.', schema: { type: 'string', pattern: '^PRJ-\\d+$' } }]) },
     [base + '/executions/{id}']: { get: endpoint('getAutomationStudioExecution', studioExecutionSchema, [id]) },
     [base + '/executions/{id}/logs']: { get: endpoint('getAutomationStudioExecutionLogs', studioPageSchema(studioExecutionEventSchema), [id,cursor]) },
     [base + '/executions/{id}/query']: { post: endpoint('queryAutomationStudioExecution', studioExecutionSchema, [id], z.strictObject({})) },

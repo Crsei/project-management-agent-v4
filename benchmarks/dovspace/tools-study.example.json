@@ -1,0 +1,56 @@
+{
+  "kind": "pm-tools-study-manifest",
+  "version": 1,
+  "studyId": "pm-tools-exploration-01",
+  "evidenceKind": "model-study",
+  "stage": "exploration",
+  "arm": "dovspace",
+  "taskIds": ["K02", "K03", "K04", "D01", "D02", "D04", "L02", "L03", "L04"],
+  "repetitions": 3,
+  "maxTotalCostUsd": null,
+  "primaryMetric": "inputTokens",
+  "samplePlan": {
+    "rationale": "Exploratory paired fixed-task study; three repetitions describe variance and failure modes, not superiority or noninferiority.",
+    "stoppingRule": "fixed-complete-design",
+    "independentConfirmation": false
+  },
+  "controls": {
+    "provider": "omp",
+    "providerApi": "openai-responses",
+    "providerBinary": "/usr/local/bin/omp",
+    "ompModel": null,
+    "model": "__REQUIRED_EXACT_MODEL_IDENTIFIER__",
+    "modelOptions": {},
+    "providerEndpoint": "__REQUIRED_PUBLIC_HTTPS_API_BASE__",
+    "prices": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "maxOutputTokens": null,
+      "version": "__REQUIRED_PRICE_SCHEDULE_VERSION__"
+    },
+    "budget": {
+      "maxDurationMinutes": 10,
+      "maxModelCalls": 30,
+      "maxToolCalls": 80,
+      "maxCostUsd": null
+    },
+    "agentImage": "__REQUIRED_OMP_IMAGE_DIGEST__",
+    "codeImage": "node:24.21.0-bookworm",
+    "postgresImage": "postgres:16-alpine"
+  },
+  "observationPolicy": {
+    "collectorVersion": "pm-tools-v1",
+    "requestLogging": "private-redacted",
+    "optionalObservers": "disabled",
+    "skills": "disabled",
+    "toolLoadMode": "essential"
+  },
+  "requiredTools": ["pm_task_brief"],
+  "safetyEvidence": null,
+  "treatment": [
+    {
+      "path": "__APPROVED_EXACT_CHANGED_RELATIVE_PATH__",
+      "rationale": "__PREREGISTER_THE_ONE_ACTUAL_MINIMAL_TREATMENT__"
+    }
+  ]
+}

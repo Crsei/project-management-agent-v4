@@ -11,7 +11,7 @@ import type { PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
 // built dist for `node --test`; test the schema source so an unbuilt artifact cannot mask a regression.
 import { pmToolCallRecordSchema } from "../../../../packages/agent-contracts/src/pm-tools.ts";
 import { projectPmToolChange, pmToolRoutes } from "./pm-tools.ts";
-import { closeStore, writeRecord } from "./durable/store.ts";
+import { closeStore, readRecord, writeRecord } from "./durable/store.ts";
 import { ensureThread } from "./durable/threads.ts";
 
 const workspaceId = randomUUID();
@@ -187,26 +187,32 @@ test("thread endpoints expose bounded arguments and isolated change sets", async
   try {
     ensureThread(thread, "Changes");
     ensureThread(other, "Other");
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
-      new URL(input instanceof Request ? input.url : String(input)).pathname === "/api/v1/agent-contexts/authorize"
-        ? Response.json({ actorId, scope: JSON.parse(String(init?.body)) })
-        : new Response("{}", { status: 404 })) as typeof fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const pathname = new URL(input instanceof Request ? input.url : String(input)).pathname;
+      const body = JSON.parse(String(init?.body)) as { operationId?: string };
+      if (pathname === "/api/v1/agent-contexts/authorize") return Response.json({ actorId, scope: body });
+      if (pathname.endsWith("/agent-tools/result") && body.operationId) {
+        const stored = readRecord<{ record: PmToolCallRecord }>("pm-tool-calls", body.operationId);
+        if (stored) return Response.json(stored.record);
+      }
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
 
     const operationId = randomUUID();
     const argumentsValue = { projectId: "PRJ-1", title: "Route task" };
     writeRecord("pm-tool-calls", operationId, {
-      record: callRecord("pm_create_task", "running", { operationId, threadId: thread }),
-      request: { operationId, name: "pm_create_task", arguments: argumentsValue, target: requestTarget, threadId: thread, messageId: "m", generationId: "g" },
+      record: callRecord("pm_create_task", "running", { operationId, threadId: thread, certainty: { dispatch: "not_sent", evidence: "unresolved" } }),
+      request: { operationId, name: "pm_create_task", arguments: argumentsValue, target: requestTarget, threadId: thread, messageId: "message-1", generationId: "generation-1" },
     });
     const bulkyId = randomUUID();
     writeRecord("pm-tool-calls", bulkyId, {
       record: callRecord("pm_save_document", "failed", { operationId: bulkyId, threadId: thread, error: { code: "rejected", message: "No" } }),
-      request: { operationId: bulkyId, name: "pm_save_document", arguments: { body: "x".repeat(20_000) }, target: requestTarget, threadId: thread, messageId: "m", generationId: "g" },
+      request: { operationId: bulkyId, name: "pm_save_document", arguments: { body: "x".repeat(20_000) }, target: requestTarget, threadId: thread, messageId: "message-1", generationId: "generation-1" },
     });
     const foreignId = randomUUID();
     writeRecord("pm-tool-calls", foreignId, {
       record: callRecord("pm_update_task", "succeeded", { operationId: foreignId, threadId: other, result: taskResult(foreignId) }),
-      request: { operationId: foreignId, name: "pm_update_task", arguments: { id: "TASK-1" }, target: requestTarget, threadId: other, messageId: "m", generationId: "g" },
+      request: { operationId: foreignId, name: "pm_update_task", arguments: { id: "TASK-1" }, target: requestTarget, threadId: other, messageId: "message-1", generationId: "generation-1" },
     });
 
     const calls = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/calls`, { headers });

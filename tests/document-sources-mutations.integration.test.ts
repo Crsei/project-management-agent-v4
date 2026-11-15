@@ -290,7 +290,7 @@ describe('external Markdown mutations: real PostgreSQL, HTTP and filesystem', { 
     await writeFile(join(outside, 'secret.md'), secret); await writeFile(join(root, 'safe.md'), '# Safe source\n');
     const { sourceId: workspaceSourceId } = await configureDocumentSource(f, null, root, 0);
     const safe = await readSourceContent(f, workspaceSourceId, 'safe.md');
-    const unsafePaths = ['../outside-mutations/secret.md', 'nested/../../outside-mutations/secret.md', 'nested/../safe.md', '/etc/secret.md', join(outside, 'secret.md'), '..\\outside-mutations\\secret.md', 'C:\\secret.md', 'a//b.md', './safe.md', 'non-markdown.txt', '.pm/core/private.md', '.git/config.md', '.ssh/key.md', '.aws/credentials.md', '.config/private.md', '.codex/private.md', '.claude/private.md', '.agent-workspace/private.md', 'provider-homes/account.md'];
+    const unsafePaths = ['../outside-mutations/secret.md', 'nested/../../outside-mutations/secret.md', 'nested/../safe.md', '/etc/secret.md', join(outside, 'secret.md'), '..\\outside-mutations\\secret.md', 'C:\\secret.md', 'a//b.md', './safe.md', 'non-markdown.txt', '.pm/core/private.md', '.dovspace/.pm/core/private.md', '.git/config.md', '.ssh/key.md', '.aws/credentials.md', '.config/private.md', '.codex/private.md', '.claude/private.md', '.agent-workspace/private.md', 'provider-homes/account.md'];
     for (const path of unsafePaths) {
       const requests: DocumentSourceMutation[] = [
         create(path, '# Must never write\n'),
@@ -326,7 +326,7 @@ describe('external Markdown mutations: real PostgreSQL, HTTP and filesystem', { 
     assert.equal((await lstat(join(root, 'special-pipe.md'))).isFIFO(), true);
     assert.equal((await lstat(join(root, 'directory.md'))).isDirectory(), true);
     await missing(join(root, 'must-not-move.md')); await missing(join(outside, 'must-not-move.md'));
-    for (const path of ['.pm', '.git', '.ssh', '.aws', '.config', '.codex', '.claude', '.agent-workspace', 'provider-homes']) await missing(join(root, path));
+    for (const path of ['.pm', '.dovspace', '.git', '.ssh', '.aws', '.config', '.codex', '.claude', '.agent-workspace', 'provider-homes']) await missing(join(root, path));
   });
 
   it('accepts the full 4 MiB content boundary over real HTTP and rejects oversized UTF-8 writes without truncation', { timeout: localProjectCaseTimeout }, async t => {

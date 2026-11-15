@@ -1,9 +1,10 @@
 import { type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { Bookmark, CalendarDays, Flag, Plus, UserRound } from 'lucide-react';
+import { Bookmark, CalendarDays, Flag, Plus } from 'lucide-react';
 import { workflowFor, type FileRecord, type WorkflowDefinition } from '@pm-schema';
 import { PMView, StatusIcon, type ContextMenuRenderer } from '@pm-views';
 import { usePmService } from '../service/pm-service';
+import { HumanIdentity } from '../service/human-identity';
 import { useWorkspaceStore } from '@/providers/app-providers';
 import { useDisplayDateTime } from '@/features/workspace/preference-format';
 import { CollectionContextMenu, renderCollectionContextMenu } from './CollectionContextMenu';
@@ -16,23 +17,22 @@ import type { QueryExpression } from '@pm-schema/query';
 import type { WorkspaceController } from './controller';
 import type { ScheduleViewProps } from './workspace';
 import './task-list-scope.css';
+import { TaskAssignmentPanel } from './TaskAssignmentPanel';
 
 const priorityLabels: Record<string, string> = { urgent: '紧急', high: '高', medium: '中', low: '低' };
 
 function TaskRow({ file, controller: c, en, workflow, dueLabel, attention }: { file: FileRecord; controller: WorkspaceController; en: boolean; workflow: WorkflowDefinition | undefined; dueLabel?: string; attention: ReactNode }) {
-  const { actor } = usePmService();
   const { actions, watchAction, watched } = useTaskRowActions({ file, controller: c, en });
   const status = workflow?.states.find(state => state.id === file.entity.status);
   const statusLabel = status ? taskStateLabel(status, en) : file.entity.status;
   const project = c.projects.find(project => project.id === file.entity.project)?.entity.title || file.entity.project || (en ? 'Unassigned' : '未关联');
-  const assigneeLabel = !file.entity.assignee ? en ? 'Unassigned' : '未分配' : file.entity.assignee === actor?.id ? actor.name : en ? 'Assigned' : '已分配';
   return <CollectionContextMenu actions={actions} trigger={<li tabIndex={0} className={`task-native-row${c.selectedId === file.id ? ' selected' : ''}`} data-testid={`task-${file.id}`}>
     <button type="button" className="task-list-title" title={file.entity.title} onClick={() => c.select(file.id)}>
       <StatusIcon category={status?.category} />
       <span className="task-list-identity"><span className="mono">{file.id}</span><strong>{file.entity.title}</strong>{c.draftIds.has(file.id) && <small className="draft-pill">{en ? 'Local draft' : '本地草稿'}</small>}</span>
     </button>
     <span className="task-row-status" title={statusLabel}><span className="sr-only">{en ? 'Status: ' : '状态：'}</span>{statusLabel}</span>
-    <span className="task-row-assignee" title={assigneeLabel}><UserRound size={13} aria-hidden="true" /><span className="sr-only">{en ? 'Assignee: ' : '负责人：'}</span><span>{assigneeLabel}</span></span>
+    <span className="task-row-assignee"><span className="sr-only">{en ? 'Assignee: ' : '负责人：'}</span><HumanIdentity userId={file.entity.assignee} projectId={file.entity.project} /></span>
     <span className={`task-row-priority priority-${file.entity.priority}`}><span className="sr-only">{en ? 'Priority: ' : '优先级：'}</span>{file.entity.priority ? en ? file.entity.priority : priorityLabels[file.entity.priority] || file.entity.priority : '—'}</span>
     <span className="task-row-due"><span className="sr-only">{en ? 'Due: ' : '截止：'}</span>{file.entity.due ? <time dateTime={file.entity.due} title={file.entity.due}>{dueLabel}</time> : '—'}</span>
     {!c.projectId && <span className="task-row-project" title={`${project} · ${file.entity.project || ''}`}><span className="sr-only">{en ? 'Project: ' : '项目：'}</span>{project}</span>}
@@ -93,7 +93,7 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
     const important = scope === 'important' && !c.pendingChangesOnly;
     return <div className="task-collection-content">{notice}<div className="task-empty-state" role="status"><Bookmark size={22} aria-hidden="true" /><strong>{c.pendingChangesOnly ? (en ? 'No pending changes' : '没有待审阅变更') : important ? (en ? 'Nothing watched yet' : '暂无关注的任务') : (en ? 'No tasks in this scope' : '此范围暂无任务')}</strong><p>{important ? (en ? 'Use the watch action on any task to keep it here. Watching is private and does not change the task.' : '在任意任务中点击关注，即可把任务加入这里。关注仅本人可见，不会改变任务状态。') : (en ? 'Adjust the filters or create a task in an authorized project.' : '调整筛选条件，或在有权限的项目中新建任务。')}</p></div></div>;
   }
-  if (personal && c.prefs.layout === 'list') return <>{notice}<TaskPersonalList controller={c} en={en} today={personal.today} actorId={personal.actorId} collection={collection} pendingOnly={c.pendingChangesOnly} renderAttention={adornment} /></>;
+  if (personal && c.prefs.layout === 'list') return <>{notice}<TaskAssignmentPanel controller={c} files={collection.files} en={en} /><TaskPersonalList controller={c} en={en} today={personal.today} actorId={personal.actorId} collection={collection} pendingOnly={c.pendingChangesOnly} renderAttention={adornment} /></>;
   const workflow = workflowFor('work_item', c.configuration);
   const renderContextMenu: ContextMenuRenderer = (trigger, actions, file) => file?.entity.entity === 'work_item'
     ? <TaskTableContextMenu key={file.id} file={file} controller={c} en={en} trigger={trigger} />
@@ -110,10 +110,11 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
     if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} renderContextMenu={renderContextMenu} renderItemAdornment={adornment} />;
     return <div className={`task-native-table${c.projectId ? ' task-native-table-project' : ''}`}><div className="task-list-columns" aria-hidden="true"><span>{en ? 'Task' : '任务'}</span><span>{en ? 'Status' : '状态'}</span><span>{en ? 'Assignee' : '负责人'}</span><span>{en ? 'Priority' : '优先级'}</span><span>{en ? 'Due' : '截止'}</span>{!c.projectId && <span>{en ? 'Project' : '项目'}</span>}<span /></div><ul className="task-native-list">{files.map(file => <TaskRow key={file.id} file={file} controller={c} en={en} workflow={workflow} dueLabel={file.entity.due ? display.date(file.entity.due) : undefined} attention={adornment(file)} />)}</ul></div>;
   }
-  if (personal && c.prefs.layout === 'calendar') return <div className="task-collection-content">{notice}{render(collection.files)}</div>;
+  if (personal && c.prefs.layout === 'calendar') return <div className="task-collection-content">{notice}<TaskAssignmentPanel controller={c} files={collection.files} en={en} />{render(collection.files)}</div>;
   // The graph owns its own entity navigation and node inspector.
   if (c.prefs.layout === 'graph') return <div className="task-collection-content task-collection-graph">{notice}<PMView {...c.viewProps} graphQuery={graphQuery} files={collection.files} graphScopeTarget={graphScopeTarget} graphToggleTarget={graphToggleTarget} /></div>;
   return <div className={`task-collection-content${timeline ? ' task-timeline-content' : ''}${board ? ' task-collection-board' : ''}`}>{notice}
+    <TaskAssignmentPanel controller={c} files={collection.files} en={en} />
     {grouped.map(group => {
       const heading = group.label
         ? `${taskStateLabel({ id: group.id, label: group.label }, en)}${group.category === 'canceled' ? (en ? ' (not completed)' : '（不计入完成）') : ''}`

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Asterisk, Briefcase, CalendarDays, Check, CircleDashed, Code, File, Folder, Globe, Heart, Layers, Megaphone, Palette, Rocket, Target } from 'lucide-react';
-import { useMemberDirectory } from '../service/pm-member-hooks';
+import { usePeopleCandidates } from '../service/people-hooks';
 import { PROJECT_COLORS, PROJECT_ICONS } from '../service/project-menu-model';
 import { usePmService } from '../service/pm-service';
 import { allowed } from '../service/pm-ui';
@@ -67,16 +67,15 @@ export interface ProjectCreationFieldsProps {
 
 export function ProjectCreationFields({ values, body, disabled, en, errors, onChange, onBodyChange }: ProjectCreationFieldsProps) {
   const uid = useId();
-  const directory = useMemberDirectory();
+  const directory = usePeopleCandidates({ purpose: 'project_owner' });
   const { workspace } = usePmService();
-  const canReadDirectory = allowed(workspace, 'access.manage') || workspace?.capabilities.includes('directory.read') === true;
+  const canReadDirectory = allowed(workspace, 'planning.edit') && allowed(workspace, 'domain.read') && workspace?.projectIds === null;
   const t = (zh: string, english: string) => en ? english : zh;
   const icon = String(values['x-pm-icon'] ?? '');
   const color = String(values['x-pm-color'] ?? '');
   const PreviewIcon = projectIcons[icon as keyof typeof projectIcons] ?? Folder;
   const owner = String(values.owner ?? '');
-  // A redacted access record is not proof of permission to a not-yet-created project.
-  const members = directory.error ? [] : directory.data?.members.filter(member => member.access && !member.access.revokedAt && member.access.capabilities.includes('domain.read') && member.access.projectIds === null) ?? [];
+  const members = directory.items;
   const ownerUnavailable = !!owner && !!directory.data && !directory.error && !members.some(member => member.userId === owner);
   const errorProps = (name: string) => ({ 'aria-invalid': !!errors[name], 'aria-describedby': errors[name] ? `${uid}-${name}-error` : undefined });
   const fieldError = (name: string) => errors[name] && <small id={`${uid}-${name}-error`} className="creation-field-error" role="alert">{errors[name]}</small>;
@@ -126,9 +125,9 @@ export function ProjectCreationFields({ values, body, disabled, en, errors, onCh
       </RadixSelect>{fieldError('owner')}</label>
       <label htmlFor={`${uid}-due`}><ProjectFieldLabel en={en}>{t('目标日期', 'Target date')}</ProjectFieldLabel><ProjectInput id={`${uid}-due`} name="due" data-testid="field-due" aria-label={t('项目目标日期', 'Project target date')} pickerLabel={t('选择项目目标日期', 'Choose project target date')} type="date" {...errorProps('due')} value={String(values.due ?? '')} disabled={disabled} onChange={event => onChange({ due: event.target.value || null })} />{fieldError('due')}</label>
     </div>
-    {!canReadDirectory && <p className="project-creation-hint" role="status">{t('当前账号无成员目录读取权限，负责人选择不可用；可先不分配，不会自动授予成员权限。', 'Lead selection requires member-directory access. You may leave the lead unassigned; no member permissions are granted automatically.')}</p>}
+    {!canReadDirectory && <p className="project-creation-hint" role="status">{t('当前账号无新项目创建权限，负责人选择不可用；不会自动授予成员权限。', 'New-project lead selection requires workspace-wide project creation access; no member permissions are granted automatically.')}</p>}
     {canReadDirectory && directory.isPending && <p className="project-creation-hint" role="status">{t('正在读取有权访问新项目的成员…', 'Reading members authorized to access new projects…')}</p>}
-    {directory.error && <div className="creation-alert" role="alert"><p>{t('成员目录读取失败，无法确认可选负责人；原草稿保留，不会以样例成员代替。', 'The member directory could not be read. Lead selection is unavailable; your draft is retained without sample members.')}</p><p>{directory.error.message}</p><button type="button" className="secondary-button" disabled={directory.isFetching} onClick={() => { void directory.refetch(); }}>{t('重新读取成员', 'Read members again')}</button></div>}
+    {directory.error && <div className="creation-alert" role="alert"><p>{t('负责人候选读取失败；原草稿保留，不会以样例成员代替。', 'Eligible leads could not be read; your draft is retained without sample members.')}</p><p>{directory.error.message}</p><button type="button" className="secondary-button" disabled={directory.isFetching} onClick={() => { void directory.refetch(); }}>{t('重新读取候选', 'Read candidates again')}</button></div>}
     {ownerUnavailable && <p className="creation-alert" role="status">{t('原草稿负责人当前没有已确认的新项目访问权限。请重新选择；不会自动改派或扩大授权。', 'The draft lead has no confirmed access to a new project. Choose an authorized member; no reassignment or access grant is automatic.')}</p>}
     {directory.data && !directory.error && members.length === 0 && <p className="project-creation-hint" role="status">{t('当前目录没有可确认的新项目负责人。可先不分配，创建后在项目设置中选择。', 'No eligible new-project lead is confirmed in the current directory. Leave unassigned and choose a lead in project settings later.')}</p>}
     <fieldset className="project-creation-choice-group project-creation-templates" role="radiogroup" aria-label={t('模板', 'Template')} aria-describedby={`${uid}-template-hint`}>

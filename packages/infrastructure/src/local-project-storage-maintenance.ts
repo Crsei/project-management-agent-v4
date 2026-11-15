@@ -14,7 +14,7 @@ import { blobInventoryEntrySchema, inventoryBlobReferences } from './blob-storag
 import { checkProjectBlobStorage, initializeProjectBlobStorage, projectBlobManifestSha256, readStoredBlob, type ProjectBlobMount } from './project-blobs.ts';
 import { lockWorkspace } from './database.ts';
 
-const manifestSchema = z.strictObject({ formatVersion: z.literal(1), operationId: z.uuid(), kind: z.enum(['migrate','relocate','rebind']), workspaceId: z.uuid(), projectId: z.string().min(1), targetRoot: z.string(), targetMode: z.enum(['existing','new']), sourceMount: z.object({ workspaceId: z.string(), projectId: z.string(), storageId: z.uuid(), root: z.string(), attachmentsPath: z.string() }).nullable(), referencesSha256: z.string(), entries: z.array(blobInventoryEntrySchema) });
+const manifestSchema = z.strictObject({ formatVersion: z.literal(1), operationId: z.uuid(), kind: z.enum(['migrate','relocate','rebind']), workspaceId: z.uuid(), projectId: z.string().min(1), targetRoot: z.string(), targetMode: z.enum(['existing','new']), sourceMount: z.object({ workspaceId: z.string(), projectId: z.string(), storageId: z.uuid(), root: z.string(), storageRoot: z.string().optional(), layout: z.enum(['legacy','dovspace-v1']).optional(), attachmentsPath: z.string() }).nullable(), referencesSha256: z.string(), entries: z.array(blobInventoryEntrySchema) });
 /** Includes receipt/outbox/event references even when no live artifact row remains. */
 async function projectObjectKeys(sql: SqlExecutor, workspaceId: string, projectId: string): Promise<Set<string>> {
     const keys = new Set<string>();
@@ -99,7 +99,9 @@ export async function maintainLocalProjectStorage(options: MaintainLocalProjectS
     if (projectBlobManifestSha256(current.map(({ references: _references, ...entry }) => entry)) !== manifest.referencesSha256) throw new DomainError('blob_checkpoint_changed', 'Project references changed after maintenance preparation', 503);
   }
   if (options.kind === 'rebind' && phase === 'prepared') {
-    const candidate = { ...manifest.sourceMount!, root: targetRoot, attachmentsPath: join(targetRoot, '.pm/attachments') };
+    const layout = manifest.sourceMount!.layout ?? 'legacy';
+    const storageRoot = layout === 'dovspace-v1' ? join(targetRoot, '.dovspace') : targetRoot;
+    const candidate = { ...manifest.sourceMount!, root: targetRoot, storageRoot, layout, attachmentsPath: join(storageRoot, '.pm/attachments') };
     await checkProjectBlobStorage(persist, candidate, { allowFrozen: true });
     const provider = new LocalBlobStore(candidate.attachmentsPath);
     for (const entry of manifest.entries) {

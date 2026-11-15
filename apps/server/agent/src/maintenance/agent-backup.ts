@@ -12,6 +12,7 @@ import { validateHubUrl } from "../usage/hubs.ts";
 import { assertPrivatePath, makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
 import { assertCanonicalAbsolute, directoryIdentity, pathContains, safePathComponent, safeRelativePath, sameFileIdentity, samePath } from "../../../../../packages/pm-core/platform.ts";
 import { assertNoWindowsReparsePath, cacheWindowsPathAttributes } from "../../../../../packages/pm-core/windows-reparse.ts";
+import { getStoreIdentity, initializePersistence, inventoryPersistence, PERSISTENCE_NAMESPACE, preflightPersistence, registerPersistenceWriter, restorePersistenceIdentity, type PersistenceInventory, type StoreIdentity } from "../durable/persistence-schema.ts";
 
 type SecretPolicy = "include" | "exclude";
 type JsonObject = Record<string, unknown>;
@@ -20,7 +21,7 @@ type BundleFile = { path: string; bytes: number; sha256: string };
 type BundleLink = { path: string; target: string };
 export type AgentBackupManifest = {
   format: "agent-offline-backup";
-  version: 1;
+  version: 1 | 2;
   createdAt: string;
   secrets: SecretPolicy;
   privateData: true;
@@ -29,6 +30,9 @@ export type AgentBackupManifest = {
   files: BundleFile[];
   links?: BundleLink[];
   exclusions: string[];
+  sourceIdentity?: StoreIdentity;
+  relationshipVersion?: 1;
+  legacyWarnings?: string[];
 };
 const DATABASE = "workspace.sqlite";
 const CONFIG = "provider-instances.json";
@@ -158,11 +162,13 @@ function walk(root: string, prefix = "", links: BundleLink[] = []): string[] {
   }
   return result;
 }
-function coverage(db: DatabaseSync): Coverage {
+function coverage(db: DatabaseSync, sourceIdentity?: StoreIdentity | null): Coverage {
   const hash = createHash("sha256");
   let records = 0, events = 0, threads = 0, histories = 0, messages = 0, settings = 0;
   for (const row of db.prepare("SELECT namespace, key, value FROM records ORDER BY namespace, key").iterate()) {
-    hash.update(JSON.stringify([row.namespace, row.key, row.value]));
+    if (row.namespace === PERSISTENCE_NAMESPACE && row.key === "store" && sourceIdentity === null) continue;
+    const value = row.namespace === PERSISTENCE_NAMESPACE && row.key === "store" && sourceIdentity ? JSON.stringify(sourceIdentity) : row.value;
+    hash.update(JSON.stringify([row.namespace, row.key, value]));
     records++;
     if (row.namespace === "chat:threads") threads++;
     if (row.namespace === "chat:history") {
@@ -178,7 +184,7 @@ function coverage(db: DatabaseSync): Coverage {
   }
   return { records, events, threads, histories, messages, settings, digest: hash.digest("hex") };
 }
-function inspectDatabase(filename: string): Coverage {
+function inspectDatabase(filename: string, sourceIdentity?: StoreIdentity | null): Coverage {
   regular(filename);
   const db = new DatabaseSync(filename, { readOnly: true });
   try {
@@ -186,7 +192,18 @@ function inspectDatabase(filename: string): Coverage {
     const integrity = db.prepare("PRAGMA integrity_check").all();
     if (integrity.length !== 1 || Object.values(integrity[0]!)[0] !== "ok") throw new Error("Agent database integrity verification failed.");
     if (db.prepare("SELECT 1 FROM worker_owner").get()) throw new Error("Backup contains an execution owner.");
-    return coverage(db);
+    preflightPersistence(db);
+    const inventory = inventoryPersistence(db);
+    if (inventory.blockers.length) throw new Error(`Agent relationship verification failed: ${inventory.blockers.join(", ")}`);
+    if (sourceIdentity !== undefined) {
+      const identity = getStoreIdentity(db);
+      if (sourceIdentity && (identity.sourceStoreId !== sourceIdentity.storeId || identity.restoreEpoch !== sourceIdentity.restoreEpoch + 1 || identity.storeId === sourceIdentity.storeId || !identity.restoredAt))
+        throw new Error("Restored Store identity/epoch is not a descendant of this bundle.");
+      const threadIds = db.prepare("SELECT key FROM records WHERE namespace='chat:threads' ORDER BY key").all().map(row => String(row.key));
+      if (JSON.stringify(Object.keys(identity.restoredThreads ?? {}).sort()) !== JSON.stringify(threadIds))
+        throw new Error("Restored history execution fence is incomplete or was rebound.");
+    }
+    return coverage(db, sourceIdentity);
   } finally { db.close(); }
 }
 function validateConfiguration(config: JsonObject): JsonObject[] {
@@ -403,12 +420,15 @@ function restoreOwnedLinks(root: string, links: BundleLink[]): void {
   }
 }
 function excludeNativeSessions(db: DatabaseSync): void {
+  // Continuations are executable native resume/fork state, not Chat or PM history.
+  // This database is the private export snapshot; the source is read-only.
+  db.exec("DELETE FROM records WHERE namespace = 'provider:t3code:continuations'");
   const update = db.prepare("UPDATE records SET value = ? WHERE namespace = ? AND key = ?");
   for (const row of db.prepare("SELECT namespace, key, value FROM records WHERE namespace IN ('chat:threads', 'chat:generations', 'durable:runs')").all()) {
     const value = parseObject(String(row.value));
     delete value.nativeSession;
     if (row.namespace === "chat:threads") {
-      for (const key of ["nativeMessageId", "nativeSystemPrompt", "nativeScope", "pendingFork", "pendingForkScope"])
+      for (const key of ["nativeMessageId", "nativeSystemPrompt", "nativeScope", "nativeEnvironment", "pendingFork", "pendingForkScope", "pendingForkEnvironment"])
         delete value[key];
     }
     if (row.namespace === "durable:runs" && Array.isArray(value.steps)) {
@@ -460,17 +480,27 @@ export async function createAgentBackup(options: { source: string; bundle: strin
   const release = acquireOfflineLock(source);
   let staging: string | undefined;
   try {
+    const sourceState = stoppedSourceState(source, options.secrets);
     const original = new DatabaseSync(path.join(source, DATABASE), { readOnly: true });
     try {
       assertDatabaseOffline(original);
+      preflightPersistence(original);
+      const sourceInventory = inventoryPersistence(original);
+      if (sourceInventory.blockers.length) throw new Error(`Agent backup relationship blockers: ${sourceInventory.blockers.join(", ")}`);
       staging = mkdtempSync(path.join(path.dirname(bundle), ".agent-backup-"));
       makePrivatePath(staging);
       await backup(original, path.join(staging, DATABASE));
     } finally { original.close(); }
     makePrivatePath(path.join(staging!, DATABASE));
     const snapshot = new DatabaseSync(path.join(staging!, DATABASE));
+    let sourceIdentity: StoreIdentity;
+    let legacyWarnings: string[] = [];
     try {
+      registerPersistenceWriter(snapshot);
       snapshot.exec("PRAGMA journal_mode = DELETE; BEGIN IMMEDIATE; DELETE FROM worker_owner;");
+      const inventory = inventoryPersistence(snapshot);
+      sourceIdentity = initializePersistence(snapshot, { migrationId: "offline-backup-copy-v1", planHash: inventory.fingerprint });
+      legacyWarnings = inventory.legacyWarnings;
       revokeCopiedMcpAuthority(snapshot);
       if (options.secrets === "exclude") excludeNativeSessions(snapshot);
       snapshot.exec("COMMIT;");
@@ -504,7 +534,8 @@ export async function createAgentBackup(options: { source: string; bundle: strin
       return { path: relative, bytes: bytes.length, sha256: sha256(bytes) };
     });
     const manifest: AgentBackupManifest = {
-      format: "agent-offline-backup", version: 1, createdAt: new Date().toISOString(), secrets: options.secrets, privateData: true,
+      format: "agent-offline-backup", version: 2, createdAt: new Date().toISOString(), secrets: options.secrets, privateData: true,
+      sourceIdentity: sourceIdentity!, relationshipVersion: 1, legacyWarnings,
       coverage: inspectDatabase(path.join(staging!, DATABASE)), providerInstances, files, ...(links.length ? { links } : {}),
       exclusions: ["PM database, Markdown, PM attachments and user project/source files (use the existing PM backup separately)",
         ".env.agent and all process/global environment, browser cookies/preferences, external/global provider homes",
@@ -514,6 +545,8 @@ export async function createAgentBackup(options: { source: string; bundle: strin
         "Extension project decryption key PM_AUTOMATION_INTEGRATIONS_KEY remains deployment-owned and must match the separate PM restore; native context bindings require explicit rebind after restore; external native roots/Unified Skills outside Agent data are references only",
         ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; all cc-switch encrypted definitions, native encryption key, registry, Skills and backups are omitted together; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
     };
+    if (stoppedSourceState(source, options.secrets).fingerprint !== sourceState.fingerprint)
+      throw new Error("Agent source changed inside the stopped backup barrier; no complete bundle was published.");
     restrictedWrite(path.join(staging!, "manifest.json"), json(manifest));
     privateBundle(staging!);
     // Rename only after the bundle has been verified. An existing destination is never replaced.
@@ -531,10 +564,11 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
   const root = directory(value);
   privateBundle(root);
   const parsed = readJson(path.join(root, "manifest.json"));
-  if (parsed.format !== "agent-offline-backup" || parsed.version !== 1 || parsed.privateData !== true
+  if (parsed.format !== "agent-offline-backup" || parsed.version !== 1 && parsed.version !== 2 || parsed.privateData !== true
     || !["include", "exclude"].includes(String(parsed.secrets)) || !Array.isArray(parsed.files)
     || !Array.isArray(parsed.exclusions) || !Number.isSafeInteger(parsed.providerInstances)) throw new Error("Unsupported Agent backup manifest.");
   const manifest = parsed as AgentBackupManifest;
+  if (manifest.version === 2 && (!manifest.sourceIdentity || manifest.relationshipVersion !== 1)) throw new Error("Backup is missing its persistence relationship contract.");
   const paths = new Set<string>();
   for (const entry of manifest.files) {
     const member = object(entry);
@@ -564,6 +598,24 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
   const actual = walk(root).filter((relative) => relative !== "manifest.json");
   if (actual.length !== paths.size || actual.some((relative) => !paths.has(relative))) throw new Error("Backup contains unlisted files.");
   const actualCoverage = inspectDatabase(path.join(root, DATABASE));
+  const copied = new DatabaseSync(path.join(root, DATABASE), { readOnly: true });
+  try {
+    if (manifest.sourceIdentity && JSON.stringify(getStoreIdentity(copied)) !== JSON.stringify(manifest.sourceIdentity)) throw new Error("Backup Store identity differs from manifest.");
+    if (copied.prepare("SELECT 1 FROM records WHERE namespace IN ('mcp:codes','mcp:tokens','mcp:consents','mcp-app-model-context-v1') LIMIT 1").get())
+      throw new Error("Backup contains live nonportable MCP/App authority.");
+    for (const row of copied.prepare("SELECT value FROM records WHERE namespace='mcp:grants'").iterate())
+      if (!parseObject(String(row.value)).revokedAt) throw new Error("Copied MCP grants must be revoked.");
+    if (manifest.secrets === "exclude") {
+      if (copied.prepare("SELECT 1 FROM records WHERE namespace='provider:t3code:continuations' LIMIT 1").get())
+        throw new Error("Credential-excluded backup retains executable native continuations.");
+      for (const row of copied.prepare("SELECT namespace,value FROM records WHERE namespace IN ('chat:threads','chat:generations','durable:runs')").iterate()) {
+        const value = parseObject(String(row.value));
+        if ("nativeSession" in value || row.namespace === "chat:threads" && ["nativeMessageId", "nativeSystemPrompt", "nativeScope", "nativeEnvironment", "pendingFork", "pendingForkScope", "pendingForkEnvironment"].some(field => field in value) ||
+            row.namespace === "durable:runs" && Array.isArray(value.steps) && value.steps.some(step => "nativeSession" in object(step)))
+          throw new Error("Credential-excluded backup retains native execution references.");
+      }
+    }
+  } finally { copied.close(); }
   if (JSON.stringify(actualCoverage) !== JSON.stringify(manifest.coverage)) throw new Error("Backup durable data coverage verification failed.");
   const config = paths.has(CONFIG) ? readJson(path.join(root, CONFIG)) : null;
   if ((config ? validateConfiguration(config).length : 0) !== manifest.providerInstances) throw new Error("Backup Provider configuration verification failed.");
@@ -601,6 +653,7 @@ function compareTarget(bundle: string, target: string, manifest: AgentBackupMani
     const filename = path.join(target, safeRelative(entry.path));
     regular(filename);
     assertPrivatePath(filename);
+    if (entry.path === DATABASE) continue; // SQLite physical pages change when the restored identity is allocated; records are checked below.
     const bytes = readFileSync(filename);
     const expectedHash = sha256(restoredBytes(bundle, entry.path, target));
     if (sha256(bytes) !== expectedHash) throw new Error("Restored file verification failed.");
@@ -610,7 +663,7 @@ function compareTarget(bundle: string, target: string, manifest: AgentBackupMani
     if (!lstatSync(filename).isSymbolicLink() || !samePath(path.resolve(path.dirname(filename), readlinkSync(filename)), path.join(target, link.target)))
       throw new Error("Restored owned Skills link verification failed.");
   }
-  const result = inspectDatabase(path.join(target, DATABASE));
+  const result = inspectDatabase(path.join(target, DATABASE), manifest.sourceIdentity ?? null);
   if (JSON.stringify(result) !== JSON.stringify(manifest.coverage)) throw new Error("Restored histories/settings verification failed.");
   return result;
 }
@@ -660,8 +713,18 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
     }
     const restored = inspectDatabase(path.join(staging, DATABASE));
     if (JSON.stringify(restored) !== JSON.stringify(manifest.coverage)) throw new Error("Restored histories/settings verification failed.");
+    const restoredDb = new DatabaseSync(path.join(staging, DATABASE));
+    let restoredIdentity: StoreIdentity;
+    try {
+      restoredDb.exec("BEGIN IMMEDIATE");
+      restoredIdentity = restorePersistenceIdentity(restoredDb);
+      restoredDb.exec("COMMIT");
+    } finally { restoredDb.close(); }
+    const restoredCoverage = inspectDatabase(path.join(staging, DATABASE), manifest.sourceIdentity ?? null);
+    if (JSON.stringify(restoredCoverage) !== JSON.stringify(manifest.coverage)) throw new Error("Restore identity allocation changed historical records.");
     restrictedWrite(path.join(staging, "agent-restore.json"), json({ format: "agent-isolated-restore", version: 1,
-      restoredAt: new Date().toISOString(), secrets: manifest.secrets, requiresLogin: manifest.secrets === "exclude",
+      restoredAt: restoredIdentity!.restoredAt, storeId: restoredIdentity!.storeId, sourceStoreId: restoredIdentity!.sourceStoreId,
+      restoreEpoch: restoredIdentity!.restoreEpoch, executionFenced: true, secrets: manifest.secrets, requiresLogin: manifest.secrets === "exclude",
       backupManifestSha256: sha256(readFileSync(path.join(root, "manifest.json"))), exclusions: manifest.exclusions }));
     privateBundle(staging);
     restoreOwnedLinks(staging, manifest.links ?? []);
@@ -689,4 +752,43 @@ export function verifyAgentBackup(options: { bundle: string; target?: string; st
   const release = acquireOfflineLock(target);
   try { return compareTarget(root, target, manifest); }
   finally { release(); }
+}
+
+export type AgentStoppedState = { fingerprint: string; storeId: string | null; restoreEpoch: number | null };
+function stoppedSourceState(root: string, secrets: SecretPolicy): AgentStoppedState {
+  const db = new DatabaseSync(path.join(root, DATABASE), { readOnly: true });
+  let inventory: PersistenceInventory;
+  try {
+    assertDatabaseOffline(db); preflightPersistence(db); inventory = inventoryPersistence(db);
+    if (inventory.blockers.length) throw new Error(`Stopped Agent inventory is blocked: ${inventory.blockers.join(", ")}`);
+  } finally { db.close(); }
+  const hash = createHash("sha256").update(inventory.fingerprint);
+  function visit(relative: string): void {
+    const filename = path.join(root, relative), info = lstatSync(filename);
+    if (info.isSymbolicLink()) { const link = ownedSkillLink(root, relative); hash.update(JSON.stringify(link)); return; }
+    if (info.isDirectory()) {
+      hash.update(JSON.stringify(["directory", relative]));
+      for (const name of readdirSync(filename).sort()) {
+        if (!safePathComponent(name)) throw new Error("Unsafe stopped Agent data member.");
+        visit(relative ? `${relative}/${name}` : name);
+      }
+    } else {
+      regular(filename);
+      hash.update(JSON.stringify([relative, info.size])).update(readFileSync(filename));
+    }
+  }
+  for (const name of readdirSync(root).sort()) {
+    if ([DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, "workspace.lock", "provider-cache"].includes(name) || derivedUsageCache(name)) continue;
+    if (![CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, EXTENSIONS, "provider-homes", "provider-private", "provider-attachments", "chat-scratch", "agent-restore.json"].includes(name))
+      throw new Error("Unclassified Agent data blocks a complete stopped recovery set.");
+    if (secrets === "exclude" && [CREDENTIALS, CURSOR_USAGE_CACHE, EXTENSIONS, "provider-homes", "provider-private"].includes(name)) continue;
+    visit(name);
+  }
+  return { fingerprint: hash.digest("hex"), storeId: inventory.store?.storeId ?? null, restoreEpoch: inventory.store?.restoreEpoch ?? null };
+}
+/** The caller must attest that every included writer remains stopped for the entire enclosing barrier. */
+export function captureAgentStoppedState(source: string, stopped: boolean, secrets: SecretPolicy = "include"): AgentStoppedState {
+  if (!stopped) throw new Error("Explicit stopped acknowledgement is required.");
+  const root = directory(source), release = acquireOfflineLock(root);
+  try { return stoppedSourceState(root, secrets); } finally { release(); }
 }

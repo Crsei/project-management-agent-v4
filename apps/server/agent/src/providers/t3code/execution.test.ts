@@ -33,6 +33,8 @@ import { makePmProviderFamily } from "./registration.ts";
 import { emitNativeOutput, endNativeOutput, getNativeOutput, initializeNativeOutput } from "../../durable/native-output.ts";
 import { mcpAppCall, mcpAppSnapshot, mcpAppTools } from "../../mcp-apps/requests.ts";
 import { agentWorkspaceEnvironment } from "../../durable/execution.testkit.ts";
+import { materializeChatAttachments } from "../chat-attachments.ts";
+import { providerAttachmentsDirectory, resolveAttachmentPath } from "./upstream-services/attachments.ts";
 
 const now = DateTime.makeUnsafe("2026-10-30T00:00:00.000Z");
 const driver = ProviderDriverKind.make("codex");
@@ -137,6 +139,26 @@ function finish(input: ProviderAdapterV2TurnInput, emit: (event: ProviderAdapter
       status: "completed", title: null, startedAt: now, completedAt: now, updatedAt: now, messageId: "native-message", text: "original answer", streaming: false }) });
     yield* emit({ type: "turn.terminal", driver, providerThreadId: input.providerThread.id, providerTurnId: root.id,
       runOrdinal: input.runOrdinal, status, failure: null, threadDisposition: "reusable" });
+  });
+}
+
+function offerNativePermission(input: ProviderAdapterV2TurnInput, emit: (event: ProviderAdapterV2Event) => Effect.Effect<void>) {
+  return Effect.gen(function* () {
+    const root = turn({ id: `root-provider-turn:${input.providerTurnOrdinal}`, providerThreadId: input.providerThread.id, nodeId: input.rootNodeId,
+      runAttemptId: input.attemptId, nativeTurnRef: null, ordinal: input.providerTurnOrdinal, status: "running", startedAt: now, completedAt: null });
+    const permission = Schema.decodeUnknownSync(Schema.toType(OrchestrationV2RuntimeRequest))({
+      id: "permission", nodeId: input.rootNodeId, providerTurnId: root.id, nativeRequestRef: null, kind: "command", status: "pending",
+      responseCapability: { type: "live", providerSessionId: input.providerThread.providerSessionId }, createdAt: now, resolvedAt: null,
+    });
+    yield* emit({ type: "provider_turn.updated", driver, providerTurn: root });
+    yield* emit({ type: "turn_item.updated", driver, turnItem: item({
+      id: "permission-item", type: "approval_request", threadId: input.threadId, runId: input.runId, nodeId: input.rootNodeId,
+      providerThreadId: input.providerThread.id, providerTurnId: root.id, nativeItemRef: null, parentItemId: null, ordinal: 0,
+      status: "waiting", title: null, startedAt: now, completedAt: null, updatedAt: now, requestId: permission.id,
+      requestKind: "command", prompt: "Run shell?",
+    }) });
+    yield* emit({ type: "runtime_request.updated", driver, runtimeRequest: permission });
+    return permission;
   });
 }
 
@@ -462,6 +484,103 @@ test("pending information answers never block event consumption or terminal clea
     assert.equal(offered, 1);
     assert.equal(f.counts().closed, 1);
   } finally { f.releaseProbe(); }
+});
+
+for (const mode of ["auto-approve", "ask"] as const) {
+  for (const terminal of ["completed", "interrupted"] as const) {
+    test(`acknowledged ${mode} native permissions retain their decision after a ${terminal} turn and durable settlement`, { timeout: 2000 }, async () => {
+      const previousMode = process.env.AGENT_APPROVAL_MODE;
+      process.env.AGENT_APPROVAL_MODE = mode;
+      const acknowledged = Promise.withResolvers<void>();
+      const decisions: unknown[] = [];
+      const f = await harness((input, emit) => Effect.gen(function* () {
+        yield* offerNativePermission(input, emit);
+        yield* Effect.promise(() => acknowledged.promise);
+        yield* finish(input, emit, terminal);
+      }), undefined, { configure: runtime => Object.assign(runtime, {
+        respondToRuntimeRequest: (response: Parameters<typeof runtime.respondToRuntimeRequest>[0]) => Effect.sync(() => {
+          decisions.push(response.decision);
+          acknowledged.resolve();
+        }),
+      }) });
+      const generationId = "permission-generation";
+      initializeNativeOutput(generationId, "permission-thread", "running");
+      try {
+        const running = f.service.run(f.context, { model: "explicit", prompt: "native permission",
+          onRequest: () => assert.fail("native permission must not offer an interactive approval"),
+          onEvent: event => emitNativeOutput(generationId, event) });
+        if (terminal === "completed") assert.equal((await running).text, "original answer");
+        else await assert.rejects(running, { terminalStatus: "interrupted" });
+        endNativeOutput(generationId, terminal);
+        const permission = getNativeOutput(generationId)!.items.find(item => item.id === "permission-item")!;
+        assert.deepEqual(decisions, [mode === "auto-approve" ? "accept" : "decline"]);
+        assert.equal(permission.status, mode === "auto-approve" ? "completed" : "cancelled");
+        assert.equal(permission.request?.respondable, false);
+        assert.equal(permission.request?.title, mode === "auto-approve" ? "Native permission auto-approved" : "Native permission denied");
+        assert.ok(permission.completedAt);
+        assert.equal(f.counts().closed, 1);
+      } finally {
+        acknowledged.resolve();
+        f.releaseProbe();
+        if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+      }
+    });
+  }
+}
+
+test("failed native permission responses never publish or persist an approved card", { timeout: 2000 }, async () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "auto-approve";
+  const failure = pmExecutionError(502, "permission_response_failed", "Native response was rejected.");
+  const events: NativeOutputEvent[] = [];
+  const f = await harness((input, emit) => offerNativePermission(input, emit).pipe(Effect.andThen(Effect.never)), undefined,
+    { configure: runtime => Object.assign(runtime, { respondToRuntimeRequest: () => Effect.fail(failure) }) });
+  const generationId = "failed-permission-generation";
+  initializeNativeOutput(generationId, "permission-thread", "running");
+  try {
+    await assert.rejects(f.service.run(f.context, { model: "explicit", prompt: "native permission",
+      onEvent: event => { events.push(event); emitNativeOutput(generationId, event); } }), { code: "permission_response_failed" });
+    endNativeOutput(generationId, "failed");
+    const permission = getNativeOutput(generationId)!.items.find(item => item.id === "permission-item")!;
+    assert.equal(permission.status, "cancelled");
+    assert.equal(permission.request?.respondable, false);
+    assert.equal(permission.request?.title, "Native permission cancelled");
+    assert.equal(events.some(event => event.type === "item.upsert" && event.item.id === permission.id && event.item.status === "completed"), false);
+    assert.equal(f.counts().interrupts, 1);
+  } finally {
+    f.releaseProbe();
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
+
+test("a native cancellation observed before response acknowledgement cannot be promoted to approved", { timeout: 2000 }, async () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "auto-approve";
+  const cancelled = Promise.withResolvers<void>();
+  const events: NativeOutputEvent[] = [];
+  const f = await harness((input, emit) => Effect.gen(function* () {
+    const permission = yield* offerNativePermission(input, emit);
+    yield* emit({ type: "runtime_request.updated", driver, runtimeRequest: { ...permission, status: "cancelled", resolvedAt: now } });
+    yield* Effect.promise(() => cancelled.promise);
+    yield* finish(input, emit);
+  }), undefined, { configure: runtime => Object.assign(runtime, {
+    respondToRuntimeRequest: () => Effect.promise(() => cancelled.promise),
+  }) });
+  try {
+    await f.service.run(f.context, { model: "explicit", prompt: "native permission", onEvent: event => {
+      events.push(event);
+      if (event.type === "item.upsert" && event.item.id === "permission-item" && event.item.status === "cancelled") cancelled.resolve();
+    } });
+    const permissions = events.filter(event => event.type === "item.upsert" && event.item.id === "permission-item");
+    const last = permissions.at(-1);
+    assert.equal(last?.type === "item.upsert" && last.item.status, "cancelled");
+    assert.equal(last?.type === "item.upsert" && last.item.request?.respondable, false);
+    assert.equal(permissions.some(event => event.type === "item.upsert" && event.item.status === "completed"), false);
+  } finally {
+    cancelled.resolve();
+    f.releaseProbe();
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
 });
 
 test("a same-operation dialect probe failure closes the original session and never starts a turn", async () => {
@@ -996,4 +1115,23 @@ test("original Codex execution drains completed-only App captures after terminal
       }
     }
   }
+});
+
+test("actual Chat attachment bytes reach pinned native turn input through the existing ProviderHost registry", async () => {
+  const attachments = materializeChatAttachments([
+    { type: "file", mediaType: "text/plain", filename: "selected.txt", url: "data:text/plain;base64,U0VMRUNURURfRklMRV9CWVRFUw==" },
+    { type: "file", mediaType: "image/png", filename: "selected.png", url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5V8AAAAASUVORK5CYII=" },
+  ], "codex");
+  const f = await harness((input, emit) => Effect.gen(function* () {
+    assert.deepEqual(input.message.attachments, attachments);
+    for (const attachment of input.message.attachments) assert.ok(resolveAttachmentPath({ attachmentsDir: providerAttachmentsDirectory(), attachment }));
+    yield* finish(input, emit);
+  }));
+  try {
+    const result = await f.service.run(f.context, { model: "explicit", prompt: "Inspect these actual attachments.", attachments });
+    assert.equal(result.text, "original answer");
+    assert.equal(f.starts.length, 1);
+    const selected = resolveAttachmentPath({ attachmentsDir: providerAttachmentsDirectory(), attachment: f.starts[0]!.message.attachments[0]! });
+    assert.equal(await readFile(selected!, "utf8"), "SELECTED_FILE_BYTES");
+  } finally { f.releaseProbe(); }
 });

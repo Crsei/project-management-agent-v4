@@ -7,7 +7,7 @@ import {
   ShieldX,
   Wrench,
 } from "lucide-react"
-import { DovspaceWordmark } from "@/components/dovspace-brand"
+import { DovspaceMark, DovspaceWordmark } from "@/components/dovspace-brand"
 import { Alert } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-provider"
@@ -172,6 +172,7 @@ export function ErrorPageScreen({
           to="/pm"
           className="inline-flex items-center gap-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
+          <DovspaceMark decorative />
           <DovspaceWordmark />
         </Link>
         {toolbar}

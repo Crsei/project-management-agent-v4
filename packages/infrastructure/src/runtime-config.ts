@@ -23,7 +23,6 @@ function localProjectConfiguration(env: NodeJS.ProcessEnv): LocalProjectConfigur
   const roots: unknown = env.LOCAL_PROJECT_ALLOWED_ROOTS === undefined ? trusted.allowedRoots ?? [] : JSON.parse(env.LOCAL_PROJECT_ALLOWED_ROOTS);
   if (!Array.isArray(roots) || roots.some(root => typeof root !== 'string' || !path.isAbsolute(root))) throw new Error('LOCAL_PROJECT_ALLOWED_ROOTS must be a JSON array of absolute paths');
   const allowedRoots = roots.map(root => path.resolve(root as string));
-  if (enabled && !allowedRoots.length) throw new Error('Local projects require at least one trusted allowed root');
   const defaultParent = env.LOCAL_PROJECT_DEFAULT_PARENT ?? (typeof trusted.defaultParent === 'string' ? trusted.defaultParent : null);
   return { enabled, dataRoot, allowedRoots, defaultParent: defaultParent ? path.resolve(defaultParent) : null,
     coreRoot: path.resolve(env.CORE_WORKSPACE_ROOT ?? path.join(dataRoot, 'pm-workspaces')),

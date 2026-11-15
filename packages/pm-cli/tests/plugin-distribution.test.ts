@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { generatePluginFiles, managePlugin, pluginOrigin, validatePortablePlugin, PLUGIN_POLICY_NOTICE } from '../plugin-distribution.ts';
 import { pluginCapabilities, PLUGIN_OPERATION_POLICY } from '../plugin-capabilities.ts';
 import { AGENT_CHAT_TOOL_REGISTRY, agentChatToolDefinitions } from '../../application/src/agent-chat-tools.ts';
+import { BUNDLED_PM_SKILLS, readBundledPmResources, readBundledPmSkills } from '../../skill-resources/catalog.ts';
+import { fileURLToPath } from 'node:url';
 
 async function fixture() {
   const parent = await realpath(process.platform === 'win32' ? tmpdir() : '/tmp');
@@ -51,7 +53,9 @@ test('generation is deterministic, schema-compatible, credential-free and uses i
   assert.deepEqual(connection.policy, PLUGIN_OPERATION_POLICY);
   assert.equal(connection.notice, PLUGIN_POLICY_NOTICE);
   const portableSkills = [...first].filter(([filename]) => filename.startsWith('portable/skills/'));
-  assert.equal(portableSkills.length, 3);
+  assert.equal(portableSkills.length, 9);
+  assert.deepEqual(portableSkills.map(([filename]) => filename.split('/')[2]).sort(), BUNDLED_PM_SKILLS.map(skill => skill.id).sort());
+  assert.ok([...first.keys()].every(filename => !filename.includes('upstream-source-update')));
   for (const [filename, content] of portableSkills) {
     const skillPath = filename.slice('portable/'.length);
     for (const prefix of ['codex/plugin', 'claude', 'pi', 'codex/.agents', 'opencode/.opencode']) assert.equal(first.get(`${prefix}/${skillPath}`), content);
@@ -100,7 +104,7 @@ test('measured client versions remain distinct from documentation targets and na
   assert.equal(files.has('opencode-v1/opencode.json'), false);
   assert.equal(files.has('opencode-v2/opencode.json'), false);
   assert.equal(files.get('opencode/LICENSE'), files.get('portable/LICENSE'));
-  for (const skill of ['project-management', 'issue-management', 'task-planning']) {
+  for (const { id: skill } of BUNDLED_PM_SKILLS) {
     assert.equal(files.get(`opencode/.opencode/skills/${skill}/SKILL.md`), files.get(`portable/skills/${skill}/SKILL.md`));
   }
 });
@@ -170,4 +174,23 @@ test('unexpected empty directories, links and locks are blocking filesystem trus
     await chmod(root, 0o755);
     await assert.rejects(managePlugin('update', root, origin), /Private credential storage/);
   } finally { await chmod(root, 0o700); await rm(root, { recursive: true, force: true }); }
+});
+
+test('generation consumes only relocated installed resources and fails closed when a shipped Skill is missing', async () => {
+  const root = await fixture();
+  try {
+    const source = fileURLToPath(new URL('../../../', import.meta.url));
+    const resources = await readBundledPmResources(source);
+    for (const [filename, content] of resources) {
+      await mkdir(path.dirname(path.join(root, filename)), { recursive: true });
+      await writeFile(path.join(root, filename), content);
+    }
+    assert.deepEqual([...await generatePluginFiles(origin, root)], [...await generatePluginFiles(origin)]);
+    assert.equal((await readBundledPmSkills(root)).length, 9);
+    for (const { sourcePath } of BUNDLED_PM_SKILLS) {
+      await rm(path.join(root, sourcePath));
+      await assert.rejects(generatePluginFiles(origin, root), { code: 'ENOENT' });
+      await writeFile(path.join(root, sourcePath), resources.get(sourcePath)!);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

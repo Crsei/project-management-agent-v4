@@ -13,6 +13,7 @@ import { readInstallStamp } from "../src/install-stamp.mjs";
 import { verifyWindowsFile } from "./signatures.mjs";
 import { computeMigrationsSha256 } from "./install-stamp.mjs";
 import { verifyPackagedUpdateConfiguration } from "./delivery-assets.mjs";
+import { readBundledPmResources } from "../../../packages/skill-resources/catalog.ts";
 
 // Use electron-builder's already locked dependency, not a second ASAR version.
 export function asarTools() {
@@ -77,6 +78,7 @@ export async function inspectPackagedApplication(resources, expectedVersion, { s
     // Includes orphaned unpacked files, not just ASAR-referenced members.
     await inspectDeployment(directory, resources);
   }
+  await readBundledPmResources(join(resources, "workspace-runtime"));
   // afterPack and unsigned delivery verification separately enforce the complete
   // pinned runtime inventory. Do not replace that guard with a filename exemption.
   const archive = join(resources, "app.asar");

@@ -30,7 +30,7 @@
 .usage-menu-separator { height: 1px; margin: 5px 0; background: var(--border); }
 .usage-instance-filter { display: flex; align-items: center; gap: 10px; margin: 10px 12px; font-size: 12px; }
 .usage-instance-filter [data-slot="select-trigger"] { font: inherit; color: var(--foreground); background: var(--background); min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 5px; padding: 5px; }
-.usage-content { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 1024px; min-width: 0; margin: 0 auto; padding: 24px 24px 48px; }
+.usage-content { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 1208px; min-width: 0; margin: 0 auto; padding: 24px 24px 48px; }
 .usage-muted, .usage-shortcuts, .usage-footnote, .usage-status { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .usage-overview { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
 .usage-summary-layout { display: grid; grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); align-items: start; gap: 24px; }

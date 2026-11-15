@@ -10,6 +10,7 @@ import type { PmExecutionIdentity } from "./t3code/contract.ts";
 import type { ProviderRuntimeHostBinding } from "@t3tools/provider-core/server/ProviderRuntimeHost";
 import type { McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
 import type { McpInvocationIdentity } from "../mcp/identity.ts";
+import type { ChatAttachment } from "@t3tools/contracts";
 
 export type ProviderDriverContext = {
   instanceId: string;
@@ -77,6 +78,7 @@ export type ProviderDriverRunOptions = {
   interactionMode?: "default" | "plan";
   prompt: string;
   userMessageText?: string;
+  attachments?: readonly ChatAttachment[];
   signal?: AbortSignal;
   onText?: (delta: string) => void;
   onEvent?: (event: NativeOutputEvent) => void;

@@ -16,7 +16,7 @@ import { acquireMailFixtureDatabase, createMailFixtureDatabase, mailTestDatabase
 import { closeMailApp, MailFixtureScope, mailFixtureCaseTimeout, mailFixtureCleanupTimeout, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 
 const password = 'isolated-instance-setup-password';
-const state = (initialized: boolean, setupAllowed: boolean) => ({ initialized, setupAllowed, registrationMode: 'invite_only' });
+const state = (initialized: boolean, setupAllowed: boolean) => ({ initialized, setupAllowed, registrationMode: initialized ? 'open' : 'invite_only' });
 const token = () => randomBytes(32).toString('base64url');
 const input = (setupToken: string, email = `${randomUUID()}@example.test`): SetupRequest => ({ setupToken, email, password, name: 'First owner', workspaceName: 'First workspace' });
 

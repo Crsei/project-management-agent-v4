@@ -27,6 +27,25 @@ export const pmToolRequestSchema = z.strictObject({
 });
 export type PmToolRequest = z.infer<typeof pmToolRequestSchema>;
 
+/** Restrictive mutation precondition, never an actor credential or permission grant. */
+export const PM_TOOL_APPROVAL_AUTHORITY_HEADER = "x-pm-approval-authority";
+export const pmToolApprovalAuthoritySchema = z.strictObject({
+  actorId: z.uuid().toLowerCase(), requestHash: z.string().regex(/^[a-f0-9]{64}$/),
+  target: pmToolTargetSchema, fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  capabilities: z.array(z.string().min(1).max(100)).min(1).max(100),
+  entity: z.strictObject({
+    id: z.string().min(1).max(200), kind: z.string().min(1).max(100),
+    revision: z.string().regex(/^[a-f0-9]{64}$/), status: z.string().nullable(), archived: z.boolean(),
+  }).nullable(),
+  configuration: z.strictObject({
+    schema: z.string().min(1), revision: z.string().min(1),
+    workflowRevision: z.string().regex(/^[a-f0-9]{64}$/),
+  }).nullable(),
+  migration: z.strictObject({ id: z.string().min(1), revision: z.string().regex(/^[a-f0-9]{64}$/) }).nullable(),
+});
+export type PmToolApprovalAuthority = z.infer<typeof pmToolApprovalAuthoritySchema>;
+export type PmToolApprovalAuthorityFacts = Omit<PmToolApprovalAuthority, "actorId" | "requestHash" | "target">;
+
 /** Service-only proof of the original request; contains no business arguments. */
 export const pmToolReconcileRequestSchema = z.strictObject({
   operationId: z.uuid().toLowerCase(), actorId: z.uuid().toLowerCase(),
@@ -35,7 +54,7 @@ export const pmToolReconcileRequestSchema = z.strictObject({
 export type PmToolReconcileRequest = z.infer<typeof pmToolReconcileRequestSchema>;
 export const pmToolReconcileResultSchema = pmToolReconcileRequestSchema.extend({
   status: z.enum(["succeeded", "failed", "unknown"]),
-  evidence: z.enum(["operation", "command_receipt", "native_journal", "unresolved"]),
+  evidence: z.enum(["operation", "command_receipt", "native_journal", "application_receipt", "unresolved"]),
   commandIds: z.array(z.string().min(1).max(200)).max(100),
   linkage: pmToolLinkageSchema.optional(),
 }).strict();

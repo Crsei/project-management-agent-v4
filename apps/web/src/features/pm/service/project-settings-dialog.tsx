@@ -6,8 +6,8 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useCoreSession, useSessionDrafts } from '../markdown/session';
-import { usePmCommand, usePmEntities, usePmService, useProjectDirectory } from './pm-service';
-import { useMemberDirectory } from './pm-member-hooks';
+import { usePmCommand, usePmEntities, usePmService } from './pm-service';
+import { MemberPicker } from './people-components';
 import { allowed, Choice, CommandNotice, Field, useDraftState, useText } from './pm-ui';
 import { ProjectTeamAssignment } from './project-directory';
 import { PROJECT_COLORS, PROJECT_ICONS, projectSettingsUpdate, projectSettingsValues, projectSourceVersion, stableProjectPath, type ProjectSettingsValues } from './project-menu-model';
@@ -36,8 +36,6 @@ function SettingsEditor({ project, source, readBlocked, onOpenChange }: { projec
   const service = usePmService();
   const session = useCoreSession();
   const command = usePmCommand();
-  const directory = useProjectDirectory();
-  const members = useMemberDirectory();
   const [sourceDrafts] = useSessionDrafts();
   const [retainedDraft, setDraft] = useDraftState<SettingsDraft | null>(`project-settings:${project.id}`, 'draft', null);
   const draft = retainedDraft ?? { source, project, values: projectSettingsValues(source) };
@@ -49,13 +47,6 @@ function SettingsEditor({ project, source, readBlocked, onOpenChange }: { projec
   const permission = allowed(service.workspace, 'planning.edit', project.id) && service.capabilities?.business.enabled === true && !source.entity.archived;
   const locked = command.pending || !!command.unknownCommand;
   const blocked = locked || readBlocked || !!invalidSource || !!sourceDrafts[project.id] || !permission || !synchronized || conflict;
-  const candidates = members.error ? [] : (members.data?.members ?? []).filter(member => member.access && !member.access.revokedAt && member.access.capabilities.includes('domain.read') && (member.access.projectIds === null || member.access.projectIds.includes(project.id))).map(member => ({ id: member.userId, name: member.name }));
-  const people = [...new Map([
-    ...(directory.data?.projects.find(row => row.projectId === project.id)?.identities ?? []),
-    ...candidates,
-    ...(service.actor && allowed(service.workspace, 'domain.read', project.id) ? [{ id: service.actor.id, name: service.actor.name }] : []),
-  ].map(person => [person.id, person])).values()];
-  const owners = [...people.map(person => ({ value: person.id, label: person.name })), ...(draft.values.ownerId && !people.some(person => person.id === draft.values.ownerId) ? [{ value: draft.values.ownerId, label: `${t('当前负责人', 'Current owner')} · ${draft.values.ownerId}` }] : [])];
   const original = projectSettingsValues(draft.source);
   const dirty = Object.keys(original).some(key => draft.values[key as keyof ProjectSettingsValues] !== original[key as keyof ProjectSettingsValues]);
   const sourceHref = service.workspace ? `/pm/${encodeURIComponent(service.workspace.id)}/entities/${encodeURIComponent(project.id)}?${new URLSearchParams({ returnTo: stableProjectPath(service.workspace.id, project.id) })}` : '#';
@@ -82,11 +73,9 @@ function SettingsEditor({ project, source, readBlocked, onOpenChange }: { projec
       <fieldset disabled={locked || !permission} className={styles.fields}>
         <Field label={t('项目名称', 'Project name')} value={draft.values.name} onChange={name => change({ name })} required />
         <Field label={t('描述 / Markdown 正文', 'Description / Markdown body')} value={draft.values.description} onChange={description => change({ description })} multiline />
-        <div className={styles.columns}><Choice label={t('负责人 / Lead', 'Owner / lead')} value={draft.values.ownerId} onChange={ownerId => change({ ownerId })} options={[{ value: '', label: t('未分配', 'Unassigned') }, ...owners]} disabled={!!directory.error || !directory.data || !!members.error} /><Field label={t('目标日期', 'Target date')} type="date" value={draft.values.dueDate} onChange={dueDate => change({ dueDate })} /></div>
+        <div className={styles.columns}><MemberPicker purpose="assignee" projectId={project.id} label={t('负责人 / Lead', 'Owner / lead')} value={draft.values.ownerId || null} onChange={ownerId => change({ ownerId: ownerId ?? '' })} disabled={blocked} /><Field label={t('目标日期', 'Target date')} type="date" value={draft.values.dueDate} onChange={dueDate => change({ dueDate })} /></div>
         <div className={styles.columns}><Choice label={t('图标', 'Icon')} value={draft.values.icon} onChange={icon => change({ icon })} options={[{ value: '', label: t('默认图标', 'Default icon') }, ...[...new Set([...PROJECT_ICONS, draft.values.icon].filter(Boolean))].map(value => ({ value, label: value }))]} /><Choice label={t('颜色', 'Color')} value={draft.values.color} onChange={color => change({ color })} options={[{ value: '', label: t('默认颜色', 'Default color') }, ...[...new Set([...PROJECT_COLORS, draft.values.color].filter(Boolean))].map(value => ({ value, label: value }))]} /></div>
       </fieldset>
-      {directory.error && <p role="alert" className={styles.notice}>{directory.error.message}</p>}
-      {members.error && <p role="alert" className={styles.notice}>{members.error.message}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className={styles.actions}><Button type="button" variant="outline" disabled={command.pending} onClick={() => onOpenChange(false)}>{t('取消', 'Cancel')}</Button><Button type="submit" data-testid="project-settings-save" disabled={blocked || !dirty}>{t('保存项目设置', 'Save project settings')}</Button></div>
     </form>

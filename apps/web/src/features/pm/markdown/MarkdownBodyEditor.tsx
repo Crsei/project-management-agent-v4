@@ -9,6 +9,7 @@ import {
   Bold, Code2, Eye, Heading2, Heading3, Italic, List, ListOrdered, Quote,
   Redo2, Strikethrough, Undo2,
 } from 'lucide-react';
+import { useWorkspaceStore } from '@/providers/app-providers';
 
 const editorTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', fontSize: '13px' },
@@ -28,6 +29,7 @@ function VisualMarkdownEditor({ value, disabled, en, placeholder, onChange }: {
   placeholder: string;
   onChange: (value: string) => void;
 }) {
+  const spellcheck = useWorkspaceStore(state => state.spellcheck);
   const [focused, setFocused] = useState(false);
   const change = useRef(onChange);
   change.current = onChange;
@@ -52,6 +54,7 @@ function VisualMarkdownEditor({ value, disabled, en, placeholder, onChange }: {
         'aria-multiline': 'true',
         'aria-label': en ? 'Task description' : '任务描述',
         class: 'doc-prose',
+        spellcheck: String(spellcheck),
       },
     },
     onFocus: () => setFocused(true),
@@ -79,6 +82,9 @@ function VisualMarkdownEditor({ value, disabled, en, placeholder, onChange }: {
     } : null,
   });
   useEffect(() => { editor?.setEditable(!disabled); }, [editor, disabled]);
+  useEffect(() => {
+    editor?.setOptions({ editorProps: { ...editor.options.editorProps, attributes: { ...editor.options.editorProps.attributes, 'aria-label': en ? 'Task description' : '任务描述', 'aria-disabled': String(disabled), spellcheck: String(spellcheck) } } });
+  }, [editor, en, disabled, spellcheck]);
   useEffect(() => {
     if (!editor || value === lastEmitted.current) return;
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
@@ -163,7 +169,7 @@ export function MarkdownBodyEditor({ value, disabled, en, onChange }: {
       : <div className="doc-source">
         <CodeMirror
           value={value}
-          extensions={[markdownLanguage(), editorTheme]}
+          extensions={[markdownLanguage(), editorTheme, EditorView.contentAttributes.of({ spellcheck: 'false' })]}
           editable={!disabled}
           readOnly={disabled}
           onChange={onChange}

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { canonical, cleanEnvironment, directory, encode, file, git, identity, inside, listTree, mergeBytes, publish, readBlob, readObjects, relative, repository, resolveCommit, run, sha256, sourceRepository, walk } from './io.mjs';
 import { assertRetiredTargetsAbsent, validateAdaptationStructure } from '../../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
+import { captureWorktree, snapshotFile } from './worktree-snapshot.mjs';
 
 export const toolRoot = fileURLToPath(new URL('../../', import.meta.url));
 const profiles = new Set(['t3code', 'cc-switch']);
@@ -14,11 +15,14 @@ const fullCommit = value => typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0
 const unique = values => [...new Set(values)].sort();
 const modeOf = entry => entry.mode === '100755' ? 0o755 : 0o644;
 const under = (name, prefix) => name === prefix || name.startsWith(prefix + '/');
-const secretPath = name => name.split('/').some(part => part === '.env' || part.startsWith('.env.') && !/\.(?:example|sample|template)$/.test(part) || ['.ssh', '.aws', '.gnupg', '.netrc', 'credentials.toml', 'id_rsa', 'id_ed25519'].includes(part));
+const secretPath = name => name.split('/').some(part => ['.local', 'node_modules'].includes(part.toLowerCase()) || part === '.env' || part.startsWith('.env.') && !/\.(?:example|sample|template)$/.test(part) || ['.ssh', '.aws', '.gnupg', '.netrc', 'credentials.toml', 'id_rsa', 'id_ed25519'].includes(part));
 const fingerprintMatches = (actual, expected) => Boolean(actual) && sha256(actual.bytes) === expected.sha256 && (expected.bytes == null || actual.bytes.length === expected.bytes) && (expected.mode == null || actual.mode === expected.mode);
+const bindingLeaves = ['sync-inventory.json', 'output-inventory.json', 'mcp-skills-adaptations.json', 'fork-policy.json', 'resource-closure.json'];
+const externalAuthorityPaths = project => ['t3code', 'cc-switch', 'openhands-extensions'].filter(fork => fork !== project).flatMap(fork => unique([...bindingLeaves, 'source-manifest.json', 'supplemental-inputs.json', 'mcp-skills-source.json', 'upstream-tree.json', 'dependency-notices.json']).map(leaf => `vendor/${fork}/${leaf}`));
 function validatePurpose(plan, purpose) {
   if (!['upstream-update', 'local-authoring'].includes(purpose)) throw new Error('INVALID_CANDIDATE_PURPOSE');
   if (purpose === 'local-authoring' && (plan.targetCommit !== plan.upstreamCommit || plan.changes.length || plan.pinAdvanceRequired)) throw new Error('LOCAL_AUTHORING_REQUIRES_SAME_PIN: target must equal the accepted pin with no upstream changes');
+  if (plan.worktreeSnapshot && purpose !== 'local-authoring') throw new Error('WORKTREE_SNAPSHOT_REQUIRES_LOCAL_AUTHORING');
 }
 const blocked = (code, details) => ({ code, ...details });
 export function assertIdentity(expected, actual, label = 'identity') {
@@ -42,21 +46,21 @@ async function profileFor(root, project) {
   }
   return { module, profile };
 }
-async function fingerprint(root, paths) {
+async function fingerprint(root, paths, reader = file) {
   const entries = [];
   for (const name of unique(paths)) {
     if (secretPath(name)) throw new Error(`CREDENTIAL_FILE_NOT_ALLOWED: ${name}; no credential bytes were read`);
-    const actual = await file(root, relative(name), { optional: true });
+    const actual = await reader(root, relative(name), { optional: true });
     entries.push(actual ? { path: name, sha256: sha256(actual.bytes), bytes: actual.bytes.length, mode: actual.mode } : { path: name, deleted: true });
   }
   return entries;
 }
-export async function workingTreeChanges(root) {
+export async function workingTreeChanges(root, { snapshot } = {}) {
   const head = await resolveCommit(root, 'HEAD');
   const tree = await listTree(root, head), expected = new Map(tree.map(entry => [entry.path, entry]));
   const baseline = await immutableFiles(root, head);
-  const tracked = differences(baseline, await fingerprint(root, tree.map(entry => entry.path)));
-  const staged = (await git(root, ['ls-files', '--stage', '-z'])).stdout.toString('utf8').split('\0').filter(Boolean);
+  const tracked = differences(baseline, snapshot?.files ?? await fingerprint(root, tree.map(entry => entry.path)));
+  const staged = (snapshot ? Buffer.from(snapshot.indexBase64, 'base64') : (await git(root, ['ls-files', '--stage', '-z'])).stdout).toString('utf8').split('\0').filter(Boolean);
   const indexed = new Set();
   for (const line of staged) {
     const match = /^(\d+) ([a-f0-9]+) (\d)\t([\s\S]+)$/.exec(line);
@@ -76,7 +80,7 @@ export async function snapshotTree(root) {
   const names = unique([...visible, ...ignored.filter(name => !generated(name))]).filter(name => !under(name, metadataName));
   return fingerprint(root, names);
 }
-async function collectTools() {
+export async function collectTools() {
   const paths = ['scripts/upstream-sync.mjs'];
   for (const prefix of ['scripts/upstream-sync', 'vendor/t3code/scripts', 'vendor/cc-switch/scripts', 'vendor/openhands-extensions/scripts']) {
     const exists = await lstat(path.join(toolRoot, prefix)).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
@@ -86,7 +90,7 @@ async function collectTools() {
   for (const name of await readdir(path.join(toolRoot, 'scripts'))) if (/\.(?:mjs|ts)$/.test(name) && !name.endsWith('.test.mjs')) paths.push(`scripts/${name}`);
   return fingerprint(toolRoot, paths);
 }
-async function runtimeIdentity() {
+export async function runtimeIdentity() {
   const nodePath = await realpath(process.execPath);
   const runtime = { nodePath, nodeVersion: process.version, nodeSha256: sha256(await readFile(nodePath)), platform: process.platform, arch: process.arch, typescript: null };
   const require = createRequire(import.meta.url);
@@ -97,13 +101,13 @@ async function runtimeIdentity() {
   } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   return runtime;
 }
-async function bindingsFor(root, project) {
+export async function bindingsFor(root, project, reader = file) {
   const bindings = [];
   for (const fork of ['t3code', 'cc-switch', 'openhands-extensions']) {
     if (fork === project) continue;
-    for (const leaf of ['sync-inventory.json', 'output-inventory.json', 'mcp-skills-adaptations.json', 'fork-policy.json', 'resource-closure.json']) {
+    for (const leaf of bindingLeaves) {
       const name = `vendor/${fork}/${leaf}`;
-      const input = await file(root, name, { optional: true });
+      const input = await reader(root, name, { optional: true });
       if (!input) continue;
       const document = JSON.parse(input.bytes);
       const retirements = fork === 't3code' && leaf === 'mcp-skills-adaptations.json' ? validateAdaptationStructure(document) : [];
@@ -193,16 +197,20 @@ export async function analyzeChanges({ profile, source, targetCommit }) {
   });
   return { changes, blockers };
 }
-export async function inspect({ root = toolRoot, project, source, target }) {
+export async function inspect({ root = toolRoot, project, source, target, purpose }) {
   root = await repository(root);
   source = await sourceRepository(source);
   if (inside(root, source) || inside(source, root)) throw new Error('Source and host repository must not overlap');
   const { profile } = await profileFor(root, project);
   const targetCommit = await resolveCommit(source, target);
   const baseCommit = await resolveCommit(root, 'HEAD');
+  if (purpose !== undefined && purpose !== 'local-authoring') throw new Error('INVALID_INSPECTION_PURPOSE');
+  const snapshotMode = purpose === 'local-authoring';
+  if (snapshotMode && (project !== 't3code' || targetCommit !== profile.upstreamCommit)) throw new Error('WORKTREE_SNAPSHOT_REQUIRES_T3_SAME_PIN');
+  const reader = snapshotMode ? snapshotFile : file;
   const tools = await collectTools();
   const baselinePaths = unique([...profile.metadataPaths, ...profile.outputs.map(entry => entry.path), ...profile.hostInputs.map(entry => entry.path)]);
-  const baseline = await fingerprint(root, baselinePaths);
+  const baseline = await fingerprint(root, baselinePaths, reader);
   const blockers = [...(profile.blockers ?? [])];
   const actual = new Map(baseline.map(entry => [entry.path, entry]));
   for (const entry of [...profile.outputs, ...profile.hostInputs]) {
@@ -210,19 +218,39 @@ export async function inspect({ root = toolRoot, project, source, target }) {
     if (!found || found.deleted || found.sha256 !== entry.sha256 || entry.bytes != null && found.bytes !== entry.bytes || entry.mode != null && found.mode !== entry.mode) blockers.push(blocked('BASELINE_DRIFT', { path: entry.path, expected: entry.sha256, actual: found?.sha256 ?? null }));
   }
   const maintenanceTool = name => ['scripts/upstream-sync.mjs', 'scripts/upstream-publish.mjs'].includes(name) || under(name, 'scripts/upstream-sync');
-  const dirty = (await workingTreeChanges(root)).filter(name => !maintenanceTool(name));
+  const worktreeSnapshot = snapshotMode ? await captureWorktree(root, unique([...baselinePaths, ...(await listTree(root, baseCommit)).map(entry => entry.path)])) : null;
+  const dirty = (await workingTreeChanges(root, { snapshot: worktreeSnapshot })).filter(name => !maintenanceTool(name));
   if (dirty.length) blockers.push(blocked('DIRTY_BASELINE', { paths: dirty }));
+  let committed, externalAuthorityBaseline;
+  if (snapshotMode) {
+    committed = new Map((await immutableFiles(root, baseCommit)).map(entry => [entry.path, entry]));
+    for (const entry of baseline.filter(entry => profile.metadataPaths.includes(entry.path))) if (canonical(entry) !== canonical(committed.get(entry.path))) blockers.push(blocked('UNREVIEWED_SNAPSHOT_METADATA', { path: entry.path, reason: 'Snapshot mode cannot accept dirty source authorities or recipes' }));
+    externalAuthorityBaseline = await fingerprint(root, externalAuthorityPaths(project), reader);
+    for (const entry of externalAuthorityBaseline) {
+      const expected = committed.get(entry.path) ?? { path: entry.path, deleted: true };
+      if (canonical(entry) !== canonical(expected)) blockers.push(blocked('UNREVIEWED_EXTERNAL_AUTHORITY', { path: entry.path, expected: expected.sha256 ?? null, actual: entry.sha256 ?? null, reason: 'Foreign source authorities and their existence must match immutable host HEAD; dirty-baseline preservation does not approve them' }));
+    }
+  }
   let analysis;
   try { analysis = await analyzeChanges({ profile, source, targetCommit }); }
   catch (error) { analysis = { changes: [], blockers: [blocked('MISSING_SOURCE_OBJECT', { message: error.message })] }; }
   blockers.push(...analysis.blockers);
-  const externalBindings = await bindingsFor(root, project);
+  // Even a blocked diagnostic must not interpret dirty foreign expectations as
+  // trusted bindings. Snapshot mode reads those authorities from immutable HEAD.
+  const externalReader = snapshotMode ? async (_root, name) => committed.has(name) ? { bytes: await readBlob(root, baseCommit, name), mode: committed.get(name).mode } : null : reader;
+  const externalBindings = await bindingsFor(root, project, externalReader);
   for (const binding of externalBindings) for (const input of binding.references) if (analysis.changes.some(change => change.outputPath === input.path)) blockers.push(blocked('BLOCKED_CROSS_FORK', { inventory: binding.path, path: input.path, reason: 'Selected upstream change affects another fork fingerprint; separate scope approval required' }));
   for (const binding of externalBindings) for (const input of binding.references) {
-    const found = await file(root, input.path, { optional: true });
+    const found = await reader(root, input.path, { optional: true });
     if (!fingerprintMatches(found, input)) blockers.push(blocked('BLOCKED_CROSS_FORK', { inventory: binding.path, path: input.path, expected: input.sha256, actual: found ? sha256(found.bytes) : null }));
   }
   const plan = { schemaVersion: 1, project, root, source, baseCommit, upstreamUrl: profile.upstreamUrl, upstreamCommit: profile.upstreamCommit, targetCommit, oldCommit: profile.upstreamCommit, newCommit: targetCommit, baseline, tools, policyHash: identity(profile.policy), externalBindings, changes: analysis.changes, dirty, blockers, status: blockers.length ? 'blocked' : analysis.changes.length ? 'changes' : 'no-change', pinAdvanceRequired: targetCommit !== profile.upstreamCommit, integratedCommit: profile.upstreamCommit };
+  if (worktreeSnapshot) {
+    if (analysis.changes.length) throw new Error('WORKTREE_SNAPSHOT_REQUIRES_NO_SOURCE_CHANGES');
+    plan.worktreeSnapshot = worktreeSnapshot;
+    plan.externalAuthorityBaseline = externalAuthorityBaseline;
+    plan.preservedBaselineBlockers = blockers.filter(entry => ['DIRTY_BASELINE', 'BASELINE_DRIFT'].includes(entry.code));
+  }
   plan.runtime = await runtimeIdentity();
   plan.planId = identity(plan);
   return plan;
@@ -233,9 +261,10 @@ async function readPlan(name) {
 }
 async function validatePlan(plan, { allowBlocked = false } = {}) {
   if (plan.schemaVersion !== 1 || !profiles.has(plan.project) || !fullCommit(plan.baseCommit) || !fullCommit(plan.targetCommit) || typeof plan.root !== 'string' || typeof plan.source !== 'string') throw new Error('INVALID_PLAN');
-  const fresh = await inspect({ root: plan.root, project: plan.project, source: plan.source, target: plan.targetCommit });
+  const fresh = await inspect({ root: plan.root, project: plan.project, source: plan.source, target: plan.targetCommit, ...(plan.worktreeSnapshot ? { purpose: 'local-authoring' } : {}) });
   assertIdentity(plan, fresh, 'plan');
-  if (!allowBlocked && fresh.blockers.length) throw new Error(`BLOCKED_PLAN: ${fresh.blockers.map(item => item.code).join(', ')}`);
+  const fatal = fresh.blockers.filter(entry => !fresh.worktreeSnapshot || !['DIRTY_BASELINE', 'BASELINE_DRIFT'].includes(entry.code));
+  if (!allowBlocked && fatal.length) throw new Error(`BLOCKED_PLAN: ${fatal.map(item => item.code).join(', ')}`);
   return fresh;
 }
 async function metadata(candidate) {
@@ -296,7 +325,7 @@ async function immutableFiles(root, commit) {
   return base;
 }
 async function candidateChanges(candidate, plan) {
-  const base = await immutableFiles(plan.root, plan.baseCommit);
+  const base = plan.worktreeSnapshot?.files ?? await immutableFiles(plan.root, plan.baseCommit);
   const files = await snapshotTree(candidate);
   return { files, changedPaths: differences(base, files), base };
 }
@@ -320,12 +349,24 @@ export async function prepare({ plan: planInput, destination, purpose = 'upstrea
   const meta = path.join(destination, metadataName);
   await mkdir(meta, { mode: 0o700 });
   const state = { schemaVersion: stateVersion, candidate: destination, plan, purpose, status: 'preparing', conflicts: [], notes: [], approvals: {}, verification: null };
+  if (plan.worktreeSnapshot) state.preservedBaselineBlockers = plan.preservedBaselineBlockers;
   await saveState(meta, state);
-  const tree = await listTree(plan.root, plan.baseCommit);
-  const objects = await readObjects(plan.root, tree.map(entry => entry.blob));
-  for (const entry of tree) {
-    if (entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode)) throw new Error(`UNSAFE_BASE_TREE: ${entry.path}`);
-    await publish(destination, entry.path, objects.get(entry.blob), modeOf(entry));
+  if (plan.worktreeSnapshot) {
+    for (const expected of plan.worktreeSnapshot.files) {
+      if (expected.deleted) continue;
+      const input = await snapshotFile(plan.root, expected.path);
+      if (!fingerprintMatches(input, expected)) throw new Error(`STALE_WORKTREE_SNAPSHOT: ${expected.path}`);
+      await publish(destination, expected.path, input.bytes, input.mode, { exclusive: true });
+    }
+    // Reauthenticate index, paths and bytes after the entire independent copy.
+    await validatePlan(plan);
+  } else {
+    const tree = await listTree(plan.root, plan.baseCommit);
+    const objects = await readObjects(plan.root, tree.map(entry => entry.blob));
+    for (const entry of tree) {
+      if (entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode)) throw new Error(`UNSAFE_BASE_TREE: ${entry.path}`);
+      await publish(destination, entry.path, objects.get(entry.blob), modeOf(entry));
+    }
   }
   // Populate the worktree index from immutable objects, without invoking checkout.
   await git(destination, ['read-tree', plan.baseCommit]);
@@ -360,7 +401,7 @@ export async function prepare({ plan: planInput, destination, purpose = 'upstrea
   state.preparedFiles = current.files;
   state.status = state.conflicts.length ? 'needs-review' : 'prepared';
   await saveState(meta, state);
-  return { candidate: destination, planId: plan.planId, purpose, status: state.status, conflicts: state.conflicts, resumed: false };
+  return { candidate: destination, planId: plan.planId, purpose, status: state.status, conflicts: state.conflicts, resumed: false, ...(plan.worktreeSnapshot ? { preservedBaselineBlockers: state.preservedBaselineBlockers, coverage: 'isolated-current-worktree-snapshot; inherited drift is not accepted' } : {}) };
 }
 function validateApprovals(approvals, profile, plan) {
   const allowed = allowedPaths(profile, { ...plan, ...approvals });
@@ -389,10 +430,65 @@ async function authenticateGenerationMetadata(candidate, profile, plan, changedP
   for (const current of await fingerprint(candidate, profile.metadataPaths)) if (canonical(current) !== canonical(baseline.get(current.path))) throw new Error(`UNREVIEWED_GENERATION_METADATA: ${current.path}; prepare baseline is authoritative`);
   for (const name of changedPaths) if ((profile.authoringTrees ?? []).some(tree => under(name, tree))) throw new Error(`UNREVIEWED_GENERATION_METADATA: ${name}; recipes may only be written by the trusted generation author`);
 }
-export async function record({ candidate, approvedSourcePaths = [], reviewedDerivedOutputs = [], approvedOutputHashes = {}, reviews = [] }) {
+async function recordWorktreeSnapshot(context, module, profile, approvals) {
+  const { candidate, state, metadata: meta } = context;
+  if (state.purpose !== 'local-authoring' || state.plan.project !== 't3code' || state.plan.targetCommit !== profile.upstreamCommit || state.plan.changes.length) throw new Error('WORKTREE_SNAPSHOT_REQUIRES_T3_SAME_PIN');
+  if (approvals.approvedSourcePaths.length || approvals.reviewedDerivedOutputs.length) throw new Error('LOCAL_AUTHORING_SCOPE_EXPANSION: snapshot recording requires structured existing-output reviews only');
+  validateApprovals(approvals, profile, state.plan);
+  const before = await candidateChanges(candidate, state.plan);
+  if (state.generationRecorded) {
+    if (identity(before.files) !== state.candidateFingerprint || canonical(approvals) !== canonical(state.approvals)) throw new Error('WORKTREE_SNAPSHOT_ALREADY_RECORDED: changed bytes or approvals require a fresh snapshot candidate');
+    return { status: state.status, changedPaths: state.changedPaths, candidateFingerprint: state.candidateFingerprint, preservedBaselineBlockers: state.preservedBaselineBlockers, blockers: [], resumed: true };
+  }
+  assertAllowedPaths(before.changedPaths, profile, state.plan);
+  await authenticateGenerationMetadata(candidate, profile, state.plan, before.changedPaths);
+  const outputs = new Map(profile.outputs.map(entry => [entry.path, entry]));
+  const snapshots = new Map(state.plan.worktreeSnapshot.files.map(entry => [entry.path, entry]));
+  const selected = Object.keys(approvals.approvedOutputHashes).sort();
+  for (const name of Object.keys(approvals.approvedExistingOutputs)) if (!selected.includes(name)) throw new Error(`EXISTING_OUTPUT_REQUIRES_POSTIMAGE_APPROVAL: ${name}`);
+  for (const name of before.changedPaths) if (!selected.includes(name)) throw new Error(`LOCAL_AUTHORING_REQUIRES_EXACT_OUTPUT_APPROVAL: ${name}`);
+  for (const name of selected) {
+    const output = outputs.get(name), snapshot = snapshots.get(name);
+    const actual = await file(candidate, name, { optional: true });
+    const expectedPost = approvals.approvedOutputHashes[name], existing = approvals.approvedExistingOutputs[name];
+    if (!output || !snapshot || snapshot.deleted || !actual || actual.mode !== output.mode || snapshot.mode !== output.mode || !/^[a-f0-9]{64}$/.test(expectedPost) || sha256(actual.bytes) !== expectedPost) throw new Error(`STALE_OUTPUT_APPROVAL: ${name}`);
+    if (expectedPost === output.sha256) throw new Error(`UNNECESSARY_OUTPUT_APPROVAL: ${name}`);
+    if (snapshot.sha256 !== output.sha256) {
+      if (!existing || existing.recordedSha256 !== output.sha256 || existing.snapshotSha256 !== snapshot.sha256) throw new Error(`EXISTING_OUTPUT_REQUIRES_EXACT_PREIMAGE_APPROVAL: ${name}`);
+    } else if (existing) throw new Error(`UNNECESSARY_EXISTING_OUTPUT_APPROVAL: ${name}`);
+  }
+  if (!selected.length) return { status: 'no-change', candidate, changedPaths: [], preservedBaselineBlockers: state.plan.preservedBaselineBlockers, blockers: [] };
+  for (const review of approvals.reviews) for (const input of review.inputs) if (sha256(await readBlob(state.plan.source, input.commit, relative(input.path))) !== input.sha256) throw new Error(`STALE_REVIEW_INPUT: ${input.path}`);
+  const cross = await crossForkChanges(candidate, state.plan.externalBindings, selected);
+  if (cross.length) return { status: 'blocked', blockers: cross, changedPaths: before.changedPaths };
+  if (typeof module.recordWorktreeGeneration !== 'function') throw new Error('Trusted profile lacks isolated worktree authoring');
+  const result = await module.recordWorktreeGeneration({ root: candidate, targetCommit: state.plan.targetCommit, plan: { ...state.plan, ...approvals, purpose: state.purpose }, readBlob: (commit, name) => readBlob(state.plan.source, commit, name), listTree: commit => listTree(state.plan.source, commit) });
+  if (!result || !Array.isArray(result.blockers) || !Array.isArray(result.changedPaths) || !Array.isArray(result.notes)) throw new Error('INVALID_TRUSTED_GENERATION_RESULT');
+  if (result.blockers.length) return { status: 'blocked', blockers: result.blockers, changedPaths: before.changedPaths };
+  const after = await candidateChanges(candidate, state.plan);
+  assertAllowedPaths(after.changedPaths, profile, state.plan);
+  const crossAfter = await crossForkChanges(candidate, state.plan.externalBindings, unique([...selected, ...after.changedPaths]));
+  if (crossAfter.length) return { status: 'blocked', blockers: crossAfter, changedPaths: after.changedPaths };
+  state.preservedBaselineBlockers = state.plan.preservedBaselineBlockers.flatMap(entry => entry.code === 'BASELINE_DRIFT' ? selected.includes(entry.path) ? [] : [entry] : [{ ...entry, paths: entry.paths.filter(name => !selected.includes(name)) }]).filter(entry => entry.code !== 'DIRTY_BASELINE' || entry.paths.length);
+  state.approvals = approvals;
+  state.generationRecorded = true;
+  state.recordedFiles = after.files;
+  state.candidateFingerprint = identity(after.files);
+  state.changedPaths = unique([...selected, ...after.changedPaths]);
+  state.notes = result.notes;
+  state.blockers = [];
+  state.verification = null;
+  state.status = 'recorded';
+  await saveState(meta, state);
+  return { status: state.status, changedPaths: state.changedPaths, candidateFingerprint: state.candidateFingerprint, notes: state.notes, preservedBaselineBlockers: state.preservedBaselineBlockers, coverage: 'exact-selected-output-authoring-only; inherited drift remains unaccepted', blockers: [] };
+}
+
+export async function record({ candidate, approvedSourcePaths = [], reviewedDerivedOutputs = [], approvedOutputHashes = {}, approvedExistingOutputs = {}, reviews = [] }) {
   const context = await validateState(candidate);
   const { state, metadata: meta } = context;
   const { module, profile } = await profileFor(state.plan.root, state.plan.project);
+  if (state.plan.worktreeSnapshot) return recordWorktreeSnapshot(context, module, profile, { approvedSourcePaths, reviewedDerivedOutputs, approvedOutputHashes, approvedExistingOutputs, reviews });
+  if (Object.keys(approvedExistingOutputs).length) throw new Error('EXISTING_OUTPUT_APPROVAL_REQUIRES_WORKTREE_SNAPSHOT');
   const previousApprovals = state.approvals ?? {};
   const approvals = { approvedSourcePaths: unique(approvedSourcePaths.length ? approvedSourcePaths : previousApprovals.approvedSourcePaths ?? []), reviewedDerivedOutputs: unique(reviewedDerivedOutputs.length ? reviewedDerivedOutputs : previousApprovals.reviewedDerivedOutputs ?? []), approvedOutputHashes: Object.keys(approvedOutputHashes).length ? approvedOutputHashes : previousApprovals.approvedOutputHashes ?? {}, reviews: reviews.length ? reviews : previousApprovals.reviews ?? [] };
   ({ approvedSourcePaths, reviewedDerivedOutputs, approvedOutputHashes, reviews } = approvals);
@@ -550,6 +646,7 @@ export async function verify({ candidate, scope = 'provenance' }) {
   assertAllowedPaths(current.changedPaths, profile, { ...state.plan, ...state.approvals });
   assertIdentity(state.recordedFiles, current.files, 'candidate');
   const checks = [];
+  if (state.plan.worktreeSnapshot) checks.push({ id: 'current-worktree-snapshot', status: 'blocked', blockers: state.preservedBaselineBlockers ?? [], message: 'Diagnostic isolated authoring snapshot; inherited dirty state is not accepted and cannot establish full or publication readiness.' });
   const cross = await crossForkChanges(candidate, state.plan.externalBindings, current.changedPaths);
   if (cross.length) checks.push({ id: 'cross-fork', status: 'failed', blockers: cross });
   try {
@@ -657,6 +754,7 @@ export async function candidateTree(candidate, baseCommit, changedPaths) {
 }
 export async function handoff({ candidate, output }) {
   const { state } = await validateState(candidate);
+  if (state.plan.worktreeSnapshot) throw new Error('WORKTREE_SNAPSHOT_DIAGNOSTIC_ONLY: no publication handoff');
   if (!state.recordedFiles || !state.verification || state.verification.status !== 'passed') throw new Error('Handoff requires a passed explicitly scoped verification');
   const { profile } = await profileFor(state.plan.root, state.plan.project);
   const current = await candidateChanges(candidate, state.plan);

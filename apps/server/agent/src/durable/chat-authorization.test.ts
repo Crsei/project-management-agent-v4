@@ -141,9 +141,9 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-function api(path: string, method = "GET", body?: object) {
+function api(path: string, method = "GET", body?: object, requestHeaders: Record<string, string> = {}) {
   return new Hono().route("/api", chatRoutes).request(`http://localhost/api${path}`, {
-    method, headers: { "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}),
+    method, headers: { "content-type": "application/json", ...requestHeaders }, ...(body ? { body: JSON.stringify(body) } : {}),
   });
 }
 
@@ -183,7 +183,7 @@ async function nativeRequest(context: ProviderDriverContext, action: "list" | "c
 }
 
 function writeInput() {
-  return { operationId: crypto.randomUUID(), name: "pm_create_task", target, arguments: { title: "Must not be created" } };
+  return { operationId: crypto.randomUUID(), name: "pm_create_task", target, arguments: { projectId: target.projectId, title: "Must not be created", description: "", assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null } };
 }
 
 async function assertNoNativeEffects(): Promise<void> {
@@ -198,7 +198,9 @@ test("Session CRUD, settings, archive, native restart and output access never co
   const chatOnlyThread = (await chatOnly.json()).thread;
   assert.equal(chatOnlyThread.executionEnvironment.sourcePath, null);
   assert.equal(chatOnlyThread.executionEnvironment.executionPath, null);
-  assert.equal((await api("/chat/threads/chat-only-session", "DELETE")).status, 200);
+  assert.equal((await api("/chat/threads/chat-only-session", "DELETE", {
+    lifecycleRevision: chatOnlyThread.lifecycleRevision, confirm: true, expectedGenerationId: null, stopActive: false,
+  }, { "Idempotency-Key": "delete-chat-only-session" })).status, 200);
   const id = "independent-session";
   assert.equal((await api("/chat/threads", "POST", { id, executionSelection: selection })).status, 200);
   assert.equal((await api("/chat/threads")).status, 200);
@@ -218,9 +220,9 @@ test("Session CRUD, settings, archive, native restart and output access never co
   assert.equal(getThread(id)!.nativeEnvironment, undefined);
   assert.equal(getThread(id)!.pendingForkEnvironment, undefined);
   assert.deepEqual(getThread(id)!.executionEnvironment, originalEnvironment);
-  assert.equal((await api(`/chat/threads/${id}`, "PUT", { status: "archived" })).status, 200);
+  assert.equal((await api(`/chat/threads/${id}`, "PUT", { status: "archived", lifecycleRevision: getThread(id)!.lifecycleRevision })).status, 200);
   assert.equal(getThread(id)!.status, "archived");
-  assert.equal((await api(`/chat/threads/${id}`, "PUT", { status: "regular" })).status, 200);
+  assert.equal((await api(`/chat/threads/${id}`, "PUT", { status: "regular", lifecycleRevision: getThread(id)!.lifecycleRevision })).status, 200);
   const generationId = "independent-output";
   writeRecord("chat:generations", generationId, { id: generationId, threadId: id, messageId: "answer", status: "completed", seq: 0,
     createdAt: new Date().toISOString(), request: { id, messages: [] }, providerInstanceId: "authorization-provider" });
@@ -233,7 +235,9 @@ test("Session CRUD, settings, archive, native restart and output access never co
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Independent output/);
   }
-  assert.equal((await api(`/chat/threads/${id}`, "DELETE")).status, 200);
+  assert.equal((await api(`/chat/threads/${id}`, "DELETE", {
+    lifecycleRevision: getThread(id)!.lifecycleRevision, confirm: true, expectedGenerationId: null, stopActive: false,
+  }, { "Idempotency-Key": "delete-independent-session" })).status, 200);
   assert.equal(getThread(id), null);
   assert.equal((await api(`/chat/generations/${generationId}/output`)).status, 404);
   assert.deepEqual(pmRequests, []);
@@ -298,7 +302,7 @@ test("opening, renaming and archiving workspace metadata cannot rebind a frozen 
   const rebind = () => api("/chat/threads/authorization-chat", "PUT", { executionSelection: otherSelection, revision: accepted.revision });
   assert.equal((await rebind()).status, 409);
   assert.equal((await api("/chat/threads/authorization-chat/native-session/restart", "POST", {})).status, 409);
-  assert.equal((await api("/chat/threads/authorization-chat", "PUT", { status: "archived" })).status, 409);
+  assert.equal((await api("/chat/threads/authorization-chat", "PUT", { status: "archived", lifecycleRevision: accepted.lifecycleRevision })).status, 409);
   assert.throws(() => ensureThread("authorization-chat", undefined, otherSelection), { code: "execution_selection_conflict" });
   await cancelChat(generation.id);
   assert.equal((await rebind()).status, 409, "Stopping a run does not unfreeze its accepted execution.");
@@ -337,7 +341,7 @@ for (const during of [false, true]) {
       const mutate = () => {
         if (mutation === "provider-revision") updateProviderInstance("authorization-provider", { label: "Changed revision" });
         else if (mutation === "thread-revision") updateThread("authorization-chat", { settings: { ...getThread("authorization-chat")!.settings } });
-        else updateThread("authorization-chat", { status: "archived" });
+        else updateThread("authorization-chat", { status: "archived", lifecycleRevision: getThread("authorization-chat")!.lifecycleRevision ?? 0 });
       };
       const expected = { code: mutation === "provider-revision" ? "session_mismatch" : mutation === "thread-revision" ? "stale_settings" : "thread_archived" };
       if (during) {

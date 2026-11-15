@@ -1,14 +1,14 @@
 import path from 'node:path';
-import { accessSync, constants, lstatSync, readdirSync, realpathSync } from 'node:fs';
+import { accessSync, constants, closeSync, fstatSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { requestHash } from '../../pm-core/state.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import type { Workspace, WorkspaceCreationPrepared, WorkspaceMutationGuard } from '../../pm-core/index.ts';
-import { localDirectorySchema, type LocalDirectory, type LocalProjectDirectoryListing, type LocalProjectPreview, type LocalProjectSettings } from '../../contracts/src/local-projects.ts';
+import { localDirectorySchema, localProjectMarkerSchema, type LocalDirectory, type LocalProjectDirectoryListing, type LocalProjectMarker, type LocalProjectPreview, type LocalProjectProbe, type LocalProjectSettings } from '../../contracts/src/local-projects.ts';
 import type { SqlExecutor } from './ports.ts';
 import { getMembership } from './access.ts';
 import { ProjectLocations } from '../../pm-core/project-locations.ts';
 import { workflowFor } from '../../pm-schema/index.ts';
-import { assertCanonicalAbsolute, pathContains, safePathComponent, samePath, systemStoragePath } from '../../pm-core/platform.ts';
+import { assertCanonicalAbsolute, checkedFileOpen, pathContains, safePathComponent, samePath, systemStoragePath } from '../../pm-core/platform.ts';
 import { assertNoWindowsReparsePath } from '../../pm-core/windows-reparse.ts';
 
 export type LocalProjectConfiguration = { enabled: boolean; dataRoot: string; defaultParent: string | null; allowedRoots: string[]; backupRoot: string; coreRoot: string };
@@ -38,51 +38,150 @@ function inspectDirectory(candidate: string): string {
   }
   return normalized;
 }
+/** Project storage is no longer constrained to configured roots. Canonical, link-free,
+ * non-system paths remain mandatory; container mounts still define what the service can see. */
 export function allowedDirectory(config: LocalProjectConfiguration, candidate: string): string {
   requireLocalProjects(config);
+  if (!path.isAbsolute(candidate) || candidate.includes('\0')) invalid('This host path cannot be used for project storage');
   const normalized = path.resolve(candidate);
-  if (!path.isAbsolute(candidate) || systemStoragePath(normalized)) invalid('This host path cannot be used for project storage');
+  if (systemStoragePath(normalized)) invalid('This host path cannot be used for project storage');
+  try { return inspectDirectory(normalized); }
+  catch (error) { if (error instanceof DomainError) throw error; throw new DomainError('local_directory_unavailable', 'The selected directory is missing or unavailable; it will not be recreated', 409); }
+}
+/** Agent file areas and document sources keep their configured roots; project storage does not. */
+export function allowedRootDirectory(config: LocalProjectConfiguration, candidate: string): string {
+  if (!path.isAbsolute(candidate) || candidate.includes('\0')) invalid('An absolute directory is required');
+  const normalized = path.resolve(candidate);
   const configured = config.allowedRoots.find(root => contains(path.resolve(root), normalized));
   if (!configured) invalid('Directory is outside the trusted local roots');
-  try { inspectDirectory(path.resolve(configured)); return inspectDirectory(normalized); }
-  catch (error) { if (error instanceof DomainError) throw error; throw new DomainError('local_directory_unavailable', 'The trusted directory is missing or unavailable; it will not be recreated', 409); }
+  inspectDirectory(path.resolve(configured));
+  return allowedDirectory(config, normalized);
 }
-export function resolveLocalDirectory(config: LocalProjectConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new' } {
-  directory = localDirectorySchema.parse(directory);
-  if (directory.mode === 'existing') return { root: allowedDirectory(config, directory.path), mode: 'existing' };
-  const parent = allowedDirectory(config, directory.parentPath);
-  const root = path.join(parent, directory.folderName);
-  if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) invalid('Folder name must be a single ordinary path component');
+function newProjectRoot(parent: string, folderName: string): { root: string; mode: 'new'; layout: 'dovspace-v1' } {
+  if (!safePathComponent(folderName)) invalid('Folder name must be a single ordinary path component');
+  const root = path.join(parent, folderName);
+  if (!samePath(path.dirname(root), parent)) invalid('Folder name must be a single ordinary path component');
   try { lstatSync(root); throw new DomainError('local_directory_exists', 'Choose an unused folder name or existing-directory mode', 409); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   accessSync(parent, constants.W_OK | constants.X_OK);
-  return { root, mode: 'new' };
+  return { root, mode: 'new', layout: 'dovspace-v1' };
 }
-/** Recovery may use its already-created final directory, but only within the original trusted parent. */
-export function resolveLocalRecoveryDirectory(config: LocalProjectConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new' } {
+/** Convert a resolved root back into the durable request shape. Never persist `{root, layout}`. */
+export function toLocalDirectory(selection: { root: string; mode: 'existing' | 'new' }): LocalDirectory {
+  return selection.mode === 'existing' ? { mode: 'existing', path: selection.root } : { mode: 'new', parentPath: path.dirname(selection.root), folderName: path.basename(selection.root) };
+}
+export function resolveLocalDirectory(config: LocalProjectConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new'; layout: 'dovspace-v1' } {
+  directory = localDirectorySchema.parse(directory);
+  if (directory.mode === 'existing') return { root: allowedDirectory(config, directory.path), mode: 'existing', layout: 'dovspace-v1' };
+  if (directory.mode === 'auto') {
+    if (!path.isAbsolute(directory.path) || directory.path.includes('\0')) invalid('An absolute directory is required');
+    const requested = path.resolve(directory.path);
+    let exists = false;
+    try {
+      const stat = lstatSync(requested);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) invalid('The selected path is not an ordinary directory');
+      exists = true;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (exists) return { root: allowedDirectory(config, requested), mode: 'existing', layout: 'dovspace-v1' };
+    return newProjectRoot(allowedDirectory(config, path.dirname(requested)), path.basename(requested));
+  }
+  return newProjectRoot(allowedDirectory(config, directory.parentPath), directory.folderName);
+}
+/** Recovery may use its already-created final directory. */
+export function resolveLocalRecoveryDirectory(config: LocalProjectConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new'; layout: 'dovspace-v1' } {
   directory = localDirectorySchema.parse(directory);
   if (directory.mode === 'existing') return resolveLocalDirectory(config, directory);
+  if (directory.mode === 'auto') {
+    const requested = path.resolve(directory.path);
+    try {
+      const stat = lstatSync(requested);
+      if (!stat.isSymbolicLink() && stat.isDirectory()) return { root: allowedDirectory(config, requested), mode: 'new', layout: 'dovspace-v1' };
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    return resolveLocalDirectory(config, directory);
+  }
   const parent = allowedDirectory(config, directory.parentPath), root = path.join(parent, directory.folderName);
   if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) invalid('Folder name must be a single ordinary path component');
-  try { allowedDirectory(config, root); return { root, mode: 'new' }; }
+  try { allowedDirectory(config, root); return { root, mode: 'new', layout: 'dovspace-v1' }; }
   catch (error) { if (error instanceof DomainError && error.code !== 'local_directory_unavailable') throw error; return resolveLocalDirectory(config, directory); }
 }
+/** Replays retain the original selection mode even after an auto-selected new path exists. */
+export function resolveLocalInitializationDirectory(config: LocalProjectConfiguration, directory: LocalDirectory, previous?: LocalProjectOperation): { root: string; mode: 'existing' | 'new'; layout: 'dovspace-v1' } {
+  if (!previous || previous.operation !== 'initialize' || previous.transport !== 'native') return resolveLocalDirectory(config, directory);
+  const original = previous.request.directory;
+  if (directory.mode === 'auto') {
+    if (!path.isAbsolute(directory.path) || directory.path.includes('\0')) invalid('An absolute directory is required');
+    const mode = original && typeof original === 'object' && 'mode' in original && original.mode === 'existing' ? 'existing' : 'new';
+    directory = toLocalDirectory({ root: path.resolve(directory.path), mode });
+  }
+  return resolveLocalRecoveryDirectory(config, directory);
+}
+/** Browsing starts at the service filesystem root. Selecting a system path is still refused by
+ * allowedDirectory; listing one does not grant storage rights. */
 export function listLocalDirectories(config: LocalProjectConfiguration, candidate?: string): LocalProjectDirectoryListing {
   requireLocalProjects(config);
-  if (!candidate) return { path: null, parentPath: null, roots: config.allowedRoots.map(root => allowedDirectory(config, root)), directories: [] };
-  const current = allowedDirectory(config, candidate);
-  const root = config.allowedRoots.find(root => contains(path.resolve(root), current))!;
+  const root = path.parse(config.dataRoot).root;
+  if (!candidate) return { path: null, parentPath: null, roots: [root], directories: [] };
+  let current: string;
+  try { current = inspectDirectory(candidate); }
+  catch (error) { if (error instanceof DomainError) throw error; throw new DomainError('local_directory_unavailable', 'The selected directory is missing or unavailable', 409); }
   const directories = readdirSync(current, { withFileTypes: true }).filter(entry => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.')).map(entry => ({ name: entry.name, path: path.join(current, entry.name) })).sort((a, b) => a.name.localeCompare(b.name));
-  return { path: current, parentPath: samePath(current, root) ? null : path.dirname(current), roots: config.allowedRoots, directories };
+  return { path: current, parentPath: samePath(current, path.parse(current).root) ? null : path.dirname(current), roots: [root], directories };
+}
+function readProjectMarker(root: string): { marker: LocalProjectMarker | null; problem: 'missing_marker' | 'invalid_marker' | null } {
+  for (const layout of ['dovspace-v1', 'legacy'] as const) {
+    const container = layout === 'dovspace-v1' ? path.join(root, '.dovspace') : path.join(root, '.pm');
+    let containerStat;
+    try { containerStat = lstatSync(container); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
+    if (containerStat.isSymbolicLink() || !containerStat.isDirectory()) return { marker: null, problem: 'invalid_marker' };
+    const file = layout === 'dovspace-v1' ? path.join(container, '.pm/project.json') : path.join(container, 'project.json');
+    try {
+      const stat = lstatSync(file);
+      if (stat.isSymbolicLink() || !stat.isFile()) return { marker: null, problem: 'invalid_marker' };
+    } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { marker: null, problem: 'missing_marker' }; throw error; }
+    let raw: unknown;
+    try {
+      const descriptor = checkedFileOpen(file, constants.O_RDONLY);
+      try {
+        const stat = fstatSync(descriptor);
+        if (stat.size > 4096) return { marker: null, problem: 'invalid_marker' };
+        raw = JSON.parse(readFileSync(descriptor, 'utf8'));
+      } finally { closeSync(descriptor); }
+    } catch { return { marker: null, problem: 'invalid_marker' }; }
+    const parsed = localProjectMarkerSchema.safeParse(raw);
+    if (!parsed.success) return { marker: null, problem: 'invalid_marker' };
+    return { marker: { version: 1, layout, workspaceId: parsed.data.workspaceId, projectId: parsed.data.projectId, storageId: parsed.data.storageId }, problem: null };
+  }
+  return { marker: null, problem: null };
+}
+export function probeLocalProject(config: LocalProjectConfiguration, candidate: string): LocalProjectProbe {
+  requireLocalProjects(config);
+  if (!path.isAbsolute(candidate) || candidate.includes('\0')) invalid('An absolute directory is required');
+  const normalized = path.resolve(candidate);
+  let exists = false;
+  try {
+    const stat = lstatSync(normalized);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) invalid('The selected path is not an ordinary directory');
+    exists = true;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  if (!exists) {
+    const parent = allowedDirectory(config, path.dirname(normalized)), folderName = path.basename(normalized);
+    newProjectRoot(parent, folderName);
+    return { path: normalized, exists: false, directory: { mode: 'new', parentPath: parent, folderName }, marker: null, markerProblem: null, project: null, problem: null };
+  }
+  const root = allowedDirectory(config, normalized), found = readProjectMarker(root);
+  return { path: root, exists: true, directory: { mode: 'existing', path: root }, marker: found.marker, markerProblem: found.problem, project: null, problem: null };
 }
 export function previewLocalProject(config: LocalProjectConfiguration, directory: LocalDirectory): LocalProjectPreview {
   const { root, mode } = resolveLocalDirectory(config, directory);
   if (mode === 'existing') {
-    try { lstatSync(path.join(root, '.pm')); throw new DomainError('local_directory_marked', 'This directory already contains .pm; it cannot be adopted or overwritten', 409); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    for (const name of ['.pm', '.dovspace']) {
+      try { lstatSync(path.join(root, name)); throw new DomainError('local_directory_marked', `This directory already contains ${name}; it cannot be adopted or overwritten`, 409); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
     accessSync(root, constants.W_OK | constants.X_OK);
   }
-  return { path: root, mode, exists: mode === 'existing', creates: ['.pm/project.json', '.pm/core/projects/PRJ-<id>.md', '.pm/core/work-items/', '.pm/core/docs/', '.pm/attachments/'], preservesExistingFiles: true };
+  return { path: root, mode, directory: mode === 'existing' ? { mode: 'existing', path: root } : { mode: 'new', parentPath: path.dirname(root), folderName: path.basename(root) }, exists: mode === 'existing', creates: ['.dovspace/.pm/project.json', '.dovspace/.pm/core/projects/PRJ-<id>.md', '.dovspace/.pm/core/work-items/', '.dovspace/.pm/core/docs/', '.dovspace/.pm/attachments/'], preservesExistingFiles: true };
 }
 export async function localProjectSettings(sql: SqlExecutor, actor: Actor, workspaceId: string, config: LocalProjectConfiguration): Promise<LocalProjectSettings> {
   const member = await getMembership(sql, actor, workspaceId);
@@ -92,7 +191,7 @@ export async function localProjectSettings(sql: SqlExecutor, actor: Actor, works
   return { enabled: config.enabled, reason: config.enabled ? null : 'not_configured', canManage,
     dataRoot: canManage && config.enabled ? config.dataRoot : null, coreRoot: canManage && config.enabled ? config.coreRoot : null,
     defaultParent: canManage && config.enabled ? row?.rows[0]?.default_parent ?? config.defaultParent : null,
-    allowedRoots: canManage && config.enabled ? config.allowedRoots : [], backupRoot: canManage && config.enabled ? config.backupRoot : null,
+    allowedRoots: [], unrestricted: config.enabled, backupRoot: canManage && config.enabled ? config.backupRoot : null,
     attachments: 'project_directory', databaseRequired: true };
 }
 export async function saveLocalProjectSettings(sql: SqlExecutor, actor: Actor, workspaceId: string, config: LocalProjectConfiguration, parent: string): Promise<LocalProjectSettings> {

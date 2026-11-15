@@ -10,6 +10,7 @@ import {
   storedMessageSchema,
   threadPatchSchema,
   threadSidebarActionSchema,
+  threadDeleteSchema,
 } from "@agent-workspace/contracts/chat";
 import { nativeInteractionResponseSchema } from "@agent-workspace/contracts/output";
 import {
@@ -21,6 +22,8 @@ import {
 import { DurableError } from "./durable/errors.ts";
 import {
   cancelChat,
+  lookupChatSubmission,
+  assertChatLifecycleMutationAllowed,
   cancelThreadChat,
   continueChat,
   defaultChatExecutionPolicy,
@@ -35,8 +38,8 @@ import {
   type ChatRequest,
 } from "./durable/chat-runtime.ts";
 import {
-  deleteThread,
   ensureThread,
+  assertThreadWritable,
   getThread,
   getThreadHistory,
   listThreads,
@@ -48,7 +51,7 @@ import {
 } from "./durable/threads.ts";
 import { getThreadSidebar, updateThreadSidebar } from "./durable/thread-sidebar.ts";
 import { generateThreadTitle } from "./durable/thread-title.ts";
-import { transaction } from "./durable/store.ts";
+import { readRecord, transaction } from "./durable/store.ts";
 import { resolveAgentExecution } from "./durable/agent-execution.ts";
 import { listRuns } from "./durable/engine.ts";
 import { setThreadNativeSession } from "./durable/threads.ts";
@@ -56,6 +59,11 @@ import { closeMcpAppSession } from "./mcp-apps/live.ts";
 import { resolveChatExecutionScope } from "./task-delivery/binding.ts";
 import { terminateSessionTerminals } from "./inspector/terminal.ts";
 import { createPmVisibilityProjector, type PmVisibilityProjector } from "./pm-visibility.ts";
+import { chatActionRoutes } from "./chat-actions.ts";
+import { paginateHistory } from "./durable/history-page.ts";
+import { beginThreadDeletion, blockThreadDeletion, commitThreadDeletion, readThreadLifecycleOperation } from "./durable/thread-lifecycle.ts";
+import { chatContextResolveRequestSchema } from "@agent-workspace/contracts/message-context";
+import { resolveChatContextItems } from "./durable/message-context.ts";
 
 export const chatRoutes = new Hono();
 export const publicThread = (thread: ThreadMetadata) => ({
@@ -69,6 +77,8 @@ export const publicThread = (thread: ThreadMetadata) => ({
   updatedAt: thread.updatedAt,
   lastMessageAt: thread.updatedAt,
   revision: thread.revision,
+  lifecycleRevision: thread.lifecycleRevision ?? 0,
+  deletionState: thread.deletionState,
   settings: thread.settings,
   defaultsRevision: thread.defaultsRevision,
   sidebar: getThreadSidebar(thread),
@@ -157,6 +167,8 @@ chatRoutes.get("/chat/threads", async (c) => c.json({
 chatRoutes.post("/chat/threads", async (c) => {
   const { id, executionSelection } = createThreadSchema.parse(await c.req.json());
   if (!validThreadId(id)) return c.json({ error: "无效的会话 ID。", code: "invalid_request" }, 400);
+  const original = readRecord<ThreadMetadata>("chat:threads", id);
+  if (original?.deleted || original?.sessionCutover) throw new ThreadConflictError("Deleted Session IDs cannot be reused.", "thread_deleted");
   const execution = await resolveAgentExecution(executionSelection, id, c.req.raw.signal);
   ensureThread(id, undefined, executionSelection, execution.environment);
   const thread = getThread(id);
@@ -181,6 +193,7 @@ chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
   const id = c.req.param("id");
   const thread = getThread(id);
   if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+  assertThreadWritable(id);
   const assertIdle = () => {
     if (getActiveChat(id) || listRuns(id).some(run => run.status === "queued" || run.status === "running"))
       throw new DurableError(409, "chat_busy", "会话仍在运行；请等待完成或显式停止，不能自动取消。");
@@ -225,6 +238,9 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     return c.json({ thread: await publicAuthorizedThread(updateThread(id, { ...patch, executionEnvironment: snapshot.environment }), c.req.raw.headers) });
   }
   if (patch.status) {
+    if (patch.lifecycleRevision === undefined)
+      throw new DurableError(400, "lifecycle_revision_required", "Archive/restore requires the current lifecycleRevision.");
+    assertChatLifecycleMutationAllowed(id);
     const thread = getThread(id);
     if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
     if (patch.status === "archived" && getActiveChat(id))
@@ -288,22 +304,42 @@ chatRoutes.post("/chat/threads/:id/regenerate-title", async (c) => {
   });
   return c.json({ thread: await publicAuthorizedThread(saved, c.req.raw.headers) });
 });
+chatRoutes.get("/chat/threads/:id/submissions/:submissionId", c => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json(lookupChatSubmission(c.req.param("id"), c.req.param("submissionId")));
+});
+chatRoutes.get("/chat/threads/:id/lifecycle-operations/:operationId", c => {
+  c.header("Cache-Control", "private, no-store");
+  const operation = readThreadLifecycleOperation(c.req.param("id"), c.req.param("operationId"));
+  if (!operation) return c.json({ error: "Operation not found", code: "not_found" }, 404);
+  const { fingerprint: _fingerprint, ...view } = operation;
+  return c.json({ operation: view });
+});
 chatRoutes.delete("/chat/threads/:id", async (c) => {
-  const id = c.req.param("id");
-  const thread = getThread(id);
-  if (!thread) return c.json({ deleted: true });
-  for (const generation of listChatGenerations(id))
-    if (isChatActive(generation)) await cancelChat(generation.id);
-  if (getActiveChat(id))
-    throw new DurableError(409, "chat_busy", "后台生成尚未确认停止，历史未删除；请核对生成状态后重试。");
-  await closeMcpAppSession(id);
-  if (getActiveChat(id))
-    throw new DurableError(409, "chat_busy", "后台生成尚未确认停止，历史未删除。");
-  terminateSessionTerminals(id);
-  deleteThread(id);
-  return c.json({ deleted: true });
+  const id = c.req.param("id"), input = threadDeleteSchema.parse(await c.req.json());
+  const operationId = c.req.header("Idempotency-Key") ?? "";
+  const prior = readThreadLifecycleOperation(id, operationId);
+  if (!prior || prior.state !== "committed") assertChatLifecycleMutationAllowed(id);
+  const operation = beginThreadDeletion(id, operationId, input, getActiveChat(id)?.id ?? null);
+  if (operation.state === "committed") return c.json({ deleted: true, operation });
+  if (operation.state === "blocked") return c.json({ deleted: false, code: "deletion_blocked", operation }, 409);
+  try {
+    if (input.expectedGenerationId !== null) await cancelChat(input.expectedGenerationId);
+    if (getActiveChat(id) || listRuns(id).some(run => run.status === "queued" || run.status === "running"))
+      throw new DurableError(409, "chat_busy", "Execution has not observably stopped; history was retained.");
+    await closeMcpAppSession(id);
+    if (getActiveChat(id)) throw new DurableError(409, "chat_busy", "Execution has not observably stopped.");
+    await terminateSessionTerminals(id);
+    assertChatLifecycleMutationAllowed(id);
+    const committed = commitThreadDeletion(id, operationId);
+    return c.json({ deleted: true, operation: committed });
+  } catch (error) {
+    blockThreadDeletion(id, operationId, error instanceof DurableError || error instanceof ThreadConflictError ? error.code : "stop_unconfirmed");
+    throw error;
+  }
 });
 chatRoutes.get("/chat/threads/:id/history", async (c) => {
+  c.header("Cache-Control", "private, no-store");
   const id = c.req.param("id");
   if (!getThread(id)) return c.json({ error: "找不到会话。", code: "not_found" }, 404);
   const history = getThreadHistory(id, c.req.query("format") ?? "ai-sdk/v6");
@@ -319,20 +355,29 @@ chatRoutes.get("/chat/threads/:id/history", async (c) => {
     const { id: messageId, ...content } = original;
     return [{ id: messageId, parent_id: active!.parentId, format: history.format, content }];
   });
+  const headId = active ? (continuing ? active.messageId : active.parentId) : history.headId;
+  const selected = paginateHistory(rawMessages, headId, { limit: c.req.query("limit"), before: c.req.query("before") });
   const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
-  const messages = projector.history(rawMessages).map(message => message.turnContext ? {
+  const messages = projector.history(selected.messages).map(message => message.turnContext ? {
     ...message, content: { ...message.content, metadata: {
       ...(message.content.metadata as Record<string, unknown> | undefined), turnContext: message.turnContext,
     } },
   } : message);
   return c.json({
-    headId: active ? (continuing ? active.messageId : active.parentId) : history.headId,
+    headId,
     messages,
+    ...(selected.page ? { page: selected.page } : {}),
     activeGenerationId: active?.id,
     latestGeneration: latest ? projector.generation(publicChatGeneration(latest)) : null,
   });
 });
+chatRoutes.post("/chat/threads/:id/context/resolve", async c => {
+  c.header("Cache-Control", "private, no-store");
+  const { contextItems } = chatContextResolveRequestSchema.parse(await c.req.json());
+  return c.json({ contextItems: await resolveChatContextItems(c.req.param("id"), contextItems, c.req.raw.headers) });
+});
 chatRoutes.get("/chat/threads/:id/messages/:messageId/context", async c => {
+  c.header("Cache-Control", "private, no-store");
   const id = c.req.param("id");
   if (!getThread(id)) throw new DurableError(404, "not_found", "找不到会话。");
   const message = getThreadHistory(id).messages.find(message => message.id === c.req.param("messageId"));
@@ -340,7 +385,8 @@ chatRoutes.get("/chat/threads/:id/messages/:messageId/context", async c => {
   const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
   const projected = projector.history([message])[0]!;
   const metadata = projected.content.metadata as { pmVisibility?: string } | undefined;
-  return c.json({ turnContext: projected.turnContext, visibility: metadata?.pmVisibility ?? "visible" });
+  const visibility = metadata?.pmVisibility ?? (projected.turnContext?.contextItems?.some(item => item.visibility !== "available") ? "unavailable" : "visible");
+  return c.json({ turnContext: projected.turnContext, visibility });
 });
 chatRoutes.put("/chat/threads/:id/history", async (c) => {
   const id = c.req.param("id");
@@ -355,6 +401,7 @@ chatRoutes.put("/chat/threads/:id/history", async (c) => {
   return c.json({ saved: true });
 });
 chatRoutes.get("/chat/threads/:id/generations", async (c) => {
+  c.header("Cache-Control", "private, no-store");
   const id = c.req.param("id");
   if (!getThread(id)) throw new DurableError(404, "not_found", "找不到会话。");
   const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
@@ -412,6 +459,7 @@ chatRoutes.get("/chat/generations/:id/items/:itemId/output", async (c) => {
 chatRoutes.post("/chat/generations/:id/requests/:requestId/respond", async (c) => {
   const generation = await accessibleGeneration(c.req.param("id"));
   const response = nativeInteractionResponseSchema.parse(await c.req.json());
+  assertThreadWritable(generation.threadId);
   respondNativeInteraction(generation.id, c.req.param("requestId"), response);
   return c.json({ accepted: true });
 });
@@ -438,3 +486,4 @@ chatRoutes.post("/chat", async (c) => {
     },
   });
 });
+chatRoutes.route("/", chatActionRoutes);

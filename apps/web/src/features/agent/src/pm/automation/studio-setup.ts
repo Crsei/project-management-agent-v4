@@ -34,8 +34,11 @@ export function studioExecutionEnvironmentIssue(action: StudioConfig["action"], 
   if (!parsed.success) return "agent-workspace-required";
   return parsed.data.agentWorkspaceId || !studioActionRequiresAgentWorkspace(action) && !requiresReselection ? null : "agent-workspace-required";
 }
-export function emptyStudioConfig(projectId = ""): StudioConfig {
-  return { name: "", description: "", projectId, tags: [], templateId: null, action: { kind: "prompt", providerInstanceId: "", model: "", options: {}, prompt: "", repositories: [], plugins: [], timeoutSeconds: 600 }, trigger: { kind: "manual" }, dailyLimit: 10, cooldownMinutes: 0 };
+/** Shortcut creation seeds only a fresh config; saved definitions and recovered drafts remain authoritative. */
+export function emptyStudioConfig(projectId = "", defaultQuickAccess = false): StudioConfig {
+  const config: StudioConfig = { name: "", description: "", projectId, tags: [], templateId: null, action: { kind: "prompt", providerInstanceId: "", model: "", options: {}, prompt: "", repositories: [], plugins: [], timeoutSeconds: 600 }, trigger: { kind: "manual" }, dailyLimit: 10, cooldownMinutes: 0 };
+  if (defaultQuickAccess) config.quickAccess = true;
+  return config;
 }
 export function templateDefaults(template?: AutomationCatalogTemplate): StudioFormValues {
   const fields = Object.entries(template?.setup?.form.args ?? {});

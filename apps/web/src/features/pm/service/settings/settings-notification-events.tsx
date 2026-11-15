@@ -56,13 +56,13 @@ const mentionsPage: EventPage = {
   id: "notif-mentions",
   title: ["提及通知", "Mention notifications"],
   unavailable: [
-    "提及通知不可用：当前没有个人、团队或工作区提及识别与通知路由合同，也没有偏好读写接口。文本中出现 @ 不代表已识别或已通知任何人；团队成员身份也不会由此授予访问权限。",
-    "Mention notifications are unavailable: there is no contract for personal, team, or workspace mention detection or routing, and no preferences API. An @ in text does not mean anyone was detected or notified. Team membership does not grant access permissions.",
+    "站内个人提及通知已提供，但本页的接收偏好尚无读写接口，订阅值未知且不可配置。团队／工作区提及广播尚未提供。普通 @ 文字不等于有效个人提及，提及与团队成员身份均不授予访问权限。",
+    "In-app personal mention notifications are available, but this page has no preferences read/write API; subscription values are unknown and cannot be configured. Team/workspace mention broadcasts are not available. Plain @ text is not a valid personal mention, and neither mentions nor team membership grant access.",
   ],
   options: [
-    { id: "personal", label: ["个人提及", "Personal mentions"], description: ["评论和描述中直接 @提及我时提醒；当前不解析或投递提及。", "Alert me about direct @mentions in comments and descriptions; mentions are not currently parsed or delivered."], previewEnabled: true },
-    { id: "team", label: ["团队提及", "Team mentions"], description: ["我所在团队被 @提及时提醒；不创建团队广播或改变团队权限。", "Alert me when my team is @mentioned; this does not create team broadcasts or change team permissions."], previewEnabled: true },
-    { id: "workspace", label: ["工作区提及", "Workspace mentions"], description: ["面向工作区所有人的提及或公告提醒；当前没有全员广播服务。", "Alert me about workspace-wide mentions or announcements; there is no workspace broadcast service."], previewEnabled: false },
+    { id: "personal", label: ["个人提及", "Personal mentions"], description: ["任务描述或评论中新增的有效个人提及可进入个人通知；此处尚不能配置接收偏好。", "New valid personal mentions in task descriptions or comments can reach the personal inbox; receiving preferences cannot be configured here."], previewEnabled: true },
+    { id: "team", label: ["团队提及", "Team mentions"], description: ["团队提及广播尚未提供；此处不会创建广播或改变团队权限。", "Team mention broadcasts are not available; this does not create broadcasts or change team permissions."], previewEnabled: true },
+    { id: "workspace", label: ["工作区提及", "Workspace mentions"], description: ["工作区全员提及或公告广播尚未提供。", "Workspace-wide mention or announcement broadcasts are not available."], previewEnabled: false },
   ],
 }
 
@@ -70,12 +70,12 @@ const assignmentsPage: EventPage = {
   id: "notif-assign",
   title: ["任务分配通知", "Task assignment notifications"],
   unavailable: [
-    "任务分配通知不可用：已有任务分配和状态事实不等于已实现提醒投递。没有通知偏好读写、个人事件订阅或逾期提醒投递合同，因此无法读取或保存这些选项。",
-    "Task assignment notifications are unavailable: real assignment and status data does not imply alert delivery. There is no notification-preferences API, personal event subscription, or overdue-alert delivery contract, so these options cannot be read or saved.",
+    "任务分配、一般状态变化和逾期提醒的订阅偏好尚无读写接口，无法读取或保存这些选项；任务分配和日期事实本身不等于提醒投递。任务真正进入已完成类别时，已有规则会定向通知仍有权限的负责人及可信 Agent／自动化发起人，这不代表下列通用订阅已启用。",
+    "Assignment, general status-change, and overdue-alert subscription preferences have no read/write API, so these options cannot be read or saved. Assignment and date facts alone do not imply alert delivery. When a task truly enters the completed category, existing rules notify its still-authorized assignee and trusted Agent/automation requester; this does not mean the general subscriptions below are enabled.",
   ],
   options: [
     { id: "assigned", label: ["任务分配给我", "When I am assigned a task"], description: ["任务的受派人变为我时提醒。", "Alert me when I become the assignee of a task."], previewEnabled: true },
-    { id: "status", label: ["我的任务状态变化", "When my task changes status"], description: ["分配给我的任务发生工作流状态变化时提醒。", "Alert me when a task assigned to me changes workflow status."], previewEnabled: true },
+    { id: "status", label: ["我的任务状态变化", "When my task changes status"], description: ["通用状态提醒偏好尚未提供；真正进入已完成类别的定向通知已有独立规则。", "General status-alert preferences are not available; routed notifications for a real transition to the completed category follow existing rules."], previewEnabled: true },
     { id: "overdue", label: ["我的任务逾期", "When my task is overdue"], description: ["分配给我的任务超过截止日期时提醒；不自动改变任务状态。", "Alert me when a task assigned to me passes its due date; task status is not changed automatically."], previewEnabled: true },
   ],
 }
@@ -127,8 +127,22 @@ function NotificationEventContext({ mode }: SettingsPageProps) {
       "These alert options are separate from workspace data synchronization. Server-sent events (SSE) continue synchronizing real data under existing permissions. This page creates no subscriptions and changes no streams, tasks, or members.",
     )}</p>
     {mode === "service" && workspaceSlug && <>
-      <p className="mt-2">{t("真实活动是服务变更记录，不是通知收件箱；没有已读或归档状态。", "Real activity contains service change records, not a notification inbox; read and archive states are unavailable.")}</p>
-      <Link to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`} className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("查看真实工作区活动", "View real workspace activity")}</Link>
+      <p className="mt-2">{t(
+        "个人收件箱已有新增有效个人提及、显式关注任务变更和真正完成后的定向通知，不由这些禁用选项配置；私信、团队／工作区广播、任务通知邮件、推送、每日摘要及分配／逾期订阅提醒尚未提供。",
+        "The personal inbox already receives newly added valid personal mentions, changes to explicitly watched tasks, and routed notifications for real completion; these disabled options do not configure them. Direct messages, team/workspace broadcasts, task notification email, push, daily digests, and assignment/overdue subscription alerts are not available.",
+      )}</p>
+      <nav aria-label={t("通知与活动入口", "Notification and activity navigation")} className="mt-2 flex flex-wrap gap-x-6">
+        <Link to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications?section=notifications`} className="inline-flex min-h-11 items-center rounded-control font-medium text-primary hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("打开个人通知收件箱", "Open personal notification inbox")}</Link>
+        <Link to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`} className="inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("查看工作区活动", "View workspace activity")}</Link>
+      </nav>
+      <p className="mt-2">{t(
+        "个人通知可显式标记已读、未读或归档，打开通知或目标不会自动标已读。工作区活动是独立的只读变更时间线，不是个人收件箱。",
+        "Personal notifications can be explicitly marked read, unread, or archived; opening a notification or its target never marks it read. Workspace activity is a separate read-only change timeline, not the personal inbox.",
+      )}</p>
+      <p className="mt-2">{t(
+        "任务与文档已有“变更记录”；“已阅这些变更”只保存本人的所示变更水位。通知已读、变更已阅、配置工作流中的任务完成和人工验收相互独立；打开页面或 Agent 执行成功不会替代这些操作。",
+        "Tasks and documents already provide Change history. Mark these changes reviewed saves only your own watermark for the changes shown. Notification read state, reviewed changes, task completion in the configured workflow, and manual acceptance are independent; opening a page or a successful Agent run never substitutes for these actions.",
+      )}</p>
     </>}
   </SettingsNotice>
 }
@@ -139,9 +153,9 @@ function ServiceNotificationEvents({ page }: { page: EventPage }) {
 
   return <div className="space-y-6">
     <SettingsNotice><p id={`${id}-unavailable`}>{t(...page.unavailable)}</p></SettingsNotice>
+    <NotificationEventContext mode="service" />
     <NotificationEventFields page={page} value={null} reasonId={`${id}-unavailable`} />
     <Button type="button" disabled aria-describedby={`${id}-unavailable`}>{t("保存通知偏好（不可用）", "Save notification preferences (unavailable)")}</Button>
-    <NotificationEventContext mode="service" />
   </div>
 }
 

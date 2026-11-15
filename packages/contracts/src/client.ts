@@ -12,20 +12,28 @@ import type { InvitationListDto, InvitationInspectDto, InvitationAcceptPayload, 
 import type { TeamDirectory } from '../../domain/src/team-directory.ts';
 import type { TeamWorkload } from '../../domain/src/team-workload.ts';
 import type { CoreCreationAttempt } from './core-creation.ts';
-import type { WorkspaceIdentity, WorkspaceIcon, WorkspaceColor } from '../../domain/src/workspace-identity.ts';
+import type { WorkspaceIdentity, WorkspaceOrganization, WorkspaceIcon, WorkspaceColor } from '../../domain/src/workspace-identity.ts';
 import type { TaskCommentsPage, TaskCommentHistoryPage, TaskCommentsOptions, TaskCommentHistoryOptions } from '../../domain/src/task-comments.ts';
 import type { AccountSecurity, AccountSecurityAction, AccountSecurityActionKind, AccountSecurityActionLookup, ChangeOwnPassword, RevokeOwnSessions } from './account-security.ts';
 import type { NotificationInboxOptions, NotificationInboxPage, MentionCandidatesPage } from './notifications.ts';
 import type { ArtifactVisibility, ArtifactCopyOriginResponse } from './artifact-files.ts';
 import type { WebhookOverview, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
+import type { ImSettings, ImLinkCode, ImBinding, ImBindingUpdate } from './im-gateway.ts';
 import { AccountRecoveryClient } from './account-recovery-client.ts';
 import { createLocalProjectClient } from './local-project-client.ts';
 import { createAgentContextClient } from './agent-file-area-client.ts';
 import { createChangeHistoryClient } from './change-history-client.ts';
+import { createPeopleClient } from './people-client.ts';
+import { createMemberLifecycleClient } from './member-lifecycle-client.ts';
 import type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
+import type { RegisterRequest, RegisterResponse } from './registration.ts';
 import { workspaceCreationResultSchema, type WorkspaceCreationRequest, type WorkspaceCreationRecoveryRequest, type WorkspaceCreationResult, type WorkspaceInitialization } from './workspace-creation.ts';
+import type { OnboardingState, UpdateOnboardingRequest } from './onboarding.ts';
+import type { TaskBrief, TaskBriefQuery, TaskKnowledgePage, TaskKnowledgeQuery } from '../../agent-contracts/src/task-brief.ts';
 export type { WorkspaceCreationRequest, WorkspaceCreationRecoveryRequest, WorkspaceCreationResult, WorkspaceInitialization } from './workspace-creation.ts';
 export type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
+export type { RegisterRequest, RegisterResponse } from './registration.ts';
+export type { OnboardingState, UpdateOnboardingRequest } from './onboarding.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
 export type { PersonalDashboard, SelfProfile, PrivateNote, PrivateNoteData, TaskWatch, TaskWatchData, ProjectMeeting, ProjectMeetingData, MeetingParticipant } from '../../domain/src/dashboard-personal.ts';
 export type { TimeDashboard, TimeTimer, TimeWorklog, TimeTotals, TimePeriodTotal, TimeTaskReference, PresencePreference, PresenceStatus, PresenceMember, PresenceSelf, TimerData, WorklogData, PresencePreferenceData, PresenceHeartbeatData } from '../../domain/src/dashboard-time.ts';
@@ -36,18 +44,23 @@ export type { ProjectExtras, ProjectExtrasProject, ProjectFavoriteData, ProjectF
 export type { ProjectDirectory, ProjectIdentity, ProjectDirectoryVersion, ProjectTeam, ProjectTeamAssignment, ProjectTeamFragment, ProjectDirectoryProject, ProjectDirectoryManagement } from '../../domain/src/project-directory.ts';
 export type { ProjectAuditOptions, ProjectAuditPage, ProjectAuditEntry, ProjectAuditChange, ProjectAuditValue } from '../../domain/src/project-audit.ts';
 export type { MemberDirectory, MemberDirectoryMember, MemberDirectoryAccess, MemberDirectoryTeam, MemberRole, MemberDirectoryRole } from '../../domain/src/members.ts';
+export { MEMBER_ROLE_PRESETS } from '../../domain/src/members.ts';
 export type { MemberInvitationDto, InvitationListDto, InvitationInspectDto, InvitationAcceptPayload, InvitationAcceptDto, InvitationReceiptDto, InvitationStatus, InvitationDeliveryStatus, InvitationFailureCode } from '../../domain/src/invitations.ts';
 export type { TeamDirectory, TeamDirectoryTeam, TeamDirectoryProject } from '../../domain/src/team-directory.ts';
 export type { TeamWorkload, TeamWorkloadCapacity, TeamWorkloadMemberScope, TeamWorkloadMember, TeamWorkloadTask, TeamWorkloadTeam, TeamWorkloadSummary, MemberCapacity, MemberCapacityData } from '../../domain/src/team-workload.ts';
 export type { CoreCreationAttempt } from './core-creation.ts';
-export type { WorkspaceIdentity, WorkspaceIcon, WorkspaceColor } from '../../domain/src/workspace-identity.ts';
+export type { WorkspaceIdentity, WorkspaceOrganization, WorkspaceIcon, WorkspaceColor } from '../../domain/src/workspace-identity.ts';
 export type { TaskComment, TaskCommentRevision, TaskCommentsPage, TaskCommentHistoryPage, TaskCommentsOptions, TaskCommentHistoryOptions } from '../../domain/src/task-comments.ts';
 export type { AccountSecurity, AccountSession, AccountSecurityAction, AccountSecurityActionKind, AccountSecurityActionLookup, AccountSecurityErrorCode, ChangeOwnPassword, RevokeOwnSessions } from './account-security.ts';
 export type { NotificationState, NotificationReason, NotificationOrigin, NotificationInboxItem, NotificationInboxOptions, NotificationInboxPage, MentionCandidatesPage } from './notifications.ts';
 export type { ArtifactVisibility, ArtifactCopyOrigin, ArtifactCopyOriginResponse } from './artifact-files.ts';
 export type { WebhookOverview, WebhookTargetDto, WebhookEndpointDto, WebhookDeliveryDto, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
+export type { ImSettings, ImLinkCode, ImBinding, ImBindingUpdate, ImConnectivity, ImBot, ImSatoriStatus } from './im-gateway.ts';
 export type { LocalDirectory, LocalProjectInitialization, LocalProjectSettings, LocalProjectDirectoryListing, LocalProjectPreview, LocalProjectLocation, LocalProjectAttempt } from './local-projects.ts';
 export type { AgentScope, AgentFileArea, AgentCatalog, AgentFileAreaUpdate, AuthorizedAgentContext } from './agent-file-areas.ts';
+export type { TaskBrief, TaskBriefQuery, TaskBriefStage, TaskBriefSourceRef, TaskBriefStatement, TaskKnowledgePage, TaskKnowledgeQuery, TaskKnowledgeCandidate } from '../../agent-contracts/src/task-brief.ts';
+export type { PeopleAccountLookup, PeopleCandidatePage, PeopleCandidatePurpose, PeopleCandidateQuery, PeopleIdentity, ProjectParticipation, ProjectPeople } from './people-client.ts';
+export type { MemberDuty, MemberDutyKind, MemberHandover, MemberImpact, HandoverItem } from './member-lifecycle-client.ts';
 // BEGIN GENERATED COMMAND PAYLOAD TYPES
 export type CommandPayloadMap = {
   AcceptIntent: { "revision": number; "reason": string; "basisRefs"?: Array<{ "kind": "project" | "work_item" | "milestone" | "conversation" | "intent" | "decision" | "upload" | "artifact" | "artifact_version" | "evidence" | "submission" | "review"; "id": string; }>; };
@@ -72,10 +85,10 @@ export type CommandPayloadMap = {
   CopyArtifactVersion: { "targetTitle": string; "targetKind": string; };
   CorrectProjectSpend: { "spendId": string; "reason": string; "currency": string; "amountMinor": number; "spentOn": string; "description": string; };
   CreateConversation: { "title": string; };
-  CreateMemberInvitation: { "email": string; "role": "admin" | "member" | "guest"; "projectIds": (Array<string>) | (null); };
+  CreateMemberInvitation: { "email": string; "role": "admin" | "member" | "guest"; "projectIds": (Array<string>) | (null); "teamIds"?: Array<string>; };
   CreateMilestone: { "title": string; "criteria": Array<string>; "targetDate"?: (string) | (null); };
   CreatePrivateNote: { "content": string; };
-  CreateProject: { "name": string; "goal": string; "ownerId": (string) | (null); "completionCriteria": Array<string>; "localDirectory"?: ({ "mode": "existing"; "path": string; }) | ({ "mode": "new"; "parentPath": string; "folderName": string; }); "startDate"?: string; "dueDate"?: string; "description"?: string; };
+  CreateProject: { "name": string; "goal": string; "ownerId": (string) | (null); "completionCriteria": Array<string>; "localDirectory"?: ({ "mode": "existing"; "path": string; }) | ({ "mode": "new"; "parentPath": string; "folderName": string; }) | ({ "mode": "auto"; "path": string; }); "startDate"?: string; "dueDate"?: string; "description"?: string; };
   CreateProjectMeeting: { "title": string; "description": string; "startsAt": string; "endsAt": string; "participantIds": Array<string>; };
   CreateProjectTeam: { "name": string; "memberIds"?: Array<string>; "maintainerIds"?: Array<string>; "identifier"?: (string) | (null); "description"?: string; "focus"?: (string) | (null); "responseTargetHours"?: (number) | (null); };
   CreateSprint: { "projectId": string; "title": string; "startDate"?: (string) | (null); "dueDate"?: (string) | (null); };
@@ -86,9 +99,11 @@ export type CommandPayloadMap = {
   DeleteObject: { "kind": "project" | "work_item"; };
   DeletePrivateNote: Record<string, never>;
   DeleteTaskComment: { "commentId": string; };
-  DuplicateProject: { "name": string; "includeTasks": boolean; "localDirectory"?: ({ "mode": "existing"; "path": string; }) | ({ "mode": "new"; "parentPath": string; "folderName": string; }); };
+  DuplicateProject: { "name": string; "includeTasks": boolean; "localDirectory"?: ({ "mode": "existing"; "path": string; }) | ({ "mode": "new"; "parentPath": string; "folderName": string; }) | ({ "mode": "auto"; "path": string; }); };
   HeartbeatPresence: Record<string, never>;
   HideArtifact: Record<string, never>;
+  LeaveWorkspace: { "userId": string; };
+  PrepareMemberHandover: { "userId": string; "recipientId": string; "items": Array<{ "id": string; "kind": "work_item" | "project" | "milestone" | "team"; "version": number; }>; };
   ProposeIntent: { "summary": string; "goal": string; "conversationId"?: (string) | (null); "sourceMessageRefs"?: Array<{ "messageId": string; "contentVersion": number; }>; };
   ReadyWorkItem: Record<string, never>;
   ReauthorizeWebhookEndpoint: Record<string, never>;
@@ -111,6 +126,7 @@ export type CommandPayloadMap = {
   ResendMemberInvitation: Record<string, never>;
   RestoreArchivedObject: { "kind": "project" | "work_item"; "reason": string; };
   RestoreArtifact: Record<string, never>;
+  RestoreProjectTeam: Record<string, never>;
   RestoreSprint: { "sprintId": string; };
   RestoreTaskComment: { "commentId": string; };
   ResumeWebhookDelivery: { "receiptId": string; };
@@ -128,6 +144,7 @@ export type CommandPayloadMap = {
   SetProjectDependencies: { "dependsOn": Array<string>; };
   SetProjectFavorite: { "favorite": boolean; };
   SetProjectHealth: { "status": "on_track" | "at_risk" | "off_track"; "confidence"?: ("high" | "medium" | "low") | (null); "rationale": string; "risks": Array<{ "description": string; "severity": "low" | "medium" | "high"; "mitigation": string; }>; };
+  SetProjectParticipants: { "memberIds": Array<string>; };
   SetProjectRemainingEstimate: { "remainingEstimateMinor": number; "asOfDate": string; "reason": string; };
   SetProjectScope: { "items": Array<{ "id": string; "text": string; "completed": boolean; }>; };
   SetProjectSidebarOrder: { "projectIds": Array<string>; };
@@ -145,9 +162,10 @@ export type CommandPayloadMap = {
   StartWorkItem: Record<string, never>;
   StopTimer: Record<string, never>;
   SubmitWorkItemResult: { "contentRevision": number; "artifactVersionIds": Array<string>; "evidenceIds": Array<string>; };
+  TransferTeamMaintainer: { "userId": string; "recipientId": string; };
   UnassignMilestone: { "milestoneId": string; };
   UnwatchTask: Record<string, never>;
-  UpdateMilestone: { "name"?: string; "targetDate"?: (string) | (null); "criteria"?: Array<string>; };
+  UpdateMilestone: { "name"?: string; "targetDate"?: (string) | (null); "ownerId"?: (string) | (null); "criteria"?: Array<string>; };
   UpdatePrivateNote: { "content": string; };
   UpdateProject: { "name": string; "goal": string; "ownerId": (string) | (null); "completionCriteria": Array<string>; "description"?: string; "dueDate"?: (string) | (null); "icon"?: (string) | (null); "color"?: (string) | (null); };
   UpdateProjectMeeting: { "title": string; "description": string; "startsAt": string; "endsAt": string; "participantIds": Array<string>; };
@@ -158,7 +176,7 @@ export type CommandPayloadMap = {
   UpdateTaskDuration: { "estimatedDurationDays": (number) | (null); };
   UpdateWorkItemContent: { "title": string; "description": string; "acceptanceCriteria": Array<{ "id": (string) | (string); "text": string; }>; };
   UpdateWorkItemMetadata: { "assigneeId"?: (string) | (null); "priority"?: ("low" | "normal" | "high" | "urgent") | (null); "startDate"?: (string) | (null); "dueDate"?: (string) | (null); };
-  UpdateWorkspaceIdentity: { "name": string; "icon": "building" | "grid" | "briefcase" | "layers" | "rocket" | "globe"; "color": "#2F2E2A" | "#5A67D8" | "#3B82C4" | "#23918A" | "#C54B78" | "#C48A1E"; };
+  UpdateWorkspaceIdentity: { "name": string; "icon": "building" | "grid" | "briefcase" | "layers" | "rocket" | "globe"; "color": "#2F2E2A" | "#5A67D8" | "#3B82C4" | "#23918A" | "#C54B78" | "#C48A1E"; "taxId"?: (string) | (null); "businessAddress"?: (string) | (null); };
   VoidProjectSpend: { "spendId": string; "reason": string; };
   WatchTask: { "taskId": string; };
   WithdrawIntent: { "reason": string; };
@@ -249,6 +267,20 @@ export class ProjectManagementClient {
     if (!response.ok) throw new ApiError(response.status, result);
     return result as T;
   });
+  readonly people = createPeopleClient(async <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> => {
+    const queryStart = path.indexOf('?');
+    const query = queryStart < 0 ? undefined : Object.fromEntries(new URLSearchParams(path.slice(queryStart + 1)));
+    const response = await this.#send(method, queryStart < 0 ? path : path.slice(0, queryStart), signal ? { signal } : {}, body, query, headers);
+    const result: unknown = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result);
+    return result as T;
+  });
+  readonly memberLifecycle = createMemberLifecycleClient(async <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> => {
+    const response = await this.#send(method, path, signal ? { signal } : {}, body, undefined, headers);
+    const result: unknown = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result);
+    return result as T;
+  });
   constructor(options: ClientOptions) {
     this.#baseUrl = new URL(options.baseUrl);
     if (!['http:', 'https:'].includes(this.#baseUrl.protocol) || this.#baseUrl.username || this.#baseUrl.password || this.#baseUrl.search || this.#baseUrl.hash) throw new TypeError('baseUrl must be an HTTP(S) URL without embedded credentials, query or fragment');
@@ -280,9 +312,12 @@ export class ProjectManagementClient {
   getOpenApi(options?: RequestOptions) { return this.#json<Record<string, unknown>>('GET', '/openapi.json', options); }
   setupStatus(options?: RequestOptions) { return this.#json<InstanceSetupStatus>('GET', '/api/v1/setup/status', options); }
   setup(input: SetupRequest, options?: RequestOptions) { return this.#json<SetupResponse>('POST', '/api/v1/setup', options, input); }
+  register(input: RegisterRequest, options?: RequestOptions): Promise<RegisterResponse> { return this.#json<RegisterResponse>('POST', '/api/v1/auth/register', options, input); }
   login(credentials: { email: string; password: string }, options?: RequestOptions) { return this.#json<{ actor: Actor; expiresAt: string }>('POST', '/api/v1/auth/login', options, credentials); }
   logout(options?: RequestOptions) { return this.#json<{ loggedOut: true }>('POST', '/api/v1/auth/logout', options); }
   getMe(options?: RequestOptions) { return this.#json<{ actor: Actor }>('GET', '/api/v1/auth/me', options); }
+  getOnboarding(options?: RequestOptions): Promise<OnboardingState> { return this.#json<OnboardingState>('GET', '/api/v1/auth/onboarding', options); }
+  updateOnboarding(input: UpdateOnboardingRequest, options?: RequestOptions): Promise<OnboardingState> { return this.#json<OnboardingState>('PATCH', '/api/v1/auth/onboarding', options, input); }
   getAccountSecurity(options?: RequestOptions): Promise<AccountSecurity> { return this.#json<AccountSecurity>('GET', '/api/v1/auth/security', options); }
   async #securityAction(path: string, input: ChangeOwnPassword | RevokeOwnSessions, kind: AccountSecurityActionKind, options?: RequestOptions): Promise<AccountSecurityAction> {
     const response = await this.#send('POST', path, options, input);
@@ -299,11 +334,21 @@ export class ProjectManagementClient {
   recoverAccountSecurityAction(actionId: string, input: { kind: AccountSecurityActionKind }, options?: RequestOptions): Promise<AccountSecurityActionLookup> { return this.#json<AccountSecurityActionLookup>('POST', `/api/v1/auth/security/actions/${segment(actionId)}/recover`, options, input); }
   getTaskComments(workspaceId: string, taskId: string, query: TaskCommentsOptions, options?: RequestOptions): Promise<TaskCommentsPage> { return this.#json<TaskCommentsPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/tasks/${segment(taskId)}/comments`, options, undefined, query); }
   getTaskCommentHistory(workspaceId: string, taskId: string, commentId: string, query: TaskCommentHistoryOptions, options?: RequestOptions): Promise<TaskCommentHistoryPage> { return this.#json<TaskCommentHistoryPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/tasks/${segment(taskId)}/comments/${segment(commentId)}/history`, options, undefined, query); }
+  taskBrief(workspaceId: string, projectId: string, taskId: string, query: TaskBriefQuery, options?: RequestOptions): Promise<TaskBrief> {
+    return this.#json<TaskBrief>('GET', `/api/v1/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}/tasks/${segment(taskId)}/brief`, options, undefined, { ...query });
+  }
+  searchTaskKnowledge(workspaceId: string, projectId: string, taskId: string, query: TaskKnowledgeQuery, options?: RequestOptions): Promise<TaskKnowledgePage> {
+    return this.#json<TaskKnowledgePage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}/tasks/${segment(taskId)}/knowledge`, options, undefined, { ...query, projectIds: query.projectIds?.join(',') });
+  }
   getNotificationInbox(workspaceId: string, query: NotificationInboxOptions = {}, options?: RequestOptions): Promise<NotificationInboxPage> { return this.#json<NotificationInboxPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/notification-inbox`, options, undefined, query); }
   getMentionCandidates(workspaceId: string, projectId: string, query: { taskId?: string; q?: string; after?: string; limit?: number } = {}, options?: RequestOptions): Promise<MentionCandidatesPage> {
     const target = query.taskId ? `tasks/${segment(query.taskId)}` : `projects/${segment(projectId)}`;
     return this.#json<MentionCandidatesPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/${target}/mention-candidates`, options, undefined, { ...(query.taskId ? { projectId } : {}), q: query.q, after: query.after, limit: query.limit });
   }
+  getImSettings(workspaceId: string, options?: RequestOptions): Promise<ImSettings> { return this.#json<ImSettings>('GET', `/api/v1/workspaces/${segment(workspaceId)}/im`, options); }
+  createImLinkCode(workspaceId: string, options?: RequestOptions): Promise<ImLinkCode> { return this.#json<ImLinkCode>('POST', `/api/v1/workspaces/${segment(workspaceId)}/im/link-codes`, options, {}); }
+  setImBindingNotify(workspaceId: string, bindingId: string, input: ImBindingUpdate, options?: RequestOptions): Promise<ImBinding> { return this.#json<ImBinding>('PATCH', `/api/v1/workspaces/${segment(workspaceId)}/im/bindings/${segment(bindingId)}`, options, input); }
+  revokeImBinding(workspaceId: string, bindingId: string, options?: RequestOptions): Promise<{ revoked: true }> { return this.#json<{ revoked: true }>('POST', `/api/v1/workspaces/${segment(workspaceId)}/im/bindings/${segment(bindingId)}/revoke`, options, {}); }
   getWebhooks(workspaceId: string, options?: RequestOptions): Promise<WebhookOverview> { return this.#json<WebhookOverview>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhooks`, options); }
   getWebhookDeliveries(workspaceId: string, endpointId: string, query: { cursor?: string; limit?: number } = {}, options?: RequestOptions): Promise<WebhookDeliveryPage> { return this.#json<WebhookDeliveryPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhooks/${segment(endpointId)}/deliveries`, options, undefined, query); }
   getWebhookDelivery(workspaceId: string, deliveryId: string, options?: RequestOptions): Promise<WebhookDeliveryDetail> { return this.#json<WebhookDeliveryDetail>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhook-deliveries/${segment(deliveryId)}`, options); }
@@ -317,6 +362,7 @@ export class ProjectManagementClient {
   async getWorkspaceCreation(key: string, options?: RequestOptions): Promise<WorkspaceCreationResult> { return workspaceCreationResultSchema.parse(await this.#json<unknown>('GET', `/api/v1/workspace-creations/${segment(key)}`, options)); }
   async recoverWorkspaceCreation(key: string, input: WorkspaceCreationRecoveryRequest, options?: RequestOptions): Promise<WorkspaceCreationResult> { return workspaceCreationResultSchema.parse(await this.#json<unknown>('POST', `/api/v1/workspace-creations/${segment(key)}/recover`, options, input)); }
   getWorkspaceIdentity(workspaceId: string, options?: RequestOptions): Promise<WorkspaceIdentity> { return this.#json<WorkspaceIdentity>('GET', `/api/v1/workspaces/${segment(workspaceId)}/identity`, options); }
+  getWorkspaceOrganization(workspaceId: string, options?: RequestOptions): Promise<WorkspaceOrganization> { return this.#json<WorkspaceOrganization>('GET', `/api/v1/workspaces/${segment(workspaceId)}/organization`, options); }
   listMembers(workspaceId: string, options?: RequestOptions) { return this.#json<Member[]>('GET', `/api/v1/workspaces/${segment(workspaceId)}/members`, options); }
   getMemberDirectory(workspaceId: string, options?: RequestOptions): Promise<MemberDirectory> { return this.#json<MemberDirectory>('GET', `/api/v1/workspaces/${segment(workspaceId)}/members/directory`, options); }
   listMemberInvitations(workspaceId: string, options?: RequestOptions): Promise<InvitationListDto> { return this.#json<InvitationListDto>('GET', `/api/v1/workspaces/${segment(workspaceId)}/members/invitations`, options); }
@@ -333,8 +379,8 @@ export class ProjectManagementClient {
   getProjectAudit(workspaceId: string, projectId: string, query: ProjectAuditOptions = {}, options?: RequestOptions): Promise<ProjectAuditPage> { return this.#json<ProjectAuditPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}/audit`, options, undefined, query); }
   getTeamDirectory(workspaceId: string, options?: RequestOptions): Promise<TeamDirectory> { return this.#json<TeamDirectory>('GET', `/api/v1/workspaces/${segment(workspaceId)}/teams/directory`, options); }
   getTeamWorkload(workspaceId: string, options?: RequestOptions): Promise<TeamWorkload> { return this.#json<TeamWorkload>('GET', `/api/v1/workspaces/${segment(workspaceId)}/teams/workload`, options); }
-  getCoreCreationAttempt(workspaceId: string, key: string, options?: RequestOptions): Promise<CoreCreationAttempt> { return this.#json<CoreCreationAttempt>('GET', `/api/v1/workspaces/${segment(workspaceId)}/core/creation-attempts/${segment(key)}`, options); }
-  recoverCoreCreationAttempt(workspaceId: string, key: string, options?: RequestOptions): Promise<CoreCreationAttempt> { return this.#json<CoreCreationAttempt>('POST', `/api/v1/workspaces/${segment(workspaceId)}/core/creation-attempts/${segment(key)}/recover`, options, {}); }
+  getCoreCreationAttempt(workspaceId: string, key: string, query: { kind?: 'task' | 'entity' } = {}, options?: RequestOptions): Promise<CoreCreationAttempt> { return this.#json<CoreCreationAttempt>('GET', `/api/v1/workspaces/${segment(workspaceId)}/core/creation-attempts/${segment(key)}`, options, undefined, query); }
+  recoverCoreCreationAttempt(workspaceId: string, key: string, query: { kind?: 'task' | 'entity' } = {}, options?: RequestOptions): Promise<CoreCreationAttempt> { return this.#json<CoreCreationAttempt>('POST', `/api/v1/workspaces/${segment(workspaceId)}/core/creation-attempts/${segment(key)}/recover`, options, {}, query); }
   async executeCommand<K extends CommandType>(workspaceId: string, command: Command<K>, options?: RequestOptions): Promise<CommandReceipt> {
     try {
       const response = await this.#send('POST', `/api/v1/workspaces/${segment(workspaceId)}/commands`, options, command);

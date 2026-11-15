@@ -4,7 +4,7 @@ import type { CoreCreationAttempt } from '../../../../../../packages/contracts/s
 import type { Command, CommandReceipt } from '../../../../../../packages/contracts/src/client.ts';
 import { localDirectorySchema, type LocalDirectory, type LocalProjectAttempt } from '../../../../../../packages/contracts/src/local-projects.ts';
 
-export interface CreationInitial { entity?: EntityKind; project?: string; status?: string; assignee?: string; due?: string; watch?: boolean; priority?: string }
+export interface CreationInitial { entity?: EntityKind; project?: string; status?: string; assignee?: string; due?: string; watch?: boolean; priority?: string; title?: string; parent?: string; workKind?: 'epic' | 'task' | 'bug' | 'subtask' }
 export type NativeCreationPhase = 'prepared' | 'sending' | 'unknown' | 'rejected' | 'committed';
 export interface NativeCreationAttempt {
   key: string;
@@ -51,9 +51,10 @@ const draftSchema = z.object({
   localDirectory: z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('existing'), path: z.string() }),
     z.object({ mode: z.literal('new'), parentPath: z.string(), folderName: z.string() }),
+    z.object({ mode: z.literal('auto'), path: z.string() }),
   ]).optional(),
   children: z.array(z.object({ draftId: z.string().min(1), values: z.record(z.string(), z.unknown()), body: z.string(), attempt: nativeAttemptSchema.optional() })),
-  watch: z.boolean(), initial: z.object({ entity: z.enum(entityKinds).optional(), project: z.string().optional(), status: z.string().optional(), assignee: z.string().optional(), due: z.string().optional(), watch: z.boolean().optional(), priority: z.string().optional() }),
+  watch: z.boolean(), initial: z.object({ entity: z.enum(entityKinds).optional(), project: z.string().optional(), status: z.string().optional(), assignee: z.string().optional(), due: z.string().optional(), watch: z.boolean().optional(), priority: z.string().optional(), title: z.string().optional(), parent: z.string().optional(), workKind: z.enum(['epic', 'task', 'bug', 'subtask']).optional() }),
   updatedAt: z.number(), attempt: nativeAttemptSchema.optional(), watchAttempt: watchAttemptSchema.optional(),
 });
 
@@ -74,9 +75,9 @@ export function initialCreationValues(kind: EntityKind, configuration: ProtocolC
   return {
     ...Object.fromEntries(fieldRegistry.filter(field => field.editable && field.name !== 'archived' && field.entities.includes(kind) && field.default !== undefined && (typeof field.default !== 'object' || Array.isArray(field.default))).map(field => [field.name, structuredClone(field.default)])),
     ...Object.fromEntries(configuration.custom_fields.filter(field => field.entities.includes(kind) && field.default !== undefined).map(field => [field.name, structuredClone(field.default)])),
-    title: '', ...(kind !== 'project' && initial.project ? { project: initial.project } : {}),
+    title: initial.title ?? '', ...(kind !== 'project' && initial.project ? { project: initial.project } : {}),
     ...(workflow ? { status: initial.status || workflow.initial } : {}),
-    ...(kind === 'work_item' ? { ...(initial.assignee ? { assignee: initial.assignee } : {}), ...(initial.due ? { due: initial.due } : {}), ...(initial.priority ? { priority: initial.priority } : {}) } : {}),
+    ...(kind === 'work_item' ? { ...(initial.workKind ? { kind: initial.workKind } : {}), ...(initial.parent ? { parent: initial.parent } : {}), ...(initial.assignee ? { assignee: initial.assignee } : {}), ...(initial.due ? { due: initial.due } : {}), ...(initial.priority ? { priority: initial.priority } : {}) } : {}),
   };
 }
 export function newCreationDraft(draftId: string, configuration: ProtocolConfiguration, initial: CreationInitial = {}, now = Date.now()): CreationDraft {

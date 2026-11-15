@@ -12,6 +12,7 @@ import { verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
 import { verifyWebDistribution } from "../../../vendor/openhands-extensions/scripts/web-build.mjs";
 import { enforceExternalAgentBoundary } from "../../server/agent/scripts/external-agent-packages.mjs";
 import { materializeDependencyLayout, planDependencyLayout, readDependencyGraph, writeDependencyLayout } from "./dependency-layout.mjs";
+import { readBundledPmResources } from "../../../packages/skill-resources/catalog.ts";
 export const repository = resolve(desktopRoot, "../..");
 export function run(command, args, cwd = repository) {
   return new Promise((resolveRun, reject) => {
@@ -143,6 +144,7 @@ export async function stageWorkspace(output, application, {
       "apps/server/agent/dist/cc-switch/host/PROVENANCE.md",
       "apps/server/agent/dist/cc-switch/host/UPSTREAM-SOURCES.md",
     ]) await access(join(output, name));
+    await readBundledPmResources(output);
     const require = createRequire(join(output, "apps/server/agent/dist/index.mjs"));
     require.resolve("@lydell/node-pty");
     for (const name of ["@anthropic-ai/claude-agent-sdk", "@cursor/sdk", "@muse-code/sdk"]) require.resolve(name);
@@ -155,7 +157,7 @@ export async function stageWorkspace(output, application, {
       await enforceExternalAgentBoundary(application, { prune: true });
       const manifest = JSON.parse(await readFile(join(desktopRoot, "package.json"), "utf8"));
       await writeFile(join(application, "package.json"), JSON.stringify({
-        name: "pm-agent-v4-desktop", productName: "PM Agent v4", version: manifest.version,
+        name: "pm-agent-v4-desktop", productName: "Dovspace", version: manifest.version,
         type: "module", main: "dist/main.mjs", description: manifest.description, private: true,
         dependencies: manifest.dependencies,
       }, null, 2) + "\n");

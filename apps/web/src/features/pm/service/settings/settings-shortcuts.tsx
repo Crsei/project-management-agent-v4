@@ -70,7 +70,7 @@ export function SettingsShortcuts({ mode }: SettingsPageProps) {
       ],
     },
   ]
-  return <SettingsSection wide title={t("键盘快捷键", "Keyboard shortcuts")} description={t("已接入按键、准确作用域与完整参考对照。此页仅提供说明，不注册新的快捷键。", "Implemented bindings, their exact scopes and the complete reference comparison. This page documents keys; it does not register new shortcuts.")}>
+  return <SettingsSection title={t("键盘快捷键", "Keyboard shortcuts")} description={t("已接入按键、准确作用域与完整参考对照。此页仅提供说明，不注册新的快捷键。", "Implemented bindings, their exact scopes and the complete reference comparison. This page documents keys; it does not register new shortcuts.")}>
     <SettingsNotice>
       {t("⌘ 对应 macOS Command，其他系统使用 Ctrl。按键受当前页面、焦点、权限与草稿状态约束；输入法组合输入和浏览器 / 操作系统快捷键不应当作应用命令。当前不支持自定义、重新绑定或一键启用参考快捷键。", "⌘ means Command on macOS; use Ctrl on other systems. Keys depend on the current page, focus, permissions and draft state. IME composition and browser or OS shortcuts are not application commands. Customization, rebinding and enabling the reference shortcuts are not supported.")}
       {mode === "lab" && <p className="mt-2">{t("当前是 Lab：下面的“仅正式工作区”描述正式产品已有实现，不代表本 Lab 页面绑定了它们。", "You are in Lab. Entries marked Service workspace only describe existing product behavior, not bindings on this Lab page.")}</p>}

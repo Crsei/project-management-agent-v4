@@ -4,10 +4,10 @@ import { DomainError } from '../../domain/src/core.ts';
 import type { Actor } from '../../domain/src/core.ts';
 import type { ArtifactCopyOriginResponse } from '../../contracts/src/artifact-files.ts';
 import { getMembership, requireCapability } from './access.ts';
-import type { CoreAccess } from './ports.ts';
+import type { CoreAccess, SqlExecutor } from './ports.ts';
 
 /** No negative/source-presence signal is exposed to a target-only reader. */
-export async function readArtifactCopyOrigin(pool: Pool, actor: Actor, workspaceId: string, versionId: string, core: () => Promise<CoreAccess>): Promise<ArtifactCopyOriginResponse> {
+export async function readArtifactCopyOrigin(pool: Pool, actor: Actor, workspaceId: string, versionId: string, core: (sql: SqlExecutor) => Promise<CoreAccess>): Promise<ArtifactCopyOriginResponse> {
   workspaceId = z.uuid().toLowerCase().parse(workspaceId);
   versionId = z.uuid().toLowerCase().parse(versionId);
   const sql = await pool.connect();
@@ -28,7 +28,7 @@ export async function readArtifactCopyOrigin(pool: Pool, actor: Actor, workspace
         await requireCapability(sql, actor, workspaceId, 'domain.read', row.source_project_id);
         // A deleted/unavailable Markdown source project is indistinguishable from
         // no provenance. Archived readable history is deliberately permitted.
-        await (await core()).get(row.source_project_id, 'project');
+        await (await core(sql)).get(row.source_project_id, 'project');
         origin = { sourceProjectId: row.source_project_id, sourceArtifactId: row.source_artifact_id, sourceArtifactVersionId: row.source_artifact_version_id, copiedAt: row.copied_at.toISOString() };
       } catch (error) {
         if (!(error instanceof DomainError)) throw error;

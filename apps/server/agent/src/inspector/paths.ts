@@ -5,6 +5,7 @@ import path from "node:path";
 export const IGNORED_DIRECTORIES: Record<string, true> = {
   ".git": true,
   ".pm": true,
+  ".dovspace": true,
   node_modules: true,
   dist: true,
   ".vite-cache": true,
@@ -33,10 +34,10 @@ export async function resolveInsideRoot(
   if (typeof relative !== "string") throw new InspectorPathError("路径必须是字符串。");
   if (relative.includes("\0")) throw new InspectorPathError("路径包含非法字符。");
   const normalizedInput = relative.replaceAll("\\", "/").replace(/^\/+/, "");
-  if (path.isAbsolute(relative)) throw new InspectorPathError("路径必须相对于项目根目录。");
+  if (path.isAbsolute(relative) || /^[a-z]:/i.test(relative)) throw new InspectorPathError("路径必须相对于项目根目录。");
   const absolute = path.resolve(root, normalizedInput);
   const lexicalRelative = path.relative(root, absolute);
-  if (lexicalRelative === ".." || lexicalRelative.startsWith(`..${path.sep}`)) {
+  if (lexicalRelative === ".." || lexicalRelative.startsWith(`..${path.sep}`) || path.isAbsolute(lexicalRelative)) {
     throw new InspectorPathError("路径不能超出项目根目录。");
   }
   const display = lexicalRelative.split(path.sep).join("/");
@@ -49,7 +50,7 @@ export async function resolveInsideRoot(
     try {
       const realTarget = await realpath(candidate);
       const realRelative = path.relative(realRoot, realTarget);
-      if (realRelative === ".." || realRelative.startsWith(`..${path.sep}`))
+      if (realRelative === ".." || realRelative.startsWith(`..${path.sep}`) || path.isAbsolute(realRelative))
         throw new InspectorPathError("路径不能通过符号链接超出项目根目录。");
       break;
     } catch (error) {

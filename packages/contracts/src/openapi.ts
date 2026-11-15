@@ -5,7 +5,7 @@ import { projectAuditPageSchema } from '../../domain/src/project-audit.ts';
 import { entityKinds } from '../../pm-schema/index.ts';
 import { graphQuerySchema } from '../../pm-schema/graph.ts';
 import { coreCreationAttemptSchema } from './core-creation.ts';
-import { workspaceIdentitySchema } from './workspace-identity.ts';
+import { workspaceIdentitySchema, workspaceOrganizationSchema } from './workspace-identity.ts';
 import { WORKSPACE_COLORS, WORKSPACE_ICONS } from '../../domain/src/workspace-identity.ts';
 import { accountSecuritySchemas } from './account-security-schemas.ts';
 import { taskCommentSchema, taskCommentRevisionSchema, taskCommentsPageSchema, taskCommentHistoryPageSchema } from '../../domain/src/task-comments.ts';
@@ -14,6 +14,8 @@ import { artifactCopyOriginResponseSchema } from './artifact-files.ts';
 import { accountRecoverySchemas } from './account-recovery-schemas.ts';
 import { accountRecoveryPaths } from './account-recovery-openapi.ts';
 import { webhookResponseSchemas } from './webhook-schemas.ts';
+import { imGatewayPaths } from './im-gateway-openapi.ts';
+import { imBindingSchema, imLinkCodeSchema, imSettingsSchema } from './im-gateway.ts';
 import { localProjectPaths } from './local-project-openapi.ts';
 import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
 import { documentSourcePaths } from './document-source-openapi.ts';
@@ -25,7 +27,12 @@ import { automationPmPaths } from './automation-pm-openapi.ts';
 import { workflowTaskTransitionPaths } from './workflow-task-transition-openapi.ts';
 import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
 import { instanceSetupSchemas } from './instance-setup.ts';
+import { registrationSchemas } from './registration.ts';
 import { workspaceCreationRequestSchema, workspaceCreationRecoveryRequestSchema, workspaceCreationResultSchema } from './workspace-creation.ts';
+import { onboardingStateSchema, updateOnboardingRequestSchema } from './onboarding.ts';
+import { taskBriefPaths } from './task-brief-openapi.ts';
+import { peoplePaths } from './people-openapi.ts';
+import { memberLifecyclePaths } from './member-lifecycle-openapi.ts';
 
 // Payload validators remain owned by application commands. This module only
 // describes their wire input and the HTTP adapter's public response envelopes.
@@ -64,6 +71,33 @@ const dashboardRecord = (data: JsonSchema, extra: Record<string, JsonSchema> = {
   data, createdAt: timestamp, updatedAt: timestamp, createdBy: uuid, ...extra,
 });
 
+const schemaMapKeywords = ['$defs', 'properties', 'patternProperties', 'dependentSchemas'] as const;
+const schemaArrayKeywords = ['allOf', 'anyOf', 'oneOf', 'prefixItems'] as const;
+const schemaKeywords = ['additionalProperties', 'unevaluatedProperties', 'propertyNames', 'items', 'contains', 'not', 'if', 'then', 'else', 'unevaluatedItems', 'contentSchema'] as const;
+
+function componentSchema(name: string, validator: z.ZodType, io: 'input' | 'output'): JsonSchema {
+  const schema = z.toJSONSchema(validator, { io, target: 'draft-2020-12' });
+  delete schema.$schema;
+  const base = `#/components/schemas/${name.replaceAll('~', '~0').replaceAll('/', '~1')}`;
+  // Zod emits a standalone resource: both "#" and "#/$defs/..." refer to
+  // that resource, not to the OpenAPI root where it is embedded.
+  const rebase = (current: JsonSchema | boolean): void => {
+    if (typeof current === 'boolean') return;
+    if (typeof current.$ref === 'string' && (current.$ref === '#' || current.$ref.startsWith('#/')))
+      current.$ref = base + current.$ref.slice(1);
+    // Only schema-valued keywords are traversed. Defaults, examples and const
+    // values can contain literal "$ref" data that must remain unchanged.
+    for (const keyword of schemaMapKeywords)
+      for (const child of Object.values(current[keyword] ?? {})) rebase(child as JsonSchema | boolean);
+    for (const keyword of schemaArrayKeywords)
+      for (const child of current[keyword] ?? []) rebase(child);
+    for (const keyword of schemaKeywords)
+      if (current[keyword] !== undefined) rebase(current[keyword]);
+  };
+  rebase(schema);
+  return schema;
+}
+
 export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   const schemas: Record<string, JsonSchema> = {
     Actor: object({ id: uuid, email: { type: 'string' }, name: { type: 'string' } }),
@@ -87,14 +121,16 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     Readiness: { oneOf: [object({ status: { const: 'not_ready' }, reason: { const: 'backend_not_initialized' } }), object({ status: { enum: ['ready', 'not_ready'] }, checks: object({ database: { type: 'boolean' }, storage: { type: 'boolean' }, worker: { type: 'boolean' }, core: { type: 'boolean' }, quarantinedEvents: { type: 'integer', minimum: 0 } }) })] },
     Capabilities: object({ stage: { enum: ['bootstrap', 'backend'] }, ...Object.fromEntries(['business', 'database', 'storage', 'markdownCore', 'worker', 'realtime', 'localProjects'].map(name => [name, object({ enabled: { type: 'boolean' } })])), execution: object({ enabled: { const: false } }), accountRecovery: object({ request: object({ enabled: boolean }), verification: object({ enabled: boolean }) }) }),
   };
-  const workspaceIdentity = z.toJSONSchema(workspaceIdentitySchema, { io: 'output', target: 'draft-2020-12' });
-  delete workspaceIdentity.$schema;
-  schemas.WorkspaceIdentity = workspaceIdentity;
+  schemas.WorkspaceIdentity = componentSchema('WorkspaceIdentity', workspaceIdentitySchema, 'output');
+  schemas.WorkspaceOrganization = componentSchema('WorkspaceOrganization', workspaceOrganizationSchema, 'output');
   for (const [name, validator] of Object.entries({
     ...accountSecuritySchemas,
     ...accountRecoverySchemas, ...webhookResponseSchemas,
     ...instanceSetupSchemas,
+    ...registrationSchemas,
     WorkspaceCreationRequest: workspaceCreationRequestSchema, WorkspaceCreationRecoveryRequest: workspaceCreationRecoveryRequestSchema, WorkspaceCreationResult: workspaceCreationResultSchema,
+    OnboardingState: onboardingStateSchema, UpdateOnboardingRequest: updateOnboardingRequestSchema,
+    ImSettings: imSettingsSchema, ImBinding: imBindingSchema, ImLinkCode: imLinkCodeSchema,
     ArtifactCopyOriginResponse: artifactCopyOriginResponseSchema,
     TaskComment: taskCommentSchema, TaskCommentRevision: taskCommentRevisionSchema,
     TaskCommentsPage: taskCommentsPageSchema, TaskCommentHistoryPage: taskCommentHistoryPageSchema,
@@ -102,9 +138,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     NotificationInboxPage: notificationInboxPageSchema, MentionCandidatesPage: mentionCandidatesPageSchema,
     AgentChatToolResult: agentChatToolResultSchema,
   })) {
-    const schema = z.toJSONSchema(validator, { io: 'output', target: 'draft-2020-12' });
-    delete schema.$schema;
-    schemas[name] = schema;
+    schemas[name] = componentSchema(name, validator, 'output');
   }
   schemas.PmToolScope = object({ kind: { enum: ['workspace', 'projects'] }, projectIds: array(coreIdentifier) });
   schemas.PmToolRequest = object({ operationId: uuid, name: text, arguments: {}, scope: ref('PmToolScope'), threadId: text, messageId: text, generationId: text });
@@ -130,12 +164,12 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     failureCode: nullable({ enum: ['smtp_rejected', 'smtp_unavailable', 'smtp_configuration', 'send_outcome_unknown', 'send_lease_expired', 'token_unavailable'] }), updatedAt: timestamp,
   });
   schemas.MemberInvitation = object({
-    id: uuid, workspaceId: uuid, email: text, role: ref('MemberRole'), projectIds: nullable(array(coreIdentifier)),
+    id: uuid, workspaceId: uuid, email: text, role: ref('MemberRole'), projectIds: nullable(array(coreIdentifier)), teamIds: array(uuid),
     status: { enum: ['pending', 'accepted', 'revoked', 'expired'] }, version, expiresAt: timestamp, createdAt: timestamp, updatedAt: timestamp,
     invitedBy: uuid, acceptedAt: nullable(timestamp), delivery: nullable(ref('InvitationDelivery')),
   });
   schemas.InvitationList = object({ enabled: boolean, items: array(ref('MemberInvitation')) });
-  schemas.InvitationInspect = object({ workspaceId: uuid, workspaceName: text, email: text, role: ref('MemberRole'), projectIds: nullable(array(coreIdentifier)), expiresAt: timestamp, accountExists: boolean });
+  schemas.InvitationInspect = object({ workspaceId: uuid, workspaceName: text, email: text, role: ref('MemberRole'), projectIds: nullable(array(coreIdentifier)), teamIds: array(uuid), teams: array(object({ id: uuid, name: text })), expiresAt: timestamp, accountExists: boolean });
   schemas.InvitationAccept = object({ workspaceId: uuid, userId: uuid, email: text, alreadyAccepted: boolean });
   schemas.InvitationReceipt = object({ outcome: nullable(ref('InvitationAccept')) });
   schemas.TaskWatch = dashboardRecord(object({ taskId: coreIdentifier, watching: boolean }));
@@ -199,7 +233,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   schemas.ProjectTeamAssignment = object({ teamIds: array(uuid) });
   schemas.ProjectDirectoryVersion = object({ id: uuid, version });
   schemas.ProjectTeamFragment = object({ id: uuid, name: text, members: array(ref('ProjectIdentity')) });
-  schemas.ProjectDirectoryProject = object({ projectId: coreIdentifier, identities: array(ref('ProjectIdentity')), teams: array(ref('ProjectTeamFragment')), assignment: nullable(ref('ProjectDirectoryVersion')) });
+  schemas.ProjectDirectoryProject = object({ projectId: coreIdentifier, identities: array(ref('ProjectIdentity')), participants: array(ref('ProjectIdentity')), participation: nullable(ref('ProjectDirectoryVersion')), teams: array(ref('ProjectTeamFragment')), assignment: nullable(ref('ProjectDirectoryVersion')) });
   schemas.ProjectDirectoryManagement = object({ members: array(ref('ProjectIdentity')), teams: array(ref('ProjectTeamRecord')) });
   schemas.ProjectDirectory = object({ projects: array(ref('ProjectDirectoryProject')), management: nullable(ref('ProjectDirectoryManagement')) });
   schemas.TeamDirectoryTeam = dashboardRecord(ref('ProjectTeam'), { createdBy: nullableUuid, projectIds: array(coreIdentifier), activityAt: timestamp, openWorkCount: nullable(nonnegativeInteger), scopeComplete: boolean });
@@ -215,12 +249,8 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   schemas.TeamWorkloadTeam = object({ id: uuid, name: text, memberIds: array(uuid), taskIds: array(coreIdentifier) });
   schemas.TeamWorkloadSummary = object({ openCount: nonnegativeInteger, doneCount: nonnegativeInteger, knownOpenPoints: { type: 'number', minimum: 0 }, unknownEstimateCount: nonnegativeInteger, overloadedMemberCount: nonnegativeInteger, unknownOverloadMemberCount: nonnegativeInteger, unknownAssigneeCount: nonnegativeInteger });
   schemas.TeamWorkload = object({ serverNow: timestamp, unit: { const: 'concurrent_open_points' }, members: array(ref('TeamWorkloadMember')), tasks: array(ref('TeamWorkloadTask')), unassignedTaskIds: array(coreIdentifier), teams: array(ref('TeamWorkloadTeam')), summary: ref('TeamWorkloadSummary'), scope: object({ complete: boolean, projectIds: array(coreIdentifier), reason: { enum: ['workspace', 'projects'] } }) });
-  const auditPage = z.toJSONSchema(projectAuditPageSchema, { io: 'output', target: 'draft-2020-12' });
-  delete auditPage.$schema;
-  schemas.ProjectAuditPage = auditPage;
-  const graphQuery = z.toJSONSchema(graphQuerySchema, { io: 'input', target: 'draft-2020-12' });
-  delete graphQuery.$schema;
-  schemas.GraphQuery = { ...graphQuery, description: 'Read-only graph query. View fields and bounded where expressions use the current protocol query DSL and are semantically validated by the server. Depth is an undirected 1..3-hop neighborhood over selected relation kinds; omitted relations selects all, [] selects none. Archive defaults to exclude.' };
+  schemas.ProjectAuditPage = componentSchema('ProjectAuditPage', projectAuditPageSchema, 'output');
+  schemas.GraphQuery = { ...componentSchema('GraphQuery', graphQuerySchema, 'input'), description: 'Read-only graph query. View fields and bounded where expressions use the current protocol query DSL and are semantically validated by the server. Depth is an undirected 1..3-hop neighborhood over selected relation kinds; omitted relations selects all, [] selects none. Archive defaults to exclude.' };
   schemas.GraphNode = object({ id: coreIdentifier, title: text, entity: { type: 'string', enum: entityKinds }, status: text, archived: boolean, stale: boolean }, ['id', 'title', 'entity', 'archived', 'stale']);
   schemas.GraphLink = object({ id: text, source: coreIdentifier, target: coreIdentifier, kind: text });
   schemas.GraphData = object({
@@ -228,16 +258,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     unresolved: array(object({ source: coreIdentifier, target: text, reason: { enum: ['missing', 'ambiguous'] } })),
     availableRelations: array(text),
   });
-  const creationAttempt = z.toJSONSchema(coreCreationAttemptSchema, { io: 'output', target: 'draft-2020-12' });
-  delete creationAttempt.$schema;
-  const rebaseCreationReferences = (value: unknown): void => {
-    if (value === null || typeof value !== 'object') return;
-    if ('$ref' in value && typeof value.$ref === 'string' && (value.$ref === '#' || value.$ref.startsWith('#/')))
-      value.$ref = `#/components/schemas/CoreCreationAttempt${value.$ref.slice(1)}`;
-    for (const child of Object.values(value)) rebaseCreationReferences(child);
-  };
-  rebaseCreationReferences(creationAttempt);
-  schemas.CoreCreationAttempt = { ...creationAttempt, description: 'Actor-scoped outcome of a native CreateCoreEntity request. This is not a PM command receipt. A missing record or pending write never proves that sending a new creation is safe. A committed revision describes the original write; current source state is reported separately.' };
+  schemas.CoreCreationAttempt = { ...componentSchema('CoreCreationAttempt', coreCreationAttemptSchema, 'output'), description: 'Actor-scoped outcome of a native CreateCoreEntity request. This is not a PM command receipt. A missing record or pending write never proves that sending a new creation is safe. A committed revision describes the original write; current source state is reported separately.' };
   schemas.CoreErrorResponse = {
     oneOf: [
       ref('ErrorResponse'),
@@ -251,8 +272,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   const mapping: Record<string, string> = {};
   for (const name of Object.keys(registry).sort()) {
     if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name)) throw new Error(`Invalid command schema name: ${name}`);
-    const payload = z.toJSONSchema(registry[name]!.payload, { io: 'input', target: 'draft-2020-12' });
-    delete payload.$schema;
+    const payload = componentSchema(`${name}Payload`, registry[name]!.payload, 'input');
     if (payload.type !== 'object' || payload.additionalProperties !== false) throw new Error(`Command ${name} must have a strict object payload`);
     schemas[`${name}Payload`] = payload;
     schemas[`${name}Command`] = object({
@@ -277,7 +297,11 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...automationStudioHelperPaths(),
     ...automationPmPaths(),
     ...workflowTaskTransitionPaths(),
+    ...imGatewayPaths,
     ...productRoadmapPaths(),
+    ...taskBriefPaths(),
+    ...peoplePaths(),
+    ...memberLifecyclePaths(),
     '/health/live': { get: { operationId: 'getLiveness', summary: 'Process liveness only', security: [], responses: { 200: response('Process responds; no business-readiness guarantee.', object({ status: { const: 'alive' } })) } } },
     '/health/ready': { get: { operationId: 'getReadiness', summary: 'Database, storage, live Worker heartbeat and quarantined outbox readiness', security: [], responses: { 200: response('All readiness checks passed.', ref('Readiness')), 503: response('Backend is uninitialized or at least one readiness check failed.', ref('Readiness')) } } },
     '/api/v1/capabilities': { get: { operationId: 'getCapabilities', summary: 'Configured phase-one capabilities; enabled does not imply readiness', security: [], responses: { 200: response('Execution remains disabled. Check /health/ready before business traffic.', ref('Capabilities')) } } },
@@ -288,7 +312,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     '/openapi.json': { get: { operationId: 'getOpenApi', summary: 'Live contract generated from the command registry', security: [], responses: { 200: response('OpenAPI 3.1 document', { type: 'object', additionalProperties: true }) } } },
     '/api/v1/setup/status': { get: {
       operationId: 'setupStatus', summary: 'Read minimal one-time instance setup state', security: [],
-      description: 'Any existing user or workspace permanently closes claiming. Database/schema failures return 503, never an uninitialized result. Registration remains invite-only. No query inputs; no-store and no-referrer.',
+      description: 'Any existing user or workspace permanently closes claiming and opens registration. Database/schema failures return 503, never an uninitialized result. No query inputs; no-store and no-referrer.',
       responses: { 200: response('Authoritative initialized and deployment-prepared state.', ref('InstanceSetupStatus')), ...errors(400, 403, 503) },
     } },
     '/api/v1/setup': { post: {
@@ -300,9 +324,22 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
         ...errors(400, 403, 409, 413, 429, 503),
       },
     } },
+    '/api/v1/auth/register': { post: {
+      operationId: 'register', summary: 'Create an independent account on an initialized instance', security: [],
+      description: 'Strict JSON, no query and at most 4096 bytes. Same-origin writes only. User and ordinary session commit atomically, with no workspace membership. Existing or disabled email conflicts; an authenticated session must first sign out. Unknown results must not be replayed automatically; check the current session and use ordinary login.',
+      requestBody: { required: true, content: json(ref('RegisterRequest')) },
+      responses: { 200: { ...response('Account and session expiry; no token or password in JSON.', ref('RegisterResponse')), headers: { 'Set-Cookie': { description: 'pm_v4_session; HttpOnly; SameSite=Strict; Path=/; eight-hour expiry; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 403, 409, 413, 429, 503) },
+    } },
     '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_v4_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
     '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_v4_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
     '/api/v1/auth/me': { get: { ...secured('Read the authenticated actor', object({ actor: ref('Actor') })), operationId: 'getMe' } },
+    '/api/v1/auth/onboarding': {
+      get: { ...secured('Read current account onboarding state; revoked or unready workspace IDs are redacted', ref('OnboardingState')), operationId: 'getOnboarding' },
+      patch: { ...secured('Compare-and-swap current account onboarding acknowledgements', ref('OnboardingState')), operationId: 'updateOnboarding',
+        requestBody: { required: true, content: json(ref('UpdateOnboardingRequest')) },
+        description: 'Actor and revision must match. Workspace selection and completion require current authorization and readiness. Profile and AI acknowledgements do not prove configuration. After an unknown outcome reread; do not automatically retry.',
+        responses: { 200: response('Updated onboarding state.', ref('OnboardingState')), ...errors(400, 401, 409, 503) } },
+    },
     '/api/v1/auth/security': { get: { ...secured('Read own credential version and active sessions; token hashes and unobserved device metadata are never exposed', ref('AccountSecurity')), operationId: 'getAccountSecurity' } },
     '/api/v1/auth/security/password': { post: {
       ...secured('Change own password with current-password verification and revoke all other sessions', ref('AccountSecurityAction')),
@@ -331,6 +368,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     '/api/v1/workspace-creations/{key}': { get: { ...secured('Read the current actor’s original workspace creation without replaying it', ref('WorkspaceCreationResult'), [param('key', 'path', uuid)]), operationId: 'getWorkspaceCreation' } },
     '/api/v1/workspace-creations/{key}/recover': { post: { ...secured('Explicitly resume the original frozen Nova initialization; never create a replacement workspace', ref('WorkspaceCreationResult'), [param('key', 'path', uuid)]), operationId: 'recoverWorkspaceCreation', requestBody: { required: true, content: json(ref('WorkspaceCreationRecoveryRequest')) }, description: 'The required expectedActorId must match the authenticated request actor before looking up or resuming the original initialization. A changed account returns 409 session_changed without side effects; the original key is retained.' } },
     '/api/v1/workspaces/{workspaceId}/identity': { get: { ...secured('Read presentation identity for a current authorized workspace; its version is independent of membership versions', ref('WorkspaceIdentity'), [workspace]), operationId: 'getWorkspaceIdentity' } },
+    '/api/v1/workspaces/{workspaceId}/organization': { get: { ...secured('Read optional organization tax ID and business address; requires workspace access.manage', ref('WorkspaceOrganization'), [workspace]), operationId: 'getWorkspaceOrganization', description: 'Organization details are intentionally not part of member-visible presentation identity. The shared identity version advances when these fields are updated; events never include their values.' } },
     '/api/v1/workspaces/{workspaceId}/members': { get: { ...secured('List members, including revoked memberships; requires workspace access.manage', array(ref('Member')), [workspace]), operationId: 'listMembers' } },
     '/api/v1/workspaces/{workspaceId}/members/directory': { get: { ...secured('Read the current scoped and redacted member directory; directory.read or workspace access.manage required', ref('MemberDirectory'), [workspace]), operationId: 'getMemberDirectory', description: 'Other members contact and authorization fields are redacted for non-managers. Team membership grants no permission. Presence is derived from authoritative heartbeats and TTL; twoFactorEnabled remains null while no trusted MFA source exists.' } },
     '/api/v1/workspaces/{workspaceId}/members/invitations': { get: { ...secured('Read workspace invitations and delivery state; requires workspace access.manage', ref('InvitationList'), [workspace]), operationId: 'listMemberInvitations', description: 'enabled reflects configured SMTP support, not successful delivery. SMTP acceptance does not imply inbox delivery. Raw invitation tokens are never returned.' } },
@@ -396,20 +434,20 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
       responses: { 200: response('Authorized graph only, including eligible isolated nodes.', ref('GraphData')), ...errors(400, 401, 403, 404, 422, 503) },
     } },
     '/api/v1/workspaces/{workspaceId}/core/creation-attempts/{key}': { get: {
-      ...secured('Read the original native entity creation outcome without replaying or repairing it', ref('CoreCreationAttempt'), [workspace, param('key', 'path', { type: 'string', minLength: 1, maxLength: 512 }, true, 'The original Idempotency-Key sent to POST core/entities. The authenticated actor and workspace scope are implicit.')]),
+      ...secured('Read the original native creation outcome without replaying or repairing it', ref('CoreCreationAttempt'), [workspace, param('key', 'path', { type: 'string', minLength: 1, maxLength: 512 }, true, 'The original Idempotency-Key sent to POST core/items or core/entities. The authenticated actor and workspace scope are implicit.'), param('kind', 'query', { type: 'string', enum: ['task', 'entity'], default: 'entity' }, false, 'task selects the original core/items action; entity selects core/entities. No cross-action fallback.')]),
       operationId: 'getCoreCreationAttempt',
-      description: 'Rechecks current authorization. Never creates an entity or repairs audit data. Pending or not_found outcomes must retain the original request; never replace its key to bypass uncertainty. The response does not expose another actor’s attempt.',
+      description: 'Rechecks current authorization. Never creates an entity or repairs audit data. Pending or not_found outcomes must retain the original request and kind; never replace its key or change kind to bypass uncertainty. The response does not expose another actor’s attempt.',
       responses: { 200: response('Original native creation outcome.', ref('CoreCreationAttempt')), ...Object.fromEntries([400, 401, 403, 404, 409, 422, 500, 503].map(status => [status, response('Native diagnostic or authorized request error. Retain the original creation attempt.', ref('CoreErrorResponse'))])) },
     } },
     '/api/v1/workspaces/{workspaceId}/core/creation-attempts/{key}/recover': { post: {
-      ...secured('Explicitly reconcile a native creation from durable file and audit evidence', ref('CoreCreationAttempt'), [workspace, param('key', 'path', { type: 'string', minLength: 1, maxLength: 512 })]),
+      ...secured('Explicitly reconcile a native creation from durable file and audit evidence', ref('CoreCreationAttempt'), [workspace, param('key', 'path', { type: 'string', minLength: 1, maxLength: 512 }), param('kind', 'query', { type: 'string', enum: ['task', 'entity'], default: 'entity' }, false, 'Must match the original task/core/items or entity/core/entities creation action.')]),
       operationId: 'recoverCoreCreationAttempt',
-      description: 'Repairs only the original attempt’s recoverable audit state after current authorization. Does not resend entity creation, match by title, or allocate a replacement ID. Unresolved file outcomes remain pending. After a transport failure query the same key.',
+      description: 'Repairs only the original attempt’s recoverable audit state after current authorization. Does not resend creation, match by title, change action kind, or allocate a replacement ID. Unresolved file outcomes remain pending. After a transport failure query the same key and kind.',
       requestBody: { required: true, content: json(object({})) },
       responses: { 200: response('Original outcome after explicit reconciliation; pending remains unresolved.', ref('CoreCreationAttempt')), ...Object.fromEntries([400, 401, 403, 404, 409, 422, 500, 503].map(status => [status, response('Native diagnostic or authorized request error. No replacement creation was dispatched.', ref('CoreErrorResponse'))])) },
     } },
     '/api/v1/workspaces/{workspaceId}/commands': { post: { operationId: 'executeCommand', summary: 'Execute one command atomically with receipt and outbox', security: authenticated, parameters: [workspace], requestBody: { required: true, content: json(ref('Command')) }, responses: { 200: response('Committed command or identical prior receipt. POST returns receipt.httpStatus; no automatic write retry.', ref('CommandReceipt')), ...Object.fromEntries([400, 401, 403, 404, 409, 413, 503].map(status => [status, response('Durable rejection receipt, or a request/authorization/infrastructure ErrorResponse. idempotency_conflict means this commandId represents a different request.', { oneOf: [ref('CommandReceipt'), ref('ErrorResponse')] })])) } } },
-    '/api/v1/workspaces/{workspaceId}/commands/{commandId}': { get: { ...secured('Query the original commandId after an unknown write outcome', ref('CommandReceipt'), [workspace, param('commandId', 'path', uuid)]), operationId: 'getCommandReceipt', description: 'Only the original actor can read a receipt, subject to current scope and read/manage permission. GET returns 200 even when its stored receipt.httpStatus represents a rejection. 404 is not proof that a concurrent command will never commit.' } },
+    '/api/v1/workspaces/{workspaceId}/commands/{commandId}': { get: { ...secured('Query the original commandId after an unknown write outcome', ref('CommandReceipt'), [workspace, param('commandId', 'path', uuid)]), operationId: 'getCommandReceipt', description: 'Only the original actor can read a receipt, subject to current scope and read/manage permission. The sole post-membership exception is a committed self LeaveWorkspace receipt: it returns only the original commandId, userId, membership version and revokedAt, never business content or restored access. GET returns 200 even when its stored receipt.httpStatus represents a rejection. 404 is not proof that a concurrent command will never commit.' } },
     '/api/v1/workspaces/{workspaceId}/commands/{commandId}/recover': { post: {
       ...secured('Explicitly resume the original durable project duplication', ref('CommandReceipt'), [workspace, param('commandId', 'path', uuid)]),
       operationId: 'recoverCommand',

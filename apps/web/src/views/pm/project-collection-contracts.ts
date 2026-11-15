@@ -16,6 +16,8 @@ export type ProjectCollectionRecord = {
   teamSize: number | null
   /** Known identities only; teamSize may include members absent from this projection. */
   members?: readonly { id: string; name: string; avatarUrl?: string | null }[]
+  peopleContent?: ReactNode
+  ownerContent?: ReactNode
   health: number | null
   /** Explicit human assessment; undefined keeps non-service callers' existing metric. */
   healthAssessment?: { status: "on_track" | "at_risk" | "off_track"; rationale: string } | null

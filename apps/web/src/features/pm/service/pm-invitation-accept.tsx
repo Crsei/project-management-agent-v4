@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import { Link, useNavigate } from "react-router"
 import { z } from "zod"
 import { ApiError, ProjectManagementClient, type InvitationAcceptDto, type InvitationAcceptPayload, type InvitationInspectDto } from "@contracts"
+import { DovspaceMark, DovspaceWordmark, DovspaceLoading } from "@/components/dovspace-brand"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/lib/i18n-provider"
@@ -12,6 +13,7 @@ const acceptanceReceipt = z.object({ outcome: acceptanceOutcome.nullable() })
 const invitationInspection = z.object({
   workspaceId: z.string().uuid(), workspaceName: z.string(), email: z.email(), role: z.enum(["admin", "member", "guest"]),
   projectIds: z.array(z.string()).nullable(), expiresAt: z.string().datetime(), accountExists: z.boolean(),
+  teamIds: z.array(z.uuid()), teams: z.array(z.object({ id: z.uuid(), name: z.string() })),
 })
 
 /** Public bearer-link flow: secret input never enters a route query, query cache,
@@ -27,6 +29,7 @@ export function PmInvitationAcceptPage() {
   const [inspecting, setInspecting] = useState(false)
   const [inspectionRevision, setInspectionRevision] = useState(0)
   const [phase, setPhase] = useState<AcceptancePhase>("ready")
+  const [step, setStep] = useState<0 | 1 | 2>(0)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState("")
   const [password, setPassword] = useState("")
@@ -47,6 +50,7 @@ export function PmInvitationAcceptPage() {
       setOutcome(null)
       setName("")
       setPassword("")
+      setStep(0)
       setPhase("ready")
       setError(null)
     }
@@ -83,6 +87,7 @@ export function PmInvitationAcceptPage() {
     if (!mounted.current) return
     setOutcome(result)
     setPhase("accepted")
+    setPassword("")
     setToken("")
     attempt.current = null
     setError(null)
@@ -134,6 +139,14 @@ export function PmInvitationAcceptPage() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (phase !== "ready" || !inspection || !token || inspecting || requestInFlight.current) return
+    if (step === 0) { setStep(1); return }
+    if (step === 1) {
+      if (!inspection.accountExists && !name.trim()) { setError(t("请输入姓名。", "Enter your name.")); return }
+      if (!password || password.length > 256 || (!inspection.accountExists && password.length < 12)) return
+      setStep(2)
+      return
+    }
+    if ((!inspection.accountExists && (!name.trim() || name.trim().length > 200 || password.length < 12)) || !password || password.length > 256) { setStep(1); return }
     const request: InvitationAcceptPayload = { commandId: crypto.randomUUID(), token, password, ...(!inspection.accountExists ? { name: name.trim() } : {}) }
     attempt.current = request
     void accept(request, false)
@@ -141,21 +154,25 @@ export function PmInvitationAcceptPage() {
   const unknown = phase === "unknown" || phase === "checking" || phase === "retry-ready"
   const busy = inspecting || phase === "submitting" || phase === "checking"
   return <main className="mx-auto min-h-dvh w-full max-w-xl space-y-6 px-4 py-10">
-    <header className="space-y-2"><h1 className="text-2xl font-semibold">{t("接受工作区邀请", "Accept workspace invitation")}</h1><p className="text-sm text-muted-foreground">{t("邀请只适用于邮件中的邮箱。链接令牌只在本页内存中使用，刷新后请从原邮件重新打开。", "This invitation applies only to its email address. The link token stays only in this page's memory; reopen the email link after refreshing.")}</p></header>
+    <header className="space-y-2"><div className="flex items-center gap-3"><DovspaceMark size={30} decorative /><DovspaceWordmark height={30} /></div><h1 className="text-2xl font-semibold">{t("接受工作区邀请", "Accept workspace invitation")}</h1><p className="text-sm text-muted-foreground">{t("邀请只适用于邮件中的邮箱。链接令牌只在本页内存中使用，刷新后请从原邮件重新打开。", "This invitation applies only to its email address. The link token stays only in this page's memory; reopen the email link after refreshing.")}</p></header>
     {!token && !outcome && <p role="alert">{t("缺少邀请令牌。请从最新邀请邮件打开完整链接；不要将令牌放到查询参数中。", "The invitation token is missing. Open the complete link from the latest email; do not put the token in query parameters.")}</p>}
-    {inspecting && <p role="status">{t("正在检查邀请…", "Inspecting invitation…")}</p>}
+    {inspecting && <DovspaceLoading message={t("正在检查邀请…", "Inspecting invitation…")} />}
     {error && <p role="alert" className="rounded border p-3 text-sm">{error}</p>}
     {inspection && !outcome && <section className="space-y-4 rounded-lg border p-5">
-      <h2 className="font-semibold">{inspection.workspaceName}</h2><dl className="grid gap-2 text-sm"><div><dt>{t("受邀邮箱", "Invited email")}</dt><dd className="break-all">{inspection.email}</dd></div><div><dt>{t("角色与范围", "Role and scope")}</dt><dd>{inspection.role} · {inspection.projectIds?.join(", ") ?? t("整个工作区", "Whole workspace")}</dd></div><div><dt>{t("到期时间", "Expires")}</dt><dd><time dateTime={inspection.expiresAt}>{inspection.expiresAt}</time></dd></div></dl>
-      <p className="text-sm">{inspection.accountExists ? t("该邮箱已有账号。请验证原密码；邀请不会更改该账号的密码。", "An account already exists for this email. Confirm its original password; the invitation does not change it.") : t("该邮箱尚未注册。仅凭本邀请可创建账号，姓名与密码将在接受时原子保存。", "This email has no account. This invitation permits account creation; name and password are saved atomically on acceptance.")}</p>
+      <p className="text-sm text-muted-foreground" aria-live="polite">{t(`第 ${step + 1} 步，共 3 步`, `Step ${step + 1} of 3`)}</p>
+      {step === 0 && <><h2 className="font-semibold">{inspection.workspaceName}</h2><dl className="grid gap-2 text-sm"><div><dt>{t("受邀邮箱", "Invited email")}</dt><dd className="break-all">{inspection.email}</dd></div><div><dt>{t("角色与范围", "Role and scope")}</dt><dd>{inspection.role} · {inspection.projectIds?.join(", ") ?? t("整个工作区", "Whole workspace")}</dd></div><div><dt>{t("到期时间", "Expires")}</dt><dd><time dateTime={inspection.expiresAt}>{inspection.expiresAt}</time></dd></div></dl></>}
+      {step === 1 && <p className="text-sm">{inspection.accountExists ? t("该邮箱已有账号。请验证原密码；邀请不会更改该账号的密码。", "An account already exists for this email. Confirm its original password; the invitation does not change it.") : t("该邮箱尚未注册。仅凭本邀请可创建账号，姓名与密码将在接受时原子保存。", "This email has no account. This invitation permits account creation; name and password are saved atomically on acceptance.")}</p>}
+      {step === 2 && <p className="text-sm">{t("确认接受邀请", "Confirm invitation acceptance")}: {inspection.email} · {inspection.workspaceName} · {inspection.role}{!inspection.accountExists && <> · {name.trim()}</>}</p>}
+      {(step === 0 || step === 2) && <div className="space-y-2 text-sm"><p>{t("接受后加入团队：", "Teams joined upon acceptance: ")}{inspection.teams.map(team => team.name).join(", ") || t("无", "None")}</p><p className="text-muted-foreground">{t("团队归属不增加授权。接受时会重新核验邀请人、项目与团队；已归档团队会阻止接受，请联系管理员重新邀请。", "Teams grant no additional access. Inviter authority, projects and teams are checked again on acceptance; an archived team blocks acceptance until an administrator replaces the invitation.")}</p></div>}
       <form onSubmit={submit} className="space-y-3"><fieldset disabled={busy || unknown} className="space-y-3">
-        {!inspection.accountExists && <label className="grid gap-1 text-sm"><span>{t("姓名", "Name")}</span><Input autoComplete="name" value={name} required maxLength={200} onChange={event => setName(event.target.value)} /></label>}
-        <label className="grid gap-1 text-sm"><span>{inspection.accountExists ? t("现有账号原密码", "Existing account password") : t("新账号密码（至少 12 位）", "New account password (at least 12 characters)")}</span><Input type="password" autoComplete={inspection.accountExists ? "current-password" : "new-password"} value={password} required minLength={inspection.accountExists ? 1 : 12} maxLength={256} onChange={event => setPassword(event.target.value)} /></label>
-        <Button type="submit">{phase === "submitting" ? t("正在接受…", "Accepting…") : inspection.accountExists ? t("验证密码并接受", "Confirm password and accept") : t("创建受邀账号并接受", "Create invited account and accept")}</Button>
+        {step === 1 && !inspection.accountExists && <label className="grid gap-1 text-sm"><span>{t("姓名", "Name")}</span><Input autoComplete="name" value={name} required maxLength={200} onChange={event => { setName(event.target.value); setError(null) }} /></label>}
+        {step === 1 && <label className="grid gap-1 text-sm"><span>{inspection.accountExists ? t("现有账号原密码", "Existing account password") : t("新账号密码（至少 12 位）", "New account password (at least 12 characters)")}</span><Input type="password" autoComplete={inspection.accountExists ? "current-password" : "new-password"} value={password} required minLength={inspection.accountExists ? 1 : 12} maxLength={256} onChange={event => setPassword(event.target.value)} /></label>}
+        <div className="flex flex-wrap gap-2"><Button type="submit">{phase === "submitting" ? t("正在接受…", "Accepting…") : step < 2 ? t("继续", "Continue") : inspection.accountExists ? t("验证密码并接受", "Confirm password and accept") : t("创建受邀账号并接受", "Create invited account and accept")}</Button>
+        {step > 0 && <Button type="button" variant="outline" onClick={() => setStep(step === 2 ? 1 : 0)}>{t("返回", "Back")}</Button>}</div>
       </fieldset></form>
     </section>}
     {unknown && <section className="space-y-3 rounded border p-4" aria-label={t("核对原接受请求", "Reconcile original acceptance")}><p className="break-all text-sm">{t("原命令 ID：", "Original command ID: ")}{attempt.current?.commandId}</p><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => { void inspectReceipt() }}>{t("查询原接受收据", "Check original acceptance receipt")}</Button>{phase === "retry-ready" && <Button variant="outline" disabled={busy} onClick={() => { if (attempt.current) void accept(attempt.current, true) }}>{t("显式重试同一请求", "Explicitly retry the same request")}</Button>}</div></section>}
-    {token && !unknown && phase === "ready" && <Button variant="outline" disabled={inspecting} onClick={() => setInspectionRevision(value => value + 1)}>{t("重新检查邀请", "Reinspect invitation")}</Button>}
+    {token && !unknown && phase === "ready" && <Button variant="outline" disabled={inspecting} onClick={() => { setStep(0); setInspectionRevision(value => value + 1) }}>{t("重新检查邀请", "Reinspect invitation")}</Button>}
     {outcome && <section className="space-y-4 rounded-lg border p-5"><h2 className="font-semibold">{t("邀请已确认接受", "Invitation acceptance confirmed")}</h2><p className="text-sm">{t("接受邀请不会自动创建登录会话。请使用相同邮箱及账号密码通过普通登录进入工作区。", "Accepting an invitation does not create a login session. Use the same email and account password to sign in normally.")}</p><form className="space-y-3" onSubmit={event => {
       event.preventDefault()
       if (loginBusy) return
@@ -163,7 +180,7 @@ export function PmInvitationAcceptPage() {
       setError(null)
       void client.login({ email: outcome.email, password }).then(() => {
         setPassword("")
-        navigate(`/pm/${encodeURIComponent(outcome.workspaceId)}/members`, { replace: true })
+        navigate("/pm", { replace: true })
       }).catch(() => { if (mounted.current) setError(t("普通登录未成功，请确认密码或使用登录入口重试。邀请接受结果不受影响。", "Normal sign-in failed. Check the password or use the sign-in page. Your confirmed acceptance is unchanged.")) }).finally(() => { if (mounted.current) setLoginBusy(false) })
     }}><label className="grid gap-1 text-sm"><span>{t("邮箱", "Email")}</span><Input type="email" autoComplete="username" value={outcome.email} readOnly /></label><label className="grid gap-1 text-sm"><span>{t("账号密码", "Account password")}</span><Input type="password" autoComplete="current-password" required value={password} disabled={loginBusy} onChange={event => setPassword(event.target.value)} /></label><Button type="submit" disabled={loginBusy}>{loginBusy ? t("登录中…", "Signing in…") : t("普通登录并进入工作区", "Sign in normally and enter workspace")}</Button></form></section>}
     {outcome && <p className="text-sm">{t("接受邀请不代表恢复邮箱已验证。普通登录后，请在本人账号安全中以当前密码发起独立邮件挑战。", "Accepting an invitation does not verify a recovery email. After normal sign-in, start a separate mail challenge with your current password in account security.")} <Link to="/pm/account/security" className="text-primary hover:text-foreground">{t("本人账号安全", "Account security")}</Link></p>}

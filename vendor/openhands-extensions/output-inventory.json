@@ -9,14 +9,14 @@
   "hostBuildInputs": [
     {
       "path": "package.json",
-      "sha256": "6d6bec6129c11752ecbbe3dc4d684acbe60e38b1d3abc1957fb77eb1d42112c7",
-      "bytes": 6930,
+      "sha256": "37c1c60a3abd1539e57f5aaa43d1289c1614681f711d5334adf442927dec5b71",
+      "bytes": 7038,
       "mode": 420
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "c8afeeead038eeb4c2f0031641b95fdf7d1d0a45d949b4742a2423dd74359ffb",
-      "bytes": 753845,
+      "sha256": "cfd2d4a9029419a0b0e96e7dcb7947b90e008d19e85e98ef3cde06e80eaff80e",
+      "bytes": 754169,
       "mode": 420
     },
     {
@@ -27,8 +27,8 @@
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "60e626d9e20c38ba3bed204916b7f9f51d9775dfb45af62140c3a88f2d3aaa27",
-      "bytes": 4060,
+      "sha256": "1aa6c90dd7426aceae9779327968b78619d609fea330b9189b42d2f18870237d",
+      "bytes": 4136,
       "mode": 420
     },
     {
@@ -45,14 +45,14 @@
     },
     {
       "path": "tsconfig.check.json",
-      "sha256": "b08a4cada1a7fab91c7c86b5f12daa23abf502cfed7115f0f16367fc48628a0a",
-      "bytes": 890,
+      "sha256": "0b15f92466ca12614e64bfbb829368d93db5b9db51554a7ae0489d3163e8e675",
+      "bytes": 926,
       "mode": 420
     },
     {
       "path": "apps/server/agent/scripts/package.mjs",
-      "sha256": "a824c707dbee9b78fb6488b1584bbc8958cf71215eb5323b534a56fc6d84f6f9",
-      "bytes": 17830,
+      "sha256": "c003b9ff0045819901237755f3bb7d87314caa64626c239d162adacb9a20387b",
+      "bytes": 18610,
       "mode": 420
     },
     {
@@ -63,8 +63,8 @@
     },
     {
       "path": "apps/desktop/scripts/stage-workspace.mjs",
-      "sha256": "db844c2196b9cfacfa70ec34c207fcd478abc4658f8e450a6eb37c522f2714be",
-      "bytes": 14220,
+      "sha256": "8f75a3b7841663f1ca62e8bbb37bb9deab06a016cb378fbdcb4069e71b7bc58f",
+      "bytes": 14346,
       "mode": 420
     }
   ],

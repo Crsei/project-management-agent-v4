@@ -1,3 +1,4 @@
+import { RETAINED_BACKOFF } from '../tasks/guidance.ts';
 /** Trusted calibration-only solutions. Never imported by adapters, mounted in public fixtures, or counted as model output. */
 export const REFERENCE_RETRY_SOURCE = `export interface RetryOptions { baseMs?: number; maxMs?: number; retryAfter?: string; nowMs?: number }
 export function retryDelay(attempt: number, options: RetryOptions = {}): number {
@@ -16,6 +17,24 @@ export function retryDelay(attempt: number, options: RetryOptions = {}): number 
   }
   return Math.min(maxMs, Math.max(exponential, serverMs));
 }
+`;
+export const REFERENCE_GUIDANCE_RETRY_SOURCE = REFERENCE_RETRY_SOURCE
+  .replace('  const exponent = Math.max(0, Math.floor(attempt));\n', '')
+  .replace('const exponential = baseMs === 0 ? 0 : exponent >= Math.log2(maxMs / baseMs) ? maxMs : baseMs * 2 ** exponent;', 'const exponential = cappedBackoff(attempt, baseMs, maxMs);')
+  .replace('export function retryDelay', `${RETAINED_BACKOFF}\nexport function retryDelay`);
+export const REFERENCE_INITIAL_RETRY_SOURCE = REFERENCE_GUIDANCE_RETRY_SOURCE
+  .replace('let serverMs = 0;', 'let serverMs = 0;\n  let hasServerHint = false;')
+  .replace('if (Number.isFinite(seconds)) serverMs = seconds * 1000;', 'if (Number.isFinite(seconds)) { serverMs = seconds * 1000; hasServerHint = true; }')
+  .replace('if (Number.isFinite(deadline)) serverMs = Math.max(0, deadline - (options.nowMs ?? Date.now()));', 'if (Number.isFinite(deadline)) { serverMs = Math.max(0, deadline - (options.nowMs ?? Date.now())); hasServerHint = true; }')
+  .replace('Math.max(exponential, serverMs)', 'hasServerHint ? serverMs : exponential');
+export const REFERENCE_CHANGE_TEST = `import test from 'node:test';
+import assert from 'node:assert/strict';
+import { retryDelay } from '../src/retry.ts';
+test('initial accepted replacement requirement', () => {
+  assert.equal(retryDelay(3, { retryAfter: '2', nowMs: 0 }), 2000);
+  assert.equal(retryDelay(0, { retryAfter: '0', nowMs: 0 }), 0);
+  assert.equal(retryDelay(0, { retryAfter: 'Sun, 06 Nov 1994 08:49:37 GMT', nowMs: 784111767000 }), 10000);
+});
 `;
 export const REFERENCE_RETRY_TEST = `import test from 'node:test';
 import assert from 'node:assert/strict';

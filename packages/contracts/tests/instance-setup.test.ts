@@ -22,12 +22,16 @@ test('setup rejects privilege injection and credentials outside the declared bou
   assert.equal(parsed.password, request.password);
 });
 
-test('public setup state cannot carry private deployment data or enable public registration', () => {
+test('public setup state excludes private data and enforces registration availability', () => {
   const state = { initialized: false, setupAllowed: true, registrationMode: 'invite_only' };
   for (const extra of [{ setupToken: request.setupToken }, { tokenHash: 'private-digest' }, { email: request.email }, { databaseUrl: 'private-connection' }]) {
     assert.equal(instanceSetupStatusSchema.safeParse({ ...state, ...extra }).success, false);
   }
   assert.equal(instanceSetupStatusSchema.safeParse({ ...state, registrationMode: 'public' }).success, false);
+  assert.equal(instanceSetupStatusSchema.safeParse({ initialized: true, setupAllowed: false, registrationMode: 'open' }).success, true);
+  assert.equal(instanceSetupStatusSchema.safeParse({ ...state, registrationMode: 'open' }).success, false);
+  assert.equal(instanceSetupStatusSchema.safeParse({ initialized: true, setupAllowed: true, registrationMode: 'open' }).success, false);
+  assert.equal(instanceSetupStatusSchema.safeParse({ initialized: true, setupAllowed: false, registrationMode: 'invite_only' }).success, false);
   assert.equal(instanceSetupStatusSchema.safeParse({ ...state, initialized: 'false' }).success, false);
 });
 

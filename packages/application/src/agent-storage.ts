@@ -6,7 +6,7 @@ import { agentStorageSettingsUpdateSchema } from '../../contracts/src/agent-file
 import type { LocalDirectory } from '../../contracts/src/local-projects.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { getMembership } from './access.ts';
-import { allowedDirectory, requireLocalManagement, resolveLocalDirectory, type LocalProjectConfiguration } from './local-projects.ts';
+import { allowedRootDirectory, requireLocalManagement, type LocalProjectConfiguration } from './local-projects.ts';
 import type { SqlExecutor } from './ports.ts';
 import { assertCanonicalAbsolute, pathContains, safePathComponent, samePath, systemStoragePath } from '../../pm-core/platform.ts';
 import { assertNoWindowsReparsePath } from '../../pm-core/windows-reparse.ts';
@@ -37,14 +37,32 @@ function deploymentRoot(config: AgentDirectoryConfiguration): string {
 export function agentAllowedDirectory(config: AgentDirectoryConfiguration, candidate: string): string {
   if (!path.isAbsolute(candidate) || candidate.includes('\0')) forbidden('An absolute directory is required');
   const normalized = path.resolve(candidate);
-  if (!contains(config.chatSpaceRoot, normalized)) return allowedDirectory(config, candidate);
+  if (!contains(config.chatSpaceRoot, normalized)) return allowedRootDirectory(config, candidate);
   deploymentRoot(config);
   inspect(normalized);
   return normalized;
 }
 export function resolveAgentDirectory(config: AgentDirectoryConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new' } {
+  if (directory.mode === 'auto') {
+    const requested = path.resolve(directory.path);
+    let exists = false;
+    try {
+      const stat = lstatSync(requested);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) forbidden('The selected path is not an ordinary directory');
+      exists = true;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    return exists ? { root: agentAllowedDirectory(config, requested), mode: 'existing' } : resolveAgentDirectory(config, { mode: 'new', parentPath: path.dirname(requested), folderName: path.basename(requested) });
+  }
   const candidate = directory.mode === 'existing' ? directory.path : directory.parentPath;
-  if (!contains(config.chatSpaceRoot, path.resolve(candidate))) return resolveLocalDirectory(config, directory);
+  if (!contains(config.chatSpaceRoot, path.resolve(candidate))) {
+    if (directory.mode === 'existing') return { root: allowedRootDirectory(config, directory.path), mode: 'existing' };
+    const parent = allowedRootDirectory(config, directory.parentPath), root = path.join(parent, directory.folderName);
+    if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) forbidden('Folder name must be a single ordinary path component');
+    try { lstatSync(root); throw new DomainError('local_directory_exists', 'Choose an unused folder name or existing-directory mode', 409); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    accessSync(parent, constants.W_OK | constants.X_OK);
+    return { root, mode: 'new' };
+  }
   const parent = agentAllowedDirectory(config, candidate);
   if (directory.mode === 'existing') return { root: parent, mode: 'existing' };
   const root = path.join(parent, directory.folderName);

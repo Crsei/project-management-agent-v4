@@ -68,7 +68,7 @@ small {
   font-size: 12px;
   line-height: 1.65;
 }
-svg:not(.brand-mark) {
+svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.65;
@@ -144,7 +144,7 @@ html[data-desktop-shell="darwin"] .app-header {
 }
 .brand-mark {
   display: block;
-  border-radius: 28%;
+  flex-shrink: 0;
 }
 .wordmark {
   font-size: 23px;
@@ -640,12 +640,9 @@ body[data-step="configure"] .ready-content h2 {
   line-height: 1.7;
   letter-spacing: 0;
 }
-.status-glyph {
-  width: 7px;
-  height: 7px;
+.status-mark {
+  display: block;
   flex-shrink: 0;
-  border: 1.5px solid var(--secondary);
-  border-radius: 50%;
 }
 #status, #processes, #address {
   grid-column: 2;
@@ -993,6 +990,14 @@ body[data-view="maintenance"] #manage-workspace {
   }
 }
 
+@keyframes brand-pulse {
+  50% { opacity: 0.5; }
+}
+body[data-connection-busy="true"] .status-mark,
+body[data-update-busy="true"] .update-heading > img {
+  animation: brand-pulse 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
@@ -1006,9 +1011,6 @@ body[data-view="maintenance"] #manage-workspace {
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }
-  .status-glyph {
-    border-color: CanvasText;
-  }
   button.primary {
     border-color: ButtonText;
   }
@@ -1021,6 +1023,14 @@ body[data-view="maintenance"] #manage-workspace {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
+}
+.update-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.update-heading > img {
+  flex-shrink: 0;
 }
 .desktop-updates > .muted, #update-detail {
   font-size: 12px;

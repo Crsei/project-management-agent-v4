@@ -80,3 +80,63 @@ if (enabled) contextBridge.exposeInMainWorld("desktopWorkspace", Object.freeze({
     onOpenLink: (listener) => subscribe("desktop:preview-open-link", listener),
   }),
 }));
+
+// CLI-created native previews live in this already-trusted local workspace
+// renderer. They use exactly the same <webview>/PreviewManager registration as
+// BrowserPanel, never a hidden/headless substitute or arbitrary renderer code.
+if (enabled && typeof document !== "undefined") {
+  const cliTabs = new Map();
+  ipcRenderer.on("desktop:preview-cli-create", async (_event, value) => {
+    if (!value || typeof value.tabId !== "string" || cliTabs.has(value.tabId)) return;
+    let container;
+    try {
+      if (!document.body) throw new Error("Workspace DOM is unavailable.");
+      container = document.createElement("section");
+      container.setAttribute("aria-label", "CLI native Browser preview");
+      container.style.cssText = "position:fixed;inset:18% 4% 4%;z-index:2147483000;display:flex;flex-direction:column;background:#fff;border:2px solid #777;box-shadow:0 4px 32px #0008";
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:#222;background:#eee;font:13px sans-serif";
+      const label = document.createElement("span");
+      label.textContent = `CLI Browser · ${value.tabId}`;
+      const close = document.createElement("button");
+      close.type = "button"; close.textContent = "Close preview";
+      close.addEventListener("click", () => {
+        const remove = () => { cliTabs.delete(value.tabId); container.remove(); };
+        void invoke("close-tab", { tabId: value.tabId }).then(remove, remove);
+      });
+      bar.append(label, close);
+      const webview = document.createElement("webview");
+      webview.style.cssText = "flex:1;min-height:0;width:100%;background:white";
+      webview.setAttribute("partition", value.partition);
+      webview.setAttribute("preload", value.preload);
+      webview.setAttribute("src", "about:blank");
+      let registering = false;
+      const register = async () => {
+        if (registering) return;
+        let webContentsId;
+        try { webContentsId = webview.getWebContentsId(); } catch { return; }
+        if (!Number.isInteger(webContentsId) || webContentsId <= 0) return;
+        registering = true;
+        try {
+          await invoke("register-webview", { tabId: value.tabId, webContentsId });
+          ipcRenderer.send("desktop:preview-cli-attached", { tabId: value.tabId, ok: true });
+        } catch {
+          ipcRenderer.send("desktop:preview-cli-attached", { tabId: value.tabId, ok: false });
+        }
+      };
+      webview.addEventListener("did-attach", register);
+      webview.addEventListener("dom-ready", register);
+      container.append(bar, webview);
+      cliTabs.set(value.tabId, container);
+      document.body.append(container);
+      void register();
+    } catch {
+      container?.remove(); cliTabs.delete(value.tabId);
+      ipcRenderer.send("desktop:preview-cli-attached", { tabId: value.tabId, ok: false });
+    }
+  });
+  ipcRenderer.on("desktop:preview-cli-close", (_event, value) => {
+    const container = cliTabs.get(value?.tabId);
+    if (container) { container.remove(); cliTabs.delete(value.tabId); }
+  });
+}

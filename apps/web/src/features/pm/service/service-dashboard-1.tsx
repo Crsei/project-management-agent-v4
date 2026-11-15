@@ -3,7 +3,7 @@ import type { Entity } from "@contracts"
 import { Bell, CalendarDays, ChevronDown, FilePlus2, Flag, MoreHorizontal, RefreshCw, SlidersHorizontal, UserRoundCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CountUp } from "@/components/ui/count-up"
-import { Avatar } from "@/components/ui/avatar"
+import { HumanIdentity } from "./human-identity"
 import { DataRegion } from "@/components/ui/data-region"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -103,10 +103,6 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
   const unavailable = t("未提供", "Not provided")
   const title = (entity: Entity) => string(entity.data.title) || entity.id
   const stateName = (entity: Entity) => statusNames[string(entity.data.status)] ?? (string(entity.data.status) || unavailable)
-  const assigneeName = (entity: Entity) => {
-    const id = string(entity.data.assigneeId)
-    return id ? memberNames.get(id) ?? (id === actorId && actor ? actor.name : id) : t("未分配", "No owner")
-  }
   const projectName = (entity: Entity) => entity.projectId ? projectNames.get(entity.projectId) ?? entity.projectId : t("未关联项目", "No project")
   const assigneeIds = [...new Set((issues.data ?? []).map(issue => string(issue.data.assigneeId)).filter(Boolean))]
   const assigneeOptions = [...new Set([...memberNames.keys(), ...assigneeIds])].map(id => ({ value: id, label: memberNames.get(id) ?? (id === actorId && actor ? actor.name : id) }))
@@ -126,7 +122,7 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
   ]
   const statusBadge = (entity: Entity) => <span className={`${d1.statusBadge} ${styles.status}`} data-status={string(entity.data.status)}><span className={d1.dot} style={{ background: "currentColor" }} />{stateName(entity)}</span>
   const assignee = (entity: Entity) => <span className={`${d1.memberIdentity} ${styles.member}`}>
-    {string(entity.data.assigneeId) && <Avatar name={assigneeName(entity)} size={24} />}<span>{assigneeName(entity)}</span>
+    <HumanIdentity userId={string(entity.data.assigneeId)} projectId={entity.projectId ?? undefined} />
   </span>
   const priority = (entity: Entity) => <span className={d1.priority}><Flag size={13} aria-hidden="true" />{priorityNames[string(entity.data.priority)] ?? (string(entity.data.priority) || unavailable)}</span>
   const drill = (nextScope: PersonalScope, nextStatus: string | string[] = "all") => {

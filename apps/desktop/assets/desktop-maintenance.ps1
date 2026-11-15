@@ -130,7 +130,7 @@ function Assert-Registered {
   $install = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($InstallRegistryKey)
   $uninstall = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($UninstallRegistryKey)
   try {
-    if (-not $install -or -not $uninstall -or $install.GetValue('InstallLocation') -cne $InstallRoot -or $uninstall.GetValue('DisplayName') -notlike 'PM Agent v4*' -or $uninstall.GetValue('UninstallString') -notlike ('"'+$InstallRoot+'\Uninstall PM Agent v4.exe"*')) { throw 'Only this user registered Dovspace installation may be removed' }
+    if (-not $install -or -not $uninstall -or $install.GetValue('InstallLocation') -cne $InstallRoot -or $uninstall.GetValue('DisplayName') -notlike 'Dovspace*' -or $uninstall.GetValue('UninstallString') -notlike ('"'+$InstallRoot+'\Uninstall Dovspace.exe"*')) { throw 'Only this user registered Dovspace installation may be removed' }
   } finally { if ($install) { $install.Dispose() }; if ($uninstall) { $uninstall.Dispose() } }
 }
 function Get-Directories([string]$Root) {
@@ -157,7 +157,7 @@ function Assert-OwnedTree($Stamp) {
   if(-not $manifest.directories -or ((Get-Directories $InstallRoot) | ConvertTo-Json -Compress) -cne (@($manifest.directories | Sort-Object) | ConvertTo-Json -Compress)) {throw 'Unknown or missing owned installation directories'}
   $tree = Get-Tree $InstallRoot
   foreach ($entry in $tree) {
-    if ($entry.path -ceq 'resources/desktop-install-files.json' -or ($entry.path -ceq 'Uninstall PM Agent v4.exe' -and -not $expected.ContainsKey($entry.path))) { continue }
+    if ($entry.path -ceq 'resources/desktop-install-files.json' -or ($entry.path -ceq 'Uninstall Dovspace.exe' -and -not $expected.ContainsKey($entry.path))) { continue }
     $claim = $expected[$entry.path]
     if (-not $claim -or $claim.bytes -ne $entry.bytes -or $claim.sha256 -cne $entry.sha256) { throw 'Unknown or changed installation file; no tree deletion authorized' }
     $expected.Remove($entry.path)
@@ -171,7 +171,7 @@ function Assert-NoOwnedProcesses {
   $processes = Get-CimInstance -ClassName Win32_Process
   foreach ($process in $processes) {
     if ($process.ProcessId -eq $PID) { continue }
-    if ($process.ExecutablePath -and $process.ExecutablePath.StartsWith($InstallRoot+'\', [StringComparison]::OrdinalIgnoreCase) -and $process.ExecutablePath -cne ($InstallRoot+'\Uninstall PM Agent v4.exe')) { throw 'An installed process still owns files; cleanup fails closed' }
+    if ($process.ExecutablePath -and $process.ExecutablePath.StartsWith($InstallRoot+'\', [StringComparison]::OrdinalIgnoreCase) -and $process.ExecutablePath -cne ($InstallRoot+'\Uninstall Dovspace.exe')) { throw 'An installed process still owns files; cleanup fails closed' }
   }
 }
 function Wait-Controllers($Processes) {
@@ -217,13 +217,13 @@ try {
     if($request.operation -cne 'uninstall' -or $request.mode -cne $Mode -or $Confirm -cne $Mode -or $request.consent.mode -cne $Mode -or $request.consent.stopLocalServices -ne $true -or $reply.ok -ne $true -or $reply.requestId -cne $request.requestId -or $reply.result.status -cne 'prepared') {throw 'Direct uninstall handoff lacks authenticated prepared consent'}
     $controller=Get-Process -Id $ControllerPid -ErrorAction SilentlyContinue
     if($controller) {
-      if($controller.Path -cne ($InstallRoot+'\PM Agent v4.exe')) {throw 'Direct controller PID no longer identifies the installed application'}
+      if($controller.Path -cne ($InstallRoot+'\Dovspace.exe')) {throw 'Direct controller PID no longer identifies the installed application'}
       Wait-Controllers @(@{id=$controller.Id;started=$controller.StartTime.ToUniversalTime().Ticks})
     }
     Assert-NoOwnedProcesses
     $nativeResponse=$ResponseFile+'.native-'+[Guid]::NewGuid().ToString('N')+'.json'
     $arguments='/S /DOVSPACE_MODE='+$Mode+' /DOVSPACE_CONFIRM='+$Mode+' /DOVSPACE_REQUEST="'+$RequestFile+'" /DOVSPACE_RESPONSE="'+$nativeResponse+'"'
-    $uninstaller=Start-Process -FilePath ($InstallRoot+'\Uninstall PM Agent v4.exe') -ArgumentList $arguments -PassThru -Wait
+    $uninstaller=Start-Process -FilePath ($InstallRoot+'\Uninstall Dovspace.exe') -ArgumentList $arguments -PassThru -Wait
     if([IO.File]::Exists($nativeResponse+'.cleanup.json')) {
       Assert-Private ($nativeResponse+'.cleanup.json')
       $cleanup=Read-Json ($nativeResponse+'.cleanup.json')
@@ -288,10 +288,10 @@ try {
     if ([IO.File]::Exists($response)) { throw 'Response path already exists' }
     Write-Json $privateRequest $request
     $processes = @()
-    foreach ($p in @(Get-Process -ErrorAction Stop | Where-Object { $_.Path -ceq ($InstallRoot+'\PM Agent v4.exe') })) { $processes += @{id=$p.Id;started=$p.StartTime.ToUniversalTime().Ticks} }
-    if ([IO.File]::Exists($InstallRoot+'\PM Agent v4.exe')) {
+    foreach ($p in @(Get-Process -ErrorAction Stop | Where-Object { $_.Path -ceq ($InstallRoot+'\Dovspace.exe') })) { $processes += @{id=$p.Id;started=$p.StartTime.ToUniversalTime().Ticks} }
+    if ([IO.File]::Exists($InstallRoot+'\Dovspace.exe')) {
       $arguments = '--desktop-lifecycle '+$operation+' --request-file "'+$privateRequest+'" --response-file "'+$response+'"'
-      $controller = Start-Process -FilePath ($InstallRoot+'\PM Agent v4.exe') -ArgumentList $arguments -PassThru
+      $controller = Start-Process -FilePath ($InstallRoot+'\Dovspace.exe') -ArgumentList $arguments -PassThru
     } else {
       Assert-NoOwnedProcesses
       if ($operation -ne 'uninstall') { throw 'Retained runtime must be explicitly cleaned before reinstalling the GUI' }

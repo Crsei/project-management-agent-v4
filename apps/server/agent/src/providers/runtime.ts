@@ -13,6 +13,7 @@ import { forkNativeSession } from "./native.ts";
 import path from "node:path";
 import { ingestUsageLimits } from "../usage/limits.ts";
 import { beginProviderExecution, isProviderAccountBusy } from "./auth.ts";
+import { materializeChatAttachments } from "./chat-attachments.ts";
 
 export const MAX_CLI_PROMPT_CHARS = 64_000;
 const MAX_SYSTEM_CHARS = 16_000;
@@ -82,6 +83,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   prompt: string; signal?: AbortSignal; onText?: (delta: string) => void; cwd: string;
   /** Original latest user text for native invocation parsing, separate from PM context. */
   userMessageText?: string;
+  attachmentParts?: UIMessage["parts"];
   session?: CliSessionOptions; onSession?: (ref: NativeSessionRef) => void;
   onEvent?: (event: NativeOutputEvent) => void;
   onRequest?: (request: NativeInteractionRequest) => Promise<NativeInteractionResponse>;
@@ -108,6 +110,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   const adapter = getNativeProviderAdapter(instance.driver);
   if (!adapter) throw new ProviderRuntimeError(400, "unknown_provider", "Unsupported native Agent.");
   const modelOptions = resolveProviderModelOptions(runtime.providerInstanceId, runtime.modelId, options.modelOptions);
+  const attachments = materializeChatAttachments(options.attachmentParts, runtime.driver);
   if (options.pmAnalysis && (instance.driver !== "claude" || options.pmToolBridge || options.mcpServers?.length || options.session?.resume || options.session?.fork))
     throw new ProviderRuntimeError(412, "analysis_tools_forbidden", "PM analysis requires the selected Provider's no-tools transport and a fresh immutable Chat generation.");
   if (options.session?.resume && options.session.fork)
@@ -146,6 +149,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
       ...(options.pmAnalysis ? { pmAnalysis: true as const } : {}) }, {
       model: runtime.modelId, prompt: options.prompt, signal: options.signal,
       userMessageText: options.userMessageText,
+      attachments,
       modelOptions, interactionMode: options.interactionMode ?? "default",
       onText: options.onText, onEvent: options.onEvent, onRequest: options.onRequest, resume, onSession: publishSession,
       onUsage: (update) => {
@@ -159,8 +163,14 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
 }
 
 /** Builds the existing bounded portable conversation for a native Agent. */
-export function buildChatPrompt(messages: UIMessage[], system?: string, context?: string): string {
+export function buildChatPrompt(messages: UIMessage[], system?: string, context?: string, protectedMessageId?: string): string {
   const normalized = Array.isArray(messages) ? injectQuoteContext(messages) : [];
+  const protectedMessage = normalized.find(message => message.id === (protectedMessageId ?? normalized.at(-1)?.id));
+  const metadata = protectedMessage?.metadata;
+  const turnContext = metadata !== null && typeof metadata === "object" && "turnContext" in metadata ? metadata.turnContext : undefined;
+  const selectedContext = turnContext !== null && typeof turnContext === "object" && "contextItems" in turnContext &&
+    Array.isArray(turnContext.contextItems) && turnContext.contextItems.length > 0;
+  let protectedIncluded = !selectedContext;
   const systemText = typeof system === "string" ? system.trim() : "";
   if (systemText.length > MAX_SYSTEM_CHARS)
     throw new ProviderRuntimeError(400, "invalid_context", `Agent system/selected context exceeds ${MAX_SYSTEM_CHARS} characters; reduce selected documents. No context was silently discarded.`);
@@ -184,12 +194,16 @@ export function buildChatPrompt(messages: UIMessage[], system?: string, context?
     const prefix = `${label}：\n`;
     const available = remaining - prefix.length - 2;
     if (available <= 0) break;
+    if (text.length > available && message.id === protectedMessage?.id && selectedContext)
+      throw new ProviderRuntimeError(413, "context_too_large", "The selected turn does not fit the native prompt; no selected context was silently discarded.");
     if (text.length <= available) {
       blocks.unshift(`${prefix}${text}`); remaining -= prefix.length + text.length + 2;
+      if (message.id === protectedMessage?.id) protectedIncluded = true;
     } else {
       blocks.unshift(`${prefix}[前文已截断]\n${text.slice(-available)}`); break;
     }
   }
+  if (!protectedIncluded) throw new ProviderRuntimeError(413, "context_too_large", "The selected input would be omitted by the native history budget; no selected context was silently discarded.");
   const conversation = blocks.length > 0 ? `对话记录：\n${blocks.join("\n\n")}` : "";
   return [header, reference, conversation].filter(Boolean).join("\n\n") || "请根据当前上下文继续对话。";
 }

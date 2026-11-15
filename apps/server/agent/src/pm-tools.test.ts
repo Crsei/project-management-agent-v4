@@ -9,10 +9,15 @@ import { z } from "zod";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { closeStore } from "./durable/store.ts";
+import { closeStore, readRecord, writeRecord } from "./durable/store.ts";
 import { initializeNativeOutput, getNativeOutput } from "./durable/native-output.ts";
-import { callPmTool, openPmToolBridge } from "./pm-tools.ts";
+import { callPmTool, openPmToolBridge, pmToolRoutes, type StoredPmToolCall } from "./pm-tools.ts";
+import { ensureThread } from "./durable/threads.ts";
 import { workspaceRoot } from "./paths.ts";
+import { pmToolRequestHash } from "../../../../packages/infrastructure/src/pm-tool-service-auth.ts";
+
+const queryArguments = { entity: null, projectId: null, query: null, after: null, limit: 20 };
+const taskArguments = { projectId: "PRJ-001", title: "once", description: "", assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null };
 
 // Exercises the HTTP boundary without a provider account; PM remains the result authority.
 test("tool bridge preserves identity, forbids browser origins, and reconciles lost replies without replay", async () => {
@@ -50,7 +55,7 @@ test("tool bridge preserves identity, forbids browser origins, and reconciles lo
   initializeNativeOutput(generationId, threadId, "running");
   const bridge = await openPmToolBridge({ threadId, messageId, generationId, headers: new Headers({ cookie: "pm_v4_session=fixture" }), authorizeExecution });
   try {
-    const input = { operationId, name: "pm_query", target, arguments: { entity: null } };
+    const input = { operationId, name: "pm_query", target, arguments: queryArguments };
     const post = (endpoint: string, origin?: string) => fetch(`${bridge.url}/tools/${endpoint}`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(input) });
     assert.equal((await post("call", "https://other.example")).status, 403);
     const pending = Promise.all([post("call"), post("call")]);
@@ -103,7 +108,8 @@ test("MCP duplicate request IDs reuse the original write and reject changed inpu
       if (!targetAllowed) { res.writeHead(403).end(JSON.stringify({ error: "Target access revoked" })); return; }
       res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ actorId: currentActor, scope: input })); return;
     }
-    received.push(input);
+    if (req.url?.endsWith("/call")) received.push(input);
+    else assert.ok(req.url?.endsWith("/result"));
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ operationId: input.operationId, name: input.name, target: input.target, actorId, status: "succeeded", result: { kind: "task", items: [], nextCursor: null, truncated: false, sources: [] }, error: null, threadId, messageId, generationId, workspaceId, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() }));
   });
@@ -123,7 +129,7 @@ test("MCP duplicate request IDs reuse the original write and reject changed inpu
   };
   try {
     await request({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26" } });
-    const call = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "pm_create_task", arguments: { target, arguments: { title: "once" } } } };
+    const call = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "pm_create_task", arguments: { target, arguments: taskArguments } } };
     const first = await request(call);
     assert.deepEqual(await request(call), first);
     assert.equal(received.length, 1);
@@ -220,7 +226,7 @@ test("native registration is PM-independent and one Session selects every PM tar
     assert.equal(missingTarget.status, 400); assert.equal(requests.length, 0);
     const operationId = randomUUID();
     for (const [index, target] of [firstTarget, secondTarget].entries()) {
-      const result = await send(bridge.url, { operationId: index === 0 ? operationId : randomUUID(), name: "pm_query", target, arguments: {} });
+      const result = await send(bridge.url, { operationId: index === 0 ? operationId : randomUUID(), name: "pm_query", target, arguments: queryArguments });
       assert.equal(result.body.status, "succeeded");
       assert.deepEqual(result.body.target, target);
       assert.equal(result.body.threadId, context.threadId);
@@ -368,7 +374,7 @@ test("native MCP unknown writes retain their operationId and never bypass live r
     authorizeExecution: async () => { if (!live) throw new Error("Generation authorization is no longer live"); } };
   initializeNativeOutput(generationId, context.threadId, "running");
   const bridge = await openPmToolBridge(context);
-  const transport = { transportId: "unknown-transport", requestId: 1, name: "pm_create_task", arguments: { target, arguments: { title: "once" } } };
+  const transport = { transportId: "unknown-transport", requestId: 1, name: "pm_create_task", arguments: { target, arguments: taskArguments } };
   const send = async (endpoint: string, body: unknown) => {
     const response = await fetch(`${bridge.url}/tools/${endpoint}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -404,7 +410,7 @@ test("native MCP unknown writes retain their operationId and never bypass live r
     assert.equal(cachedRecovered.body.actorId, actorId);
     assert.deepEqual(cachedRecovered.body.target, target);
     assert.deepEqual(cachedRecovered.body.result, recovered.body.result);
-    assert.equal(writes, 1); assert.equal(results, 1);
+    assert.equal(writes, 1);
 
     pauseAuthorization = true;
     const stopping = send("mcp-call", transport);
@@ -424,11 +430,303 @@ test("native MCP unknown writes retain their operationId and never bypass live r
     assert.equal(stoppedResult.status, 400);
     assert.match(String(stoppedResult.body.error), /no longer live/);
     assert.equal(stoppedResult.body.operationId, undefined);
-    assert.equal(writes, 1); assert.equal(results, 2);
+    assert.equal(writes, 1);
   } finally {
     releaseAuthorization.resolve(); releaseResult.resolve();
     await bridge.close(); server.closeAllConnections();
     const closed = Promise.withResolvers<void>(); server.close(error => error ? closed.reject(error) : closed.resolve()); await closed.promise;
+    closeStore();
+    if (previousData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previousData;
+    if (previousPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = previousPm;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("native and MCP calls reject invalid inputs before PM dispatch and bind corrections to a new read", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pm-tool-inputs-"));
+  const previousData = process.env.AGENT_WORKSPACE_DATA_DIR, previousPm = process.env.PM_API_URL;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  const workspaceId = randomUUID(), actorId = randomUUID(), generationId = randomUUID();
+  const target = { workspaceId, projectId: "PRJ-002" };
+  const dispatched: Array<Record<string, unknown>> = [];
+  let results = 0;
+  const originalResults = new Map<string, unknown>();
+  const server = createServer(async (request, response) => {
+    let text = ""; for await (const chunk of request) text += String(chunk);
+    const input = JSON.parse(text) as Record<string, unknown>;
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/api/v1/agent-contexts/authorize") {
+      response.end(JSON.stringify({ actorId, scope: input })); return;
+    }
+    if (request.url?.endsWith("/result")) {
+      results++;
+      const original = originalResults.get(String(input.operationId));
+      if (!original) { response.writeHead(404).end("{}"); return; }
+      response.end(JSON.stringify(original)); return;
+    }
+    assert.ok(request.url?.endsWith("/call"));
+    dispatched.push(input);
+    const args = input.arguments as typeof queryArguments;
+    const original = { ...input, workspaceId, actorId, status: "succeeded", error: null,
+      result: { kind: "query", items: [], sources: [], nextCursor: args.after === null ? "TASK-020" : null, truncated: args.after === null },
+      createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() };
+    originalResults.set(String(input.operationId), original);
+    response.end(JSON.stringify(original));
+  });
+  const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string");
+  process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  const context = { threadId: "input-validation", messageId: "message", generationId, authorizeExecution: async () => {} };
+  initializeNativeOutput(generationId, context.threadId, "running");
+  const bridge = await openPmToolBridge(context);
+  const send = async (endpoint: string, input: unknown) => {
+    const response = await fetch(`${bridge.url}/tools/${endpoint}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+    return { status: response.status, body: await response.json() as Record<string, unknown> };
+  };
+  try {
+    const input = { operationId: randomUUID(), name: "pm_query", target, arguments: { ...queryArguments, limit: 100 } };
+    const rejected = await send("call", input);
+    assert.equal(rejected.status, 200);
+    assert.equal(rejected.body.status, "failed");
+    assert.deepEqual(rejected.body.certainty, { dispatch: "not_sent", evidence: "local_rejection" });
+    assert.match(JSON.stringify(rejected.body.error), /limit: must be at most 20/);
+    assert.match(JSON.stringify(rejected.body.error), /nextCursor.*after/);
+    assert.equal(dispatched.length, 0);
+    const result = await send("result", input);
+    assert.equal(result.body.status, "failed");
+    assert.deepEqual(result.body.error, rejected.body.error);
+    assert.equal(results, 0, "a known local rejection never queries a nonexistent PM result");
+    assert.equal((await send("call", { ...input, arguments: queryArguments })).status, 400, "operation IDs cannot be reused for corrected input");
+    const transport = { transportId: "invalid-query", requestId: 7, name: input.name, arguments: { target, arguments: input.arguments } };
+    const mcpRejected = await send("mcp-call", transport);
+    assert.equal(mcpRejected.body.status, "failed");
+    assert.deepEqual((await send("mcp-call", transport)).body, mcpRejected.body);
+    assert.equal((await send("mcp-call", { ...transport, arguments: { target, arguments: queryArguments } })).status, 400, "MCP IDs cannot adopt changed arguments");
+    const unknownTool = await callPmTool(context, { operationId: randomUUID(), name: "pm_unregistered", target, arguments: {} });
+    assert.equal(unknownTool.status, "failed");
+    assert.equal(unknownTool.error?.code, "agent_tool_not_available");
+    const badWrite = await callPmTool(context, { operationId: randomUUID(), name: "pm_delete_task", target, arguments: { id: "TASK-001", revision: "bad" } });
+    assert.equal(badWrite.status, "failed", "invalid destructive writes never wait for approval");
+    assert.deepEqual(badWrite.certainty, { dispatch: "not_sent", evidence: "local_rejection" });
+    assert.equal(dispatched.length, 0);
+    const corrected = await send("call", { ...input, operationId: randomUUID(), arguments: queryArguments });
+    assert.equal(corrected.body.status, "succeeded");
+    assert.notEqual(corrected.body.operationId, input.operationId);
+    const cursor = z.object({ nextCursor: z.string() }).parse(corrected.body.result).nextCursor;
+    const nextArguments = { ...queryArguments, after: cursor };
+    const continued = await send("call", { ...input, operationId: randomUUID(), arguments: nextArguments });
+    assert.equal(continued.body.status, "succeeded");
+    assert.equal(z.object({ nextCursor: z.string().nullable() }).parse(continued.body.result).nextCursor, null);
+    assert.deepEqual(dispatched.map(call => call.arguments), [queryArguments, nextArguments]);
+    assert.deepEqual(readRecord<StoredPmToolCall>("pm-tool-calls", input.operationId)!.request.arguments, input.arguments);
+  } finally {
+    await bridge.close(); server.closeAllConnections();
+    const closed = Promise.withResolvers<void>(); server.close(error => error ? closed.reject(error) : closed.resolve()); await closed.promise;
+    closeStore();
+    if (previousData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previousData;
+    if (previousPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = previousPm;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("legacy invalid queries reconcile without replay while original hash, actor and uncertain writes remain protected", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pm-tool-legacy-inputs-"));
+  const previousData = process.env.AGENT_WORKSPACE_DATA_DIR, previousPm = process.env.PM_API_URL, previousSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  process.env.PM_AUTOMATION_SERVICE_SECRET = "isolated-legacy-query-proof-fixture";
+  const workspaceId = randomUUID(), actorId = randomUUID(), generationId = randomUUID();
+  const target = { workspaceId, projectId: "PRJ-002" };
+  let currentActor = actorId, targetAllowed = true, calls = 0, results = 0, proofs = 0;
+  const server = createServer(async (request, response) => {
+    let text = ""; for await (const chunk of request) text += String(chunk);
+    const input = JSON.parse(text) as Record<string, unknown>;
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/api/v1/agent-contexts/authorize") {
+      if (!targetAllowed) { response.writeHead(403).end("{}"); return; }
+      response.end(JSON.stringify({ actorId: currentActor, scope: input })); return;
+    }
+    if (request.url === "/api/v1/internal/agent-tools/reconcile") {
+      proofs++; response.writeHead(404).end("{}"); return;
+    }
+    if (request.url?.endsWith("/call")) calls++;
+    else results++;
+    response.writeHead(404).end(JSON.stringify({ error: "Original operation is not accessible" }));
+  });
+  const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string");
+  process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  const context = { threadId: "legacy-input-validation", messageId: "message", generationId, authorizeExecution: async () => {} };
+  initializeNativeOutput(generationId, context.threadId, "running");
+  const bridge = await openPmToolBridge(context);
+  const seed = (name: string, args: unknown): StoredPmToolCall => {
+    const request = { operationId: randomUUID(), name, target, arguments: args, threadId: context.threadId, messageId: context.messageId, generationId };
+    const value: StoredPmToolCall = { request, requestHash: pmToolRequestHash(request, actorId), record: {
+      operationId: request.operationId, name, target, actorId, workspaceId, threadId: request.threadId, messageId: request.messageId, generationId,
+      status: "unknown", result: null, error: { code: "result_unavailable", message: "Legacy missing PM record" },
+      certainty: { dispatch: "possibly_sent", evidence: "unresolved" }, createdAt: new Date().toISOString(), finishedAt: null,
+    } };
+    writeRecord("pm-tool-calls", request.operationId, value);
+    return value;
+  };
+  const send = async (value: StoredPmToolCall, action = "result", args = value.request.arguments) => {
+    const response = await fetch(`${bridge.url}/tools/${action}`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: value.request.operationId, name: value.request.name, target, arguments: args }) });
+    return { status: response.status, body: await response.json() as Record<string, unknown> };
+  };
+  try {
+    for (const entity of ["work_item", "document"]) {
+      const legacy = seed("pm_query", { ...queryArguments, entity, limit: 100 });
+      targetAllowed = false;
+      assert.equal((await send(legacy)).status, 400);
+      assert.equal(readRecord<StoredPmToolCall>("pm-tool-calls", legacy.record.operationId)!.record.status, "unknown");
+      targetAllowed = true; currentActor = randomUUID();
+      assert.equal((await send(legacy)).status, 400);
+      currentActor = actorId;
+      assert.equal((await send(legacy, "result", queryArguments)).status, 400);
+      const settled = await send(legacy, entity === "work_item" ? "result" : "call");
+      assert.equal(settled.body.status, "failed");
+      assert.equal(z.object({ code: z.string() }).parse(settled.body.error).code, "agent_tool_invalid_input");
+      assert.deepEqual(settled.body.certainty, { dispatch: "possibly_sent", evidence: "local_rejection" });
+      assert.deepEqual((await send(legacy)).body.error, settled.body.error);
+      const retained = readRecord<StoredPmToolCall>("pm-tool-calls", legacy.record.operationId)!;
+      assert.deepEqual(retained.request, legacy.request);
+      assert.equal(retained.requestHash, legacy.requestHash);
+    }
+    assert.equal(calls, 0); assert.equal(results, 0, "invalid read settlement is entirely local after authorization");
+    assert.equal(proofs, 0, "schema rejection needs no service proof or missing PM operation");
+    const tampered = seed("pm_query", { ...queryArguments, limit: 100 });
+    tampered.requestHash = "0".repeat(64);
+    writeRecord("pm-tool-calls", tampered.record.operationId, tampered);
+    assert.equal((await send(tampered)).status, 400);
+    assert.equal(readRecord<StoredPmToolCall>("pm-tool-calls", tampered.record.operationId)!.record.status, "unknown");
+    const uncertainWrite = seed("pm_create_task", { title: "legacy invalid write" });
+    const unresolved = await send(uncertainWrite);
+    assert.equal(unresolved.body.status, "unknown");
+    assert.deepEqual(unresolved.body.certainty, { dispatch: "possibly_sent", evidence: "unresolved" });
+    assert.equal(unresolved.body.finishedAt, null);
+    assert.equal((await send(uncertainWrite, "call")).body.status, "unknown");
+    assert.equal(calls, 0); assert.equal(results, 1, "an absent PM write result is not proof of rejection");
+    assert.equal(proofs, 1, "unresolved writes still use the original internal proof path");
+  } finally {
+    await bridge.close(); server.closeAllConnections();
+    const closed = Promise.withResolvers<void>(); server.close(error => error ? closed.reject(error) : closed.resolve()); await closed.promise;
+    closeStore();
+    if (previousData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previousData;
+    if (previousPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = previousPm;
+    if (previousSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = previousSecret;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+for (const name of ["pm_read_workflow", "pm_task_brief", "pm_search_knowledge"] as const) test(`cached ${name} reads reject stale results without redispatching or rewriting historical success`, async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pm-workflow-cache-"));
+  const previousData = process.env.AGENT_WORKSPACE_DATA_DIR, previousPm = process.env.PM_API_URL;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  const workspaceId = randomUUID(), actorId = randomUUID(), generationId = randomUUID();
+  const target = { workspaceId, projectId: "PRJ-002" };
+  let stale = false, calls = 0;
+  const sourceVersions = new Map<string, boolean>();
+  let pauseAuthorization = false;
+  const authorizationReached = Promise.withResolvers<void>(), resumeAuthorization = Promise.withResolvers<void>();
+  const workflow = {
+    ...target, entity: "work_item", initial: "queued",
+    states: [{ id: "queued", label: "Queued", category: "unstarted" }], transitions: [], defaultTargets: null,
+    configuration: { schema: "pm/config/v1", revision: "config-one", source: "workspace", workflowRevision: "a".repeat(64) },
+  };
+  const revision = "a".repeat(64), generatedAt = "2026-11-13T00:00:00.000Z";
+  const resultFields = { items: [], sources: [], nextCursor: null, truncated: false };
+  const result = name === "pm_read_workflow" ? { kind: "workflow", workflow, ...resultFields }
+    : name === "pm_task_brief" ? { kind: "task_brief", ...resultFields, brief: {
+      schemaVersion: 1, stage: "analysis", generatedAt,
+      task: { ...target, taskId: "TASK-001", revision, title: "Original task", body: "Original requirement",
+        bodyOffset: 0, bodyLength: 20, nextBodyOffset: null },
+      goals: [], acceptanceCriteria: [], constraints: [], nonGoals: [], relations: [], guidance: [], sources: [],
+      gaps: [{ code: "acceptance_not_explicit", message: "Acceptance is not yet explicit." }],
+      truncation: { truncated: false, body: false, statements: false, relations: false, message: null },
+      dispatchable: false, authorityNotice: "Read-only context, not authorization.",
+    } } : { kind: "knowledge", ...resultFields, knowledge: {
+      schemaVersion: 1, generatedAt, taskRevision: revision, query: "Original requirement",
+      projectIds: [target.projectId], items: [], nextCursor: null, method: "deterministic_lexical",
+      authorityNotice: "Candidates require review.",
+    } };
+  const args = name === "pm_read_workflow" ? { projectId: target.projectId }
+    : name === "pm_task_brief" ? { projectId: target.projectId, taskId: "TASK-001", revision, stage: "analysis", bodyOffset: null, bodyLimit: null }
+      : { projectId: target.projectId, taskId: "TASK-001", revision, query: "Original requirement", projectIds: null, limit: 10, cursor: null };
+  const server = createServer(async (request, response) => {
+    response.setHeader("content-type", "application/json");
+    let text = ""; for await (const chunk of request) text += String(chunk);
+    const input = JSON.parse(text) as Record<string, unknown>;
+    if (request.url === "/api/v1/agent-contexts/authorize") {
+      if (pauseAuthorization) {
+        pauseAuthorization = false; authorizationReached.resolve(); await resumeAuthorization.promise;
+      }
+      response.end(JSON.stringify({ actorId, scope: input })); return;
+    }
+    if (request.url === "/api/v1/internal/agent-tools/reconcile") { response.writeHead(404).end("{}"); return; }
+    if (request.url?.endsWith("/result")) {
+      if (sourceVersions.get(String(input.operationId)) !== stale) {
+        response.writeHead(409).end(JSON.stringify({ code: "agent_tool_read_stale", message: "Source content changed; perform a new read." }));
+        return;
+      }
+    } else {
+      assert.ok(request.url?.endsWith("/call")); calls++;
+      sourceVersions.set(String(input.operationId), stale);
+    }
+    response.end(JSON.stringify({ ...input, actorId, workspaceId, status: "succeeded", error: null,
+      result,
+      createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() }));
+  });
+  const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string");
+  process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  const context = { threadId: "workflow-cache", messageId: "message", generationId, authorizeExecution: async () => {} };
+  ensureThread(context.threadId, "Workflow cache regression");
+  initializeNativeOutput(generationId, context.threadId, "running");
+  const bridge = await openPmToolBridge(context);
+  const input = { operationId: randomUUID(), name, target, arguments: args };
+  const send = async (endpoint: string, body: unknown = input) => {
+    const response = await fetch(`${bridge.url}/tools/${endpoint}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: response.status, body: await response.json() as Record<string, unknown> };
+  };
+  try {
+    assert.equal((await send("call")).body.status, "succeeded");
+    assert.equal((await send("call")).body.status, "succeeded");
+    assert.equal(calls, 1);
+    stale = true;
+    for (const endpoint of ["call", "result"]) {
+      const rejected = await send(endpoint);
+      assert.equal(rejected.status, 400);
+      assert.equal(rejected.body.result, undefined);
+    }
+    const recovered = await send("mcp-call", { transportId: "stale-read-recovery", requestId: 1,
+      name: "pm_get_operation_result", arguments: { arguments: { operationId: input.operationId } } });
+    assert.equal(recovered.status, 400);
+    assert.equal(recovered.body.result, undefined);
+    assert.equal(calls, 1);
+    const historical = readRecord<StoredPmToolCall>("pm-tool-calls", input.operationId)!.record;
+    assert.equal(historical.status, "succeeded");
+    assert.equal(historical.result?.kind, result.kind);
+    const reconciled = await pmToolRoutes.request(`http://localhost/pm-tools/calls/${input.operationId}/reconcile`, { method: "POST" });
+    assert.equal(reconciled.status, 200);
+    const projection = await reconciled.json() as Record<string, unknown>;
+    assert.equal(projection.visibility, "unavailable");
+    assert.equal(projection.result, undefined);
+    assert.equal((await send("call", { ...input, operationId: randomUUID() })).body.status, "succeeded");
+    assert.equal(calls, 2, "only an explicitly new read dispatches again");
+    stale = false; pauseAuthorization = true;
+    const raceInput = { ...input, operationId: randomUUID() };
+    const pending = send("call", raceInput);
+    await authorizationReached.promise;
+    assert.equal((await send("call", raceInput)).body.status, "succeeded");
+    stale = true; resumeAuthorization.resolve();
+    const raced = await pending;
+    assert.equal(raced.status, 400);
+    assert.equal(raced.body.result, undefined);
+    assert.equal(calls, 3, "concurrent admission must revalidate, not redispatch, the newly cached read");
+  } finally {
+    resumeAuthorization.resolve();
+    await bridge.close();
+    const stopped = Promise.withResolvers<void>(); server.close(() => stopped.resolve()); await stopped.promise;
     closeStore();
     if (previousData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previousData;
     if (previousPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = previousPm;

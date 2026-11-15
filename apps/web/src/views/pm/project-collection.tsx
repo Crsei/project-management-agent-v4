@@ -329,7 +329,7 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
   const statusOptions = readModel.statusOptions
   const conditionFields: FilterField[] = [
     { id: "status", label: en ? "Status" : "业务状态", single: true, options: statusOptions },
-    { id: "team", label: en ? "Team size" : "团队规模", single: true, options: [
+    { id: "team", label: en ? "Participant count" : "参与人数", single: true, options: [
       { value: "small", label: en ? "1–5 members" : "1–5 人" },
       { value: "medium", label: en ? "6–10 members" : "6–10 人" },
       { value: "large", label: en ? "11+ members" : "11 人及以上" },
@@ -383,11 +383,11 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
   )
   const teamControl = (
     <ProjectSelect
-      label={en ? "Filter by team size" : "按团队规模筛选"}
+      label={en ? "Filter by participant count" : "按参与人数筛选"}
       value={state.teamSize}
       onChange={(value) => update("teamSize", value)}
       options={[
-        { value: "all", label: en ? "Team size" : "团队规模" },
+        { value: "all", label: en ? "Participant count" : "参与人数" },
         { value: "three", label: en ? "3 members" : "3 人" },
         { value: "larger", label: en ? "4+ members" : "4 人及以上" },
         { value: "small", label: en ? "1–5 members" : "1–5 人" },
@@ -467,8 +467,8 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
             {capabilities.filters.starred && <><DropdownMenuSeparator />
             <DropdownMenuCheckboxItem checked={state.starredOnly} onCheckedChange={(checked) => update("starredOnly", checked)}>{en ? "Starred only" : "仅显示收藏"}</DropdownMenuCheckboxItem></>}
             {browse && capabilities.filters.teamSize && <DropdownMenuGroup>
-              <DropdownMenuLabel className={styles.filterLabel}>{en ? "Team size" : "团队规模"}</DropdownMenuLabel>
-              {[{value: "all" as const, label: en ? "All teams" : "全部团队"}, {value: "three" as const, label: en ? "3 members" : "3 人"}, {value: "larger" as const, label: en ? "4+ members" : "4 人及以上"}, {value: "small" as const, label: en ? "1–5 members" : "1–5 人"}, {value: "medium" as const, label: en ? "6–10 members" : "6–10 人"}, {value: "large" as const, label: en ? "11+ members" : "11 人及以上"}].map((option) => <DropdownMenuCheckboxItem key={option.value} checked={state.teamSize === option.value} onCheckedChange={() => update("teamSize", option.value)}>{option.label}</DropdownMenuCheckboxItem>)}
+              <DropdownMenuLabel className={styles.filterLabel}>{en ? "Participant count" : "参与人数"}</DropdownMenuLabel>
+              {[{value: "all" as const, label: en ? "All projects" : "全部项目"}, {value: "three" as const, label: en ? "3 participants" : "3 位参与人"}, {value: "larger" as const, label: en ? "4+ participants" : "4 位及以上参与人"}, {value: "small" as const, label: en ? "1–5 participants" : "1–5 位参与人"}, {value: "medium" as const, label: en ? "6–10 participants" : "6–10 位参与人"}, {value: "large" as const, label: en ? "11+ participants" : "11 位及以上参与人"}].map((option) => <DropdownMenuCheckboxItem key={option.value} checked={state.teamSize === option.value} onCheckedChange={() => update("teamSize", option.value)}>{option.label}</DropdownMenuCheckboxItem>)}
             </DropdownMenuGroup>}
           </DropdownMenuContent>
         </DropdownMenuSub></>}
@@ -501,8 +501,8 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
                 ["active", en ? "Active" : "进行中"],
                 ["archived", en ? "Archived" : "已归档"],
                 ["recent", en ? "Recently updated" : "最近更新"],
-                ["three", en ? "3-member teams" : "3 人团队"],
-                ["larger", en ? "4+ member teams" : "4 人及以上团队"],
+                ["three", en ? "3 participants" : "3 位参与人"],
+                ["larger", en ? "4+ participants" : "4 位及以上参与人"],
               ] satisfies [ProjectCollectionViewInteraction["quickView"], string][]
             ).filter(([value]) => value === "all" || value === "active" && capabilities.filters.status || value === "archived" && capabilities.filters.archive || value === "recent" && capabilities.filters.updated || (value === "three" || value === "larger") && capabilities.filters.teamSize).map(([value, label]) => (
               <Button
@@ -647,13 +647,13 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
                 <p className={`${styles.label} mb-2`}>
                   {en ? "Project lead" : "项目负责人"}
                 </p>
-                {owner ? <span className="inline-flex min-w-0 items-center gap-2" data-pm-member={owner.id}><Avatar name={owner.name} size={24} /><span className="min-w-0"><span className="block truncate text-sm">{owner.name}</span>{owner.role && <span className="block text-xs text-muted-foreground">{owner.role}</span>}</span></span> : <p className={styles.note}>
+                {selected.ownerContent ?? (owner ? <span className="inline-flex min-w-0 items-center gap-2" data-pm-member={owner.id}><Avatar name={owner.name} size={24} /><span className="min-w-0"><span className="block truncate text-sm">{owner.name}</span>{owner.role && <span className="block text-xs text-muted-foreground">{owner.role}</span>}</span></span> : <p className={styles.note}>
                   {en ? "Unassigned or unavailable project lead; no replacement has been inferred." : "项目负责人未分配或不可用；没有推断或替换负责人。"}
-                </p>}
+                </p>)}
               </div>
               <dl className={styles.detailFacts}>
                 <div>
-                  <dt>{en ? "Team size" : "团队规模"}</dt>
+                  <dt>{en ? "Explicit participants" : "显式参与人"}</dt>
                   <dd>
                     {selected.teamSize === null ? "—" : en ? `${selected.teamSize} members` : `${selected.teamSize} 人`}
                   </dd>

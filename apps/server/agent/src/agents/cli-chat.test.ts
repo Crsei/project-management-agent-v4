@@ -16,3 +16,11 @@ test("bounded transfer context is retained separately from system limits and lat
   assert.throws(() => buildChatPrompt([], "", "C".repeat(20_001)), /transfer limit/);
   assert.throws(() => buildChatPrompt([], "S".repeat(16_001)), /No context was silently discarded/);
 });
+
+test("a regenerated selected input is refused rather than lost behind a newer oversized assistant message", () => {
+  const messages = [
+    { id: "selected-input", role: "user" as const, parts: [{ type: "text" as const, text: "EXACT_SELECTED_CONTEXT" }], metadata: { turnContext: { contextItems: [{ contextId: "selected" }] } } },
+    { id: "newer-output", role: "assistant" as const, parts: [{ type: "text" as const, text: "O".repeat(64000) }] },
+  ];
+  assert.throws(() => buildChatPrompt(messages, undefined, undefined, "selected-input"), { code: "context_too_large" });
+});

@@ -13,8 +13,9 @@ import { grantIdentity, MCP_EXECUTION_ROOTS, MCP_GRANTS, putGrant, reserveMcpExe
 import { verifyMcpServiceBearer } from "../../../../../packages/infrastructure/src/mcp-service-auth.ts";
 import { createProviderInstance, recordProviderObservations } from "../providers/instances.ts";
 import { chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
-import type { PmToolCallProjection, PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
+import { pmToolCallRecordSchema, type PmToolCallProjection, type PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
 
+import { createPmApprovalAuthorityFixture } from "../test-fixtures/pm-approval-authority.ts";
 // Real service/SQLite/HTTP boundaries, without a paid model or production PM database.
 test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed approval", async () => {
   const directory = await mkdtemp(join(tmpdir(), "mcp-tools-authority-"));
@@ -24,10 +25,11 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
   process.env.MCP_PUBLIC_ORIGIN = "https://fixture.invalid";
   process.env.PM_AUTOMATION_SERVICE_SECRET = "isolated-boundary-test-secret-32-bytes";
   const workspaceId = randomUUID(), actorId = randomUUID(), grantedThread = randomUUID(), unrelatedThread = randomUUID();
-  const scope = { workspaceId, projectId: "PRJ-001" };
   const fileArea = { path: null, status: "unconfigured", revision: 0, source: null, canManage: false };
   let calls = 0, resolves = 0, proofQueries = 0, forwardedActor: string | undefined, browserActor = actorId;
   let loseNextReply = false, resultsUnavailable = false, payloadAllowed = true;
+  const approvalAuthority = await createPmApprovalAuthorityFixture({ directory, workspaceId, actorId, archived: true, enabled: () => payloadAllowed });
+  const scope = approvalAuthority.target;
   const server = createServer(async (request, response) => {
     response.setHeader("content-type", "application/json");
     if (request.url === "/api/v1/auth/me") { response.end(JSON.stringify({ actor: { id: browserActor } })); return; }
@@ -46,6 +48,10 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     if (request.url === "/api/v1/agent-contexts/authorize") {
       if (!payloadAllowed) { response.writeHead(403).end(JSON.stringify({ error: "Current target is unavailable" })); return; }
       response.end(JSON.stringify({ actorId, scope: input })); return;
+    }
+    if (request.url?.endsWith("/agent-tools/approval-authority")) {
+      const authority = await approvalAuthority.read(input);
+      response.writeHead(authority.statusCode).end(authority.body); return;
     }
     if (request.url?.endsWith("/call")) {
       calls++;
@@ -104,10 +110,19 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     for (const name of ["t3_thread_launch", "t3_thread_send", "t3_thread_interrupt"]) await assert.rejects(invokeMcpTool(readonly, name, {}), /Read-only/);
     await assert.rejects(invokeMcpTool(readonly, "pm_delete_task", { operationId: randomUUID(), arguments: {} }), /Read-only/);
     assert.equal(listThreads().length, before); assert.equal(resolves, 0); assert.equal(calls, 0);
-    const operationId = randomUUID(), input = { operationId, target: scope, arguments: { id: "TASK-001", revision: 3 } };
+    const invalidQuery = { operationId: randomUUID(), target: scope, arguments: { entity: null, projectId: null, query: null, after: null, limit: 100 } };
+    const invalidResult = pmToolCallRecordSchema.parse(await invokeMcpTool(readonly, "pm_query", invalidQuery));
+    assert.equal(invalidResult.status, "failed");
+    assert.deepEqual(invalidResult.certainty, { dispatch: "not_sent", evidence: "local_rejection" });
+    assert.match(invalidResult.error?.message ?? "", /limit: must be at most 20/);
+    const repeatedInvalid = pmToolCallRecordSchema.parse(await invokeMcpTool(readonly, "pm_query", invalidQuery));
+    assert.equal(repeatedInvalid.status, "failed");
+    await assert.rejects(invokeMcpTool(readonly, "pm_query", { ...invalidQuery, arguments: { ...invalidQuery.arguments, limit: 20 } }), /another request/);
+    assert.equal(calls, 0, "external MCP invalid input never reaches PM execution");
+    const operationId = randomUUID(), input = { operationId, target: scope, arguments: { ...approvalAuthority.task } };
     const pending = await invokeMcpTool(identity, "pm_delete_task", input) as { status: string };
     assert.equal(pending.status, "pending_approval"); assert.equal(calls, 0);
-    await assert.rejects(invokeMcpTool(identity, "pm_delete_task", { ...input, arguments: { id: "TASK-002", revision: 3 } }), /another request/);
+    await assert.rejects(invokeMcpTool(identity, "pm_delete_task", { ...input, arguments: { id: "TASK-002", revision: "a".repeat(64) } }), /another request/);
     await assert.rejects(invokeMcpTool(identity, "pm_delete_task", { ...input, operationId: randomUUID(), target: { ...scope, projectId: "PRJ-002" } }), /ceiling/);
     browserActor = randomUUID();
     assert.equal((await pmToolRoutes.request(`/pm-tools/calls/${operationId}/approve`, { method: "POST", headers: { cookie: "pm_v4_session=fixture" } })).status, 403);
@@ -125,7 +140,7 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     assert.equal(approved.status, 200); assert.equal(calls, 1); assert.equal(forwardedActor, actorId);
     assert.equal((await pmToolRoutes.request(`/pm-tools/calls/${next.operationId}/approve`, { method: "POST", headers: { cookie: "pm_v4_session=fixture" } })).status, 409); assert.equal(calls, 1);
     loseNextReply = true; resultsUnavailable = true;
-    const unknownInput = { operationId: randomUUID(), target: scope, arguments: { query: "fixture" } };
+    const unknownInput = { operationId: randomUUID(), target: scope, arguments: { entity: null, projectId: null, query: "fixture", after: null, limit: 20 } };
     const unresolved = await invokeMcpTool(grantIdentity(replacement), "pm_query", unknownInput) as PmToolCallRecord;
     assert.equal(unresolved.status, "unknown");
     assert.equal(unresolved.threadId, ""); assert.equal(unresolved.messageId, ""); assert.equal(unresolved.generationId, "");
@@ -164,7 +179,7 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     const discovered = await invokeMcpTool(grantIdentity(replacement), "pm_list_workspaces", { operationId: randomUUID(), arguments: {} }) as PmToolCallRecord;
     assert.equal(discovered.result?.kind, "workspaces", "PM-only discovery remains the sole targetless capability");
     assert.equal(discovered.linkage?.executionRoot, "external");
-    const readonlyInput = { operationId: randomUUID(), target: scope, arguments: { query: "read-only" } };
+    const readonlyInput = { operationId: randomUUID(), target: scope, arguments: { entity: null, projectId: null, query: "read-only", after: null, limit: 20 } };
     const readonlyResult = await invokeMcpTool(readonly, "pm_query", readonlyInput) as PmToolCallRecord;
     assert.equal(readonlyResult.status, "succeeded");
     assert.equal(readRecord<Grant>(MCP_GRANTS, readonly.grantId)?.access, "read-only", "audit full policy does not upgrade an existing OAuth delegation");
@@ -208,6 +223,7 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     await assert.rejects(invokeMcpTool(grantIdentity(replacement), "pm_get_operation_result", { operationId: unknownInput.operationId }), /expired|revoked|unavailable/);
   } finally {
     server.closeAllConnections(); const closed = Promise.withResolvers<void>(); server.close(error => error ? closed.reject(error) : closed.resolve()); await closed.promise; closeStore();
+    await approvalAuthority.close();
     for (const [key, value] of [["AGENT_WORKSPACE_DATA_DIR", previous.data], ["PM_API_URL", previous.pm], ["MCP_PUBLIC_ORIGIN", previous.origin], ["PM_AUTOMATION_SERVICE_SECRET", previous.secret], ["AGENT_APPROVAL_MODE", previous.approval]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     await rm(directory, { recursive: true, force: true });
   }

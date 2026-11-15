@@ -6,10 +6,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { pmToolCallProjectionSchema, type PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
-import { closeStore, writeRecord } from "./durable/store.ts";
+import { closeStore, readRecord, writeRecord } from "./durable/store.ts";
 import type { StoredMessage } from "./durable/threads.ts";
 import { createPmVisibilityProjector, recordPmContentProvenance, recordPmQuoteProvenance } from "./pm-visibility.ts";
 import type { StoredPmToolCall } from "./pm-tools.ts";
+import { chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
+import { acceptedChatContextSchema, type AcceptedChatContext } from "@agent-workspace/contracts/message-context";
+import { ensureThread, saveFormattedMessage, bindMessageTurnContext, getThreadHistory } from "./durable/threads.ts";
+import { contextDigest } from "./durable/message-context.ts";
 
 test("five-target history projects each call and nested dependency independently without sensitive raw JSON", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "pm-visibility-"));
@@ -19,8 +23,15 @@ test("five-target history projects each call and nested dependency independently
   const denied = new Set<string>(); let unavailable = false, actor = actorId;
   const authorizationTargets: string[] = [];
   const server = createServer(async (req, res) => {
-    assert.equal(req.url, "/api/v1/agent-contexts/authorize");
     let text = ""; for await (const chunk of req) text += String(chunk);
+    if (req.url?.endsWith("/agent-tools/result")) {
+      const input = JSON.parse(text) as { operationId: string };
+      const stored = readRecord<StoredPmToolCall>("pm-tool-calls", input.operationId);
+      res.setHeader("content-type", "application/json");
+      if (!stored) { res.writeHead(404).end("{}"); return; }
+      res.end(JSON.stringify(stored.record)); return;
+    }
+    assert.equal(req.url, "/api/v1/agent-contexts/authorize");
     const target = JSON.parse(text) as { workspaceId: string; projectId: string | null };
     authorizationTargets.push(target.workspaceId);
     res.setHeader("content-type", "application/json");
@@ -232,8 +243,11 @@ test("five-target history projects each call and nested dependency independently
     const duplicate = projector.nativeSnapshot({ generationId: proven.generationId, threadId, status: "cancelled", sequence: 20, items: [
       { id: "provider-copy", type: "dynamic_tool", status: "failed", error: "stale-private-error", input: "stale-private-input", output: JSON.stringify({ isError: true, structuredContent: { ...records[0]!, status: "unknown" } }) },
     ] }).items[0]!;
-    assert.equal(duplicate.status, "completed"); assert.doesNotMatch(JSON.stringify(duplicate), /stale-private|private-body-1/);
-    assert.equal((JSON.parse(duplicate.output!) as PmToolCallRecord).certainty?.evidence, "internal_proof");
+    assert.equal(duplicate.visibility, "unavailable", "bare success proof cannot authorize a stale native payload");
+    assert.doesNotMatch(JSON.stringify(duplicate), /stale-private|private-body-1|internal_proof/);
+    const retained = readRecord<StoredPmToolCall>("pm-tool-calls", proven.operationId)!.record;
+    assert.equal(retained.status, "succeeded", "unavailable current payload must not demote the original durable outcome");
+    assert.equal(retained.certainty?.evidence, "internal_proof");
     const forkThread = "fork-history", forkGeneration = randomUUID();
     recordPmContentProvenance({ threadId: forkThread, generationId: forkGeneration, messageIds: ["fork-summary"], operationIds: [proven.operationId], targets: [proven.target!] });
     actor = randomUUID();
@@ -255,6 +269,63 @@ test("five-target history projects each call and nested dependency independently
     assert.doesNotMatch(JSON.stringify(filteredQuote), /private-model-1/);
   } finally {
     server.closeAllConnections(); const closed = Promise.withResolvers<void>(); server.close(() => closed.resolve()); await closed.promise; closeStore();
+    if (oldData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldData;
+    if (oldUrl === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldUrl;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("revocation removes all accepted context bodies and sensitive source metadata while retaining unrelated user prose", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "native-context-visibility-"));
+  const oldData = process.env.AGENT_WORKSPACE_DATA_DIR, oldUrl = process.env.PM_API_URL;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  const actorId = randomUUID(), target = { workspaceId: randomUUID(), projectId: "PRJ-001" };
+  let denied = false;
+  const server = createServer(async (_request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (denied) response.writeHead(403).end(JSON.stringify({ error: "Denied" }));
+    else response.end(JSON.stringify({ actorId, scope: target }));
+  });
+  const ready = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", ready.resolve); await ready.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string"); process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  try {
+    ensureThread("source-context", undefined, chatOnlyExecutionSelection());
+    ensureThread("destination-context", undefined, chatOnlyExecutionSelection());
+    const inputs = [
+      { contextId: "sensitive-file", kind: "review-comment" as const, source: { type: "file" as const, path: "PRIVATE_SOURCE_PATH", contentDigest: contextDigest("PRIVATE_FILE_BYTES") }, comment: "PRIVATE_REVIEW_COMMENT" },
+      { contextId: "sensitive-preview", kind: "preview-annotation" as const, source: { type: "browser" as const, url: "https://private-source.invalid/sensitive", title: "PRIVATE_PAGE_TITLE", attachmentId: "private-capture" }, text: "PRIVATE_BROWSER_TEXT", comment: "PRIVATE_BROWSER_COMMENT" },
+      { contextId: "sensitive-terminal", kind: "terminal" as const, source: { type: "terminal" as const, terminalId: "real-fixture-terminal", serviceId: randomUUID() }, text: "PRIVATE_TERMINAL_TEXT", comment: "PRIVATE_TERMINAL_COMMENT" },
+    ];
+    const contextItems: AcceptedChatContext[] = inputs.map(input => ({
+      contextId: input.contextId, kind: input.kind, source: input.source, input,
+      text: "PRIVATE_ACCEPTED_BODY", digest: contextDigest("PRIVATE_ACCEPTED_BODY"), inputDigest: contextDigest(input),
+      acceptedAt: new Date().toISOString(), provenance: input.kind === "terminal" ? "user-terminal-snapshot" : input.kind === "preview-annotation" ? "user-browser-snapshot" : "server-verified", truncated: false, visibility: "available",
+      dependencies: [{ threadId: "source-context", messageIds: [] }],
+      pmProvenance: { operationIds: [], targets: [target], authorities: [{ actorId, target }], complete: true },
+    }));
+    for (const item of contextItems) acceptedChatContextSchema.parse(item);
+    const screenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5V8AAAAASUVORK5CYII=";
+    saveFormattedMessage("destination-context", { id: "input", parent_id: null, format: "ai-sdk/v6", content: { role: "user",
+      parts: [{ type: "text", text: "UNRELATED_USER_PROSE" }, { type: "file", mediaType: "image/png", filename: "PRIVATE_SCREENSHOT.png", url: screenshot },
+        { type: "file", mediaType: "text/plain", filename: "public.txt", url: "data:text/plain;base64,cHVibGlj" }],
+      metadata: { custom: { contextAttachments: [{ attachmentId: "private-capture", partIndex: 1 }] } } } });
+    bindMessageTurnContext("destination-context", { version: 1, threadId: "destination-context", messageId: "input", acceptedAt: new Date().toISOString(), pmReferences: [], contextItems });
+    const before = await createPmVisibilityProjector("destination-context", new Headers());
+    assert.match(JSON.stringify(before.history(getThreadHistory("destination-context").messages)), /PRIVATE_SOURCE_PATH/);
+    denied = true;
+    const after = await createPmVisibilityProjector("destination-context", new Headers());
+    assert.equal(after.nativeContextContaminated, true);
+    const projected = after.history(getThreadHistory("destination-context").messages);
+    assert.match(JSON.stringify(projected), /UNRELATED_USER_PROSE/);
+    assert.doesNotMatch(JSON.stringify(projected), /PRIVATE_|private-source\.invalid/);
+    assert.equal(JSON.stringify(projected).includes(screenshot), false, "Linked screenshot bytes cannot bypass unavailable browser context.");
+    assert.match(JSON.stringify(projected), /public\.txt/, "Unrelated user attachments remain readable.");
+    for (const item of projected[0]!.turnContext!.contextItems!) {
+      acceptedChatContextSchema.parse(item);
+      assert.equal(item.input, undefined); assert.deepEqual(item.source, { type: "unavailable" }); assert.equal(item.text, "");
+    }
+  } finally {
+    const closed = Promise.withResolvers<void>(); server.close(() => closed.resolve()); await closed.promise; closeStore();
     if (oldData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldData;
     if (oldUrl === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldUrl;
     await rm(directory, { recursive: true, force: true });

@@ -33,13 +33,13 @@ test("the connection bridge offers no generic filesystem, process, shell or IPC 
   assert.equal(invocations[0].channel, "desktop:action");
   assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "directory", field: "dataDir" }));
   await bridge.invoke("backup", { destination: "/renderer-must-not-choose-this" });
-  assert.equal(JSON.stringify(invocations[1].input), JSON.stringify({ action: "backup" }));
+  assert.equal(Object.hasOwn(invocations[1].input, "destination"), false);
 });
 
 test("backup bridge forwards only ephemeral password and explicit legacy acknowledgement, not renderer paths or algorithms", async () => {
   const { bridge, invocations } = await preload();
-  await bridge.invoke("backup", { password: "synthetic-backup-passphrase", destination: "/not-accepted", kdf: { N: 1 } });
-  assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "backup", password: "synthetic-backup-passphrase" }));
+  await bridge.invoke("backup", { password: "synthetic-backup-passphrase", stoppedWritersAcknowledged: true, destination: "/not-accepted", kdf: { N: 1 } });
+  assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "backup", password: "synthetic-backup-passphrase", stoppedWritersAcknowledged: true }));
   await bridge.invoke("restore", { password: "synthetic-backup-passphrase", allowLegacyUnencrypted: "true", trustedSourceAcknowledged: "true", source: "/not-accepted", dataDir: "/not-accepted" });
   assert.equal(JSON.stringify(invocations[1].input), JSON.stringify({ action: "restore", password: "synthetic-backup-passphrase", allowLegacyUnencrypted: false, trustedSourceAcknowledged: false }));
   await bridge.invoke("restore", { allowLegacyUnencrypted: true, trustedSourceAcknowledged: true });

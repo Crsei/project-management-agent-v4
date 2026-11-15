@@ -46,11 +46,6 @@
   function teardown() {
     active = false;
     selected = null;
-    window.removeEventListener("mousemove", onMove, true);
-    window.removeEventListener("pointerdown", onPointer, true);
-    window.removeEventListener("mousedown", onPointer, true);
-    window.removeEventListener("keydown", onKey, true);
-    window.removeEventListener("scroll", onScroll, true);
     overlay?.remove();
     overlay = box = label = null;
   }
@@ -109,7 +104,13 @@
 
   function onPointer(event) {
     if (!active) return;
-    // Do not let the preview page act on the gesture that selects it.
+    // Block every phase of the gesture, not just the initial press.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function onClick(event) {
+    if (!active) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     pickAt(event);
@@ -173,12 +174,19 @@
     theme = { dark: options?.dark === true };
     active = true;
     ensureOverlay();
-    window.addEventListener("mousemove", onMove, true);
-    window.addEventListener("pointerdown", onPointer, true);
-    window.addEventListener("mousedown", onPointer, true);
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("scroll", onScroll, true);
   }
+
+  // Install before page scripts; keep the listeners gated by active between picks.
+  window.addEventListener("mousemove", onMove, true);
+  window.addEventListener("pointerdown", onPointer, true);
+  window.addEventListener("mousedown", onPointer, true);
+  window.addEventListener("pointerup", onPointer, true);
+  window.addEventListener("mouseup", onPointer, true);
+  window.addEventListener("click", onClick, true);
+  window.addEventListener("contextmenu", onPointer, true);
+  window.addEventListener("auxclick", onPointer, true);
+  window.addEventListener("keydown", onKey, true);
+  window.addEventListener("scroll", onScroll, true);
 
   ipcRenderer.on(START, (_event, options) => start(options));
   ipcRenderer.on(CANCEL, () => teardown());

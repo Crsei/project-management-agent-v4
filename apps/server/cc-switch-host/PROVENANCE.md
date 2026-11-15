@@ -44,3 +44,27 @@ only the reviewed React Web UI, MIT notice and the two shared provenance helper
 scripts required by the OpenHands presentation. Complete removal of that UI
 folder requires a separate Web/OpenHands ownership and provenance migration and
 is not silently claimed here.
+
+## Local bundled PM Skills adaptation
+
+`src/skills/bundled.ts` is Dovspace-owned orchestration, not new upstream code.
+It consumes only the Agent's private, catalog-validated byte payload and reuses
+the translated cc-switch library, native layout, full-tree deployment hashing,
+staged filesystem publication/rollback and uninstall-backup helpers. It does not
+introduce a parallel Skill library, native root resolver or runtime dispatcher.
+
+The same-pin changes in `src/host.ts`, `types.ts`, `constants.ts`,
+`database/{index,skills}.ts` and `skills/{install,service,backup}.ts` add explicit
+installed-source metadata (schema 3), retain it in backups, exclude builtins from
+the GitHub updater, and protect bundled user edits across installation, updates,
+toggle/resync/uninstall and backup restore. `updateManagedSkillFiles` is reused
+with a final ownership recheck immediately before publication. The private
+`inspect_bundled_skills` and `install_bundled_skills` IPC commands are not exposed
+through the generic browser invoke allowlist.
+
+`tests/bundled-skills.test.ts` covers real isolated-filesystem install/update,
+Pi/OMP observations, assignment retention, full-tree conflicts, per-item failure,
+metadata rollback and backup source retention. Agent route/provider tests are in
+`apps/server/agent/src/extensions/bundled-skills.test.ts`. These additions do not
+claim that a running native Provider loaded or can invoke the installed Skills.
+

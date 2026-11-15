@@ -49,6 +49,57 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     return response.body.result as MemberInvitationDto;
   }
 
+  it('persists team intent through resend and atomically joins teams once without granting extra capabilities', { timeout: mailFixtureCaseTimeout }, async () => {
+    const created = await f.send({ commandId: randomUUID(), commandType: 'CreateProjectTeam', payload: { name: 'Invited team', memberIds: [f.owner.id] } });
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const team = created.body.result as { id: string; version: number };
+    const request: Command = { commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'team-invite@example.test', role: 'guest', projectIds: null, teamIds: [team.id] } };
+    const invitation = await committed(request);
+    assert.deepEqual(invitation.teamIds, [team.id]);
+    assert.deepEqual((await f.pool.query('SELECT team_ids FROM member_invitations WHERE id=$1', [invitation.id])).rows[0].team_ids, [team.id]);
+    const resent = await committed(mutation('ResendMemberInvitation', invitation));
+    assert.deepEqual(resent.teamIds, [team.id]);
+    const token = await mail(resent);
+    const inspect = await f.request<InvitationInspectDto>('/api/v1/invitations/inspect', { token }, '');
+    assert.deepEqual(inspect.body.teams, [{ id: team.id, name: 'Invited team' }]);
+    const payload = { commandId: randomUUID(), token, password: 'team-invite-existing-password', name: 'Team invitee' };
+    const accepted = await f.request<InvitationAcceptDto>('/api/v1/invitations/accept', payload, '');
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    const userId = accepted.body.userId;
+    const saved = (await f.pool.query('SELECT data,version FROM dashboard_records WHERE id=$1', [team.id])).rows[0];
+    assert.deepEqual(saved.data.memberIds, [f.owner.id, userId]);
+    assert.deepEqual(saved.data.maintainerIds, []);
+    assert.equal(saved.version, team.version + 1);
+    assert.deepEqual((await f.pool.query('SELECT capabilities,project_ids FROM memberships WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, userId])).rows[0], { capabilities: memberRoleCapabilities('guest'), project_ids: null });
+    assert.deepEqual((await f.request('/api/v1/invitations/accept', payload, '')).body, accepted.body);
+    assert.equal((await f.pool.query('SELECT version FROM dashboard_records WHERE id=$1', [team.id])).rows[0].version, saved.version);
+    const event = (await f.pool.query('SELECT aggregate_version,event_type FROM outbox WHERE command_id=$1 AND aggregate_id=$2', [payload.commandId, team.id])).rows;
+    assert.deepEqual(event, [{ aggregate_version: saved.version, event_type: 'ProjectTeamMembersSet' }]);
+    assert.equal((await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`)).body.items[0]?.delivery?.status, 'smtp_accepted');
+  });
+
+  it('rejects foreign, missing and archived teams and rolls back account creation when team intent becomes unavailable', { timeout: mailFixtureCaseTimeout }, async () => {
+    const response = await f.send({ commandId: randomUUID(), commandType: 'CreateProjectTeam', payload: { name: 'Will archive' } });
+    assert.equal(response.status, 200);
+    const team = response.body.result as { id: string; version: number };
+    const create = (teamIds: string[]): Command => ({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'unavailable-team@example.test', role: 'guest', projectIds: null, teamIds } });
+    assert.equal((await f.send(create([randomUUID()]))).body.error?.code, 'invitation_team_unavailable');
+    assert.equal((await f.send(create([team.id, team.id]))).status, 400);
+    const other = await createWorkspace(f.pool, f.owner.id, 'Other team workspace');
+    assert.equal((await f.send(create([team.id]), undefined, other.id)).body.error?.code, 'invitation_team_unavailable');
+    const invitation = await committed(create([team.id]));
+    const token = await mail(invitation);
+    const archive = await f.send({ commandId: randomUUID(), commandType: 'ArchiveProjectTeam', targetId: team.id, expectedVersions: { [team.id]: team.version }, payload: {} });
+    assert.equal(archive.status, 200);
+    assert.equal((await f.send(mutation('ResendMemberInvitation', invitation))).body.error?.code, 'invitation_team_unavailable');
+    assert.equal((await f.request('/api/v1/invitations/inspect', { token }, '')).status, 409);
+    const accepted = await f.request('/api/v1/invitations/accept', { commandId: randomUUID(), token, password: 'unavailable-team-password', name: 'Cannot join' }, '');
+    assert.equal(accepted.status, 409);
+    assert.equal((await f.pool.query('SELECT count(*)::int AS count FROM users WHERE email=$1', [invitation.email])).rows[0].count, 0);
+    assert.equal((await f.pool.query('SELECT status FROM member_invitations WHERE id=$1', [invitation.id])).rows[0].status, 'pending');
+    assert.equal((await f.pool.query('SELECT generation FROM member_invitations WHERE id=$1', [invitation.id])).rows[0].generation, 1);
+  });
+
   it('disables writes without SMTP configuration rather than making a fake pending queue', { timeout: mailFixtureCaseTimeout }, async t => {
     await f.close();
     f = await createInvitationFixture({ database, signal: t.signal, disabled: true });
@@ -122,6 +173,21 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await f.pool.query('SELECT count(*)::int AS count FROM sessions WHERE user_id=$1', [user.id])).rows[0].count, 0);
     assert.equal((await f.request('/api/v1/auth/login', { email: user.email, password: 'new-attacker-password' }, '')).status, 401);
     assert.equal((await f.request('/api/v1/auth/login', { email: user.email, password }, '')).status, 200);
+  });
+
+  it('allows a publicly registered account to accept an invitation only with its existing password', { timeout: mailFixtureCaseTimeout }, async () => {
+    const password = 'public-registration-invitation-password';
+    const email = `${randomUUID()}@example.test`;
+    const registered = await f.request<{ actor: { id: string } }>('/api/v1/auth/register', { email, name: 'Registered member', password }, '');
+    assert.equal(registered.status, 200);
+    const invitation = await f.invite(email, { role: 'guest' });
+    const token = await mail(invitation);
+    assert.equal((await f.request<InvitationInspectDto>('/api/v1/invitations/inspect', { token }, '')).body.accountExists, true);
+    const commandId = randomUUID();
+    assert.equal((await f.request('/api/v1/invitations/accept', { commandId, token, password: 'wrong-password' }, '')).status, 401);
+    const accepted = await f.request<InvitationAcceptDto>('/api/v1/invitations/accept', { commandId, token, password }, '');
+    assert.equal(accepted.status, 200); assert.equal(accepted.body.userId, registered.body.actor.id);
+    assert.deepEqual((await f.pool.query('SELECT capabilities,project_ids FROM memberships WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, registered.body.actor.id])).rows[0], { capabilities: memberRoleCapabilities('guest'), project_ids: null });
   });
 
   it('serializes command idempotency, unique active emails and invitation CAS', { timeout: mailFixtureCaseTimeout }, async () => {

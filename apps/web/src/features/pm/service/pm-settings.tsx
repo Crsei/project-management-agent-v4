@@ -13,6 +13,7 @@ import {
   projectDetailViews,
   resetPmDisplaySettings,
   usePmDisplaySettings,
+  usePmDisplayStorage,
   writePmDisplaySettings,
   type PmDisplaySettings,
 } from "./pm-display-settings"
@@ -83,7 +84,9 @@ function ServiceSettingsContent() {
   const setTheme = useWorkspaceStore((state) => state.setTheme)
   const locale = useWorkspaceStore((state) => state.locale)
   const setLocale = useWorkspaceStore((state) => state.setLocale)
+  const preferenceStorage = useWorkspaceStore((state) => state.preferenceStorage)
   const settings = usePmDisplaySettings(workspace?.id)
+  const layoutStorage = usePmDisplayStorage(workspace?.id)
 
   if (!workspace) return null
 
@@ -110,13 +113,15 @@ function ServiceSettingsContent() {
         <h1 className="text-2xl font-semibold">{t("设置", "Settings")}</h1>
         <p className="text-sm text-muted-foreground">
           {t(
-            "页面布局按工作区保存在当前浏览器；主题与语言由此网站的浏览器偏好共享。均不修改业务数据或同步至其他设备。",
-            "Page layouts are saved per workspace in this browser; theme and language are shared browser preferences for this site. Neither changes business data or syncs to other devices.",
+            "页面布局按工作区保存在当前浏览器；在此浏览器访问同一工作区的账号共用。主题与语言由此网站的浏览器偏好共享。均不修改业务数据或跨设备同步。",
+            "Page layouts are saved per workspace in this browser and shared by accounts using that workspace here. Theme and language are shared browser preferences for this site. Neither changes business data or syncs across devices.",
           )}
         </p>
       </header>
 
-      <Panel title={t("外观", "Appearance")}>
+      <Panel title={t("外观（此网站的浏览器偏好）", "Appearance (site-wide browser preferences)")}>
+        {preferenceStorage === "unavailable" && <p role="alert" className="mb-4 text-sm text-destructive">{t("主题 / 语言的浏览器存储不可用或写入失败。当前选择仅在本次应用会话生效，刷新后可能丢失。", "Browser storage for theme / language is unavailable or a write failed. Current choices apply only to this app session and may be lost on reload.")}</p>}
+        {preferenceStorage === "recovered" && <p role="status" className="mb-4 text-sm text-muted-foreground">{t("主题 / 语言等网站偏好中损坏或不支持的值已使用安全默认值；下次修改会保存有效设置。", "Damaged or unsupported site preferences, including theme / language, use safe defaults. Your next change saves valid settings.")}</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Choice
             label={t("主题", "Theme")}
@@ -148,12 +153,12 @@ function ServiceSettingsContent() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium">
-              {t("页面布局", "Page layouts")}
+              {t("页面布局（当前工作区 / 浏览器）", "Page layouts (this workspace / browser)")}
             </h2>
             <p className="text-sm text-muted-foreground">
               {t(
-                "选择真实服务页面使用的展示方式。",
-                "Choose the presentation used by real-service pages.",
+                "选择真实服务页面使用的展示方式；只影响此浏览器中当前工作区的显示，不是团队共享默认值。",
+                "Choose presentations for real-service pages. Only this browser’s display of the current workspace changes, not shared team defaults.",
               )}
             </p>
           </div>
@@ -162,9 +167,11 @@ function ServiceSettingsContent() {
             onClick={() => resetPmDisplaySettings(workspace.id)}
           >
             <RotateCcw aria-hidden="true" />
-            {t("恢复展示默认值", "Reset to showcase defaults")}
+            {t("恢复布局默认值", "Reset layout defaults")}
           </Button>
         </div>
+        {layoutStorage === "unavailable" && <div role="alert" className="space-y-2 rounded-module border border-destructive/30 p-3 text-sm"><p>{t("当前工作区的布局存储不可用或写入失败。选择仍在内存中生效，刷新后可能丢失；不会用旧浏览器值覆盖本次修改。主题 / 语言的存储状态在上方单独显示。", "Layout storage for this workspace is unavailable or a write failed. Choices remain active in memory and may be lost on reload; older browser values will not replace this session’s edits. Theme / language storage status is shown separately above.")}</p><Button variant="outline" onClick={() => writePmDisplaySettings(workspace.id, settings)}>{t("重试保存当前布局", "Retry saving current layouts")}</Button></div>}
+        {layoutStorage === "recovered" && <p role="status" className="text-sm text-muted-foreground">{t("已忽略损坏或不支持的布局值并采用安全默认值；下次选择或重置将保存有效布局。", "Damaged or unsupported layout values were replaced with safe defaults. Your next selection or reset saves valid layouts.")}</p>}
         <div className="grid gap-4 md:grid-cols-2">
           <Panel title={t("工作区概览", "Dashboard")}>
             <Choice

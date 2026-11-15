@@ -114,3 +114,18 @@ test("available metadata requires a revision and explicitly disclaims historic b
   assert.match(pmContextPromptLine(resolved)!, /不是历史正文快照/);
   assert.doesNotThrow(() => assertResolvedReferences(resolved));
 });
+
+test("ordinary Chat task references request an actual revision-bound brief read, not imagined Skill loading", async () => {
+  const resolved = await resolvePmReferences([reference], credentials);
+  const prompt = pmContextPromptLine(resolved)!;
+  assert.match(prompt, /实际调用只读 pm_task_brief/);
+  assert.match(prompt, /"taskId":"TASK-001"/);
+  assert.match(prompt, /"stage":"analysis"/);
+  assert.match(prompt, /"revision":"current-revision"/);
+  assert.match(prompt, /dispatchable=false/); assert.match(prompt, /重新规划/);
+  assert.match(prompt, /pm_search_knowledge/); assert.match(prompt, /needs_review/);
+  assert.match(prompt, /Skill 安装.*不表示本轮已加载或可调用/);
+  assert.match(prompt, /未提供工具的压缩\/技术轮次不得宣称已经读取或调用/);
+  assert.equal(calls.length, 1, "forming prompt guidance is not itself a PM tool execution or dispatch");
+  assert.doesNotMatch(pmContextPromptLine(resolved.map(item => ({ ...item, availability: 'stale' })))!, /"taskId":/);
+});

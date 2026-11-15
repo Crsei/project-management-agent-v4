@@ -78,6 +78,55 @@ The explicit **Adopt into library** action uses the real `import_skills_from_app
 
 “Local” always means the Agent service machine: desktop local mode uses the desktop machine; desktop remote mode and shared Web use the remote Agent host, never the browser filesystem.
 
+### Shipped Dovspace PM Skills
+
+The nine explicitly selected resources are read from the installed application's
+`.agents/skills` and `plugins/dovspace-pm/skills` paths by the shared
+`packages/skill-resources/catalog.ts` catalog. `upstream-source-update` is excluded.
+No source checkout, repository download or model invocation is needed.
+
+- `GET /api/extensions/bundled-skills` returns `{skills,bundleDigest}`. Each catalog
+  entry includes canonical ID/name, description, `sourceLabel:"Dovspace"`,
+  `sourcePath`, and the exact UTF-8 `SKILL.md` SHA-256.
+- `GET /api/extensions/providers/:providerInstanceId/bundled-skills` returns
+  `{providerInstanceId,bundleDigest,targetFingerprint?,skills,warnings}` with
+  per-skill `not-installed`, `installed`, `update-available`, `conflict` or
+  `unavailable` state. An unowned Provider read does not create a management
+  context, database or native destination. Existing owners may start their
+  private host to inspect authoritative library metadata; the read never deploys.
+- `POST` to the same Provider URL accepts exactly
+  `{skillIds,bundleDigest,targetFingerprint,confirmed:true}`. Both bundle digest
+  and reviewed target fingerprint (Provider revision plus physical native roots)
+  are checked before installation; changed snapshots reject with HTTP 409.
+  The result is `{results:[{id,status,error?}],state}`. A per-item result is
+  `installed`, `updated`, `unchanged`, `conflict`, `unavailable` or `error`, never
+  unconditional success. Browser callers cannot supply file bytes or paths.
+
+The explicit POST reuses the registered Provider's existing native owner,
+cc-switch managed library, native deployment/staging and backup machinery.
+Disabled, remote and unsupported targets remain unavailable. Builtins have a
+distinct managed record ID and durable `source` metadata
+`{sourceLabel,sourcePath,sha256,treeHash}` in SQLite schema 3 and uninstall backups;
+same-name local/native/GitHub entries never become builtins by name or byte
+coincidence. Existing managed-list responses retain this source metadata.
+The GitHub updater rejects builtins and discovery never submits them as a
+repository update.
+
+Updating verifies the prior manifest and full SSOT/native trees, including extra
+and hidden files, before staging and again before publication. User edits and
+foreign native entries produce conflicts, not overwrites. Every existing
+verified deployment in a shared owner updates together; warnings identify bound
+applications and associated Providers. Pi/OMP remain native-directory
+observations, not persisted enable flags. Builtin uninstall/toggle/resync and
+backup restore retain these ownership protections.
+
+Read the returned state after an unknown result; no automatic write replay is
+performed. Successful or unconfirmed writes use existing Provider snapshot
+invalidation and `changed`/`operation` events with `liveSessionsReloaded:false`.
+Installation is not proof of runtime loading or invocation support; running
+sessions are never restarted. Session/persistence design remains unclosed.
+
+
 
 ### MCP library, assignments and reviewed imports
 

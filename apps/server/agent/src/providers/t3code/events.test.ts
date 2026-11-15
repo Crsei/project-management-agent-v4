@@ -54,6 +54,7 @@ test("request and item ordering joins once, default-denies native approval, and 
   adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, status: "cancelled" } });
   assert.deepEqual(closed, ["question"]);
   assert.equal(adapter.items.get("item")?.request?.respondable, false);
+  assert.equal(adapter.items.get("item")?.status, "cancelled");
   adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "approval-item", type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
   adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, id: Schema.decodeUnknownSync(OrchestrationV2RuntimeRequest.fields.id)("approval"), kind: "command" } });
   assert.equal(offered[1].kind, "approval");
@@ -61,24 +62,102 @@ test("request and item ordering joins once, default-denies native approval, and 
   assert.match(offered[1].unavailableReason!, /PM business approvals remain separate/);
 });
 
-test("auto-approve labels native approvals as configuration decisions", () => {
+test("auto-approved permissions settle only from accepted decisions and survive repeated native closure", () => {
   const previousMode = process.env.AGENT_APPROVAL_MODE;
   process.env.AGENT_APPROVAL_MODE = "auto-approve";
   try {
-    const offered: NativeInteractionRequest[] = [];
-    const adapter = makePmEventAdapter({ canRespond: true, onRequest: (value) => offered.push(value), onRequestClosed: () => {},
-      isLiveRequest: (value) => value.responseCapability.type === "live" && value.responseCapability.providerSessionId === "session" });
-    const live = request({ id: "question", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "user_input", status: "pending",
-      responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: null });
-    adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "approval-item", type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
-    adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, id: Schema.decodeUnknownSync(OrchestrationV2RuntimeRequest.fields.id)("approval"), kind: "command" } });
-    assert.equal(offered.length, 1);
-    assert.equal(offered[0].kind, "approval");
-    assert.equal(offered[0].respondable, false);
-    assert.equal(offered[0].title, "Native permission auto-approved");
-    assert.match(offered[0].unavailableReason!, /Auto-approved by configuration/);
+    for (const decision of ["accept", "acceptForSession", "acceptAlways"] as const) {
+      const offered: NativeInteractionRequest[] = [];
+      const adapter = makePmEventAdapter({ canRespond: true, onRequest: (value) => offered.push(value), onRequestClosed: () => {},
+        isLiveRequest: (value) => value.responseCapability.type === "live" && value.responseCapability.providerSessionId === "session" });
+      const live = request({ id: "approval", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "command", status: "pending",
+        responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: null });
+      const approval = item({ ...base, id: "approval-item", type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" });
+      adapter.handle({ type: "turn_item.updated", driver, turnItem: approval });
+      adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: live });
+      assert.equal(offered.length, 1);
+      assert.equal(offered[0].kind, "approval");
+      assert.equal(offered[0].respondable, false);
+      assert.equal(adapter.items.get(approval.id)?.status, "waiting");
+      assert.equal(offered[0].title, "Native permission approval pending");
+      adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, status: "resolved", decision, resolvedAt: now } });
+      const accepted = adapter.items.get(approval.id)!;
+      assert.equal(accepted.status, "completed");
+      assert.equal(accepted.completedAt, DateTime.formatIso(now));
+      assert.equal(accepted.request?.respondable, false);
+      assert.equal(accepted.request?.resolution, "auto_approved");
+      assert.equal(accepted.request?.title, "Native permission auto-approved");
+      assert.match(accepted.request!.unavailableReason!, /Auto-approved by configuration/);
+      adapter.handle({ type: "turn_item.updated", driver, turnItem: { ...approval, status: "cancelled", completedAt: now } });
+      adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, status: "cancelled", resolvedAt: now } });
+      adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: live });
+      adapter.close();
+      adapter.close();
+      assert.equal(adapter.items.get(approval.id)?.status, "completed");
+      assert.equal(adapter.items.get(approval.id)?.request?.resolution, "auto_approved");
+      assert.equal(adapter.items.get(approval.id)?.request?.respondable, false);
+      assert.equal(adapter.requests.get(live.id)?.decision, decision);
+      assert.equal(offered.length, 1);
+    }
   } finally {
     if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
+
+test("denied, cancelled, expired and unacknowledged permissions never become approved from configuration", () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "auto-approve";
+  try {
+    for (const resolution of [
+      { status: "resolved", decision: "decline" }, { status: "resolved", decision: "cancel" },
+      { status: "cancelled" }, { status: "expired" },
+    ] as const) {
+      const adapter = makePmEventAdapter({ canRespond: true, onRequest: () => assert.fail("closed request was offered"), onRequestClosed: () => {} });
+      adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
+      adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: request({
+        id: "approval", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "command",
+        responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: now, ...resolution,
+      }) });
+      adapter.close();
+      const closed = adapter.items.get(base.id)!;
+      assert.equal(closed.status, "cancelled");
+      assert.equal(closed.request?.respondable, false);
+      assert.doesNotMatch(closed.request!.title, /approved/);
+      assert.doesNotMatch(closed.request!.unavailableReason!, /approved/);
+    }
+    const adapter = makePmEventAdapter({ canRespond: true, onRequest: () => {}, onRequestClosed: () => {},
+      isLiveRequest: () => true });
+    adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
+    adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: request({
+      id: "approval", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "command", status: "pending",
+      responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: null,
+    }) });
+    adapter.close();
+    assert.equal(adapter.items.get(base.id)?.status, "cancelled");
+    assert.equal(adapter.items.get(base.id)?.request?.title, "Native permission cancelled");
+  } finally {
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
+
+test("answered and interrupted information questions retain their own terminal state", () => {
+  for (const status of ["completed", "interrupted"] as const) {
+    let offered = 0;
+    const adapter = makePmEventAdapter({ canRespond: true, onRequest: () => { offered++; }, onRequestClosed: () => {},
+      isLiveRequest: () => true });
+    const question = item({ ...base, type: "user_input_request", requestId: "question",
+      questions: [{ id: "note", header: "Note", question: "Which note?", options: [] }] });
+    const live = request({ id: "question", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "user_input", status: "pending",
+      responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: null });
+    adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: live });
+    adapter.handle({ type: "turn_item.updated", driver, turnItem: question });
+    assert.equal(adapter.items.get(base.id)?.request?.respondable, true);
+    if (status === "completed") adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, status: "resolved", answers: { note: "chosen" }, resolvedAt: now } });
+    else adapter.handle({ type: "turn_item.updated", driver, turnItem: { ...question, status, completedAt: now } });
+    adapter.close();
+    assert.equal(adapter.items.get(base.id)?.status, status);
+    assert.equal(adapter.items.get(base.id)?.request?.respondable, false);
+    assert.equal(offered, 1);
   }
 });
 

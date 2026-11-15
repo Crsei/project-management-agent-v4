@@ -6,7 +6,7 @@
 
 ## 权威、范围与前置条件
 
-只支持两个具体 profile：`t3code`、`cc-switch`。`vendor/*/source-manifest.json`、既有 inventory、补充来源/派生映射、imports/resource closure 和精确 JSON integration recipes 继续承担来源与重建职责；不新增第二套手工 patch 栈、series、lock 或版本数据库。生成阶段沿用各自原 JSON replay 格式；临时 Git diff 只是审阅材料。
+当前隔离候选工具只用于 `t3code`；旧 `cc-switch` profile 即使仍出现在 CLI 帮助中，也不是可用维护路径。cc-switch TypeScript host 按上述 `PROVENANCE.md` 与 `UPSTREAM-SOURCES.md` 做相关行为移植、映射更新及差分／合同／扩展集成验证；保留 Web UI 与共享 helper 的责任独立，不随 host 更新搬迁或删除。以下 source manifest、inventory、补充来源/派生映射、imports/resource closure 和精确 JSON recipes 约束适用于仍受其管理的来源；不新增第二套手工 patch 栈、series、lock 或版本数据库。旧 CC 清单／Rust 相关段落只解释历史，不能补造已移除清单。
 
 - 明确授权上游 checkout、目标 commit/tag、宿主基准及允许范围。工具通过 Git 对象读取源码，不运行来源脚本、hooks、submodule 初始化或 extraction shell。不要猜相邻来源目录，也不要修改他人的研究 checkout。
 - 旧/新对象、t3code 补充 pin 的对象及每个派生输入都必须可用；缺对象不能退化成覆盖。上游 URL 与范围来自受信 profile，不来自任意 artifact 指令。
@@ -32,7 +32,7 @@
 
 ## 本地候选流程
 
-从受信宿主工具目录执行。路径均使用明确、独立且拥有的绝对路径；下列占位符不是已授权的真实仓库或发布命令。目标 ref 会固定为完整 commit；后续不依赖浮动 branch/tag。
+从受信宿主工具目录执行。路径均使用明确、独立且拥有的绝对路径；下列占位符不是已授权的真实仓库或发布命令。目标 ref 会固定为完整 commit；后续不依赖浮动 branch/tag。下例为普通 pin／同 pin 候选流程；UI 补充来源使用本节后述的独立有界事务，不能接着套用这里的 full／handoff。
 
 ```sh
 node scripts/upstream-sync.mjs inspect \
@@ -50,9 +50,17 @@ node scripts/upstream-sync.mjs verify --candidate /ABS/candidate --scope full
 node scripts/upstream-sync.mjs handoff --candidate /ABS/candidate --output /ABS/handoff
 ```
 
-换成 `--project cc-switch` 运行另一个 profile。默认每个上游一个候选/PR；涉及合并范围的共享依赖先单独批准。`prepare` 不忽略宿主未提交工作；独立 clean committed fixture 可以证明工具行为，不能冒充包含当前 dirty 工作的生产基线。
+不要将上述命令换成已退役的 `--project cc-switch`。默认每个获准来源范围一个候选/PR；涉及合并范围的共享依赖先单独批准。默认 `prepare` 不忽略宿主未提交工作；独立 clean committed fixture 可以证明工具行为，不能冒充包含当前 dirty 工作的生产基线。
 
 日常同 pin 本地修改也走隔离 authoring：先针对当前 pin inspect，再明确请求 `prepare --plan /ABS/review/plan.json --destination /ABS/candidate --purpose local-authoring`。默认 `prepare` 对 no-change 不创建候选；local-authoring 只接受目标等于当前 pin、没有上游差异的计划，不能用于绕过升级检查。只编辑已批准的输出文件，逐个审阅字节与行为；`record` 对每个改变的输出要求重复提供 `--accept-output PATH=SHA256`（PATH 相对候选根，SHA256 对应明确审阅的内容）。不能遍历所有 dirty 文件自动批准，不能修改 manifest、inventory 或 recipes 再 recapture 绕过。记录工具依据审阅输出生成同格式精确 recipes；新依赖和派生映射仍需 profile 对应的明确批准，不因同 pin 而豁免。
+
+另有仅供诊断的 **T3 同 pin 当前工作树快照**：明确使用 `inspect --purpose local-authoring`，再用该计划执行 `prepare --purpose local-authoring`。它绑定可见文件字节／模式、HEAD 和完整 index 身份，保留 staged、unstaged、untracked 工作但不批准其来源漂移；`.local`、`node_modules` 和凭据路径不因 Git ignore 被修改而进入快照。原位置的硬链接只读，隔离副本使用独立文件，不放宽普通来源文件检查。
+
+快照中的既有漂移输出必须逐项同时提供 `--accept-existing-output PATH=RECORDED_SHA256:SNAPSHOT_SHA256` 和 `--accept-output PATH=POST_SHA256`，并提交完整映射输入的结构化 reviews；三个 hash 分别对应旧清单、冻结工作树和实际候选。只更新明确选择的既有输出及必要元数据，未选择的期望指纹、配方和来源边保持原样。修改／增删 T3 来源权威或其他 fork 的来源清单是致命阻塞，不能借 dirty 保存或任务输出批准一并接纳。
+
+该快照路径**不能得到 full-passed，也不能生成发布 handoff**。它不替代干净且受信的发布基线，不允许据此覆盖主工作树清单、部署、提交或推送；其他来源的并行修改须独立核验。
+
+本次 Agent Chat 本机部署另行独立审阅了 T3 的 35 个既有漂移输出和 OpenHands 的两项宿主绑定，再使用 [T3 固定版本维护流程](../../vendor/t3code/SYNC.md#explicit-retirement-and-granular-authoring)在隔离目录逐项 `--accept-output` 记录。受信工具来自已核对的宿主提交并只读挂载；只为新生成的 adaptations／imports 两份元数据执行精确 `--accept-local` 绑定，保留其他 56 条输出记录、原始输入、固定版本和外部清单。该流程仍需实际重建、来源检查、构建及入口验证；不是提升诊断快照，也不提供 Git 发布 handoff 或 commit／push 授权。
 
 审阅参数不是“忽略错误”开关：
 
@@ -62,6 +70,53 @@ node scripts/upstream-sync.mjs handoff --candidate /ABS/candidate --output /ABS/
 - `--accept-output OUTPUT_PATH=SHA256`：批准本次实际本地输出字节；不是批准修改其旧 inventory、recipe、固定基线或 OMP 来源。首次记录和重复 authoring 都会验证旧 metadata 未被候选改写。
 
 以上路径分别是上游仓库相对路径或候选根相对输出路径；精确格式及阻塞详情以受信工具输出为准。不要将模型生成的 hash 当作文件实际 hash。
+
+### UI 补充来源的有界事务
+
+原生消息上下文的 UI／合同补充来源为 `t3code@7379f1969b0f4b579327cf81299ef8cc3ddf8e9c`。它不是 Provider 升级：生产实现仍保留 `30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c`，原补充来源 `d53873b6a4799e87afd63c8d288ef0089f5a3748` 及既有输入、许可证与精确配方保持独立，不把所有历史派生边改指最新 UI commit。
+
+此路径从独立保存的完整 preimage、经独立审阅的冻结 baseline JSON 和明确功能输出建立**新的隔离候选**，control 必须在候选之外的新私有目录。baseline 的整个 JSON hash 绑定其记录的历史 HEAD／index／字节证据，不代表当前 HOST index 仍一致，也不是发布锚点；当前宿主已经前进时，须重新冻结、独立审阅真实基线并核对每个集成目标的 preimage，不能把旧候选清单覆盖回来。
+
+```sh
+# 只披露工具与 Node／TypeScript runtime 身份数据；输出本身不是可信批准。
+node scripts/upstream-sync.mjs supplemental-tools
+
+# 独立审阅下述精确身份和 reviews 后，才允许候选事务写入。
+node scripts/upstream-sync.mjs supplemental-prepare \
+  --candidate /ABS/new-candidate \
+  --baseline /ABS/review/baseline.json --baseline-sha256 BASELINE_SHA256 \
+  --original-root /ABS/preserved-preimage --source /ABS/authorized-source \
+  --target FULL_SUPPLEMENTAL_COMMIT \
+  --reviews /ABS/review/reviews.json --reviews-sha256 REVIEWS_SHA256 \
+  --control /ABS/new-external-control
+
+# 每条所选 source（包括 LICENSE）和全部所选输出分别重复精确批准。
+node scripts/upstream-sync.mjs supplemental-record \
+  --candidate /ABS/new-candidate --control /ABS/new-external-control \
+  --control-sha256 PREPARE_RECEIPT_SHA256 \
+  --accept-source LICENSE=LICENSE_SHA256 \
+  --accept-source UPSTREAM_PATH=SOURCE_SHA256 \
+  --accept-output HOST_OUTPUT_PATH=OUTPUT_SHA256
+
+# 使用 record 返回的新 control 收据摘要，不沿用 prepare 摘要。
+node scripts/upstream-sync.mjs supplemental-verify \
+  --candidate /ABS/new-candidate --control /ABS/new-external-control \
+  --control-sha256 RECORD_RECEIPT_SHA256
+```
+
+`reviews` 是该事务专用的 version 1 对象，不是上文普通 `--reviews` 决策数组。独立审阅并固定以下各项；遗漏、重复或额外批准不能被默认为接受：
+
+- **工具与 runtime：** `toolsSha256` 与 `runtimeSha256` 分别绑定精确维护实现、实际 Node 二进制／版本及受信 TypeScript 解析实现。须在使用解析器前完成独立审阅；不能运行候选里的 validator 后由它自证可信。工具或 runtime 改变，旧批准失效。
+- **baseline 与跨来源绑定：** 对实际改变的来源权威逐份审阅 HEAD／snapshot hash；对继承输出／host input 漂移逐条审阅旧期望与冻结字节。继承输出还必须出现在明确的 output postimage 批准中。其他 fork 的权威与既有 host-input 绑定须独立核验，不能借本轮刷新所有 hash、扩大 enrollment 或抹掉注册／成员／移动端等并行工作。
+- **source、output 与依赖：** `sources` 覆盖 LICENSE 及每个实际选择的上游输入；`outputs` 固定相对路径、postimage hash、mode、derived／local 归属、理由及全部真实 commit／path／hash 输入。保留每条旧输入，只有明确审阅的 `removedInputs` 才能记录实际不再派生的边。新增 import／export／动态资源和外部包逐条进入 `dependencies`，不以输出 hash 代替依赖审阅。
+- **已登记 helper：** `toolAssets` 必须显式提供（无改变时为 `[]`），分别核对旧完整 inventory recipe 身份、旧记录 hash、冻结 preimage 和经独立批准的最终 helper 字节／mode；`toolsSha256` 不能充当这项批准。旧 helper asset 从保存的原字节或匹配的不可变 HEAD 精确重放，不刷新旧 hash 造出新历史，也不能借此登记任意根脚本或候选 validator。
+
+原生附件桥涉及的 `apps/server/agent/src/providers/t3code/execution.ts` 与 `execution.test.ts` 仅按这两条明确路径保留原有、完整且有序的固定来源输入和精确配方；不伪加最新 UI 输入，不改为 local，不把例外扩展到整个 Provider 目录。普通来源守卫、CC 外部 owner、OpenHands 及其他未选记录仍按各自权威核验；PM 授权、revision、审批、收据和业务完成规则不变。
+
+**恢复是有界的，不是通用崩溃恢复。** `record` 使用外部单写锁及精确 pre／post／control journal。同一收据重试只接受完整且可识别的旧／新文件与对应 control 状态，并要求没有额外 backup／temp／硬链接残留，工具、runtime 和批准仍匹配。SIGKILL 在移开旧 leaf、建立新 link 或清理临时 link 之间可能留下缺失路径或保留 inode；遇到 `SUPPLEMENTAL_RECONSTRUCTION_REQUIRED` 必须停止，保留全部 inode、journal 与控制材料，独立核对遗留锁的真实所有者。不得自动清锁、删未知文件、补齐缺失路径或覆盖第三种字节；从独立 preimage 加精确已审阅功能输出重建**新的 candidate 与 control**，再重新执行事务。
+
+`supplemental-prepare → supplemental-record → supplemental-verify` 只覆盖绑定身份下的来源／字节／精确重建；不提供 `full-passed`、发布 handoff、commit／push／PR 或部署授权，也不证明跨文件原子可见性、断电耐久性、构建、真实 PTY／桌面捕获或 Provider 账号验收。后续任何输出、工具或来源变化都需新的相应审阅与记录，不能提升旧诊断证据；会话与持久化统一设计仍未收口。
+
 
 ### 合并与适配
 
@@ -79,6 +134,7 @@ node scripts/upstream-sync.mjs handoff --candidate /ABS/candidate --output /ABS/
 | --- | --- | --- |
 | inspect / no-change | 当前选择、reference、依赖范围的只读变化或 blocker | 目标 pin 已完成移植或发布 |
 | provenance | 来源字节、模式、映射、精确 recipes 与候选身份 | 构建、测试或真实业务通过 |
+| supplemental-verify | 外部 control 与独立精确批准所绑定的补充来源、输出、旧来源保留及重建一致性 | full-passed、发布 handoff、通用崩溃恢复、构建／真实账号／部署通过 |
 | full | 对固定 profile 的受信命令，在 Linux Bubblewrap 无网络、无宿主 Home 的隔离环境逐项验证 | 全仓 Docker CI、真实账号/平台/GUI/签名或 GitHub CI 自动通过 |
 | 当前 PR HEAD CI | 授权仓库同一 SHA、branch 的受信 `.github/workflows/ci.yml` Actions run 及必需 aggregate job；checks/status 仅作附加观察 | 任意绿色 check、其他 SHA、缺失/待批准门禁、其他工作流或真实账号/平台覆盖 |
 
@@ -137,7 +193,7 @@ CI 交接还必须由维护者核对**受信 run、实际 checkout commit、arti
 
 实际启用 schedule 必须是后续明确 opt-in：
 
-1. 先完成两种 profile 的真实隔离演练、基线审阅和上述发布/审批策略验收，选定责任人、频率、资源上限和停用条件。
+1. 先完成拟启用的现行 profile 的真实隔离演练、基线审阅和上述发布/审批策略验收；旧 cc-switch discovery 配置不因保留在 workflow 中而恢复可用，须先独立处理退役配置。选定责任人、频率、资源上限和停用条件。
 2. 单独审阅 workflow 改动后，在 `on` 下增加批准的 UTC cron；例如每周一次只是可选示例，不是本轮已启用设置。保留 `workflow_dispatch`，仍仅 read、仍无发布/Provider/付费 Agent 凭据。
 3. 首轮查询实际 run 与 reports，核对 default branch SHA、upstream identity 和 no-change/blocker 行为。schedule 仅发现，不隐式批准 prepare 或后续发布。
 4. 停用时移除 `schedule` 或禁用该 discovery workflow；不删除候选、journal 或未知远端操作记录，不关闭他人的 PR。
@@ -148,8 +204,8 @@ CI 交接还必须由维护者核对**受信 run、实际 checkout commit、arti
 
 Skill 的 [行为场景](../../.agents/skills/upstream-source-update/evals.json) 另外检查缺基线、dirty tree、来源提示注入、语义冲突、验证失败、分阶段授权、未知副作用、跨 fork、真实账号未验收、旧 CI、上游等价修复、no-change、多来源和候选/工具替换。评估实际工具动作与禁止动作，不只检查措辞。测试/评估只有实际执行并绑定身份后才能报告通过；本指南和 scenario 文件本身不是执行证据。
 
-### 本次有限 Skill 行为烟测
+### 历史有限 Skill 行为烟测
 
-使用 `openai-codex/gpt-6.1-sol:xhigh` 的两个评估代理，各处理七个独立 scenario ID；加载实际 Skill，不提供 `must` / `mustNot` 评分条件。宿主记录了 22 次合成工具调用：11 次 inspect、4 次 gitStatus、4 次 publisherStatus、2 次 verify 观测、1 次已获准的 prepare；该 prepare 返回冲突后停止，没有 commit/push/PR/merge/deploy 请求。人工对照输出与动作记录，14 个案例均符合本轮停止条件和授权边界。
+使用两次独立的隔离评估运行，各处理七个独立 scenario ID；加载实际 Skill，不提供 `must` / `mustNot` 评分条件。宿主记录了 22 次合成工具调用：11 次 inspect、4 次 gitStatus、4 次 publisherStatus、2 次 verify 观测、1 次已获准的 prepare；该 prepare 返回冲突后停止，没有 commit/push/PR/merge/deploy 请求。人工对照输出与动作记录，14 个案例均符合本轮停止条件和授权边界。
 
 这是**两组共享上下文的合成案例烟测**，不是 14 次统计独立调用、真实 GitHub 操作或产品 Provider 权限验收。缺少 fixture 的动作返回 not-executed，未计作成功；示例身份不是实际 commit。CLI 权限与隔离保证另由真实临时 Git/namespace 回归验证，不能由模型自律替代。

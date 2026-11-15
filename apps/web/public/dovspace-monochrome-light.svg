@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="brand-title">
+  <title id="brand-title">Dovspace monochrome mark</title>
+  <g id="mark">
+    <path id="letter-d" d="M164 120H267C354 120 418 176 418 254C418 333 354 392 267 392H144V140C144 126 150 120 164 120Z" fill="#FFFFFF"/>
+    <path id="wing-face" d="M151 291L302 233C308 231 312 234 310 241L265 381C263 388 259 392 251 392H89C84 392 82 389 85 384L139 302C142 297 146 293 151 291Z" fill="#FFFFFF"/>
+    
+  </g>
+</svg>

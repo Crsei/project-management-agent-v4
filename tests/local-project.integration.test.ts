@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { randomInt, randomUUID } from 'node:crypto';
 import { cp, link, lstat, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { describe, it } from 'node:test';
 import { ProjectManagementClient } from '../packages/contracts/src/client.ts';
 import type { LocalDirectory, LocalProjectAttempt, LocalProjectInitialization, LocalProjectLocation, LocalProjectSettings } from '../packages/contracts/src/local-projects.ts';
@@ -64,10 +64,10 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.notEqual(a.record.id, b.record.id); assert.notEqual(a.location.storageId, b.location.storageId);
     for (const project of [a, b]) {
       assert.ok(project.location.path);
-      assert.equal(await readFile(join(project.location.path, '.pm/core/projects', `${project.record.id}.md`), 'utf8'), project.record.raw);
-      assert.ok((await lstat(join(project.location.path, '.pm/core/work-items'))).isDirectory());
-      assert.ok((await lstat(join(project.location.path, '.pm/core/docs'))).isDirectory());
-      const marker = JSON.parse(await readFile(join(project.location.path, '.pm/project.json'), 'utf8')) as Record<string, unknown>;
+      assert.equal(await readFile(join(project.location.path, '.dovspace/.pm/core/projects', `${project.record.id}.md`), 'utf8'), project.record.raw);
+      assert.ok((await lstat(join(project.location.path, '.dovspace/.pm/core/work-items'))).isDirectory());
+      assert.ok((await lstat(join(project.location.path, '.dovspace/.pm/core/docs'))).isDirectory());
+      const marker = JSON.parse(await readFile(join(project.location.path, '.dovspace/.pm/project.json'), 'utf8')) as Record<string, unknown>;
       assert.equal(marker.projectId, project.record.id); assert.equal(marker.workspaceId, f.workspaceId);
       assert.equal(JSON.stringify(marker).includes(project.record.entity.title), false, 'Marker is storage identity, not a second project title authority');
     }
@@ -78,25 +78,25 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(doc.status, 200, JSON.stringify(doc.body));
     const edited = await f.request<FileRecord>(`${core}/entities/${task.body.id}`, { method: 'PATCH', body: { revision: task.body.revision, changes: { due: '2026-10-30' } } });
     assert.equal(edited.status, 200, JSON.stringify(edited.body));
-    const taskDisk = join(rootA, '.pm/core/work-items', `${task.body.id}.md`), docDisk = join(rootB, '.pm/core/docs', `${doc.body.id}.md`);
+    const taskDisk = join(rootA, '.dovspace/.pm/core/work-items', `${task.body.id}.md`), docDisk = join(rootB, '.dovspace/.pm/core/docs', `${doc.body.id}.md`);
     assert.equal(await readFile(taskDisk, 'utf8'), edited.body.raw); assert.equal(await readFile(docDisk, 'utf8'), doc.body.raw);
-    await assert.rejects(lstat(join(rootB, '.pm/core/work-items', `${task.body.id}.md`)), { code: 'ENOENT' });
-    await assert.rejects(lstat(join(rootA, '.pm/core/docs', `${doc.body.id}.md`)), { code: 'ENOENT' });
+    await assert.rejects(lstat(join(rootB, '.dovspace/.pm/core/work-items', `${task.body.id}.md`)), { code: 'ENOENT' });
+    await assert.rejects(lstat(join(rootA, '.dovspace/.pm/core/docs', `${doc.body.id}.md`)), { code: 'ENOENT' });
     const binaryA = Buffer.from([0, 255, 1, 19, 42]), binaryB = Buffer.from('Project B immutable original\n');
     const artifactA = await upload(f, a.record.id, binaryA), artifactB = await upload(f, b.record.id, binaryB);
     assert.deepEqual(await download(f, artifactA.artifactVersion.id), binaryA); assert.deepEqual(await download(f, artifactB.artifactVersion.id), binaryB);
-    const diskA = await filesBelow(join(rootA, '.pm/attachments')), diskB = await filesBelow(join(rootB, '.pm/attachments'));
+    const diskA = await filesBelow(join(rootA, '.dovspace/.pm/attachments')), diskB = await filesBelow(join(rootB, '.dovspace/.pm/attachments'));
     assert.ok((await Promise.all(diskA.map(path => readFile(path)))).some(bytes => bytes.equals(binaryA)));
     assert.ok((await Promise.all(diskB.map(path => readFile(path)))).some(bytes => bytes.equals(binaryB)));
     assert.equal((await Promise.all(diskB.map(path => readFile(path)))).some(bytes => bytes.equals(binaryA)), false);
     const globalBytes = await Promise.all((await filesBelow(f.blobRoot)).map(path => readFile(path)));
     assert.equal(globalBytes.some(bytes => bytes.equals(binaryA) || bytes.equals(binaryB)), false, 'New project uploads do not silently land in global BLOB_ROOT');
     const beforeWorker = new Map<string, Buffer>();
-    for (const root of [rootA, rootB]) for (const path of await filesBelow(join(root, '.pm'))) beforeWorker.set(path, await readFile(path));
+    for (const root of [rootA, rootB]) for (const path of await filesBelow(join(root, '.dovspace/.pm'))) beforeWorker.set(path, await readFile(path));
     await f.startWorker();
     const conversation = await f.command<Entity>('CreateConversation', { title: 'Real Worker publication' });
     await localProjectEventually(async () => (await f.pool.query("SELECT 1 FROM events WHERE envelope->>'aggregateId'=$1", [conversation.id])).rowCount! > 0, 'the real Worker to publish a real PM outbox event', 20_000, f.signal);
-    const afterWorkerPaths = [...await filesBelow(join(rootA, '.pm')), ...await filesBelow(join(rootB, '.pm'))];
+    const afterWorkerPaths = [...await filesBelow(join(rootA, '.dovspace/.pm')), ...await filesBelow(join(rootB, '.dovspace/.pm'))];
     assert.deepEqual(afterWorkerPaths.sort(), [...beforeWorker.keys()].sort(), 'The real Worker does not create project authority files');
     for (const [path, bytes] of beforeWorker) assert.deepEqual(await readFile(path), bytes, 'Worker observation never mutates project authority');
     const all = await f.request<{ items: FileRecord[] }>(`${core}/query`, { method: 'POST', body: { view: { layout: 'table' } } });
@@ -127,13 +127,14 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const prefix = `/api/v1/workspaces/${f.workspaceId}/local-projects`;
     const configured = await f.request<LocalProjectSettings>(`${prefix}/settings`);
     assert.equal(configured.status, 200); assert.equal(configured.body.enabled, true); assert.equal(configured.body.canManage, true);
-    assert.deepEqual(configured.body.allowedRoots, f.parents);
     const changeDefault = await f.request<LocalProjectSettings>(`${prefix}/settings`, { method: 'PUT', body: { defaultParent: f.parents[1] } });
     assert.equal(changeDefault.status, 200); assert.equal(changeDefault.body.defaultParent, f.parents[1]);
-    const noExpansion = await f.request(`${prefix}/settings`, { method: 'PUT', body: { defaultParent: f.root } });
-    assert.ok(noExpansion.status >= 400, 'Browser path text cannot expand the host-configured directory allowlist');
+    const hostParent = join(f.root, 'host-selected-parent'); await mkdir(hostParent);
+    const selectedParent = await f.request<LocalProjectSettings>(`${prefix}/settings`, { method: 'PUT', body: { defaultParent: hostParent } });
+    assert.equal(selectedParent.status, 200, JSON.stringify(selectedParent.body));
     await f.restartApi();
-    assert.equal((await f.request<LocalProjectSettings>(`${prefix}/settings`)).body.defaultParent, f.parents[1]);
+    assert.equal((await f.request<LocalProjectSettings>(`${prefix}/settings`)).body.defaultParent, hostParent);
+    const outside = await initialize(f, 'Authorized host storage', { mode: 'new', parentPath: hostParent, folderName: 'outside-old-roots' });
     const listed = await f.request<{ path: string; directories: { path: string }[] }>(`${prefix}/directories?path=${encodeURIComponent(f.parents[0])}`);
     assert.equal(listed.status, 200); assert.equal(listed.body.path, f.parents[0]);
     const encodedParent = join(f.parents[0], '目录 with spaces & query');
@@ -164,17 +165,17 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     await rename(preflightPath, preflightOffline); await symlink(a.location.path!, preflightPath, 'dir');
     const replaced = await f.request(`${prefix}/initializations`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { input: { entity: 'project', title: 'No stale preview authority' }, directory: { mode: 'existing', path: preflightPath } } });
     assert.ok(replaced.status >= 400, 'Initialization rechecks disk identity instead of trusting an earlier preview');
-    await assert.rejects(lstat(join(preflightOffline, '.pm/project.json')), { code: 'ENOENT' });
+    await assert.rejects(lstat(join(preflightOffline, '.dovspace/.pm/project.json')), { code: 'ENOENT' });
     const linkPath = join(f.parents[1], 'symlink-project'); await symlink(a.location.path!, linkPath, 'dir');
     const nested = join(a.location.path!, 'nested'); await mkdir(nested);
-    const damaged = join(f.parents[1], 'damaged'); await mkdir(join(damaged, '.pm'), { recursive: true }); await writeFile(join(damaged, '.pm/project.json'), '{broken-marker');
-    const hardlinked = join(f.parents[1], 'hardlink-marker'); await mkdir(join(hardlinked, '.pm'), { recursive: true });
-    await writeFile(join(hardlinked, '.pm/project.json'), await readFile(join(a.location.path!, '.pm/project.json')));
-    await link(join(hardlinked, '.pm/project.json'), join(hardlinked, '.pm/marker-hardlink'));
+    const damaged = join(f.parents[1], 'damaged'); await mkdir(join(damaged, '.dovspace/.pm'), { recursive: true }); await writeFile(join(damaged, '.dovspace/.pm/project.json'), '{broken-marker');
+    const hardlinked = join(f.parents[1], 'hardlink-marker'); await mkdir(join(hardlinked, '.dovspace/.pm'), { recursive: true });
+    await writeFile(join(hardlinked, '.dovspace/.pm/project.json'), await readFile(join(a.location.path!, '.dovspace/.pm/project.json')));
+    await link(join(hardlinked, '.dovspace/.pm/project.json'), join(hardlinked, '.dovspace/.pm/marker-hardlink'));
     const invalid: LocalDirectory[] = [
       { mode: 'existing', path: a.location.path! }, { mode: 'existing', path: nested }, { mode: 'existing', path: f.parents[0] },
       { mode: 'existing', path: linkPath }, { mode: 'existing', path: damaged }, { mode: 'existing', path: hardlinked },
-      { mode: 'existing', path: join(f.root, 'outside-authorized-roots') }, { mode: 'existing', path: '/etc' },
+      { mode: 'existing', path: join(f.root, 'missing-directory') }, { mode: 'existing', path: '/etc' },
       { mode: 'new', parentPath: f.parents[1], folderName: '../escape' },
     ];
     for (const directory of invalid) {
@@ -184,12 +185,12 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const scopedCreate = await f.request(`${prefix}/initializations`, { method: 'POST', cookie: member.cookie, headers: { 'Idempotency-Key': randomUUID() }, body: { input: { entity: 'project', title: 'No host management' }, directory: { mode: 'new', parentPath: f.parents[1], folderName: 'forbidden' } } });
     assert.equal(scopedCreate.status, 403);
     const files = await f.request<{ items: FileRecord[] }>(`/api/v1/workspaces/${f.workspaceId}/core/items?entity=project`);
-    assert.deepEqual(files.body.items.filter(file => file.entity.entity === 'project').map(file => file.id), [a.record.id]);
+    assert.deepEqual(files.body.items.filter(file => file.entity.entity === 'project').map(file => file.id).sort(), [a.record.id, outside.record.id].sort());
     const binary = await upload(f, a.record.id, Buffer.from('private object'));
     const outsider = await f.member('No workspace access');
     const hidden = await fetch(`${f.origin}/api/v1/workspaces/${f.workspaceId}/artifact-versions/${binary.artifactVersion.id}/content`, { headers: { cookie: outsider.cookie }, signal: AbortSignal.any([f.signal, AbortSignal.timeout(30_000)]) });
     assert.equal(hidden.status, 404); assert.equal((await hidden.text()).includes(a.location.path!), false);
-    const arbitrary = await f.request(`/api/v1/workspaces/${f.workspaceId}/core/files/${encodeURIComponent(join(a.location.path!, '.pm/project.json'))}`);
+    const arbitrary = await f.request(`/api/v1/workspaces/${f.workspaceId}/core/files/${encodeURIComponent(join(a.location.path!, '.dovspace/.pm/project.json'))}`);
     assert.ok(arbitrary.status >= 400, 'Authorized ordinary core file reads never accept host absolute paths');
   });
 
@@ -206,7 +207,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(first.body.record.entity['x-pm-icon'], input.input['x-pm-icon']);
     assert.equal(first.body.record.entity['x-pm-color'], input.input['x-pm-color']);
     assert.ok(first.body.record.raw.includes(input.input.body!));
-    assert.equal(await readFile(join(f.parents[0], 'once/.pm/core/projects', `${first.body.record.id}.md`), 'utf8'), first.body.record.raw);
+    assert.equal(await readFile(join(f.parents[0], 'once/.dovspace/.pm/core/projects', `${first.body.record.id}.md`), 'utf8'), first.body.record.raw);
     const again = await f.request<LocalProjectAttempt>(`${prefix}/local-projects/initializations`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: input });
     assert.equal(again.status, 200); assert.deepEqual(again.body, first.body);
     const mismatch = await f.request(`${prefix}/local-projects/initializations`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { ...input, input: { ...input.input, title: 'Different immutable request' } } });
@@ -217,17 +218,47 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const denied = await f.send(missing); assert.ok(denied.status >= 400 || denied.body.status === 'rejected');
     const receiptsBeforeNative = (await f.pool.query('SELECT command_id FROM command_receipts ORDER BY command_id')).rows;
     const nativeKey = randomUUID();
-    const native = await f.request<FileRecord>(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': nativeKey }, body: { entity: 'project', title: 'Native initialization', localDirectory: { mode: 'new', parentPath: f.parents[0], folderName: 'native' } } });
+    const nativeInput = { entity: 'project', title: 'Native initialization', localDirectory: { mode: 'new', parentPath: f.parents[0], folderName: 'native' } };
+    const native = await f.request<FileRecord>(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': nativeKey }, body: nativeInput });
     assert.equal(native.status, 200, JSON.stringify(native.body));
+    const nativeAgain = await f.request<FileRecord>(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': nativeKey }, body: nativeInput });
+    assert.equal(nativeAgain.status, 200, JSON.stringify(nativeAgain.body)); assert.deepEqual(nativeAgain.body, native.body);
     const nativeOutcome = await f.request<{ status: string; entityId?: string }>(`${prefix}/core/creation-attempts/${nativeKey}`);
     assert.equal(nativeOutcome.body.status, 'committed'); assert.equal(nativeOutcome.body.entityId, native.body.id);
     assert.deepEqual((await f.pool.query('SELECT command_id FROM command_receipts ORDER BY command_id')).rows, receiptsBeforeNative, 'A native journal write never creates an ordinary PM receipt');
     const command: Command = { commandId: randomUUID(), commandType: 'CreateProject', payload: { name: 'Command initialization', goal: '', ownerId: f.owner.id, completionCriteria: [], localDirectory: { mode: 'new', parentPath: f.parents[1], folderName: 'command' } } };
     const commandResponse = await f.send(command); assert.equal(commandResponse.status, 200, JSON.stringify(commandResponse.body)); assert.equal(commandResponse.body.status, 'committed');
     const project = commandResponse.body.result as Entity;
-    assert.equal(await readFile(join(f.parents[1], 'command/.pm/core/projects', `${project.id}.md`), 'utf8'), (await f.request<FileRecord>(`${prefix}/core/files/${project.id}`)).body.raw);
+    assert.equal(await readFile(join(f.parents[1], 'command/.dovspace/.pm/core/projects', `${project.id}.md`), 'utf8'), (await f.request<FileRecord>(`${prefix}/core/files/${project.id}`)).body.raw);
     assert.deepEqual((await f.request(`${prefix}/commands/${command.commandId}`)).body, commandResponse.body);
     assert.deepEqual((await f.request(`${prefix}/core/creation-attempts/${command.commandId}`)).body, { status: 'not_found' }, 'A PM command receipt never becomes a native journal outcome');
+  });
+
+  it('LP-A04: auto paths preserve their original new/existing selection across both initialization transports', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
+    for (const transport of ['local', 'native'] as const) for (const existing of [false, true]) {
+      const root = join(f.parents[0], `${transport}-${existing ? 'existing' : 'new'}`);
+      if (existing) { await mkdir(root); await writeFile(join(root, 'original.txt'), 'Keep original source'); }
+      const directory = { mode: 'auto', path: root }, input = { entity: 'project', title: `${transport} auto ${existing}` };
+      const route = `/api/v1/workspaces/${f.workspaceId}/${transport === 'local' ? 'local-projects/initializations' : 'core/entities'}`;
+      const body = transport === 'local' ? { input, directory } : { ...input, localDirectory: directory };
+      const key = randomUUID(), headers = { 'Idempotency-Key': key };
+      const first = await f.request(route, { method: 'POST', headers, body });
+      assert.equal(first.status, 200, JSON.stringify(first.body));
+      const frozen = (await f.pool.query('SELECT request_hash,request,project_id,status FROM local_project_operations WHERE workspace_id=$1 AND actor_id=$2 AND request_key=$3', [f.workspaceId, f.owner.id, key])).rows;
+      assert.equal(frozen[0]?.request.directory.mode, existing ? 'existing' : 'new');
+      const again = await f.request(route, { method: 'POST', headers, body });
+      assert.equal(again.status, 200, JSON.stringify(again.body)); assert.deepEqual(again.body, first.body);
+      assert.deepEqual((await f.pool.query('SELECT request_hash,request,project_id,status FROM local_project_operations WHERE workspace_id=$1 AND actor_id=$2 AND request_key=$3', [f.workspaceId, f.owner.id, key])).rows, frozen);
+      const relativeAlias = { mode: 'auto', path: relative(process.cwd(), root) };
+      const invalidReplay = await f.request(route, { method: 'POST', headers, body: transport === 'local' ? { input, directory: relativeAlias } : { ...input, localDirectory: relativeAlias } });
+      assert.equal(invalidReplay.status, 403, 'Reusing a key cannot admit a relative alias of the original absolute path');
+      if (existing) assert.equal(await readFile(join(root, 'original.txt'), 'utf8'), 'Keep original source');
+      const different = { mode: 'auto', path: `${root}-different` };
+      const conflict = await f.request(route, { method: 'POST', headers, body: transport === 'local' ? { input, directory: different } : { ...input, localDirectory: different } });
+      assert.equal(conflict.status, 409);
+      await assert.rejects(lstat(different.path), { code: 'ENOENT' });
+    }
   });
 
   it('LP-A04: recovers real dropped HTTP responses using the fixed original initialization key', { timeout: localProjectCaseTimeout }, async t => {
@@ -263,7 +294,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     await f.restartApi();
     assert.deepEqual((await f.request(`${path}/${key}`)).body, committed);
     assert.deepEqual((await f.request(`${path}/${key}/recover`, { method: 'POST', body: {} })).body, committed);
-    assert.equal((await readdir(join(f.parents[0], 'lost-response/.pm/core/projects'))).filter(file => file.endsWith('.md')).length, 1);
+    assert.equal((await readdir(join(f.parents[0], 'lost-response/.dovspace/.pm/core/projects'))).filter(file => file.endsWith('.md')).length, 1);
     const unknown = randomUUID();
     assert.deepEqual((await f.request(`${path}/${unknown}`)).body, { status: 'not_found' });
     assert.deepEqual((await f.request(`${path}/${unknown}/recover`, { method: 'POST', body: {} })).body, { status: 'not_found' });
@@ -285,9 +316,9 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
         const waiting = await f.pool.query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=$1::oid AND objid=$2::oid AND objsubid=2 AND NOT granted", [lockNamespace, lockId]);
         return waiting.rowCount! > 0;
       }, 'the real API to block at its post-file SQL audit boundary', 20_000, f.signal);
-      const names = (await readdir(join(root, '.pm/core/projects'))).filter(file => file.endsWith('.md'));
+      const names = (await readdir(join(root, '.dovspace/.pm/core/projects'))).filter(file => file.endsWith('.md'));
       assert.equal(names.length, 1);
-      const original = await readFile(join(root, '.pm/core/projects', names[0]!));
+      const original = await readFile(join(root, '.dovspace/.pm/core/projects', names[0]!));
       await f.crashApi(); assert.equal(await dispatched, 'connection_lost');
       await lock.query('SELECT pg_advisory_unlock($1,$2)', [lockNamespace, lockId]);
       await f.pool.query('DROP TRIGGER local_accept_block_audit ON project_audit; DROP FUNCTION local_accept_block_audit()');
@@ -301,14 +332,14 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
         assert.equal(before.status, 200); assert.equal(before.body.status, 'pending');
         assert.deepEqual((await lock.query('SELECT id,command_id,dedupe_key,changes FROM project_audit ORDER BY id')).rows, auditBeforeRead, 'GET must not repair SQL history as a side effect');
       } finally { await lock.query('ROLLBACK'); }
-      assert.deepEqual(await readFile(join(root, '.pm/core/projects', names[0]!)), original);
+      assert.deepEqual(await readFile(join(root, '.dovspace/.pm/core/projects', names[0]!)), original);
       const recovered = await f.request<LocalProjectAttempt>(`${prefix}/${key}/recover`, { method: 'POST', body: {} });
       assert.equal(recovered.status, 200); assert.equal(recovered.body.status, 'ready');
       if (recovered.body.status !== 'ready') throw new Error('Original initialization remains unresolved');
       assert.equal(recovered.body.record.raw, original.toString('utf8'));
       assert.deepEqual((await f.request(`${prefix}/${key}/recover`, { method: 'POST', body: {} })).body, recovered.body);
       assert.equal((await f.pool.query('SELECT 1 FROM project_audit WHERE target_id=$1', [recovered.body.record.id])).rowCount, 1);
-      assert.equal((await readdir(join(root, '.pm/core/projects'))).filter(file => file.endsWith('.md')).length, 1);
+      assert.equal((await readdir(join(root, '.dovspace/.pm/core/projects'))).filter(file => file.endsWith('.md')).length, 1);
     } finally { await lock.query('SELECT pg_advisory_unlock($1,$2)', [lockNamespace, lockId]); }
   });
 
@@ -325,7 +356,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.ok(write.status >= 400);
     const read = await fetch(`${f.origin}${prefix}/artifact-versions/${artifact.artifactVersion.id}/content`, { headers: { cookie: f.ownerCookie }, signal: AbortSignal.any([f.signal, AbortSignal.timeout(30_000)]) }); assert.ok(read.status >= 400);
     await assert.rejects(lstat(root), { code: 'ENOENT' });
-    assert.equal(await readFile(join(offline, '.pm/core/projects', `${a.record.id}.md`), 'utf8'), a.record.raw);
+    assert.equal(await readFile(join(offline, '.dovspace/.pm/core/projects', `${a.record.id}.md`), 'utf8'), a.record.raw);
     await f.stopServices(); await rename(offline, root); await f.restartApi();
     const reattached = await f.request<FileRecord>(`${prefix}/core/files/${a.record.id}`);
     assert.equal(reattached.status, 200); assert.equal(reattached.body.revision, a.record.revision);
@@ -355,8 +386,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const migrateKey = randomUUID(), movePath = `${prefix}/local-projects/projects/${project.id}`;
     const migrated = await f.request<LocalProjectAttempt>(`${movePath}/migrate`, { method: 'POST', headers: { 'Idempotency-Key': migrateKey }, body: { directory: { mode: 'existing', path: migrateRoot }, writersStopped: true } });
     assert.equal(migrated.status, 200, JSON.stringify(migrated.body)); assert.equal(migrated.body.status, 'ready');
-    assert.equal(await readFile(join(migrateRoot, '.pm/core/projects', `${project.id}.md`), 'utf8'), original.body.raw);
-    assert.equal(await readFile(join(migrateRoot, '.pm/core/work-items', `${task.body.id}.md`), 'utf8'), task.body.raw);
+    assert.equal(await readFile(join(migrateRoot, '.dovspace/.pm/core/projects', `${project.id}.md`), 'utf8'), original.body.raw);
+    assert.equal(await readFile(join(migrateRoot, '.dovspace/.pm/core/work-items', `${task.body.id}.md`), 'utf8'), task.body.raw);
     await assert.rejects(lstat(join(f.coreRoot, f.workspaceId, 'projects', `${project.id}.md`)), { code: 'ENOENT' });
     assert.deepEqual(await download(f, historical.artifactVersion.id), png);
     assert.deepEqual(await download(f, latest.artifactVersion.id), Buffer.from('Newer immutable version'));
@@ -368,8 +399,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(relocated.status, 200, JSON.stringify(relocated.body)); assert.equal(relocated.body.status, 'ready');
     const after = await f.request<FileRecord>(`${prefix}/core/files/${project.id}`);
     assert.equal(after.status, 200); assert.equal(after.body.id, project.id); assert.equal(after.body.revision, original.body.revision); assert.equal(after.body.raw, original.body.raw);
-    assert.equal(await readFile(join(relocatedRoot, '.pm/core/work-items', `${task.body.id}.md`), 'utf8'), task.body.raw);
-    await assert.rejects(lstat(join(migrateRoot, '.pm/core/projects', `${project.id}.md`)), { code: 'ENOENT' });
+    assert.equal(await readFile(join(relocatedRoot, '.dovspace/.pm/core/work-items', `${task.body.id}.md`), 'utf8'), task.body.raw);
+    await assert.rejects(lstat(join(migrateRoot, '.dovspace/.pm/core/projects', `${project.id}.md`)), { code: 'ENOENT' });
     assert.deepEqual(await readFile(join(migrateRoot, 'README.md')), userBytes);
     assert.deepEqual(await readFile(join(relocatedRoot, 'source.bin')), Buffer.from([9, 8, 7, 0]));
     assert.deepEqual((await f.pool.query('SELECT id,data,version FROM entities WHERE id=ANY($1::uuid[]) ORDER BY id', [[historical.artifactVersion.id, latest.artifactVersion.id]])).rows, historyBefore, 'Migration routes immutable history instead of rewriting version object keys/storage IDs');
@@ -395,13 +426,13 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const task = await f.request<FileRecord>(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { entity: 'work_item', project: project.record.id, title: 'Task survives an OS folder move' } });
     assert.equal(task.status, 200);
     const artifact = await upload(f, project.record.id, Buffer.from('External-move historical bytes'));
-    const marker = await readFile(join(originalRoot, '.pm/project.json'));
+    const marker = await readFile(join(originalRoot, '.dovspace/.pm/project.json'));
     const clone = join(f.parents[1], 'clone-while-original-exists');
     await f.stopServices(); await cp(originalRoot, clone, { recursive: true, errorOnExist: true, force: false }); await f.restartApi();
     const relocate = `${prefix}/local-projects/projects/${project.record.id}/relocate`;
     const cloneAttempt = await f.request(relocate, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { mode: 'rebind', directory: { mode: 'existing', path: clone }, writersStopped: true } });
     assert.ok(cloneAttempt.status >= 400, 'A matching cloned marker is insufficient while the registered source still exists');
-    assert.deepEqual(await readFile(join(originalRoot, '.pm/project.json')), marker);
+    assert.deepEqual(await readFile(join(originalRoot, '.dovspace/.pm/project.json')), marker);
     const movedRoot = join(f.parents[1], 'after-external-move');
     await f.stopServices(); await rename(originalRoot, movedRoot); await f.restartApi();
     const missing = await f.request<LocalProjectLocation>(`${prefix}/local-projects/projects/${project.record.id}/location`);
@@ -415,12 +446,12 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const restoredTask = await f.request<FileRecord>(`${prefix}/core/files/${task.body.id}`);
     assert.equal(restoredTask.status, 200); assert.equal(restoredTask.body.revision, task.body.revision); assert.equal(restoredTask.body.raw, task.body.raw);
     assert.deepEqual(await download(f, artifact.artifactVersion.id), Buffer.from('External-move historical bytes'));
-    assert.deepEqual(await readFile(join(movedRoot, '.pm/project.json')), marker);
+    assert.deepEqual(await readFile(join(movedRoot, '.dovspace/.pm/project.json')), marker);
     await assert.rejects(lstat(originalRoot), { code: 'ENOENT' });
     assert.deepEqual((await f.request(relocate, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { mode: 'rebind', directory: { mode: 'existing', path: movedRoot }, writersStopped: true } })).body, rebound.body);
     const updated = await f.request<FileRecord>(`${prefix}/core/entities/${task.body.id}`, { method: 'PATCH', body: { revision: task.body.revision, changes: { due: '2026-11-01' } } });
     assert.equal(updated.status, 200, JSON.stringify(updated.body));
-    assert.equal(await readFile(join(movedRoot, '.pm/core/work-items', `${task.body.id}.md`), 'utf8'), updated.body.raw);
+    assert.equal(await readFile(join(movedRoot, '.dovspace/.pm/core/work-items', `${task.body.id}.md`), 'utf8'), updated.body.raw);
   });
 
   it('LP-A05: missing workspace authority state fails closed without creating replacement IDs or journals', { timeout: localProjectCaseTimeout }, async t => {
@@ -429,7 +460,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     const prefix = `/api/v1/workspaces/${f.workspaceId}`;
     const state = join(f.coreRoot, f.workspaceId, '.pm/state'), offlineState = `${state}.owned-offline`;
     const frozenState = await readFile(join(state, 'state.json'));
-    const frozenProject = await readFile(join(project.location.path!, '.pm/core/projects', `${project.record.id}.md`));
+    const frozenProject = await readFile(join(project.location.path!, '.dovspace/.pm/core/projects', `${project.record.id}.md`));
     await f.stopServices(); await rename(state, offlineState); await f.restartApi();
     const missing = await f.request(`${prefix}/core/workspace`);
     assert.equal(missing.status, 503, JSON.stringify(missing.body));
@@ -437,7 +468,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(initialization.status, 503, JSON.stringify(initialization.body));
     await assert.rejects(lstat(state), { code: 'ENOENT' });
     assert.deepEqual(await readFile(join(offlineState, 'state.json')), frozenState);
-    assert.deepEqual(await readFile(join(project.location.path!, '.pm/core/projects', `${project.record.id}.md`)), frozenProject);
+    assert.deepEqual(await readFile(join(project.location.path!, '.dovspace/.pm/core/projects', `${project.record.id}.md`)), frozenProject);
     await f.stopServices(); await rename(offlineState, state); await f.restartApi();
     const recovered = await f.request<LocalProjectAttempt>(`${prefix}/local-projects/initializations/${project.key}/recover`, { method: 'POST', body: {} });
     assert.equal(recovered.status, 200); assert.equal(recovered.body.status, 'ready');

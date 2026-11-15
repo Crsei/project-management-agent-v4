@@ -18,6 +18,9 @@ test('unknown metrics remain null and unsafe/ungrounded success cannot be serial
   assert.equal(parsed.usage.modelCalls, null); assert.equal(parsed.usage.costUsd, null);
   assert.equal(parsed.humanInterventions.count, null); assert.equal(parsed.rework.denominator, null); assert.equal(parsed.rework.proportion, null);
   assert.throws(() => RunResultSchema.parse({ ...result, success: true }), /Verified success/);
+  assert.equal(parsed.reproducibility.controlTransport, undefined, 'Legacy results retain unknown transport rather than assuming HTTP');
+  for (const controlTransport of ['http', 'cli']) assert.equal(RunResultSchema.parse({ ...result, reproducibility: { ...result.reproducibility, controlTransport } }).reproducibility.controlTransport, controlTransport);
+  assert.equal(RunResultSchema.safeParse({ ...result, reproducibility: { ...result.reproducibility, controlTransport: 'automatic' } }).success, false);
 });
 test('fixture manifests require actual entity revisions and events retain trusted execution identities', () => {
   assert.throws(() => FixtureManifestSchema.parse({ fixtureVersion: 'v', workspaceId: 'owned', targets: { issue: { key: 'issue', workspaceId: 'owned', projectId: 'PRJ-001', entityId: 'TASK-001', kind: 'work_item' } } }));
@@ -27,7 +30,17 @@ test('fixture manifests require actual entity revisions and events retain truste
 test('configuration never defaults a model or accepts authority/source storage overlap', () => {
   assert.equal(parseBenchmarkConfig().model, '');
   assert.equal(parseBenchmarkConfig().providerApiKey, undefined);
+  assert.equal(parseBenchmarkConfig().controlTransport, 'http');
+  assert.equal(parseBenchmarkConfig({ controlTransport: 'cli' }).controlTransport, 'cli');
+  assert.throws(() => parseBenchmarkConfig({ controlTransport: 'automatic' }));
   assert.throws(() => parseBenchmarkConfig({ runtimeRoot: repositoryRoot }), /reserved/);
-  assert.throws(() => parseBenchmarkConfig({ outputsRoot: `${repositoryRoot}benchmarks/dovspace/.runtime` }), /reserved/);
+  assert.throws(() => parseBenchmarkConfig({ outputsRoot: `${repositoryRoot}/benchmarks/dovspace/.runtime` }), /reserved/);
   assert.throws(() => parseBenchmarkConfig({ providerEndpoint: 'http://127.0.0.1:4194' }), /HTTPS/);
+});
+
+test('versioned guidance observations reject fabricated negative metrics and preserve explicit unknowns', () => {
+  const guidance = { contextVersion: 2, generatedArtifacts: null, generatedBytes: null, sessions: null, requirementChanges: null, codeChangedLines: null };
+  assert.deepEqual(RunResultSchema.parse({ ...result, guidance }).guidance, guidance);
+  assert.equal(RunResultSchema.safeParse({ ...result, guidance: { ...guidance, generatedBytes: -1 } }).success, false);
+  assert.equal(RunResultSchema.safeParse({ ...result, guidance: { ...guidance, contextVersion: 1 } }).success, false);
 });

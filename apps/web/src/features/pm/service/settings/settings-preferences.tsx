@@ -9,6 +9,7 @@ import { usePersonalDashboard } from "../pm-service"
 import { useText } from "../pm-ui"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
 import { RadixSelect } from "@/components/ui/radix-select"
+import { FontPreferenceControl } from "./settings-font-preference"
 
 const selectClass = "min-h-10 w-full rounded-control border bg-surface px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"
 const accentColors = { indigo: "#4b5bd6", blue: "#2563c5", violet: "#7348cc", teal: "#087b72", rose: "#b93663", graphite: "#525762" }
@@ -17,7 +18,7 @@ function BrowserScope({ mode }: SettingsPageProps) {
   const t = useText()
   const storage = useWorkspaceStore(state => state.preferenceStorage)
   return <SettingsNotice>
-    <p>{t("立即生效，仅保存在当前浏览器的此网站中；不随账号跨设备同步，也不修改工作区业务数据。正式页面与 Lab 共用这些显示偏好。", "Applied immediately in this browser for this site only. Not synced across accounts or devices, and no workspace business data is changed. Service and Lab share these display preferences.")}</p>
+    <p>{t("立即生效，仅保存在当前浏览器的此网站中；不按账号隔离，也不跨设备同步，不修改工作区业务数据。正式页面与 Lab 共用这些显示偏好。", "Applied immediately in this browser for this site only. Preferences are not account-specific or synced across devices, and no workspace business data is changed. Service and Lab share these display preferences.")}</p>
     {mode === "lab" && <p className="mt-2">{t("Lab 中的偏好同样会影响正式页面；这不是后端写入演示。", "Changes made in Lab also affect service pages; these are real browser preferences, not simulated backend writes.")}</p>}
     {storage === "unavailable" && <p role="alert" className="mt-2 text-destructive">{t("浏览器存储不可用或写入失败。当前修改仅在本次应用会话中有效，刷新后可能丢失。", "Browser storage is unavailable or a write failed. Changes work for this app session only and may be lost on reload.")}</p>}
     {storage === "recovered" && <p role="status" className="mt-2">{t("已忽略损坏或不支持的偏好值并使用安全默认值；下一次修改会保存有效设置。", "Damaged or unsupported values were ignored in favor of safe defaults. Your next change will save valid settings.")}</p>}
@@ -25,14 +26,14 @@ function BrowserScope({ mode }: SettingsPageProps) {
 }
 
 function PreferenceSelect({ label, description, value, onChange, children }: { label: string; description?: string; value: string | number; onChange: (value: string) => void; children: ReactNode }) {
-  return <Field label={label} description={description}>{control => <RadixSelect {...control} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>{children}</RadixSelect>}</Field>
+  return <Field className="max-w-2xl" label={label} description={description}>{control => <RadixSelect {...control} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>{children}</RadixSelect>}</Field>
 }
 
 export function SettingsAppearance({ mode }: SettingsPageProps) {
   const t = useText()
   const id = useId()
   const { theme, accent, sidebarDensity, taskDensity, motion, setPreferences } = useWorkspaceStore(state => state)
-  return <SettingsSection title={t("外观", "Appearance")} wide>
+  return <SettingsSection title={t("外观", "Appearance")}>
     <BrowserScope mode={mode} />
     <fieldset><legend className="mb-3 text-sm font-medium">{t("主题", "Theme")}</legend><div className="grid gap-3 sm:grid-cols-3">
       {([['light', t("浅色", "Light"), Sun], ['dark', t("深色", "Dark"), Moon], ['system', t("跟随系统", "System"), Monitor]] as const).map(([value, label, Icon]) => <label key={value} className={`min-w-0 cursor-pointer rounded-module border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${theme === value ? "border-ring bg-selection" : "bg-surface"}`}>
@@ -40,6 +41,7 @@ export function SettingsAppearance({ mode }: SettingsPageProps) {
         <span className="flex items-center gap-2 text-sm"><input className="size-4 accent-[var(--accent)]" type="radio" name={`${id}-theme`} value={value} checked={theme === value} onChange={() => setPreferences({ theme: value })} /><Icon className="size-4" aria-hidden="true" />{label}</span>
       </label>)}
     </div><p className="mt-2 text-xs text-muted-foreground">{t("跟随系统会实时响应操作系统的深浅色变化。", "System responds live to operating-system light and dark mode changes.")}</p></fieldset>
+    <Field className="max-w-2xl" label={t("界面字体", "Interface font")} description={t("与常规页的字体选择共用同一浏览器偏好，不写入账号，也不跨设备同步。", "Uses the same browser preference as General. Not stored in your account or synced across devices.")}>{control => <FontPreferenceControl id={control.id} describedBy={control["aria-describedby"]} />}</Field>
     <fieldset><legend className="mb-2 text-sm font-medium">{t("强调色", "Accent color")}</legend><p className="mb-3 text-xs text-muted-foreground">{t("应用于主要按钮、键盘焦点与选中状态；不改变工作流状态颜色。", "Used for primary buttons, keyboard focus and selection, not workflow status colors.")}</p><div className="flex flex-wrap gap-3">{(Object.keys(accentColors) as DisplayPreferences["accent"][]).map(value => <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-control border px-3 py-2 text-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${accent === value ? "border-ring bg-selection" : ""}`}><input type="radio" name={`${id}-accent`} checked={accent === value} onChange={() => setPreferences({ accent: value })} className="size-4 accent-[var(--accent)]" /><span aria-hidden="true" className="size-4 rounded-full" style={{ background: accentColors[value] }} />{({ indigo: t("靛蓝", "Indigo"), blue: t("蓝色", "Blue"), violet: t("紫罗兰", "Violet"), teal: t("青绿", "Teal"), rose: t("玫红", "Rose"), graphite: t("石墨", "Graphite") })[value]}</label>)}</div></fieldset>
     <div className="grid max-w-2xl gap-6 sm:grid-cols-2">
       <PreferenceSelect label={t("侧栏密度", "Sidebar density")} description={t("只调整工作区导航；触屏保留较大点击区域。", "Workspace navigation only; touch targets stay large.")} value={sidebarDensity} onChange={value => setPreferences({ sidebarDensity: value as DisplayPreferences["sidebarDensity"] })}><option value="comfortable">{t("舒适", "Comfortable")}</option><option value="compact">{t("紧凑", "Compact")}</option></PreferenceSelect>

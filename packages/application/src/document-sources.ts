@@ -16,7 +16,14 @@ import { requireLocalManagement } from './local-projects.ts';
 import type { SqlExecutor } from './ports.ts';
 import { externalDocumentHistoryAddress, externalDocumentHistorySnapshot, type ExternalDocumentHistoryAddress, type ExternalDocumentHistoryPrepared, type ExternalDocumentHistorySink } from './external-document-history.ts';
 
-export type DocumentSourceContext = { sql: SqlExecutor; actor: Actor; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace>; history?: ExternalDocumentHistorySink };
+export type DocumentSourceContext = {
+  sql: SqlExecutor; actor: Actor; config: AgentDirectoryConfiguration;
+  workspace: (workspaceId: string, sql: SqlExecutor) => Promise<Workspace>;
+  history?: ExternalDocumentHistorySink;
+  /** Additional delegated scope, never a replacement for native membership/root authorization. */
+  checkProject?: (projectId: string | null) => void;
+  checkAuthorization?: (sql: SqlExecutor) => Promise<void>;
+};
 const contains = pathContains;
 const overlaps = (a: string, b: string): boolean => contains(a, b) || contains(b, a);
 function pathVisible(member: Membership): boolean { return member.projectIds === null && member.capabilities.includes('access.manage'); }
@@ -29,8 +36,9 @@ function requireWrite(member: Membership): void {
   if (!member.capabilities.includes('planning.edit')) throw new DomainError('permission_denied', 'Capability planning.edit is required', 403);
 }
 async function authorized(context: DocumentSourceContext, scope: DocumentSourceScope): Promise<{ member: Membership; name: string }> {
+  context.checkProject?.(scope.projectId);
   const member = await getMembership(context.sql, context.actor, scope.workspaceId); requireRead(member, scope.projectId);
-  const workspace = await context.workspace(scope.workspaceId);
+  const workspace = await context.workspace(scope.workspaceId, context.sql);
   if (scope.projectId) {
     const project = workspace.items({ entity: 'project', archived: 'include' }).find(item => item.id === scope.projectId);
     if (!project) throw new DomainError('not_found_or_forbidden', 'The project is unavailable in this workspace', 404);
@@ -59,23 +67,31 @@ function allowedRoot(context: DocumentSourceContext, candidate: string): string 
 }
 
 /** An explicitly selected safe root may be shared, even if it is another
- * scope's ordinary directory. A broad parent never implicitly shares registered
- * private subtrees. Omit denied paths entirely, including names in scan issues. */
+ * scope's ordinary directory. A broad parent never implicitly shares descendants
+ * outside native membership or the delegated ceiling. Omit their names in issues. */
 async function readablePaths(context: DocumentSourceContext, scope: DocumentSourceScope, member: Membership, root: string): Promise<(relative: string) => boolean> {
   const blocked: string[] = [];
   const blockDescendant = (boundary: string): void => { const normalized = path.resolve(boundary); if (!samePath(normalized, root) && contains(root, normalized)) blocked.push(normalized); };
+  const canReadProject = (projectId: string | null): boolean => {
+    if (member.projectIds !== null && (projectId === null || !member.projectIds.includes(projectId))) return false;
+    try { context.checkProject?.(projectId); return true; }
+    catch (error) {
+      if (error instanceof DomainError && (error.status === 403 || error.status === 404)) return false;
+      throw error;
+    }
+  };
   const workspaces = await context.sql.query<{ id: string }>('SELECT id FROM workspaces ORDER BY id');
   const foreignAreas = await context.sql.query<{ path: string }>('SELECT path FROM agent_file_areas WHERE workspace_id <> $1', [scope.workspaceId]);
   for (const area of foreignAreas.rows) blockDescendant(area.path);
   const sources = await context.sql.query<{ workspace_id: string; project_key: string; path: string }>('SELECT workspace_id,project_key,path FROM document_sources WHERE removed_at IS NULL AND path IS NOT NULL');
   for (const source of sources.rows) {
-    if (source.workspace_id === scope.workspaceId && (member.projectIds === null || source.project_key !== '' && member.projectIds.includes(source.project_key))) continue;
+    if (source.workspace_id === scope.workspaceId && canReadProject(source.project_key || null)) continue;
     blockDescendant(source.path);
   }
   try {
     for (const workspace of workspaces.rows) {
       for (const location of new ProjectLocations(path.join(context.config.coreRoot, workspace.id)).list()) {
-        if (workspace.id === scope.workspaceId && (member.projectIds === null || member.projectIds.includes(location.projectId))) continue;
+        if (workspace.id === scope.workspaceId && canReadProject(location.projectId)) continue;
         blockDescendant(location.root);
       }
     }
@@ -114,7 +130,7 @@ function scopeDto(projectId: string | null, name: string, member: Membership, re
 export async function listDocumentSources(context: DocumentSourceContext, workspaceId: string): Promise<DocumentSources> {
   const member = await getMembership(context.sql, context.actor, workspaceId);
   if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
-  const workspace = await context.workspace(workspaceId), saved = await readDocumentSources(context.sql, workspaceId), revisions = await readDocumentSourceScopeRevisions(context.sql, workspaceId);
+  const workspace = await context.workspace(workspaceId, context.sql), saved = await readDocumentSources(context.sql, workspaceId), revisions = await readDocumentSourceScopeRevisions(context.sql, workspaceId);
   const sources: DocumentSource[] = [], scopes: DocumentSourceAssociationScope[] = [];
   if (member.projectIds === null) {
     const current = await authorized(context, { workspaceId, projectId: null });
@@ -148,6 +164,7 @@ export async function configureDocumentSources(context: DocumentSourceContext, w
     await requireLocalManagement(context.sql, context.actor, workspaceId, true);
     const latest = await authorized(context, scope);
     if (latest.member.version !== current.member.version) throw new DomainError('not_found_or_forbidden', 'Authorization changed; reload the source catalog', 404);
+    await context.checkAuthorization?.(context.sql);
     for (const directory of directories) directory.assertCurrent();
     const saved = await writeDocumentSourceConfiguration(context.sql, scope, { directories: directories.map(directory => ({ path: directory.root, ...directory.identity })), expectedRevision: input.expectedRevision, actorId: context.actor.id });
     for (const directory of directories) directory.assertCurrent();
@@ -198,6 +215,7 @@ async function readSource<T>(context: DocumentSourceContext, reference: Document
     const current = await authorizedSource(context, reference);
     if (current.member.version !== member.version) throw new DomainError('not_found_or_forbidden', 'Authorization changed during the read', 404);
     if (current.saved.revision !== saved.revision) throw new DomainError('document_source_cursor_invalid', 'The source changed; reload from the first page', 409);
+    await context.checkAuthorization?.(context.sql);
     directory.assertCurrent();
     if (observed) {
       await observed(result, saved);
@@ -371,11 +389,57 @@ async function reconcileDocumentSourceOperation(context: DocumentSourceContext, 
 }
 /** Queries never repeat, resume or compensate filesystem effects. */
 export async function queryDocumentSourceMutation(context: DocumentSourceContext, reference: DocumentSourceReference, operationId: string): Promise<DocumentSourceMutationReceipt> {
+  await context.checkAuthorization?.(context.sql);
   reference = documentSourceReferenceSchema.parse(reference);
   await getMembership(context.sql, context.actor, reference.workspaceId);
   const row = await readDocumentSourceOperation(context.sql, reference, context.actor.id, operationId);
   if (!row || row.source_id !== reference.sourceId) throw new DomainError('document_source_operation_not_found', 'No original operation is recorded for this identity and source; this is not permission to replay an uncertain write', 404);
   await authorizedOperation(context, reference, row); return reconcileDocumentSourceOperation(context, reference, row);
+}
+
+/** Status-only, no filesystem construction, history publication, reconciliation or writes. */
+export async function inspectDocumentSourceMutation(context: DocumentSourceContext, reference: DocumentSourceReference, identity: {
+  operationId: string; hash?: string; action: DocumentSourceMutation['action'];
+}): Promise<'succeeded' | 'failed' | 'unknown'> {
+  reference = documentSourceReferenceSchema.parse(reference);
+  await context.checkAuthorization?.(context.sql);
+  await getMembership(context.sql, context.actor, reference.workspaceId);
+  const row = await readDocumentSourceOperation(context.sql, reference, context.actor.id, identity.operationId);
+  if (!row || row.source_id !== reference.sourceId || row.request.action !== identity.action) return 'unknown';
+  await authorizedOperation(context, reference, row);
+  // Original status is independent of current bytes, but both current project scopes
+  // must still authorize a cross-source outcome. No source path or content is returned.
+  if (row.request.action === 'move') {
+    const targetSourceId = row.request.targetSourceId ?? row.request.targetScope;
+    if (!targetSourceId) return 'unknown';
+    await authorizedSource(context, { workspaceId: reference.workspaceId, sourceId: targetSourceId }, true);
+  }
+  await context.checkAuthorization?.(context.sql);
+  if (identity.hash !== undefined && row.request_hash !== identity.hash) return 'unknown';
+  if (row.receipt?.status === 'succeeded') return 'succeeded';
+  if (row.receipt?.status === 'not_applied') return 'failed';
+  return 'unknown';
+}
+
+/** Original receipt projection only. Missing evidence stays unknown; no reconciliation or repair. */
+export async function readDocumentSourceMutationResult(context: DocumentSourceContext, reference: DocumentSourceReference, operationId: string, expectedIdentity?: { hash: string; action: DocumentSourceMutation['action'] }): Promise<DocumentSourceMutationReceipt | null> {
+  reference = documentSourceReferenceSchema.parse(reference);
+  await context.checkAuthorization?.(context.sql);
+  await getMembership(context.sql, context.actor, reference.workspaceId);
+  const row = await readDocumentSourceOperation(context.sql, reference, context.actor.id, operationId);
+  if (!row || row.source_id !== reference.sourceId) return null;
+  await authorizedOperation(context, reference, row);
+  if (expectedIdentity && (row.request_hash !== expectedIdentity.hash || row.request.action !== expectedIdentity.action)) return null;
+  if (!row.receipt) return null;
+  const sourceAddress = await authorizeExternalDocumentHistory(context, { ...reference, path: row.request.path });
+  if (sourceAddress.sourceRevision !== row.request.sourceRevision) throw new DomainError('not_found_or_forbidden', 'The original source binding is no longer readable', 404);
+  if (row.request.action === 'move' && row.request.targetSourceId && row.request.targetPath) {
+    const targetAddress = await authorizeExternalDocumentHistory(context, { workspaceId: reference.workspaceId, sourceId: row.request.targetSourceId, path: row.request.targetPath });
+    if (targetAddress.sourceRevision !== row.request.targetSourceRevision) throw new DomainError('not_found_or_forbidden', 'The original destination binding is no longer readable', 404);
+  }
+  const result = await authorizedReceipt(context, reference, row, row.receipt);
+  await context.checkAuthorization?.(context.sql);
+  return result;
 }
 
 type WritableDocumentSource = { directory: DocumentSourceDirectory; saved: DocumentSourceRow };
@@ -420,6 +484,7 @@ export async function mutateDocumentSource(context: DocumentSourceContext, refer
   const request: DocumentSourceOperationRequest = { action: input.action, path: input.path, sourceRevision: input.sourceRevision,
     ...('expectedRevision' in input ? { expectedRevision: input.expectedRevision } : {}),
     ...(input.action === 'move' ? { targetSourceId: input.targetSourceId, targetPath: input.targetPath, targetSourceRevision: input.targetSourceRevision } : {}) };
+  await context.checkAuthorization?.(context.sql);
   const attempt = await beginDocumentSourceOperation(context.sql, reference, projectId, context.actor.id, input.operationId, hash, request, historicalOperationHash(reference, existing, input));
   if (!attempt.created) return reconcileDocumentSourceOperation(context, reference, attempt.row);
   let source: WritableDocumentSource | undefined, target: WritableDocumentSource | undefined, journal: DocumentSourceOperationJournal | undefined;
@@ -452,6 +517,9 @@ export async function mutateDocumentSource(context: DocumentSourceContext, refer
       await authorizeExternalDocumentHistory(context, { workspaceId: reference.workspaceId, sourceId: capture.target.sourceId, path: capture.target.path }, capture.target);
       requireWrite((await authorizedSource(context, { workspaceId: reference.workspaceId, sourceId: capture.target.sourceId })).member);
     }
+    // Both pinned roots and their project scopes were checked above. The native
+    // caller holds the workspace/directory locks throughout dispatch and IO.
+    await context.checkAuthorization?.(context.sql);
     source.directory.assertCurrent(); target?.directory.assertCurrent();
     await dispatchDocumentSourceOperation(context.sql, reference, context.actor.id, input.operationId, request); dispatched = true;
     let content: DocumentSourceContent | undefined;

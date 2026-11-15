@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { responseStreamingModeSchema } from "./output.ts";
 import { pmReferenceInputSchema, turnContextSchema } from "./pm-references.ts";
+import { chatContextAttachmentBindingSchema, chatContextInputSchema } from "./message-context.ts";
 import type { ExecutionPolicy, PmReferenceResolution, TurnContext } from "./pm-references.ts";
 import type { ProviderOptionSelection } from "./provider.ts";
 export { agentWorkspaceSchema, executionSelectionSchema, executionEnvironmentSchema, chatOnlyExecutionSelection } from "./execution.ts";
@@ -71,6 +72,7 @@ export const chatBodySchema = z.object({
   messageId: z.string().optional(),
   idempotencyKey: z.string().max(256).optional(),
   pmReferences: z.array(pmReferenceInputSchema).max(50).optional(),
+  contextItems: z.array(chatContextInputSchema).max(20).optional(),
 });
 export const threadPatchSchema = z.object({
   title: z.string().max(200).optional(),
@@ -78,8 +80,29 @@ export const threadPatchSchema = z.object({
   custom: z.record(z.string(), z.unknown()).optional(),
   settings: threadSettingsSchema.optional(),
   revision: z.number().int().nonnegative().optional(),
+  lifecycleRevision: z.number().int().nonnegative().optional(),
   executionSelection: executionSelectionSchema.optional(),
 }).strict();
+export const threadDeleteSchema = z.strictObject({
+  lifecycleRevision: z.number().int().nonnegative(),
+  confirm: z.literal(true),
+  expectedGenerationId: z.string().min(1).max(256).nullable(),
+  stopActive: z.boolean(),
+});
+export type ChatSubmissionLookup = {
+  status: "accepted" | "not_accepted" | "unknown";
+  generationId?: string;
+  reason?: string;
+  storeId: string;
+  restoreEpoch: number;
+};
+export type ThreadLifecycleOperationView = {
+  operationId: string; threadId: string; state: "stopping" | "blocked" | "committed";
+  lifecycleRevision: number; expectedGenerationId: string | null;
+  closingClaimed: boolean;
+  reasons: string[]; deleted?: true; retainedGenerationIds?: string[];
+  createdAt: string; updatedAt: string;
+};
 export const threadSidebarActionSchema = z.object({
   action: z.enum(["pin", "unpin", "settle", "unsettle", "snooze", "wake", "auto-settle", "mark-unread", "visit"]),
   revision: z.number().int().nonnegative(),
@@ -127,6 +150,8 @@ export type RemoteThread = {
   title?: string;
   custom?: Record<string, unknown>;
   revision: number;
+  lifecycleRevision: number;
+  deletionState?: "closing" | "committed";
   sidebar: ThreadSidebar;
   createdAt: string;
   updatedAt: string;
@@ -156,4 +181,70 @@ export type ChatGenerationView = {
   handoff?: { mode: "native" | "native-fork" | "portable"; reason: string };
   /** Resolved IDs, titles, revisions and short reasons only; never PM bodies or credentials. */
   pmReferences?: PmReferenceResolution[];
+};
+
+/** Explicit saved drafts are separate from the browser's current composer draft. */
+export const chatDraftInputSchema = z.object({
+  message: z.object({
+    id: z.string().min(1).max(256),
+    role: z.literal("user"),
+    parts: z.array(z.union([
+      z.object({ type: z.literal("text"), text: z.string().max(256000) }).strict(),
+      z.object({
+        type: z.literal("file"), url: z.string().max(24000000),
+        mediaType: z.string().max(256), filename: z.string().max(512).optional(),
+      }).strict(),
+    ])).min(1).max(100),
+    metadata: z.object({ custom: z.object({
+      quote: z.unknown().optional(), contextAttachments: z.array(chatContextAttachmentBindingSchema).max(100).optional(),
+    }).strict().optional() }).strict().optional(),
+  }).strict(),
+  pmReferences: z.array(pmReferenceInputSchema).max(50).optional(),
+  contextItems: z.array(chatContextInputSchema).max(20).optional(),
+}).strict();
+export type ChatDraftInput = z.infer<typeof chatDraftInputSchema>;
+export const savedChatDraftSchema = z.object({
+  id: z.string().min(1).max(256),
+  draft: chatDraftInputSchema,
+  threadSettingsRevision: z.number().int().nonnegative(),
+}).strict();
+export const chatQueueActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("remove"), revision: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal("move"), revision: z.number().int().nonnegative(), beforeId: z.string().nullable() }).strict(),
+  z.object({ action: z.literal("edit"), revision: z.number().int().nonnegative(), draft: chatDraftInputSchema,
+    threadSettingsRevision: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal("send"), revision: z.number().int().nonnegative(), confirmAfterGenerationId: z.string().optional(),
+    expectedHeadId: z.string().nullable().optional(), expectedGenerationId: z.string().nullable().optional() }).strict(),
+  z.object({ action: z.literal("reconcile"), revision: z.number().int().nonnegative() }).strict(),
+]);
+export type QueuedChatMessage = {
+  id: string;
+  threadId: string;
+  revision: number;
+  draft: ChatDraftInput | null;
+  status: "queued" | "dispatching" | "sent" | "blocked" | "unknown" | "removed";
+  createdAt: string;
+  updatedAt: string;
+  generationId?: string;
+  /** Stable admission boundary used by a live foreground queue coordinator. */
+  afterGenerationId?: string | null;
+  afterHeadId?: string | null;
+  afterGenerationWasActive?: boolean;
+  reason?: string;
+};
+export type StashedChatDraft = {
+  id: string;
+  threadId: string;
+  draft: ChatDraftInput | null;
+  createdAt: string;
+  reason?: string;
+};
+export type ThreadActionCapability = { supported: boolean; reason?: string };
+export type ThreadActionCapabilities = {
+  steer: ThreadActionCapability & { interruptsTools?: boolean; generationId?: string };
+  fork: ThreadActionCapability;
+  rewind: ThreadActionCapability;
+  planImplementation: ThreadActionCapability;
+  /** Conversation rewind never rolls back PM mutations or filesystem changes. */
+  rewindEffects: "conversation-only";
 };

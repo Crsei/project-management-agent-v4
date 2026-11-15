@@ -71,24 +71,40 @@ export function makePmEventAdapter(input: {
     const live = !closedRequests.has(id) && source.status === "pending" && source.responseCapability.type === "live"
       && input.isLiveRequest?.(source) === true;
     const respondable = informational && live && input.canRespond && item.questions.length > 0;
-    const autoApproved = !informational && autoApproveApprovals();
+    const autoApprove = !informational && autoApproveApprovals();
+    const approved = !informational && source.status === "resolved"
+      && (source.decision === "accept" || source.decision === "acceptForSession" || source.decision === "acceptAlways");
+    const denied = !informational && source.status === "resolved" && source.decision === "decline";
+    const cancelled = !informational && (source.status === "cancelled" || source.status === "expired" || source.decision === "cancel"
+      || (source.status === "pending" && closedRequests.has(id)));
     const request: NativeInteractionRequest = {
       id, itemId: item.id, kind: informational ? "user_input" : "approval",
-      title: item.title ?? (informational ? "Provider question" : autoApproved ? "Native permission auto-approved" : "Native permission denied"),
+      title: item.title ?? (informational ? "Provider question" : cancelled ? "Native permission cancelled"
+        : denied ? "Native permission denied" : approved ? autoApprove ? "Native permission auto-approved" : "Native permission approved"
+        : source.status === "resolved" ? "Native permission closed" : autoApprove ? "Native permission approval pending" : "Native permission denied"),
       respondable,
+      ...(!informational && (approved || denied || cancelled || source.status === "resolved") ? {
+        resolution: cancelled ? "cancelled" as const : denied ? "denied" as const
+          : approved ? autoApprove ? "auto_approved" as const : "approved" as const : "closed" as const,
+      } : {}),
       ...(informational ? { questions: item.questions.map((question) => ({
         id: question.id, title: question.header, prompt: question.question,
         options: question.options.map((option) => ({ id: option.value ?? option.label, label: option.label, description: option.description })),
         multiple: question.multiSelect, allowText: question.allowCustomAnswer,
       })) } : { detail: item.reason ?? item.prompt }),
       ...(!respondable ? { unavailableReason: !informational
-        ? autoApproved ? "Auto-approved by configuration; no action required." : "Native permissions are denied. PM business approvals remain separate."
+        ? cancelled ? "The native permission request was cancelled; no action required."
+          : denied ? "Native permissions are denied. PM business approvals remain separate."
+          : approved ? autoApprove ? "Auto-approved by configuration; no action required." : "Native permission approved; no action required."
+          : source.status === "resolved" ? "The provider closed this permission request."
+          : autoApprove ? "Native permission is being auto-approved by configuration; no action required." : "Native permissions are denied. PM business approvals remain separate."
         : source.responseCapability.type === "not_resumable" ? source.responseCapability.reason
         : !live ? "The provider closed this interaction." : "This interaction has no live response channel." } : {}),
     };
     const previous = items.get(item.id)!;
-    publish({ ...previous, request, status: source.status === "resolved" ? "completed"
-      : source.status !== "pending" || closedRequests.has(id) ? (itemOpen ? "cancelled" : previous.status) : "waiting" });
+    publish({ ...previous, request, status: source.status === "resolved" ? (denied || source.decision === "cancel" ? "cancelled" : "completed")
+      : source.status !== "pending" || closedRequests.has(id) ? (itemOpen ? "cancelled" : previous.status) : "waiting",
+      completedAt: pmEventTime(source.resolvedAt) ?? previous.completedAt });
     if (closedRequests.has(id)) input.onRequestClosed(id);
     else if (!startedRequests.has(id) && (respondable || !informational)) {
       startedRequests.add(id);
@@ -186,7 +202,16 @@ export function makePmEventAdapter(input: {
           for (const item of sourceItems.values()) if (item.type === "assistant_message" && item.messageId === event.message.id && item.textOmitted) handleItem(item);
           break;
         }
-        case "runtime_request.updated": requests.set(event.runtimeRequest.id, event.runtimeRequest); projectRequest(event.runtimeRequest.id); break;
+        case "runtime_request.updated": {
+          const previous = requests.get(event.runtimeRequest.id);
+          // A delayed pending snapshot cannot reopen an acknowledged or cancelled request.
+          if (previous && previous.status !== "pending" && event.runtimeRequest.status === "pending") break;
+          // Closing a turn cannot revoke an already acknowledged permission decision.
+          if (previous?.status === "resolved"
+            && (previous.decision === "accept" || previous.decision === "acceptForSession" || previous.decision === "acceptAlways")
+            && (event.runtimeRequest.status !== "resolved" || event.runtimeRequest.decision === undefined)) break;
+          requests.set(event.runtimeRequest.id, event.runtimeRequest); projectRequest(event.runtimeRequest.id); break;
+        }
         case "plan.updated": {
           const plan = event.plan;
           plans.set(plan.id, plan);

@@ -1,0 +1,51 @@
+.dock {
+  max-width: none;
+  overflow: hidden;
+}
+
+.dock[data-expanded="true"] {
+  border-left: 1px solid var(--border);
+}
+
+.title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--foreground);
+}
+
+.title > svg {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.title h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dock[data-compact="true"] {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+}
+
+.dock[data-compact="true"] > header {
+  padding-left: 48px;
+}

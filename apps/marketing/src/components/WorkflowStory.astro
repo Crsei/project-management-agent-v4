@@ -1,0 +1,88 @@
+---
+import ProductImage from "./ProductImage.astro";
+
+const steps = [
+  { label: "定义 Issue", detail: "写清目标、范围与项目上下文。", owner: "PM 项目" },
+  { label: "明确执行目标", detail: "在 Chat 中选择任务引用与实际目录。", owner: "Agent Chat" },
+  { label: "执行并查看结果", detail: "配置 Provider 后，检查真实输出与变更。", owner: "实际执行" },
+  { label: "回到项目核对", detail: "读回记录，按原有工作流确认业务状态。", owner: "人工核对" },
+];
+---
+
+<section id="workflow" class="section surface-dark workflow-story" aria-labelledby="workflow-title">
+  <div class="container">
+    <div class="workflow-heading">
+      <div class="section-head">
+        <p class="eyebrow">FROM ISSUE TO EVIDENCE</p>
+        <h2 id="workflow-title">从任务到结果，<br />每一步都有来处。</h2>
+        <p>项目定义要做什么，Chat 明确这次做什么。执行之后，回到真实记录确认发生了什么。</p>
+      </div>
+      <a class="text-link" href="/get-started/#first-run">了解如何开始一次执行 <span aria-hidden="true">↗</span></a>
+    </div>
+    <ol class="workflow-rail" aria-label="从任务到核对的操作顺序">
+      {steps.map((step, index) => (
+        <li>
+          <span class="workflow-number" aria-hidden="true">0{index + 1}</span>
+          <p class="workflow-owner">{step.owner}</p>
+          <h3>{step.label}</h3>
+          <p>{step.detail}</p>
+        </li>
+      ))}
+    </ol>
+    <p class="workflow-boundary">这是操作顺序说明，不是自动执行或模型回放。PM 授权与 Agent 身份独立；Run 成功不等于 Issue 完成。</p>
+    <div class="workflow-evidence">
+      <div class="workflow-evidence-copy">
+        <p class="eyebrow">THE RECORD, NOT THE PROMISE</p>
+        <h3>一句“完成了”，<br />不如一份可核对的记录。</h3>
+        <p>任务正文、核对清单和状态留在项目里。保存后重新读取，才能分清对话建议、实际写入与业务完成。</p>
+        <dl>
+          <div><dt>这张截图的操作</dt><dd>人工保存，再刷新读回</dd></div>
+          <div><dt>采集后的任务状态</dt><dd>仍为待办</dd></div>
+          <div><dt>本次截图是否执行模型</dt><dd>没有；不作为 Agent 验收</dd></div>
+        </dl>
+        <a class="text-link" href="/security/#execution">结果未知时，先核对原操作 <span aria-hidden="true">↗</span></a>
+      </div>
+      <ProductImage family="task-readback" id="workflow-readback" />
+    </div>
+  </div>
+</section>
+
+<style>
+  .workflow-heading { display: flex; align-items: end; justify-content: space-between; gap: 32px; }
+  .workflow-heading .section-head { max-width: 700px; margin-bottom: 0; }
+  .workflow-heading > .text-link { flex-shrink: 0; margin-bottom: 8px; }
+  .workflow-rail { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 32px; margin-top: 52px; padding: 0; list-style: none; }
+  .workflow-rail li { position: relative; min-width: 0; }
+  .workflow-rail li:not(:last-child)::after { content: ''; position: absolute; top: 20px; left: 60px; width: calc(100% - 28px); border-top: 1px solid var(--strong); }
+  .workflow-number { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--accent); border-radius: 50%; color: var(--accent); font: 13px var(--mono); }
+  .workflow-owner { margin-top: 22px; color: var(--accent); font-size: 12px; }
+  .workflow-rail h3 { margin-block: 6px 12px; font-size: 21px; }
+  .workflow-rail li > p:last-child { max-width: 240px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+  .workflow-boundary { margin-top: 28px; color: var(--muted); font-size: 13px; }
+  .workflow-evidence { display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.35fr); align-items: center; gap: 64px; margin-top: 64px; padding-top: 56px; border-top: 1px solid var(--border); }
+  .workflow-evidence-copy { min-width: 0; }
+  .workflow-evidence-copy h3 { margin-block: 16px 20px; font-size: clamp(26px,2.6vw,34px); line-height: 1.35; }
+  .workflow-evidence-copy > p:not(.eyebrow) { max-width: 430px; color: var(--muted); font-size: 16px; line-height: 1.8; }
+  .workflow-evidence-copy dl { display: grid; gap: 16px; margin-block: 28px; padding-block: 24px; border-block: 1px solid var(--border); }
+  .workflow-evidence-copy dl > div { display: grid; gap: 3px; }
+  .workflow-evidence-copy dt { color: var(--muted); font-size: 12px; }
+  .workflow-evidence-copy dd { margin: 0; color: var(--fg); font-size: 14px; }
+  @media (max-width: 1000px) {
+    .workflow-heading { align-items: start; flex-direction: column; gap: 20px; }
+    .workflow-evidence { grid-template-columns: 1fr; gap: 32px; }
+    .workflow-evidence-copy { max-width: 700px; }
+    .workflow-evidence-copy > p:not(.eyebrow) { max-width: 640px; }
+    .workflow-evidence-copy dl { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+  }
+  @media (max-width: 640px) {
+    .workflow-rail { grid-template-columns: 1fr; gap: 28px; margin-top: 36px; }
+    .workflow-rail li { padding-left: 64px; }
+    .workflow-number { position: absolute; left: 0; top: 0; }
+    .workflow-rail li:not(:last-child)::after { top: 52px; left: 20px; height: calc(100% - 24px); width: 0; border-top: 0; border-left: 1px solid var(--strong); }
+    .workflow-owner { margin-top: 0; }
+    .workflow-rail h3 { font-size: 20px; }
+    .workflow-rail li > p:last-child { max-width: none; }
+    .workflow-evidence { gap: 28px; margin-top: 36px; padding-top: 36px; }
+    .workflow-evidence-copy dl { grid-template-columns: 1fr; gap: 16px; }
+  }
+</style>

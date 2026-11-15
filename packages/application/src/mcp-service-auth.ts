@@ -29,7 +29,7 @@ export function assertMcpEndpoint(identity: McpInvocationIdentity, request: Requ
     const references = pmReferenceResolveRequestSchema.safeParse(request.body);
     allowed = references.success && references.data.references.every(reference => reference.workspaceId === scope.workspaceId && (scope.projectId === null || reference.projectId === null || reference.projectId === scope.projectId));
   }
-  else if (request.method === 'POST' && !url.search && (url.pathname === `${base}/call` || url.pathname === `${base}/result`)) {
+  else if (request.method === 'POST' && !url.search && (url.pathname === `${base}/call` || url.pathname === `${base}/result` || url.pathname === `${base}/approval-authority`)) {
     const tool = AGENT_CHAT_TOOL_REGISTRY.find(item => item.name === body?.name), selected = pmToolTargetSchema.safeParse(body?.target);
     const selectedAllowed = selected.success && selected.data.workspaceId === scope.workspaceId
       && (scope.projectId === null || selected.data.projectId === scope.projectId);

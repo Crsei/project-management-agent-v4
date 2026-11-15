@@ -1,8 +1,15 @@
 # dovspace-pm
 
-First-party PM workflows for Codex, Claude Code, Pi and OpenCode. The three `skills/*/SKILL.md` files and the existing application PM tool registry are the single source. Adapters connect to the same authoritative `/mcp`; they contain no PM business implementation, database writer, model caller, credentials or third-party plugin host. Conditional plan E is not enabled.
+First-party PM workflows for Codex, Claude Code, Pi and OpenCode. The common registry `packages/skill-resources/catalog.ts` selects nine canonical Skills: six read-only review/analysis Skills from `.agents/skills` and the three workflow Skills from this directory's `skills/`. It reads those original files, never a second authored copy. The existing application PM tool registry remains the tool source. Adapters connect to the same authoritative `/mcp`; they contain no PM business implementation, database writer, model caller, credentials or third-party plugin host. Conditional plan E is not enabled.
 
 This authoring directory deliberately has no preconfigured `mcp.json`: no public service origin has been approved. **Generate a configured distribution before loading it.** The generated `portable/` is a self-contained Agent Plugins **1.0.0** package with root `plugin.json`, concrete `mcp.json`, shared Skills, capability/result schema snapshot and complete AGPL license. Native adapters and compatibility manifests are generated from that source, not independent tools.
+
+All six generated Skill layouts (`portable/skills`, `codex/plugin/skills`, `codex/.agents/skills`, `claude/skills`, `pi/skills`, `opencode/.opencode/skills`) contain the same nine names:
+
+- Read-only guidance: `pm-requirement-review`, `pm-plan-draft`, `pm-evidence-review`, `pm-project-digest`, `pm-collaboration-review`, `pm-automation-candidate-review`.
+- Workflow guidance: `project-management`, `issue-management`, `task-planning`; actual writes still require the existing authorized PM/native tools.
+
+Desktop and Agent resource payloads preserve these source paths, plugin manifest, README and license. The four existing automation-analysis host paths remain unchanged. Development-maintenance `upstream-source-update` and evaluation fixtures are not runtime Skill resources. Provider installation from Dovspace's Skills settings or onboarding is a separate explicit action from generating this plugin/MCP bundle: neither copied files, installed status nor visible source provenance proves that a native Provider has loaded or invoked the Skill. Verify discovery in the actual target/profile, and use the client's supported reload/new-session behavior as needed; do not infer authentication or business success from installation.
 
 ## Generate, install, update and uninstall
 
@@ -35,6 +42,7 @@ The CLI returns an observable notice: **new operation policy is full access / au
 | `pi/` | Actual first-party package and small `index.ts` registering the remote MCP server with built-in OAuth. No custom transport or credential reader. Pi extensions run with full host OS permissions, not in a sandbox. |
 | `opencode/` | Native OpenCode **2.1.2** `mcp.servers` configuration and `.opencode/skills`; no legacy normalization, parallel major-version adapter or JS plugin. |
 | `capabilities.json` in packages | Schema/description/capability metadata exported from the real PM registry and result contracts. Tool count is derived, not hardcoded. Runtime tools/list and existing authorization determine actual availability. |
+| Task guidance | The shared Skills direct actual `pm_task_brief` reads by revision/stage and explicitly scoped `pm_search_knowledge` when advertised. Candidates remain `needs_review`; source freshness, missing requirements and unknown original operations are not replaced by generated prose. Installation does not prove native Skill invocation. |
 | `connection.json`, `clients.json` | Concrete connection, nonblocking policy notice, documentation targets and separately labeled parent-measured executable versions. Never authentication material. |
 
 ## Native client commands (not run by the installer)
@@ -84,7 +92,7 @@ claude --plugin-dir "$BUNDLE/claude" --init-only
 claude --plugin-dir "$BUNDLE/claude"
 ```
 
-In Claude use `/mcp` to authenticate the `dovspace-pm` server with existing Dovspace OAuth; verify all three namespaced Skills and the same PM tool catalog. `--plugin-dir` is invocation-scoped and does not rewrite persistent plugin config. Stop supplying it to unload. Remove any native OAuth credentials through Claude's own `/mcp` UI and revoke the client at Dovspace separately. Client-native confirmation cannot replace explicit PM deployment approvals, and the plugin adds no new permission prompt.
+In Claude use `/mcp` to authenticate the `dovspace-pm` server with existing Dovspace OAuth; verify all nine namespaced Skills listed above and the same PM tool catalog. `--plugin-dir` is invocation-scoped and does not rewrite persistent plugin config. Stop supplying it to unload. Remove any native OAuth credentials through Claude's own `/mcp` UI and revoke the client at Dovspace separately. Client-native confirmation cannot replace explicit PM deployment approvals, and the plugin adds no new permission prompt.
 
 ### Pi
 
@@ -115,7 +123,7 @@ pi --offline --no-approve --no-extensions --extension builtin:mcp --extension "$
 {"id":"state","type":"get_state"}
 ```
 
-`get_commands` exposes the three `skill:` commands and extension commands; inspect startup/extension diagnostics as well. Close stdin for orderly shutdown. This proves only loading/discovery, not authenticated tool execution. For live MCP discovery/OAuth, remove `--offline`, open the same explicitly loaded resources in the TUI with no initial prompt, then use `/mcp` and `/mcp login dovspace-pm`. Retain existing project trust boundaries; do not add `--approve` merely to bypass them.
+`get_commands` should expose the nine `skill:` commands listed above and extension commands; inspect startup/extension diagnostics as well. Close stdin for orderly shutdown. This proves only loading/discovery, not authenticated tool execution. For live MCP discovery/OAuth, remove `--offline`, open the same explicitly loaded resources in the TUI with no initial prompt, then use `/mcp` and `/mcp login dovspace-pm`. Retain existing project trust boundaries; do not add `--approve` merely to bypass them.
 
 ### OpenCode 2.x
 
@@ -146,7 +154,7 @@ For a source-backed model-free configured-server check, use the native API subco
 
 `GET /api/config` reads configuration sources; inspect the generated document's `mcp.servers.dovspace-pm` and concrete URL. These commands call native GET endpoints, not session/prompt/generate endpoints. The directory header selects the native OpenCode configuration location; it is not a PM authority grant. The native CLI manages the private server's authentication and lifetime. No raw credential or authorization header is supplied here.
 
-For interactive error inspection, start the standalone TUI without a prompt, press **Ctrl+P**, and first verify that the **Commands** dialog is visibly open. Search/select **MCP servers** (command ID `mcp.list`). In that MCP dialog select `dovspace-pm` and press Enter to view a failed connection's error details. Do not press Space for a read-only probe: it toggles/retries the connection. If the palette does not open, stop; do not fall back to submitting diagnostic text in the composer. This uses local UI callbacks rather than a model. Inspect the three shared Skills separately; V2 IDs are path-derived (`project-management`, `issue-management`, `task-planning`) and the native model skill tool takes `{ "id": "..." }`, but invoking a model is not required merely to inspect configuration.
+For interactive error inspection, start the standalone TUI without a prompt, press **Ctrl+P**, and first verify that the **Commands** dialog is visibly open. Search/select **MCP servers** (command ID `mcp.list`). In that MCP dialog select `dovspace-pm` and press Enter to view a failed connection's error details. Do not press Space for a read-only probe: it toggles/retries the connection. If the palette does not open, stop; do not fall back to submitting diagnostic text in the composer. This uses local UI callbacks rather than a model. Inspect all nine shared Skills listed above separately; V2 IDs are path-derived (the canonical names above) and the native model skill tool takes `{ "id": "..." }`, but invoking a model is not required merely to inspect configuration.
 
 `opencode --standalone mcp list` is not supported by the measured 2.1.2 CLI. Its ordinary `mcp list/auth/logout` and `debug config` commands use a shared-server connection; use the explicit private API path above for isolated smoke instead of stopping/reconfiguring an existing user's service. Source `mcp.list` passes the caller's cwd, so an empty one-shot list is not inherently proof of global-only lookup or missing generated configuration. The MCP server registry is populated by an asynchronously activated config plugin, while the list handler has no activation barrier; an initial empty list and a later TUI failure can differ. Treat activation timing as an unconfirmed explanation until independently proven. A listed server whose discovery/OAuth endpoint returns 503 is **configured but unavailable**, not absent; no unauthenticated fallback is installed. The generated config sets no client-wide `permissions`/`policies`, OAuth disabling, global plugin manager or new operation gate.
 
@@ -174,6 +182,9 @@ All adapters preserve original operationId, server traceId, invocation and comma
 
 The ordinary CLI accepts only the public result projection. A visible record must match the original operation, tool, workspace/project target, external execution root and empty Chat correlation IDs; any receipt must identify the original operation. Wrong-target/malformed results and hidden projections carrying extra payload are replaced by a safe unavailable response, never echoed. Unknown non-contract fields are discarded rather than returned as an unchecked body copy.
 
+Exit 0 from `plugin call` or `plugin result` means transport/projection handling, **not business success**. For machine consumption, save output in a private file and run `pnpm pm plugin check --file RESULT.json` before continuing. This local schema check requires visible + succeeded + a present result + no error; failed, unknown, running, pending approval, redacted and unavailable all stop the chain. It makes no network request and never redispatches an operation. In a source checkout, `docs/guides/cli.md` documents the complete PM resource and independent Agent operator CLI; those host/credential management commands are not added to this PM plugin.
+
+
 ## Compatibility and release evidence
 
 The parent measured executable versions under isolated HOME: **Codex 0.166.0, Claude 2.1.303, Pi 1.1.0, OpenCode 2.1.2**. These are not the same fact as successful package loading, Skills/tool discovery, OAuth, model execution or business acceptance. `clients.json` separates `documentationVersion` from `measuredVersion` and names the measurement source; this worker did not rerun those version observations or execute clients. Pi 1.1.0's installed API declarations and [version-pinned extension docs](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/extensions.md) establish the thin registration API; OpenCode's generated config uses [native V2 MCP](https://opencode.ai/docs/mcp-servers/). Capture actual OS, package digest, profile, authentication identity class, time and evidence path for loading and each remaining acceptance scenario. Codex desktop still requires distinct evidence. No public TLS/distribution origin or real authentication/model/business acceptance is inferred from available binaries.
@@ -188,6 +199,8 @@ pnpm check:docs
 ```
 
 Real-client smoke must separately cover: installation from clean isolated profiles and unchanged unrelated config; same runtime tool/Skill discovery; OAuth consent, rejection, expiry/revocation, account/project boundaries; exact-revision writes and conflicts; existing deployment `ask` approvals and explicitly configured auto-approve; response loss after commit and client restart; original-operation-only recovery; revoked-history visibility; adapter update drift/failure and owned-only uninstall. A protocol fixture is not four real-client acceptance. Needed but unavailable client executables, model accounts, MCP/OAuth deployment, approved HTTPS/distribution origin and public release authorization remain **unverified prerequisites**, not silently passed checks.
+
+Skill-only behavior scenarios live in [evals.json](evals.json), outside `skills/` so the distribution directory continues to contain only named Skill folders. Load one corresponding `SKILL.md` per independent synthetic model call; provide the case prompt but never its `must`/`mustNot` rubric. Evaluate behavior, not fixed wording. These scenarios cover MCP versus CLI recovery, structured result checks, configured workflows, pagination, source freshness and explicit Roadmap/automation side effects; they are not authenticated client or production acceptance. The repository's [read-only analysis and review Skills](../../.agents/skills/README.md) are separate and are not copied into this plugin.
 
 ## Sources and license
 

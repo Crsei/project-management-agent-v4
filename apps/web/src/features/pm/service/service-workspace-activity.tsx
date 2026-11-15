@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation, useParams } from "react-router"
 import { Activity, ArrowRight, ListFilter, RefreshCw } from "lucide-react"
-import { Avatar } from "@/components/ui/avatar"
+import { HumanIdentity } from "./human-identity"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { FilterCard } from "@/components/blocks/filter-card"
 import type { FilterCondition, FilterField } from "@/lib/filter-model"
 import { useI18n } from "@/lib/i18n-provider"
+import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { actionLabels } from "./activity-action-labels"
 import { useWorkspaceActivity } from "./pm-activity-hooks"
 import { usePmService } from "./pm-service"
@@ -40,8 +41,7 @@ function WorkspaceActivity() {
 
   // UTC is an explicitly labelled display boundary, never a guessed personal preference.
   const timeZone = activity.timeZone ?? "UTC"
-  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { timeZone, month: "long", day: "numeric", year: "numeric" }), [locale, timeZone])
-  const timestampFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { timeZone, year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }), [locale, timeZone])
+  const display = useDisplayDateTime(timeZone)
   const dayFormatter = useMemo(() => new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }), [timeZone])
   const relativeFormatter = useMemo(() => new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" }), [locale])
   const people = useMemo(() => new Map(activity.people.map(person => [person.id, person.name])), [activity.people])
@@ -109,10 +109,10 @@ function WorkspaceActivity() {
             const heading = group.day === null ? t("日期未知", "Unknown date")
               : group.day === currentDay ? t("今天", "Today")
                 : group.day === currentDay - dayMilliseconds ? t("昨天", "Yesterday")
-                  : dateFormatter.format(new Date(group.entries[0].occurredAt))
+                  : display.date(group.entries[0].occurredAt)
             return <section key={group.day ?? "unknown"} className={styles.dayGroup} aria-label={heading}>
               <h2 className={styles.dayHeading}>{heading}</h2>
-              <ol className={styles.feed}>{group.entries.map(entry => <ActivityRow key={entry.id} entry={entry} actorId={activity.actorId} people={people} root={root} returnTo={returnTo} now={now} timestampFormatter={timestampFormatter} relativeFormatter={relativeFormatter} timeZone={timeZone} t={t} />)}</ol>
+              <ol className={styles.feed}>{group.entries.map(entry => <ActivityRow key={entry.id} entry={entry} actorId={activity.actorId} people={people} root={root} returnTo={returnTo} now={now} formatTimestamp={display.dateTime} relativeFormatter={relativeFormatter} timeZone={timeZone} t={t} />)}</ol>
             </section>
           }) : !activity.error && <div className={styles.empty} role="status">
             <Activity size={24} strokeWidth={1.5} aria-hidden="true" />
@@ -161,14 +161,14 @@ function relativeTime(timestamp: number, now: number, formatter: Intl.RelativeTi
   return formatter.format(Math.trunc(seconds / 31_536_000), "year")
 }
 
-function ActivityRow({ entry, actorId, people, root, returnTo, now, timestampFormatter, relativeFormatter, timeZone, t }: {
+function ActivityRow({ entry, actorId, people, root, returnTo, now, formatTimestamp, relativeFormatter, timeZone, t }: {
   entry: ActivityEntry
   actorId: string | undefined
   people: ReadonlyMap<string, string>
   root: string
   returnTo: string
   now: number
-  timestampFormatter: Intl.DateTimeFormat
+  formatTimestamp: (value: string) => string
   relativeFormatter: Intl.RelativeTimeFormat
   timeZone: string
   t: Text
@@ -178,7 +178,7 @@ function ActivityRow({ entry, actorId, people, root, returnTo, now, timestampFor
   const name = self ? t("你", "You") : knownName || t("未知操作者", "Someone")
   const title = entry.targetTitle || entry.targetId || t("未知对象", "Unknown target")
   const timestamp = Date.parse(entry.occurredAt)
-  const absolute = Number.isFinite(timestamp) ? `${timestampFormatter.format(timestamp)} · ${timeZone}` : t("时间未知", "Time unknown")
+  const absolute = Number.isFinite(timestamp) ? `${formatTimestamp(entry.occurredAt)} · ${timeZone}` : t("时间未知", "Time unknown")
   const relative = Number.isFinite(timestamp) ? relativeTime(timestamp, now, relativeFormatter, t) : t("时间未知", "Time unknown")
   const diffs = entry.changes?.filter(change => change.field === "status" && change.before !== null && change.after !== null && change.before !== change.after) ?? []
   const projectHref = entry.projectId ? `${root}/projects/${encodeURIComponent(entry.projectId)}?${new URLSearchParams({ returnTo })}` : null
@@ -187,9 +187,9 @@ function ActivityRow({ entry, actorId, people, root, returnTo, now, timestampFor
   const action = actionLabels[entry.action]
   const verb = action ? t(...action) : entry.category === "status" ? t("更改了状态，位于", "changed the status of") : t("记录了动态，位于", "recorded activity on")
   return <li className={styles.row} data-activity-source={entry.source}>
-    <span className={styles.avatar} aria-hidden="true"><Avatar size={20} name={knownName || name} initials={!knownName && !self ? "?" : undefined} /></span>
+    <span className={styles.avatar}>{entry.actorId ? <HumanIdentity userId={entry.actorId} projectId={entry.projectId ?? undefined} name={knownName} size={20} showName={false} /> : <span aria-label={t("未记录操作者", "Actor not recorded")}>?</span>}</span>
     <div className={styles.rowMain}>
-      <span className={styles.actor} title={knownName || t("未记录操作者", "Actor not recorded")}>{name}</span>{" "}<span className={styles.verb} title={entry.action}>{verb}</span>{" "}
+      <span className={styles.actor} title={knownName || t("未记录操作者", "Actor not recorded")}>{entry.actorId ? <HumanIdentity userId={entry.actorId} projectId={entry.projectId ?? undefined} name={knownName} size={20} /> : name}</span>{" "}<span className={styles.verb} title={entry.action}>{verb}</span>{" "}
       {entry.href ? <Link className={styles.target} to={entry.href} state={{ returnTo }} title={`${title} · ${entry.targetId}`}>{title}</Link> : <span className={styles.targetUnavailable} title={t("目标不存在或当前不可访问", "Target no longer exists or is not currently accessible")}>{title}</span>}
       {projectTitle && entry.targetKind !== "project" && <span className={styles.projectContext}>{" "}{t("位于", "in")}{" "}{projectHref ? <Link to={projectHref} state={{ returnTo }}>{projectTitle}</Link> : projectTitle}</span>}
       {diffs.length > 0 && <span className={styles.statusChanges}>{diffs.map((change, index) => <span className={styles.statusDiff} key={`${change.field}:${index}`} aria-label={`${t("状态", "Status")}: ${valueLabel(change.before)} → ${valueLabel(change.after)}`}><span>{valueLabel(change.before)}</span><ArrowRight size={11} aria-hidden="true" /><span>{valueLabel(change.after)}</span></span>)}</span>}

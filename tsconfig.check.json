@@ -23,6 +23,7 @@
     "packages/pm-cli/**/*.ts",
     "scripts/bootstrap.ts",
     "scripts/smoke.ts",
+    "scripts/im-delivery-admin.ts",
     "tests/**/*.ts",
     "scripts/local-project*.ts"
   ],

@@ -5,14 +5,16 @@ import { readInvitationMailConfig } from '../../../../packages/infrastructure/sr
 import { readAccountRecoveryMailConfig } from '../../../../packages/infrastructure/src/account-recovery-mail.ts';
 import { readWebhookConfig } from '../../../../packages/infrastructure/src/webhook-config.ts';
 import { readBlobStoreConfig, blobStorageLocator } from '../../../../packages/infrastructure/src/blob-storage-config.ts';
+import { readImGatewayConfig } from '../../../../packages/infrastructure/src/im-gateway-config.ts';
 import { createBlobStore } from '../../../../packages/infrastructure/src/blob-storage-provider.ts';
 
 const config = readConfig();
 const runtime = runtimeConfig();
 const invitationMail = readInvitationMailConfig();
 const accountRecoveryMail = readAccountRecoveryMailConfig();
+const im = readImGatewayConfig();
 const storage = runtime.databaseUrl ? readBlobStoreConfig() : { provider: 'disabled' as const };
-const app = buildApp({ logger: true, ...(runtime.databaseUrl ? { databaseUrl: runtime.databaseUrl } : {}), blobStore: createBlobStore(storage), blobStorageLocator: blobStorageLocator(storage), coreWorkspaceRoot: runtime.coreWorkspaceRoot, chatSpaceRoot: runtime.chatSpaceRoot, localProjects: runtime.localProjects, publicOrigin: runtime.publicOrigin, cookieSecure: runtime.cookieSecure, ...(invitationMail ? { invitationMail } : {}), ...(accountRecoveryMail ? { accountRecoveryMail } : {}), webhooks: readWebhookConfig() });
+const app = buildApp({ logger: true, ...(runtime.databaseUrl ? { databaseUrl: runtime.databaseUrl } : {}), blobStore: createBlobStore(storage), blobStorageLocator: blobStorageLocator(storage), coreWorkspaceRoot: runtime.coreWorkspaceRoot, chatSpaceRoot: runtime.chatSpaceRoot, localProjects: runtime.localProjects, publicOrigin: runtime.publicOrigin, cookieSecure: runtime.cookieSecure, ...(invitationMail ? { invitationMail } : {}), ...(accountRecoveryMail ? { accountRecoveryMail } : {}), webhooks: readWebhookConfig(), ...(im ? { im } : {}) });
 let closing = false;
 
 async function shutdown() {

@@ -5,6 +5,8 @@ import { workspaceClient } from "../network";
 import { useAgentText } from "../i18n";
 import type { ChatGenerationView } from "@agent-workspace/contracts/chat";
 import { chatStreams, getChatCancellationTarget } from "./transport";
+import { preserveThreadHistoryPosition } from "./history-position";
+import { reconcileChatSubmission, usePendingChatSubmission } from "./submission-recovery";
 
 type RecoveryView = {
   runId: string;
@@ -25,41 +27,46 @@ export function ChatContinuity({ runtime, canContinue }: { runtime: AssistantRun
   const running = useAuiState((state) => state.thread.isRunning);
   const [storedLatest, setLatest] = useState<ChatGenerationView | null>(null);
   const latest = storedLatest?.threadId === threadId ? storedLatest : null;
+  const submission = usePendingChatSubmission(threadId);
   const [recovery, setRecovery] = useState<RecoveryView | null>(null);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const seen = useRef(new Map<string, string>());
+  const reloading = useRef<Promise<void> | null>(null);
   const reload = useCallback(async () => {
-    const target = threadId;
-    const draft = runtime.thread.composer.getState();
-    const viewport = document.querySelector<HTMLElement>(
-      ".aui-thread-root [data-slot='aui_thread-viewport']",
-    );
-    const scrollTop = viewport?.scrollTop;
-    await runtime.threads.reloadMainThread();
-    if (target !== aui.threads.item("main").getState().remoteId) return;
-    runtime.thread.composer.setText(draft.text);
-    runtime.thread.composer.setQuote(draft.quote);
-    for (const attachment of draft.attachments)
-      if (
-        !runtime.thread.composer.getState().attachments.some((item) => item.id === attachment.id)
-      ) {
-        if (attachment.content !== undefined)
-          await runtime.thread.composer.addAttachment({
-            ...attachment,
-            content: attachment.content,
-          });
-        else if (attachment.file) await runtime.thread.composer.addAttachment(attachment.file);
-      }
-    if (scrollTop !== undefined)
-      requestAnimationFrame(() => {
-        const current = document.querySelector<HTMLElement>(
-          ".aui-thread-root [data-slot='aui_thread-viewport']",
-        );
-        if (current) current.scrollTop = scrollTop;
-      });
-  }, [aui, runtime, threadId]);
+    if (reloading.current) return reloading.current;
+    const request = (async () => {
+      const target = threadId;
+      const draft = runtime.thread.composer.getState();
+      const restorePosition = preserveThreadHistoryPosition(localId);
+      await runtime.threads.reloadMainThread();
+      if (target !== aui.threads.item("main").getState().remoteId) return;
+      runtime.thread.composer.setText(draft.text);
+      runtime.thread.composer.setQuote(draft.quote);
+      for (const attachment of draft.attachments)
+        if (!runtime.thread.composer.getState().attachments.some((item) => item.id === attachment.id)) {
+          if (attachment.content !== undefined)
+            await runtime.thread.composer.addAttachment({ ...attachment, content: attachment.content });
+          else if (attachment.file) await runtime.thread.composer.addAttachment(attachment.file);
+        }
+      requestAnimationFrame(restorePosition);
+    })();
+    reloading.current = request;
+    try { await request; }
+    finally { if (reloading.current === request) reloading.current = null; }
+  }, [aui, localId, runtime, threadId]);
+
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<{ threadId?: unknown; generationId?: unknown; reload?: unknown }>).detail;
+      if (!detail || detail.threadId !== threadId || detail.reload !== true) return;
+      if (typeof detail.generationId === "string") chatStreams.setStreamId(detail.generationId, localId);
+      void reload().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
+    };
+    window.addEventListener("agent-thread-action", changed);
+    return () => window.removeEventListener("agent-thread-action", changed);
+  }, [localId, reload, threadId]);
 
   useEffect(() => {
     const cancel = (event: { threadId: string }) => {
@@ -157,13 +164,20 @@ export function ChatContinuity({ runtime, canContinue }: { runtime: AssistantRun
     latest &&
     ["interrupted", "failed", "cancelled"].includes(latest.status) &&
     !latest.continuationId;
-  if (!active && !resumable && !error) return null;
+  if (!active && !resumable && !error && !submission) return null;
   return (
     <section
       aria-label={t("聊天连续性", "Chat continuity")}
       className="border-border text-muted-foreground flex max-h-[45dvh] shrink-0 flex-wrap items-center gap-2 overflow-y-auto border-b px-4 py-2 text-xs"
       aria-live="polite"
     >
+      {submission && <><span>{t("原消息受理结果待核对，不自动重发。", "Original message acceptance is unresolved; no automatic replay.")} <code>{submission.submissionId}</code></span><Button size="sm" variant="outline" disabled={pending} onClick={() => void act(async () => {
+        if (!threadId) return;
+        const result = await reconcileChatSubmission(threadId);
+        if (result?.status === "accepted" && result.generationId) { chatStreams.setStreamId(result.generationId, localId); await reload(); }
+        else if (result?.status === "not_accepted") setError(t("已确认原消息未受理；请检查保留的输入，再显式发送。", "Original message is confirmed not accepted. Review the retained input before explicitly sending."));
+        else setError(result?.reason ?? t("仍无法确认原受理结果；继续保留原身份，不重放。", "Acceptance remains unknown. Original identity retained; no replay."));
+      })}>{t("只读核对原消息", "Check original message (read-only)")}</Button></>}
       {active && (
         <>
           <span>

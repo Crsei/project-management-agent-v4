@@ -27,6 +27,14 @@ async function normalizeInstallationModes(path, preserveFileModes = false) {
   } else throw new Error("Unsupported installation resource.");
 }
 
+export function installerLifecycleInclude({ migrationsSha256, assets = join(import.meta.dirname, "assets") }) {
+  if (typeof migrationsSha256 !== "string" || !/^[a-f0-9]{64}$/.test(migrationsSha256))
+    throw new Error("Installer include requires the exact migrations digest.");
+  // Branding is compiled first so customWelcomePage/customUnWelcomePage exist
+  // before installer.nsi. The lifecycle gates then compile exactly as before.
+  return `!define DOVSPACE_MIGRATIONS_SHA256 "${migrationsSha256}"\n!include "${join(assets, "installer-branding.nsh")}"\n!include "${join(assets, "desktop-lifecycle.nsh")}"\n`;
+}
+
 export function desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries, installStamp }) {
   const signed = mode === "signed";
   if (!installStamp) throw new Error("Desktop packaging requires an exact source-bound build install stamp.");
@@ -34,11 +42,14 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
   const windowsSigner = signed && platform === "win32" ? windowsSignerIdentity() : null;
   if (signed && platform === "darwin" && !/^[A-Z0-9]{10}$/.test(process.env.PM_DESKTOP_MAC_TEAM_ID ?? process.env.APPLE_TEAM_ID ?? "")) throw new Error("Signed macOS packaging requires an exact expected Apple team identity.");
   return {
+    // Windows identity and the on-disk data location stay bound to the original
+    // install identity so a display-name rebrand does not migrate user data or
+    // relink the updater feed.
     appId: "com.projectmanagementagent.v4",
-    productName: "PM Agent v4",
-    executableName: "PM Agent v4",
+    productName: "Dovspace",
+    executableName: "Dovspace",
     electronVersion,
-    directories: { app: prepackedApplication.directory, output },
+    directories: { app: prepackedApplication.directory, output, buildResources: join(import.meta.dirname, "build") },
     files: ["app.asar"],
     asar: true,
     npmRebuild: false,
@@ -47,13 +58,13 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
     publish: updates.enabled ? { provider: updates.provider, owner: updates.owner, repo: updates.repo, channel: updates.channel, private: false, releaseType: updates.allowPrerelease ? "prerelease" : "release" } : null,
     generateUpdatesFilesForAllChannels: false,
     electronUpdaterCompatibility: ">=6.8.11",
-    artifactName: `PM-Agent-v4-\${version}-\${os}-\${arch}-${mode}.\${ext}`,
+    artifactName: `Dovspace-\${version}-\${os}-\${arch}-${mode}.\${ext}`,
     // The native Node closure is intentionally outside app.asar and outside
     // Electron's dependency/rebuild graph. Its dependency directories are real
     // hoisted packages, never graph links for the Windows archiver to expand.
     async afterPack(context) {
       const resources = platform === "darwin"
-        ? join(context.appOutDir, "PM Agent v4.app", "Contents", "Resources")
+        ? join(context.appOutDir, "Dovspace.app", "Contents", "Resources")
         : join(context.appOutDir, "resources");
       await mkdir(resources, { recursive: true });
       if (await hashFile(join(resources, "app.asar")) !== prepackedApplication.sha256)
@@ -72,7 +83,7 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
         await mkdir(maintenance);
         for (const name of ["uninstall.mjs", "uninstall-cli.mjs", "install-stamp.mjs", "private-state.mjs"]) await cp(join(import.meta.dirname, "src", name), join(maintenance, name));
         await cp(join(import.meta.dirname, "assets", "desktop-maintenance.ps1"), join(maintenance, "desktop-maintenance.ps1"));
-        await writeFile(join(output, "desktop-lifecycle.generated.nsh"), `!define DOVSPACE_MIGRATIONS_SHA256 "${installStamp.compatibility.migrationsSha256}"\n!include "${join(import.meta.dirname, "assets", "desktop-lifecycle.nsh")}"\n`);
+        await writeFile(join(output, "desktop-lifecycle.generated.nsh"), installerLifecycleInclude({ migrationsSha256: installStamp.compatibility.migrationsSha256 }));
         await writeFile(join(resources, "windows-runtime-dependencies.json"), `${JSON.stringify(await inspectWindowsRuntimeDependencies(join(resources, "desktop-runtime")), null, 2)}\n`);
         await writeFile(join(resources, INSTALL_FILES_NAME), `${JSON.stringify(await createInstallationManifest(context.appOutDir, installStamp))}\n`);
       }
@@ -103,6 +114,7 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
     },
     win: {
       target: [{ target: "nsis", arch: ["x64"] }],
+      icon: join(import.meta.dirname, "build", "icon.ico"),
       signAndEditExecutable: signed,
       signExts: [".exe", ".dll", ".node"],
       ...(windowsSigner ? { signtoolOptions: { certificateSubjectName: windowsSigner.subject, signingHashAlgorithms: ["sha256"] } } : {}),
@@ -119,13 +131,20 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
       packElevateHelper: false,
       allowToChangeInstallationDirectory: true,
       deleteAppDataOnUninstall: false,
+      runAfterFinish: true,
+      installerIcon: join(import.meta.dirname, "build", "icon.ico"),
+      uninstallerIcon: join(import.meta.dirname, "build", "icon.ico"),
+      installerHeader: join(import.meta.dirname, "build", "installerHeader.bmp"),
+      installerSidebar: join(import.meta.dirname, "build", "installerSidebar.bmp"),
+      uninstallerSidebar: join(import.meta.dirname, "build", "installerSidebar.bmp"),
       include: join(output, "desktop-lifecycle.generated.nsh"),
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
-      shortcutName: "PM Agent v4",
+      shortcutName: "Dovspace",
     },
     mac: {
       target: ["dmg", "zip"],
+      icon: join(import.meta.dirname, "build", "icon.icns"),
       category: "public.app-category.developer-tools",
       minimumSystemVersion: "15.0",
       darkModeSupport: true,

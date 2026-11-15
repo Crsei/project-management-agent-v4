@@ -10,7 +10,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { TerminalDescriptor, TerminalServerMessage } from "@agent-workspace/contracts/inspector";
 import { resolveAgentWorkspaceExecution } from "../agent-workspaces.ts";
 import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
-import { getThread, validThreadId } from "../durable/threads.ts";
+import { assertThreadWritable, getThread, ThreadConflictError, validThreadId } from "../durable/threads.ts";
 import { DurableError } from "../durable/errors.ts";
 import { authorizeHeaders, sameOrigin } from "../access.ts";
 import { InspectorPathError, resolveInsideRoot } from "./paths.ts";
@@ -66,6 +66,7 @@ async function resolveBinding(binding: DirectoryBinding, headers: Headers) {
   if (binding.scope === "session") {
     if (!validThreadId(binding.threadId))
       throw new DurableError(400, "invalid_terminal_binding", "Session terminals require an explicit Session.");
+    assertThreadWritable(binding.threadId);
     const thread = getThread(binding.threadId);
     if (!thread || thread.executionSelection?.agentWorkspaceId !== binding.agentWorkspaceId ||
         thread.executionSelection.agentWorkspaceRevision !== binding.agentWorkspaceRevision)
@@ -87,11 +88,13 @@ async function resolveBinding(binding: DirectoryBinding, headers: Headers) {
     const canonical = await realpath(root);
     const info = await stat(root, { bigint: true });
     if (canonical !== root || !info.isDirectory()) throw new Error("Changed execution directory");
+    if (binding.scope === "session") assertThreadWritable(binding.threadId!);
     return { root, environment, signature: JSON.stringify([
       environment.agentWorkspaceId, environment.agentWorkspaceRevision, environment.sourcePath,
       root, environment.worktree, `${info.dev}:${info.ino}`,
     ]) };
-  } catch {
+  } catch (error) {
+    if (error instanceof ThreadConflictError) throw error;
     throw new DurableError(412, "execution_unavailable", "Terminal execution directory is missing or replaced.");
   }
 }
@@ -103,6 +106,25 @@ async function authorize(terminal: ManagedTerminal, headers: Headers): Promise<v
   const info = await stat(cwd.absolute, { bigint: true });
   if (cwd.absolute !== terminal.descriptor.startCwd || !info.isDirectory() || `${info.dev}:${info.ino}` !== terminal.startIdentity)
     throw new DurableError(409, "terminal_binding_changed", "Terminal start directory is no longer available.");
+  if (terminal.binding.scope === "session") assertThreadWritable(terminal.binding.threadId!);
+}
+
+/** Validates a real PTY lifetime without running a command or claiming to observe selected text. */
+export async function authorizeTerminalContext(threadId: string, terminalId: string, expectedServiceId: string, headers: Headers): Promise<TerminalDescriptor> {
+  const terminal = requireTerminal(terminalId);
+  if (terminal.descriptor.serviceId !== expectedServiceId)
+    throw new DurableError(409, "terminal_expired", "Terminal belongs to another service lifetime; select a live source.");
+  await authorize(terminal, headers);
+  const thread = getThread(threadId);
+  if (!thread || thread.executionSelection?.agentWorkspaceId !== terminal.descriptor.agentWorkspaceId ||
+      thread.executionSelection.agentWorkspaceRevision !== terminal.descriptor.agentWorkspaceRevision ||
+      terminal.descriptor.threadId !== null && terminal.descriptor.threadId !== threadId)
+    throw new DurableError(403, "terminal_scope_mismatch", "Terminal does not belong to this Session's execution environment.");
+  const destination = await resolveBinding({ scope: "session", threadId, agentWorkspaceId: terminal.binding.agentWorkspaceId,
+    agentWorkspaceRevision: terminal.binding.agentWorkspaceRevision }, headers);
+  if (destination.root !== terminal.root || destination.signature !== terminal.signature)
+    throw new DurableError(403, "terminal_scope_mismatch", "Terminal and Session resolve to different actual execution roots or worktrees.");
+  return { ...terminal.descriptor };
 }
 function finish(terminal: ManagedTerminal, exitCode: number, signal?: number): void {
   clearTimeout(terminal.killTimer); terminal.killTimer = undefined;
@@ -119,17 +141,17 @@ function terminate(terminal: ManagedTerminal): void {
   if (!child) return;
   if (terminal.killTimer) return;
   if (terminal.processIdentity && processIdentity(child.pid) !== terminal.processIdentity) return;
-  try { process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { finish(terminal, -1); } }
+  try { process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { /* A failed signal does not prove exit. */ } }
   terminal.killTimer = setTimeout(() => {
     terminal.killTimer = undefined;
     if (terminal.child !== child || terminal.descriptor.status !== "running" || terminal.processIdentity && processIdentity(child.pid) !== terminal.processIdentity) return;
-    try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { finish(terminal, -1); } }
+    try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* Keep the unresolved child identity for explicit reconciliation. */ } }
   }, 3000);
   terminal.killTimer.unref();
 }
 function rejectBinding(terminal: ManagedTerminal, error: unknown): void {
   for (const { socket } of terminal.clients.values()) {
-    send(socket, { type: "error", code: error instanceof DurableError ? error.code : "terminal_authorization_failed", message: "Terminal authorization or directory identity expired; process is being terminated." });
+    send(socket, { type: "error", code: error instanceof DurableError || error instanceof ThreadConflictError ? error.code : "terminal_authorization_failed", message: "Terminal authorization or directory identity expired; process is being terminated." });
     socket.close(1008, "Terminal authorization expired");
   }
   terminate(terminal);
@@ -161,6 +183,7 @@ function requireTerminal(id: string): ManagedTerminal {
 export const terminalRoutes = new Hono();
 terminalRoutes.onError((error, c) => {
   if (error instanceof DurableError) return c.json({ error: error.message, code: error.code }, error.status);
+  if (error instanceof ThreadConflictError) return c.json({ error: error.message, code: error.code }, 409);
   if (error instanceof z.ZodError || error instanceof SyntaxError || error instanceof InspectorPathError) return c.json({ error: error.message, code: "invalid_terminal_request" }, 400);
   return c.json({ error: "Terminal operation failed; no automatic retry was performed.", code: "terminal_failed" }, 503);
 });
@@ -180,6 +203,7 @@ terminalRoutes.post("/terminals", async c => {
   const cwd = await resolveInsideRoot(binding.relativePath, current.root);
   const startInfo = await stat(cwd.absolute, { bigint: true });
   if (!startInfo.isDirectory()) throw new DurableError(400, "invalid_terminal_directory", "Terminal cwd must be an existing directory.");
+  if (binding.scope === "session") assertThreadWritable(binding.threadId!);
   const raced = creations.get(creationKey);
   if (raced) {
     if (raced.fingerprint !== fingerprint) throw new DurableError(409, "terminal_request_conflict", "Creation requestId already belongs to different parameters.");
@@ -258,6 +282,7 @@ async function handleMessage(terminal: ManagedTerminal, attachment: Attachment, 
   ]).parse(JSON.parse(raw.toString()));
   await authorize(terminal, attachment.headers);
   if (terminal.clients.get(attachment.clientId) !== attachment) return;
+  if (terminal.binding.scope === "session") assertThreadWritable(terminal.binding.threadId!);
   terminal.headers = attachment.headers;
   if (message.type === "ping") { send(attachment.socket, { type: "pong" }); return; }
   if (!terminal.child) throw new DurableError(409, "terminal_ended", "Terminal process has ended; it was not rerun.");
@@ -299,8 +324,8 @@ export function attachTerminalUpgrade(server: Server): void {
         client.on("message", (raw, binary) => {
           if (++attachment.pending > 64) { client.close(1008, "Too many pending inputs"); return; }
           attachment.queue = attachment.queue.then(() => handleMessage(terminal, attachment, raw, binary)).catch(error => {
-            send(client, { type: "error", code: error instanceof DurableError ? error.code : "invalid_terminal_message", message: error instanceof Error ? error.message : "Terminal message failed" });
-            if (error instanceof DurableError && [401, 403, 404, 409, 412, 503].includes(error.status)) rejectBinding(terminal, error);
+            send(client, { type: "error", code: error instanceof DurableError || error instanceof ThreadConflictError ? error.code : "invalid_terminal_message", message: error instanceof Error ? error.message : "Terminal message failed" });
+            if (error instanceof ThreadConflictError || error instanceof DurableError && [401, 403, 404, 409, 412, 503].includes(error.status)) rejectBinding(terminal, error);
           }).finally(() => { attachment.pending--; });
         });
         const detach = () => {
@@ -312,14 +337,24 @@ export function attachTerminalUpgrade(server: Server): void {
     };
     void attach().catch((error: unknown) => {
       if (socket.destroyed) return;
-      const status = error instanceof DurableError ? error.status : error instanceof z.ZodError ? 400 : 503;
-      const body = JSON.stringify({ error: error instanceof DurableError ? error.message : "Invalid or unavailable terminal attachment.", code: error instanceof DurableError ? error.code : "terminal_unavailable" });
+      const status = error instanceof DurableError ? error.status : error instanceof ThreadConflictError ? 409 : error instanceof z.ZodError ? 400 : 503;
+      const body = JSON.stringify({ error: error instanceof DurableError || error instanceof ThreadConflictError ? error.message : "Invalid or unavailable terminal attachment.", code: error instanceof DurableError || error instanceof ThreadConflictError ? error.code : "terminal_unavailable" });
       socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status] ?? "Error"}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
     });
   });
 }
-export function terminateSessionTerminals(threadId: string): void {
-  for (const terminal of terminals.values()) if (terminal.descriptor.threadId === threadId) terminate(terminal);
+export async function terminateSessionTerminals(threadId: string): Promise<void> {
+  const owned = [...terminals.values()].filter(terminal => terminal.descriptor.threadId === threadId && terminal.child);
+  await Promise.all(owned.map(async terminal => {
+    const child = terminal.child;
+    if (!child) return;
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    let timer: NodeJS.Timeout | undefined;
+    const observed = child.onExit(() => { clearTimeout(timer); resolve(); });
+    timer = setTimeout(() => reject(new DurableError(409, "terminal_stop_unconfirmed", "The owned Session terminal has not observably exited; history and deletion identity were retained.")), 5000);
+    try { terminate(terminal); await promise; }
+    finally { clearTimeout(timer); observed.dispose(); }
+  }));
 }
 export async function stopTerminals(): Promise<void> {
   stopping = true;

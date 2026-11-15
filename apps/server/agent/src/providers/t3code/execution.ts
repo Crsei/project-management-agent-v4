@@ -32,6 +32,7 @@ import { closeMcpAppSession, retainMcpAppSession } from "../../mcp-apps/live.ts"
 import { mcpAppContextForDispatch, mcpAppContextForTurn } from "../../mcp-apps/context.ts";
 import { autoApproveApprovals } from "../../approval-mode.ts";
 import { readPmCodexActivity } from "./families/codex-activity.ts";
+import { registerLiveSteering } from "./live-actions.ts";
 
 /** Single application instance, configured by parent lifecycle assembly. No driver or protocol registry here. */
 export function makePmProviderExecutionService(host: PmProviderHostService, runtimeHost: ProviderRuntimeHostService): PmProviderExecutionService {
@@ -156,6 +157,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
         const childProviderThreads = new Map<string, string>();
         const knownNodes = new Set<string>([rootNodeId]);
         const assertCurrent = () => Effect.runPromise(lease.assertCurrent);
+        let unregisterSteering: (() => void) | undefined;
         const fail = (error: unknown) => {
           backgroundFailures.push(error);
           firstFailure ??= error;
@@ -208,8 +210,17 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
               if (sourceRequest.responseCapability.type !== "live" || sourceRequest.responseCapability.providerSessionId !== runtime.providerSessionId) return;
               if (request.kind === "approval") {
                 await assertCurrent();
-                await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id,
-                  decision: autoApproveApprovals() ? "accept" : "decline" }));
+                const decision = autoApproveApprovals() ? "accept" : "decline";
+                await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id, decision }));
+                const current = mapper.requests.get(request.id);
+                const currentItem = mapper.sourceItems.get(request.itemId);
+                // Some native adapters acknowledge the response without emitting a resolved request.
+                // Record the successful decision, not the configured intent or the eventual turn outcome.
+                if (current?.status === "pending" && currentItem?.status !== "cancelled"
+                  && currentItem?.status !== "interrupted" && currentItem?.status !== "failed") {
+                  mapper.handle({ type: "runtime_request.updated", driver: runtime.driver,
+                    runtimeRequest: { ...current, status: "resolved", decision, resolvedAt: DateTime.nowUnsafe() } });
+                }
                 return;
               }
               const answered = Promise.resolve().then(() => options.onRequest!(request)).catch((error) => {
@@ -350,6 +361,28 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
                   nativeHistory = history;
                 }
                 observed.root = turn;
+                if (context.execution && !fork && runtime.providerSession.capabilities.turns.supportsActiveSteering && turn.status === "running") {
+                  unregisterSteering ??= registerLiveSteering({
+                    generationId: context.execution.generationId, threadId: context.execution.threadId,
+                    interruptsTools: runtime.providerSession.capabilities.turns.activeSteeringInterruptsTools === true,
+                    async steer(message) {
+                      await assertCurrent();
+                      await context.authorizeExecution?.("tool");
+                      await assertCurrent();
+                      const current = observed.root;
+                      if (stopped || observed.end || firstFailure || options.signal?.aborted || !thread || !current || current.status !== "running")
+                        throw pmExecutionError(409, "stale_execution", "The original native turn is no longer steerable.");
+                      const pending = runOperation(runtime.steerTurn({ threadId, runId, providerThread: thread, providerTurnId: current.id,
+                        message: { messageId: MessageId.make(message.messageId), text: message.text, attachments: [], createdBy: "user", creationSource: "server" } }));
+                      responses.add(pending);
+                      try { await pending; }
+                      finally { responses.delete(pending); }
+                    },
+                  });
+                } else if (turn.status !== "running") {
+                  unregisterSteering?.();
+                  unregisterSteering = undefined;
+                }
                 await persist();
                 const usage = pmTurnUsage(turn, options.model);
                 if (usage) publishUsage(usage);
@@ -544,7 +577,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             await assertCurrent();
             startInput = { appThread, threadId, runId, runOrdinal, providerTurnOrdinal,
               nativeThreadHasTurns: Boolean(source), attemptId, rootNodeId, providerThread: thread,
-              message: { messageId, text: options.prompt, attachments: [], createdBy: "user", creationSource: "server" }, modelSelection, runtimePolicy,
+              message: { messageId, text: options.prompt, attachments: options.attachments ?? [], createdBy: "user", creationSource: "server" }, modelSelection, runtimePolicy,
               ...(options.userMessageText === undefined ? {} : { userMessageText: options.userMessageText }),
               ...(appContext.length ? { appContext } : {}) };
             startTask = runOperation(Effect.suspend(() => {
@@ -612,6 +645,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
           firstFailure ??= error;
         }
         const cleanupErrors: unknown[] = [];
+        unregisterSteering?.();
         unbindContinuation();
         for (const pending of pendingRequests.values()) pending.close();
         pendingRequests.clear();

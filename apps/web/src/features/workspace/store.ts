@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla"
 
 export type DisplayPreferences = {
   theme: "light" | "dark" | "system"
+  font: "inter" | "system"
   accent: "indigo" | "blue" | "violet" | "teal" | "rose" | "graphite"
   sidebarDensity: "comfortable" | "compact"
   taskDensity: "comfortable" | "compact"
@@ -28,14 +29,16 @@ export type WorkspaceState = BrowserPreferences & {
 }
 
 export const displayPreferencesKey = "pm.display-preferences.v1"
+export const displayPreferencesVersion = 2
 export const defaultDisplayPreferences: BrowserPreferences = {
-  locale: "zh-CN", theme: "system", accent: "indigo",
+  locale: "zh-CN", theme: "system", font: "inter", accent: "indigo",
   sidebarDensity: "comfortable", taskDensity: "comfortable", motion: "system",
   spellcheck: true, dateFormat: "MMM d", weekStartsOn: 1, timeFormat: "24",
   startPage: "home", taskOpenMode: "panel", projectTab: "board", showCompletedTasks: true,
 }
 const allowedValues: { [K in keyof BrowserPreferences]: readonly BrowserPreferences[K][] } = {
   locale: ["zh-CN", "en"], theme: ["light", "dark", "system"],
+  font: ["inter", "system"],
   accent: ["indigo", "blue", "violet", "teal", "rose", "graphite"],
   sidebarDensity: ["comfortable", "compact"], taskDensity: ["comfortable", "compact"],
   motion: ["system", "reduce"], spellcheck: [true, false],
@@ -78,8 +81,11 @@ function loadPreferences(): { preferences: BrowserPreferences; preferenceStorage
     const raw = window.localStorage.getItem(displayPreferencesKey)
     if (!raw) return { preferences: { ...defaultDisplayPreferences }, preferenceStorage: "available" }
     const stored: unknown = JSON.parse(raw)
-    if (!stored || typeof stored !== "object" || !("version" in stored) || stored.version !== 1 || !("preferences" in stored)) throw new Error("Unsupported preferences")
-    const safe = sanitizeDisplayPreferences(stored.preferences)
+    if (!stored || typeof stored !== "object" || !("version" in stored) || (stored.version !== 1 && stored.version !== displayPreferencesVersion) || !("preferences" in stored)) throw new Error("Unsupported preferences")
+    const saved = sanitizeDisplayPreferences(stored.preferences)
+    // Version 1 had no font preference. Add its historical default without
+    // marking an otherwise complete record as damaged.
+    const safe = stored.version === 1 ? { ...saved, font: "inter" as const } : saved
     const complete = Object.keys(defaultDisplayPreferences).every(key => Object.hasOwn(safe, key))
     return { preferences: { ...defaultDisplayPreferences, ...safe }, preferenceStorage: complete ? "available" : "recovered" }
   } catch (error) {
@@ -97,7 +103,7 @@ export function createWorkspaceStore() {
       let preferenceStorage: PreferenceStorage = "available"
       try {
         if (typeof window === "undefined") throw new Error("Browser storage unavailable")
-        window.localStorage.setItem(displayPreferencesKey, JSON.stringify({ version: 1, preferences }))
+        window.localStorage.setItem(displayPreferencesKey, JSON.stringify({ version: displayPreferencesVersion, preferences }))
       } catch {
         preferenceStorage = "unavailable"
       }

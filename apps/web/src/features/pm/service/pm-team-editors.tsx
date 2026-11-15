@@ -6,16 +6,17 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { CommandNotice, Field, Form, useDraftState, useText } from "./pm-ui"
 import { usePmCommand } from "./pm-service"
+import { usePeopleCandidates } from "./people-hooks"
 
 type Team = TeamDirectory["teams"][number]
-export type TeamEditorSelection = { id: string | null; mode: "details" | "members" | "projects" | "archive" }
+export type TeamEditorSelection = { id: string | null; mode: "details" | "members" | "projects" | "archive" | "restore" }
 const committedHead = z.object({ id: z.string().uuid(), version: z.number().int().positive() })
 const detailsSchema = z.object({ name: z.string().trim().min(1).max(160), identifier: z.string().trim().min(1).max(64).nullable(), description: z.string().trim().max(5000), focus: z.string().trim().min(1).max(500).nullable(), responseTargetHours: z.number().finite().nonnegative().max(8760).nullable() })
 
 export function TeamEditorDialog({ selection, directory, members, disabled, onClose, onChanged, finalFocus }: { selection: TeamEditorSelection | null; directory: TeamDirectory | undefined; members: readonly ControlledMember[]; disabled: boolean; onClose: () => void; onChanged: () => void; finalFocus: () => HTMLElement | null }) {
   const t = useText()
   const team = directory?.teams.find(item => item.id === selection?.id)
-  const title = !selection?.id ? t("添加团队", "Add team") : selection.mode === "members" ? t("成员与维护者", "Members and maintainers") : selection.mode === "projects" ? t("关联项目", "Linked projects") : selection.mode === "archive" ? t("归档团队", "Archive team") : t("编辑团队", "Edit team")
+  const title = !selection?.id ? t("添加团队", "Add team") : selection.mode === "members" ? t("成员与维护者", "Members and maintainers") : selection.mode === "projects" ? t("关联项目", "Linked projects") : selection.mode === "archive" ? t("归档团队", "Archive team") : selection.mode === "restore" ? t("恢复团队", "Restore team") : t("编辑团队", "Edit team")
   return <Dialog open={!!selection} onOpenChange={open => { if (!open) onClose() }}><DialogContent className="max-w-2xl" finalFocus={finalFocus}>
     <DialogTitle>{title}</DialogTitle><DialogDescription>{t("团队只组织已有成员，不授予权限。版本冲突与未知结果保留草稿。", "Teams organize existing members without granting access. Conflicts and unknown outcomes retain drafts.")}</DialogDescription>
     <DialogBody className="space-y-4"><CommandNotice />{selection && directory && (!selection.id || team) ? selection.mode === "projects" && team ? <TeamProjectRelations key={team.id} team={team} directory={directory} disabled={disabled} onChanged={onChanged} /> : <TeamWriteForm key={`${selection.id ?? "new"}:${selection.mode}`} team={team} mode={selection.mode} members={members} disabled={disabled} onChanged={onChanged} /> : <p role="status">{t("当前记录不可用；不能提交旧快照。", "The current record is unavailable; an old snapshot cannot be submitted.")}</p>}</DialogBody>
@@ -25,9 +26,10 @@ export function TeamEditorDialog({ selection, directory, members, disabled, onCl
 function TeamWriteForm({ team, mode, members, disabled, onChanged }: { team?: Team; mode: TeamEditorSelection["mode"]; members: readonly ControlledMember[]; disabled: boolean; onChanged: () => void }) {
   const t = useText()
   const command = usePmCommand()
+  const candidates = usePeopleCandidates({ purpose: "team", enabled: mode === "members" && !disabled })
   const scope = `teams:${team?.id ?? "create"}:${mode}`
   const unknown = command.unknownCommand
-  const original = unknown && (!team ? unknown.commandType === "CreateProjectTeam" : unknown.targetId === team.id && (mode === "details" && (unknown.commandType === "UpdateProjectTeamDetails" || unknown.commandType === "RenameProjectTeam") || mode === "members" && (unknown.commandType === "SetProjectTeamMembers" || unknown.commandType === "SetProjectTeamMaintainers") || mode === "archive" && unknown.commandType === "ArchiveProjectTeam")) ? unknown : null
+  const original = unknown && (!team ? unknown.commandType === "CreateProjectTeam" : unknown.targetId === team.id && (mode === "details" && (unknown.commandType === "UpdateProjectTeamDetails" || unknown.commandType === "RenameProjectTeam") || mode === "members" && (unknown.commandType === "SetProjectTeamMembers" || unknown.commandType === "SetProjectTeamMaintainers") || mode === "archive" && unknown.commandType === "ArchiveProjectTeam" || mode === "restore" && unknown.commandType === "RestoreProjectTeam")) ? unknown : null
   const originalDetails = original?.commandType === "CreateProjectTeam" || original?.commandType === "UpdateProjectTeamDetails" ? original.payload : null
   const [baseVersion, setBaseVersion] = useDraftState(scope, "baseVersion", team ? original?.expectedVersions?.[team.id] ?? team.version : null)
   const [name, setName] = useDraftState(scope, "name", originalDetails?.name ?? team?.data.name ?? "")
@@ -43,9 +45,10 @@ function TeamWriteForm({ team, mode, members, disabled, onChanged }: { team?: Te
   const handled = useRef<string | null>(null)
   const [acknowledgement, setAcknowledgement] = useState<string | null>(null)
   const changed = !!team && baseVersion !== team.version
-  const locked = disabled || command.pending || !!command.unknownCommand || !!team?.data.archivedAt || changed
-  const activeMembers = members.filter(member => member.isActive)
-  const choices = [...activeMembers, ...members.filter(member => !member.isActive && memberIds.includes(member.userId))]
+  const locked = disabled || command.pending || !!command.unknownCommand || (mode === "restore" ? !team?.data.archivedAt : !!team?.data.archivedAt) || changed || mode === "members" && !candidates.complete
+  const eligibleIds = new Set(candidates.items.map(member => member.userId))
+  const activeMembers = members.filter(member => member.isActive && eligibleIds.has(member.userId))
+  const choices = activeMembers
   async function submit(value: Command) {
     setAcknowledgement(null)
     setAttemptId(value.commandId)
@@ -74,11 +77,14 @@ function TeamWriteForm({ team, mode, members, disabled, onChanged }: { team?: Te
   }, [attemptId, attemptType, command.receipt, memberIds, onChanged, setAttemptId, setBaseVersion, setDescription, setFocus, setIdentifier, setMaintainerIds, setMemberIds, setName, setResponse, t, team])
   const envelope = team && baseVersion !== null ? { targetId: team.id, expectedVersions: { [team.id]: baseVersion } } : {}
   const conflict = changed && <div role="status" className="space-y-2 rounded-md border p-3 text-sm"><p>{t("服务版本已变化。请核对当前记录；采用新版本不会覆盖草稿。", "The server version changed. Review the current record; adopting its version keeps your draft.")}</p><p className="break-words">{team?.data.name} · {team?.data.identifier ?? "—"} · {team?.data.description}</p><Button variant="outline" disabled={command.pending || !!command.unknownCommand || disabled} onClick={() => { setBaseVersion(team?.version ?? null); setAcknowledgement(null) }}>{t("采用当前版本，保留草稿", "Use current version, keep draft")}</Button></div>
+  if (mode === "restore") return <div className="space-y-4"><p className="text-sm">{t("恢复将重新校验现有成员和团队关系：已撤销或停用的成员及其维护者职责会被移出团队；其余资料和项目关联保留。不恢复或新增任何访问授权。", "Restoring revalidates current members and relations: revoked or disabled members and their maintainer duties are removed; other metadata and project associations are preserved. No access grants are restored or added.")}</p>{team && <Form disabled={locked} label={t("确认恢复", "Confirm restore")} onSubmit={() => submit({ commandId: crypto.randomUUID(), commandType: "RestoreProjectTeam", ...envelope, payload: {} })}><p className="break-words font-medium">{team.data.name}</p></Form>}{conflict}{team && !team.data.archivedAt && <p role="status">{t("团队当前未归档。", "The team is currently active.")}</p>}{acknowledgement && <p role="status">{acknowledgement}</p>}</div>
   if (mode === "archive") return <div className="space-y-4"><p className="text-sm">{t("归档后不再出现在活动团队与项目关联中；历史保留。此操作不撤销任何人的权限。", "Archiving removes the team from active teams and project associations while preserving history. It does not revoke anyone's access.")}</p>{team && <Form disabled={locked} label={t("确认归档", "Confirm archive")} onSubmit={() => submit({ commandId: crypto.randomUUID(), commandType: "ArchiveProjectTeam", ...envelope, payload: {} })}><p className="break-words font-medium">{team.data.name}</p></Form>}{conflict}{team?.data.archivedAt && <p role="status">{t("团队已归档。", "The team is archived.")}</p>}{acknowledgement && <p role="status">{acknowledgement}</p>}</div>
   if (mode === "members" && team) return <div className="space-y-5">
+    {candidates.isPending && <p role="status">{t("正在读取有效团队候选…", "Reading eligible team members…")}</p>}
+    {candidates.error && <div role="alert"><p>{candidates.error.message}</p><button type="button" className="text-sm underline" disabled={disabled} onClick={() => { void candidates.refetch() }}>{t("重新读取候选", "Read candidates again")}</button></div>}
     <Form disabled={locked} label={t("保存成员", "Save roster")} onSubmit={() => submit({ commandId: crypto.randomUUID(), commandType: "SetProjectTeamMembers", ...envelope, payload: { memberIds } })}>
       <fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">{t("已有有效成员", "Existing active members")}</legend>{choices.map(member => <label key={member.userId} className="flex min-h-8 min-w-0 items-center gap-2 break-words text-sm"><input type="checkbox" checked={memberIds.includes(member.userId)} disabled={!member.isActive && !memberIds.includes(member.userId)} onChange={event => { setMemberIds(event.target.checked ? [...memberIds, member.userId] : memberIds.filter(id => id !== member.userId)); setAcknowledgement(null) }} /><span className="min-w-0 break-words">{member.name}{!member.isActive && ` · ${t("已撤销", "Revoked")}`}</span></label>)}{!choices.length && <p className="text-sm">{t("没有有效候选成员。", "No active candidate members.")}</p>}</fieldset>
-      {memberIds.filter(id => !members.some(member => member.userId === id)).map(id => <label key={id} className="flex min-h-8 items-center gap-2 text-sm"><input type="checkbox" checked onChange={() => { setMemberIds(previous => previous.filter(memberId => memberId !== id)); setAcknowledgement(null) }} />{t("不可用的旧成员选择（取消以移除）", "Unavailable retained member selection (uncheck to remove)")}</label>)}
+      {memberIds.filter(id => !activeMembers.some(member => member.userId === id)).map(id => <label key={id} className="flex min-h-8 items-center gap-2 text-sm"><input type="checkbox" checked onChange={() => { setMemberIds(previous => previous.filter(memberId => memberId !== id)); setAcknowledgement(null) }} />{t("不可用的旧成员选择（取消以移除）", "Unavailable retained member selection (uncheck to remove)")}</label>)}
     </Form>
     <Form disabled={locked} label={t("保存维护者", "Save maintainers")} onSubmit={() => submit({ commandId: crypto.randomUUID(), commandType: "SetProjectTeamMaintainers", ...envelope, payload: { maintainerIds } })}>
       <fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">{t("当前团队有效成员中的维护者", "Maintainers from the current active roster")}</legend>{activeMembers.filter(member => team.data.memberIds.includes(member.userId)).map(member => <label key={member.userId} className="flex min-h-8 items-center gap-2 break-words text-sm"><input type="checkbox" checked={maintainerIds.includes(member.userId)} onChange={event => { setMaintainerIds(event.target.checked ? [...maintainerIds, member.userId] : maintainerIds.filter(id => id !== member.userId)); setAcknowledgement(null) }} />{member.name}</label>)}</fieldset><p className="text-xs text-muted-foreground">{t("先保存成员，再设置维护者；移除成员会自动移除其维护者职责。维护者不获得权限。", "Save roster changes before assigning maintainers. Removing a member also removes their maintainer responsibility. Maintainers gain no permissions.")}</p>

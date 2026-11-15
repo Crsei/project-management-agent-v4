@@ -6,10 +6,11 @@ import type { Arm, RunResult } from '../schemas/types.ts';
 import { costPerSuccess, summarizeMetric, wilsonInterval } from './statistics.ts';
 import type { CostPerSuccess, MetricSummary } from './statistics.ts';
 import { readReportJson, writeReportFile } from './files.ts';
+import { hashValue } from '../runners/telemetry.ts';
 
 export type FailureCategory = 'task' | 'model' | 'platform' | 'grader';
-export type ExperimentConfiguration = Pick<BenchmarkConfig, 'provider' | 'model' | 'modelOptions' | 'budget' | 'prices' | 'providerEndpoint' | 'providerBinary' | 'agentImage' | 'codeImage' | 'postgresImage'>;
-const ConfigurationSchema = BenchmarkConfigSchema.pick({ provider: true, model: true, modelOptions: true, budget: true, prices: true, providerEndpoint: true, providerBinary: true, agentImage: true, codeImage: true, postgresImage: true }).strip();
+export type ExperimentConfiguration = Pick<BenchmarkConfig, 'controlTransport' | 'provider' | 'providerApi' | 'hostAuthBoundary' | 'ompModel' | 'model' | 'modelOptions' | 'budget' | 'prices' | 'providerEndpoint' | 'providerBinary' | 'agentImage' | 'codeImage' | 'postgresImage'>;
+const ConfigurationSchema = BenchmarkConfigSchema.pick({ controlTransport: true, provider: true, providerApi: true, hostAuthBoundary: true, ompModel: true, model: true, modelOptions: true, budget: true, prices: true, providerEndpoint: true, providerBinary: true, agentImage: true, codeImage: true, postgresImage: true }).extend({ providerBinary: BenchmarkConfigSchema.shape.providerBinary.unwrap() }).strip();
 
 /** A deliberate whitelist: provider keys, runtime environment and PM credentials cannot be serialized here. */
 export function publicExperimentConfiguration(config: BenchmarkConfig): ExperimentConfiguration {
@@ -51,6 +52,9 @@ export interface OutcomeSummary {
   costUsd: MetricSummary;
   costPerSuccess: CostPerSuccess;
   checks: Record<string, { passed: number; evaluated: number; passRate: number }>;
+  generatedContextBytes: MetricSummary;
+  distinctSessions: MetricSummary;
+  changedRequirementCodeLines: MetricSummary;
 }
 export interface ExperimentSummary {
   kind: 'model-experiment';
@@ -141,6 +145,9 @@ export function summarizeRuns(runs: readonly RunResult[]): OutcomeSummary {
     toolCalls: summarizeMetric(runs.map((run) => run.usage.toolCalls)),
     costUsd: summarizeMetric(runs.map((run) => run.usage.costUsd)),
     costPerSuccess: costPerSuccess(runs.map((run) => run.usage.costUsd), successes), checks,
+    generatedContextBytes: summarizeMetric(runs.map(run => run.guidance?.generatedBytes ?? null)),
+    distinctSessions: summarizeMetric(runs.map(run => run.guidance?.sessions ?? null)),
+    changedRequirementCodeLines: summarizeMetric(runs.map(run => run.guidance?.codeChangedLines ?? null)),
   };
 }
 
@@ -161,6 +168,7 @@ export function evaluateFairness(runs: readonly RunResult[], design: ExperimentD
   const modelHashes = new Set<string>();
   const environmentHashes = new Set<string>();
   const effectiveModelHashes = new Set<string>();
+  const controlTransports = new Set<string>();
   for (const run of runs) {
     if (runIds.has(run.runId)) issues.add(`Duplicate run identity: ${run.runId}.`);
     runIds.add(run.runId);
@@ -169,6 +177,9 @@ export function evaluateFairness(runs: readonly RunResult[], design: ExperimentD
     fixtureIds.add(run.reproducibility.fixtureId);
     if (!knownIdentity(run.model)) issues.add(`No explicit real model for ${run.runId}.`);
     globalModels.add(run.model);
+    const controlTransport = run.reproducibility.controlTransport;
+    if (controlTransport !== 'http' && controlTransport !== 'cli') issues.add(`Missing or unsupported control transport for ${run.runId}; historical unknowns cannot establish comparability.`);
+    else controlTransports.add(controlTransport);
     for (const key of hashKeys) {
       if (!/^[a-f0-9]{64}$/i.test(run.reproducibility[key])) issues.add(`Missing or invalid SHA-256 ${key} evidence for ${run.runId}.`);
     }
@@ -178,7 +189,9 @@ export function evaluateFairness(runs: readonly RunResult[], design: ExperimentD
     if (effectiveHash !== null) {
       if (!/^[a-f0-9]{64}$/i.test(effectiveHash)) issues.add(`Invalid effective model-settings proof for ${run.runId}.`);
       else effectiveModelHashes.add(effectiveHash);
-    } else if ((run.usage.modelCalls ?? 0) > 0) issues.add(`Observed model requests lack effective model-settings proof for ${run.runId}.`);
+    } else if ((run.usage.modelCalls ?? 0) > 0 || (run.observations?.providerRequests ?? 0) > 0) issues.add(`Observed model requests lack effective model-settings proof for ${run.runId}.`);
+    const requestCount = run.observations?.providerRequests;
+    if (requestCount !== undefined && requestCount !== null && run.usage.modelCalls !== null && requestCount !== run.usage.modelCalls) issues.add(`Model request counts contradict canonical transport observation for ${run.runId}.`);
     if (!design.arms.includes(run.arm) || !design.taskIds.includes(run.taskId)) issues.add(`Run outside experiment design: ${run.runId}.`);
     if (run.success && !verifiedSuccess(run)) issues.add(`Claimed success contradicts independent/safety evidence: ${run.runId}.`);
   }
@@ -186,8 +199,10 @@ export function evaluateFairness(runs: readonly RunResult[], design: ExperimentD
   if (modelHashes.size > 1) issues.add('Provider/model/options configuration differs across attempts.');
   if (environmentHashes.size > 1) issues.add('Actual runtime images, staged product source or lockfile environment differs across attempts.');
   if (effectiveModelHashes.size > 1) issues.add('Effective model request settings differ across attempts.');
+  if (controlTransports.size > 1) issues.add('Operator control transport differs across attempts; HTTP versus CLI is not a PM optimization treatment.');
   for (const taskId of design.taskIds) {
     const taskRuns = runs.filter((run) => run.taskId === taskId);
+    if (new Set(taskRuns.map(run => run.guidance?.contextVersion ?? null)).size > 1) issues.add(`${taskId}: source-context protocol version differs across arms/repeats.`);
     for (const key of ['taskVersion', 'fixtureVersion'] as const) {
       if (new Set(taskRuns.map((run) => run[key])).size > 1) issues.add(`${taskId}: ${key} differs across attempts.`);
     }
@@ -218,20 +233,34 @@ export function aggregateExperiment(runs: readonly RunResult[], options: ReportO
     byTask[taskId] = taskArms;
   }
   const models = new Set(runs.map((run) => run.model));
-  const observedRequestRuns = runs.reduce((count, run) => count + Number((run.usage.modelCalls ?? 0) > 0 || (run.reproducibility.effectiveModelSettingsHash !== null && /^[a-f0-9]{64}$/i.test(run.reproducibility.effectiveModelSettingsHash))), 0);
+  const observedRequestRuns = runs.filter(run => (run.usage.modelCalls ?? 0) > 0 || (run.observations?.providerRequests ?? 0) > 0).length;
+  const configuration = options.configuration ? ConfigurationSchema.parse(options.configuration) : null;
+  const fairness = evaluateFairness(runs, design);
+  if (configuration && runs.some(run => run.reproducibility.controlTransport !== configuration.controlTransport)) {
+    fairness.valid = false;
+    fairness.issues.push('Actual operator control transport differs from the fixed experiment configuration.');
+  }
+  if (configuration?.hostAuthBoundary && runs.some(run => run.reproducibility.providerAuthentication !== 'explicit-host-sdk-account' || run.reproducibility.hostAuthBoundaryHash !== hashValue(configuration.hostAuthBoundary))) {
+    fairness.valid = false;
+    fairness.issues.push('Actual explicit native account selection differs from the fixed experiment configuration or is unobserved.');
+  }
   return {
     kind: 'model-experiment', schemaVersion: '0.1', experimentId: options.experimentId,
     createdAt: options.createdAt ?? new Date().toISOString(), model: models.size === 1 ? runs[0]!.model : null,
-    design, fairness: evaluateFairness(runs, design),
-    configuration: options.configuration ? ConfigurationSchema.parse(options.configuration) : null,
+    design, fairness,
+    configuration,
     caveats: [
       'This is a small original synthetic benchmark, not a general model ranking or production-readiness claim.',
       ...(design.repetitions <= 3 ? [`n-small: only ${design.repetitions} attempt(s) per task/arm; n=2–3 cannot establish a reliable advantage.`] : []),
       'Wilson intervals are descriptive only. Repeats of the same task are correlated and are not independent new tasks.',
       'All attempts, including platform/model/grader errors, remain in the primary success-rate denominator; error categories are reported separately.',
       'Unknown cost/token observations are null, never zero. Cost per success includes failed attempts and is undefined with zero successes or incomplete cost observations.',
+      'Native Codex costUsd is a versioned catalog estimate, never observed subscription billing; actualSubscriptionBillingUsd remains null. Its full catalog output limit is reserved because that backend omits output-token caps.',
       'Human interventions exclude scheduled benchmark injections. Rework is only the identical failed-PM-mutation retry proxy, excluding read-only reconciliation and injected lost-response originals; it is not total coding/semantic rework. Missing/incomplete observation or zero attributable denominator yields a null proportion.',
       'Run termination, model claims, checkpoint credit and PM task completion are different facts; verified success requires all independent required checks and safety.',
+      'Operator HTTP/CLI transport is a fixed common control, not the PM optimization treatment. Missing historical transport evidence cannot establish a matched comparison.',
+      'Raw retains its own model-written files, including K04 saved memory. Arms compare generated source/context support, not a memory-erasure ablation. Generated byte counts are not model input tokens.',
+      'L03 code rework is the observable positional changed-line count between frozen halfway/final retry.ts, separate from the unchanged failed-PM-retry proxy; neither measures total semantic rework.',
     ],
     overall: summarizeRuns(runs), arms: byArm, tasks: byTask,
     inferenceObservation: { runsWithObservedModelRequest: observedRequestRuns, runsWithoutObservedModelRequest: runs.length - observedRequestRuns },
@@ -278,7 +307,7 @@ export function renderRunReport(result: RunResult, runDirectory?: string): strin
     `- Failure category: ${failureCategory(result) ?? 'none'}${result.failure ? ` (${result.failure.category}): ${cell(result.failure.message)}` : ''}`,
     `- Duration: ${number(result.timeMs / 1000)} s; model/tool calls: ${number(result.usage.modelCalls, 0)}/${number(result.usage.toolCalls, 0)}`,
     `- Tokens input/output/cache-read/cache-write: ${number(result.usage.inputTokens, 0)}/${number(result.usage.outputTokens, 0)}/${number(result.usage.cacheReadTokens, 0)}/${number(result.usage.cacheWriteTokens, 0)}`,
-    `- Cost USD: ${number(result.usage.costUsd, 6)} (unknown is not free)`, '',
+    `- Cost USD: ${number(result.usage.costUsd, 6)} (basis: ${result.usage.costBasis ?? 'unobserved'}; unknown is not free; catalog estimates are not subscription billing)`, '',
     '## Independent checks', '', '| Phase / check | Required | Pass | Score | Evidence |', '| --- | --- | --- | --- | --- |',
   ];
   for (const phase of result.phaseResults) {
@@ -293,6 +322,9 @@ export function renderRunReport(result: RunResult, runDirectory?: string): strin
   lines.push('', '## Human intervention and rework', '',
     `- Human interventions: ${number(result.humanInterventions.count, 0)} — ${cell(result.humanInterventions.definition)}${result.humanInterventions.reason ? ` (${cell(result.humanInterventions.reason)})` : ''}`,
     `- PM retry rework proxy: ${number(result.rework.count, 0)} / ${number(result.rework.denominator, 0)} attributable attempts; proportion ${percent(result.rework.proportion)} — ${cell(result.rework.definition)}${result.rework.reason ? ` (${cell(result.rework.reason)})` : ''}`);
+  lines.push('', '## Versioned guidance observations', '',
+    `- Source-context protocol: ${result.guidance?.contextVersion ?? 'unknown'}; generated artifact bytes: ${number(result.guidance?.generatedBytes ?? null, 0)}; distinct Sessions: ${number(result.guidance?.sessions ?? null, 0)}; requirement changes: ${number(result.guidance?.requirementChanges ?? null, 0)}.`,
+    `- L03 frozen-checkpoint → final source changed lines: ${number(result.guidance?.codeChangedLines ?? null, 0)} (positional line differences, not a semantic percentage). Generated bytes are not provider token usage.`);
   lines.push('', '## Reproducibility', '', '```json', JSON.stringify(result.reproducibility, null, 2), '```', '', '## Evidence', '');
   lines.push(`- ${link('Structured result', 'result.json')}`, `- ${link('Trusted trace', 'trace.jsonl')}`, `- ${link('PM diff', 'pm-diff.json')}`, `- ${link('Code diff', 'git.diff')}`);
   for (const [name, path] of Object.entries(result.artifacts)) lines.push(`- ${link(name, path, runDirectory)}`);
@@ -337,6 +369,11 @@ export function renderComparison(summary: ExperimentSummary, reportDirectory?: s
     const value = summary.arms[arm]!;
     lines.push(`| ${arm} | ${number(value.humanInterventions.total, 0)} | ${value.humanInterventions.unknownCount} | ${number(value.rework.total, 0)} / ${number(value.reworkDenominator.total, 0)} | ${percent(value.reworkProportion)} | ${value.rework.unknownCount} / ${value.reworkDenominator.unknownCount} | ${cell(JSON.stringify(value.failureKinds))} |`);
   }
+  lines.push('', '## Guidance observations', '', '| Arm | Mean generated context bytes | Mean distinct Sessions | Mean L03 checkpoint/final changed lines |', '| --- | --- | --- | --- |');
+  for (const arm of summary.design.arms) {
+    const value = summary.arms[arm]!;
+    lines.push(`| ${arm} | ${number(value.generatedContextBytes.mean)} | ${number(value.distinctSessions.mean)} | ${number(value.changedRequirementCodeLines.mean)} |`);
+  }
   lines.push('', '## Run evidence', '', '| Run | Task | Arm | Verified success | Error category | Evidence |', '| --- | --- | --- | --- | --- | --- |');
   for (const run of summary.runs) lines.push(`| ${cell(run.runId)} | ${cell(run.taskId)} | ${run.arm} | ${run.success ? 'yes' : 'no'} | ${run.failureCategory ?? 'none'} | ${run.resultPath ? link('result.json', run.resultPath, reportDirectory) : 'embedded in task-results.json'} |`);
   lines.push('', '## Interpretation limits', '');
@@ -353,7 +390,7 @@ export async function writeExperimentReport(runs: readonly RunResult[], director
   return summary;
 }
 
-function parseModelRun(parsed: unknown): RunResult {
+export function parseModelRun(parsed: unknown): RunResult {
   if (typeof parsed === 'object' && parsed !== null && 'kind' in parsed) throw new Error('Expected a real-model run result; calibration/experiment documents cannot be imported as a model run');
   return RunResultSchema.parse(parsed);
 }

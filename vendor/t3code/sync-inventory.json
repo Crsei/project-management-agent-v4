@@ -1,10 +1,10 @@
 {
   "version": 1,
   "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
-  "sourceManifestSha256": "95073aea81e90fe663dba4070a9b9732f4ca93d9a70c6648ab022464e92ae704",
+  "sourceManifestSha256": "9c979fc7aa0c64869b4760d00d8f55b4e024dd6813d1d0b0783dc10dcf1941da",
   "scope": "Exact current selected upstream + explicit existing local adaptations/resources. No runtime, PM host persistence or source repository is copied wholesale.",
   "patchFormat": "integration-patches/*.json exact original-line splices with whole-file SHA256 preconditions and postconditions",
-  "verification": "New-generation exact recipe authoring only; integrated provenance/build/resource/behavior verification remains required.",
+  "verification": "Supplemental UI authoring only; exact source replay and all runtime/build/behavior acceptance remain distinct.",
   "summary": {
     "upstreamInputs": 959,
     "upstreamSelected": 861,
@@ -26,8 +26,8 @@
     {
       "destination": "vendor/t3code/SYNC.md",
       "asset": "vendor/t3code/SYNC.md",
-      "sha256": "2379006b9fd4edf0d22f9f98f399932965c80156fd9130d6d01b78375825d87f",
-      "bytes": 32863,
+      "sha256": "77254bc2d60a21bdb3a5951bea46e406b114a3c0527861179571a17f8ec510e3",
+      "bytes": 32870,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3831,8 +3831,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "e54f8d05b4c437e450a479b4b39e4477ea768de46adb6ec572b371969c8e11a5",
-      "bytes": 5139051
+      "sha256": "a5076be907c512c3bb480f7eb0656a0143ef013dbf4853ddd93fa7e393c1fd4f",
+      "bytes": 7581338
     },
     {
       "destination": "vendor/t3code/mcp-skills-source.json",
@@ -10616,8 +10616,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "6d8df1e22df3d1f05c2b3bd2b3ee433cbaca73eb12dd1309074e6b20842736da",
-      "bytes": 13420
+      "sha256": "7b55668957fe0ee788fe1cff047b2e148cf65f558c78374222f2a14336103fa8",
+      "bytes": 13436
     },
     {
       "destination": "vendor/t3code/scripts/mcp-skills-source.mjs",
@@ -10667,8 +10667,8 @@
     {
       "destination": "vendor/t3code/source-manifest.json",
       "asset": "vendor/t3code/source-manifest.json",
-      "sha256": "95073aea81e90fe663dba4070a9b9732f4ca93d9a70c6648ab022464e92ae704",
-      "bytes": 3502104,
+      "sha256": "9c979fc7aa0c64869b4760d00d8f55b4e024dd6813d1d0b0783dc10dcf1941da",
+      "bytes": 3551648,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10676,8 +10676,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "7f9b66b751755f438b13def1e9b21ee30a6e2ec1e5e94850feab00e6acb580c2",
-      "bytes": 2303172,
+      "sha256": "67b003a7a2146a73d3811a1aa19303e1eea215e61fb3ed0b6a72bf625915f0b2",
+      "bytes": 2511234,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11642,7 +11642,7 @@
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",
-        "sha256": "a824c707dbee9b78fb6488b1584bbc8958cf71215eb5323b534a56fc6d84f6f9"
+        "sha256": "c003b9ff0045819901237755f3bb7d87314caa64626c239d162adacb9a20387b"
       },
       {
         "path": "vendor/t3code/scripts/host-inputs.mjs",
@@ -11650,7 +11650,7 @@
       },
       {
         "path": "apps/server/agent/scripts/verify-artifact.mjs",
-        "sha256": "24fbffca05785cc3aa6556a7cd2616d05aee33f71b9670f603c5597a3e8a0542"
+        "sha256": "7754a61cc55c4599606cb2e6495fab3829bca3f0b692e3a50ccd61e313cd45ed"
       },
       {
         "path": ".node-version",
@@ -11658,7 +11658,7 @@
       },
       {
         "path": "package.json",
-        "sha256": "6d6bec6129c11752ecbbe3dc4d684acbe60e38b1d3abc1957fb77eb1d42112c7"
+        "sha256": "37c1c60a3abd1539e57f5aaa43d1289c1614681f711d5334adf442927dec5b71"
       },
       {
         "path": "scripts/doctor.mjs",

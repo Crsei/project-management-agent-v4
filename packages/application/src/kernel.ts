@@ -10,6 +10,7 @@ import { requireDashboardReadSelf } from './dashboard-read.ts';
 import { assertWebhookReceiptReadable } from './webhooks.ts';
 import { assertNotificationReceiptReadable } from './notifications.ts';
 import type { NotificationCorePort } from '../../pm-core/readonly.ts';
+import { readDepartureReceipt } from './member-lifecycle.ts';
 
 const webhookReceiptCommands: Readonly<Record<string, true>> = { CreateWebhookEndpoint: true, SetWebhookEndpointState: true, ReauthorizeWebhookEndpoint: true, SetWebhookEndpointSigningKey: true, ReconcileWebhookDelivery: true, ResumeWebhookDelivery: true };
 
@@ -47,10 +48,14 @@ export async function assertReceiptReadable(sql: SqlExecutor, actor: Actor, work
     await assertWebhookReceiptReadable(sql, actor, workspaceId, row.scope_project_ids);
     return;
   }
-  const capability = ['UpdateWorkspaceIdentity', 'SetWorkspaceMember', 'RevokeWorkspaceMember', 'SetMemberRole', 'CreateMemberInvitation', 'RevokeMemberInvitation', 'ResendMemberInvitation', 'CreateProjectTeam', 'RenameProjectTeam', 'UpdateProjectTeamDetails', 'SetProjectTeamMembers', 'SetProjectTeamMaintainers', 'ArchiveProjectTeam', 'SetProjectTeams', 'SetMemberCapacity'].includes(row.command_type) ? 'access.manage' : 'domain.read';
+  const capability = ['UpdateWorkspaceIdentity', 'SetWorkspaceMember', 'RevokeWorkspaceMember', 'SetMemberRole', 'CreateMemberInvitation', 'RevokeMemberInvitation', 'ResendMemberInvitation', 'CreateProjectTeam', 'RenameProjectTeam', 'UpdateProjectTeamDetails', 'SetProjectTeamMembers', 'SetProjectTeamMaintainers', 'ArchiveProjectTeam', 'RestoreProjectTeam', 'SetProjectTeams', 'SetProjectParticipants', 'PrepareMemberHandover', 'TransferTeamMaintainer', 'SetMemberCapacity'].includes(row.command_type) ? 'access.manage' : 'domain.read';
   if (row.actor_scope) await requireDashboardReadSelf({ sql, actor, workspaceId });
   if (row.workspace_scope || !row.actor_scope && row.scope_project_ids.length === 0) await requireCapability(sql, actor, workspaceId, capability);
   for (const projectId of row.scope_project_ids) await requireCapability(sql, actor, workspaceId, capability, projectId);
+  if (row.command_type === 'PrepareMemberHandover') await requireCapability(sql, actor, workspaceId, 'domain.read');
+  if (row.command_type === 'SetProjectParticipants') {
+    for (const projectId of row.scope_project_ids) await requireCapability(sql, actor, workspaceId, 'domain.read', projectId);
+  }
   if ((row.command_type === 'SetNotificationRead' || row.command_type === 'SetNotificationArchived') && row.receipt?.status === 'committed') {
     const result = row.receipt.result;
     if (!notificationCore || !result || typeof result !== 'object' || !('eventId' in result) || typeof result.eventId !== 'string') throw new DomainError('notification_receipt_unavailable', 'Current notification authorization is unavailable', 503);
@@ -62,7 +67,12 @@ export async function getCommandReceipt(pool: Pool, actor: Actor, workspaceId: s
   if (!z.uuid().toLowerCase().safeParse(workspaceId).success || !z.uuid().toLowerCase().safeParse(commandId).success) throw new DomainError('validation_failed', 'Invalid identifier');
   workspaceId = workspaceId.toLowerCase();
   commandId = commandId.toLowerCase();
-  await getMembership(pool, actor, workspaceId);
+  try {
+    await getMembership(pool, actor, workspaceId);
+  } catch (error) {
+    if (!(error instanceof DomainError) || error.code !== 'not_found_or_forbidden') throw error;
+    return readDepartureReceipt(pool, actor, workspaceId, actor.id, commandId);
+  }
   const result = await pool.query<StoredReceipt>('SELECT * FROM command_receipts WHERE workspace_id=$1 AND actor_id=$2 AND command_id=$3', [workspaceId, actor.id, commandId]);
   const row = result.rows[0];
   if (!row) throw new DomainError('not_found_or_forbidden', 'Command receipt is not accessible', 404);
@@ -70,7 +80,7 @@ export async function getCommandReceipt(pool: Pool, actor: Actor, workspaceId: s
   return row.receipt;
 }
 
-export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, incoming: Command, registry: CommandRegistry, core?: CoreAccess, notificationCore?: NotificationCorePort, beforeExecute?: (sql: SqlExecutor) => Promise<void>, trustedSource?: TrustedMutationSource): Promise<CommandReceipt> {
+export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, incoming: Command, registry: CommandRegistry, coreAccess?: CoreAccess | ((sql: SqlExecutor) => Promise<CoreAccess>), notificationCore?: NotificationCorePort, beforeExecute?: (sql: SqlExecutor) => Promise<void>, trustedSource?: TrustedMutationSource): Promise<CommandReceipt> {
   if (!z.uuid().toLowerCase().safeParse(workspaceId).success || !z.uuid().toLowerCase().safeParse(incoming?.commandId).success) throw new DomainError('validation_failed', 'Workspace and command IDs must be UUIDs');
   workspaceId = workspaceId.toLowerCase();
   // Canonical typed UUIDs/defaults before hashing and persistence; never rewrite arbitrary prose.
@@ -94,6 +104,9 @@ export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, 
       await client.query('COMMIT');
       return prior.rows[0].receipt;
     }
+    // SQL-backed ports must retain this transaction, not borrow from the pool later.
+    // Resolve before the business savepoint: storage outages are not permanent rejections.
+    const core = typeof coreAccess === 'function' ? await coreAccess(client) : coreAccess;
     const touchedProjects = new Set<string>();
     let workspaceScope = false;
     let actorScope = false;

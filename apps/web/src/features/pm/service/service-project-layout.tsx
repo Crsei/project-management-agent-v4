@@ -14,6 +14,7 @@ import { ProjectContextMenu, ProjectIdentityIcon, ProjectMenuButton, useProjectM
 import { projectArchived } from "./project-menu-model"
 import styles from "./service-project-layout.module.css"
 import { usePmAutomationVisit } from "./use-pm-automation-visit"
+import { ProjectPeopleSummary } from "./project-people"
 
 const projectViews = [
   { key: "overview", path: "/overview", zh: "概览", en: "Overview", icon: LayoutDashboard },
@@ -253,7 +254,7 @@ function ProjectLayoutContent({ projectId, workspaceSlug }: { projectId: string;
   const inspectingEntity = !!new URLSearchParams(location.search).get("entity")
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-workspace={projectId}>
     {!inspectingEntity && <header className="shrink-0 border-b bg-surface px-3 pt-2 sm:px-5">
-      <ProjectContextMenu projectId={projectId}><div className="mb-1 flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><ProjectMenuButton projectId={projectId} /></div></ProjectContextMenu>
+      <ProjectContextMenu projectId={projectId}><div className="mb-1 flex min-w-0 flex-wrap items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><div className="flex items-center gap-2"><ProjectPeopleSummary projectId={projectId} /><ProjectMenuButton projectId={projectId} /></div></div></ProjectContextMenu>
       <ProjectViewNavigation base={base} />
     </header>}
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">

@@ -67,7 +67,7 @@ test("Effect HTTP MCP initializes, isolates sessions, lists/calls/pings, termina
     assert.deepEqual(called.result.structuredContent, JSON.parse(called.result.content[0].text));
     const operationId = randomUUID();
     const pmCalled = await rpcBody(await post({ jsonrpc: "2.0", id: "pm-unknown", method: "tools/call", params: { name: "pm_query",
-      arguments: { operationId, target: grant.scope, arguments: { query: "fixture" } } } }, session));
+      arguments: { operationId, target: grant.scope, arguments: { entity: null, projectId: null, query: "fixture", after: null, limit: 20 } } } }, session));
     assert.equal(pmCalled.error, undefined, "operation uncertainty is not a JSON-RPC transport error");
     assert.equal(pmCalled.result.isError ?? false, false, "unknown is not fabricated as a failed command");
     assert.equal(pmCalled.result.structuredContent.status, "unknown");

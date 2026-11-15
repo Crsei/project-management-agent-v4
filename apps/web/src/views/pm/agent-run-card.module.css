@@ -1,0 +1,83 @@
+/* Preserve board1 geometry even when the canonical card's coarse-pointer rule applies. */
+.card.card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 140px;
+  min-height: 140px;
+  gap: 0;
+  border-radius: 12px;
+  appearance: none;
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.provider,
+.folder {
+  min-width: 0;
+  max-width: 60%;
+}
+
+.provider {
+  --label-color: var(--agent);
+}
+
+.folder {
+  --label-color: var(--text-muted);
+}
+
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  flex-shrink: 0;
+}
+
+.status[data-status="running"] {
+  color: var(--info);
+}
+
+.status[data-status="waiting"] {
+  color: var(--warning);
+}
+
+.status[data-status="attention"] {
+  color: var(--destructive);
+}
+
+.status[data-status="unknown"] {
+  color: var(--warning);
+}
+
+.card .title {
+  min-height: 0;
+}
+
+.key {
+  flex: 0 1 auto;
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metadata {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.metadata > span,
+.metadata > time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

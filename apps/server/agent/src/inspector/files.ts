@@ -1,4 +1,5 @@
-import { open, readdir, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { Hono, type Context } from "hono";
 import type {
@@ -15,7 +16,7 @@ import {
   resolveInsideRoot,
 } from "./paths.ts";
 import { DurableError } from "../durable/errors.ts";
-import { resolveInspectorRoot } from "./scope.ts";
+import { readInspectorProjection } from "./scope.ts";
 
 /** Maximum number of directory entries returned in one listing. */
 export const DIRECTORY_ENTRY_LIMIT = 2000;
@@ -67,8 +68,9 @@ function errorOf(error: unknown, fallback: string): InspectorFailure {
 async function statOrNull(absolute: string) {
   try {
     return await stat(absolute);
-  } catch {
-    return null;
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "")) return null;
+    throw error;
   }
 }
 
@@ -141,47 +143,45 @@ async function readTree(relative: string, root: string): Promise<InspectorTreeRe
 
   const truncated = entries.length > DIRECTORY_ENTRY_LIMIT;
   if (truncated) entries.length = DIRECTORY_ENTRY_LIMIT;
+  const finalDirectory = await stat(absolute);
+  await resolveInsideRoot(relative, root);
+  if (directoryStat.dev !== finalDirectory.dev || directoryStat.ino !== finalDirectory.ino || directoryStat.birthtimeMs !== finalDirectory.birthtimeMs)
+    throw new DurableError(409, "inspector_path_changed", "Directory identity changed during inspection.");
 
   return { root, path: displayRelative, entries, truncated };
 }
 
-async function readFile(relative: string, root: string): Promise<InspectorFileResponse> {
+export async function readFile(relative: string, root: string): Promise<InspectorFileResponse> {
   const { absolute, relative: displayRelative } = await resolveInsideRoot(relative, root);
-  const fileStat = await statOrNull(absolute);
-  if (!fileStat)
-    throw new InspectorRouteError(fail({ error: "路径不存在。", code: "not_found" }, 404));
-  if (fileStat.isDirectory()) {
-    throw new InspectorRouteError(fail({ error: "该路径不是文件。", code: "not_a_file" }, 400));
-  }
-  if (!fileStat.isFile()) {
+  const canonical = await realpath(absolute);
+  const canonicalRelative = path.relative(root, canonical);
+  if (canonicalRelative === ".." || canonicalRelative.startsWith(`..${path.sep}`) || path.isAbsolute(canonicalRelative))
+    throw new InspectorPathError("路径不能通过符号链接超出项目根目录。");
+  const expected = await stat(canonical);
+  if (!expected.isFile())
     throw new InspectorRouteError(fail({ error: "该路径不是普通文件。", code: "not_a_file" }, 400));
-  }
-
-  const length = Math.min(fileStat.size, FILE_READ_LIMIT);
-  const buffer = Buffer.alloc(length);
-  const handle = await open(absolute, "r");
+  const handle = await open(canonical, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.dev !== expected.dev || opened.ino !== expected.ino || opened.birthtimeMs !== expected.birthtimeMs || opened.size !== expected.size)
+      throw new DurableError(409, "inspector_path_changed", "File identity changed before it could be read.");
+    const buffer = Buffer.alloc(Math.min(opened.size, FILE_READ_LIMIT));
     let offset = 0;
-    while (offset < length) {
-      const { bytesRead } = await handle.read(buffer, offset, length - offset, offset);
-      if (bytesRead === 0) break;
-      offset += bytesRead;
+    while (offset < buffer.length) {
+      const result = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (!result.bytesRead) break;
+      offset += result.bytesRead;
     }
-    if (offset < length) buffer.fill(0, offset);
-  } finally {
-    await handle.close();
-  }
-
-  if (buffer.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
-    throw new InspectorRouteError(fail({ error: "不支持二进制文件。", code: "binary_file" }, 415));
-  }
-
-  return {
-    path: displayRelative,
-    size: fileStat.size,
-    content: buffer.toString("utf8"),
-    truncated: fileStat.size > FILE_READ_LIMIT,
-  };
+    const final = await handle.stat(), visible = await stat(canonical);
+    await resolveInsideRoot(relative, root);
+    if (offset !== buffer.length || final.size !== opened.size || final.mtimeMs !== opened.mtimeMs ||
+        visible.dev !== opened.dev || visible.ino !== opened.ino || visible.birthtimeMs !== opened.birthtimeMs ||
+        await realpath(absolute) !== canonical)
+      throw new DurableError(409, "inspector_path_changed", "File path or content changed during inspection.");
+    if (buffer.subarray(0, BINARY_SNIFF_BYTES).includes(0))
+      throw new InspectorRouteError(fail({ error: "不支持二进制文件。", code: "binary_file" }, 415));
+    return { path: displayRelative, size: opened.size, content: buffer.toString("utf8"), truncated: opened.size > FILE_READ_LIMIT };
+  } finally { await handle.close(); }
 }
 
 function searchRank(entry: InspectorSearchEntry, needle: string): number {
@@ -211,11 +211,18 @@ async function searchFiles(query: string, root: string): Promise<InspectorSearch
   while (directories.length > 0) {
     const relative = directories.pop()!;
     let dirents;
+    const resolved = await resolveInsideRoot(relative, root);
+    const before = await stat(resolved.absolute);
     try {
-      dirents = await readdir(path.join(root, relative), { withFileTypes: true });
-    } catch {
-      continue;
+      dirents = await readdir(resolved.absolute, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
     }
+    await resolveInsideRoot(relative, root);
+    const after = await stat(resolved.absolute);
+    if (before.dev !== after.dev || before.ino !== after.ino || before.birthtimeMs !== after.birthtimeMs)
+      throw new DurableError(409, "inspector_path_changed", "Search directory identity changed during inspection.");
     dirents.sort((left, right) => left.name.localeCompare(right.name));
 
     for (const dirent of dirents) {
@@ -266,8 +273,8 @@ function respondFailure(c: Context, error: unknown): Response {
 export const filesRoutes = new Hono()
   .get("/files", async (c) => {
     try {
-      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
-      const tree = await readTree(c.req.query("path") ?? "", root);
+      const tree = await readInspectorProjection(new URL(c.req.url), c.req.raw.headers,
+        root => readTree(c.req.query("path") ?? "", root));
       return c.json(tree);
     } catch (error) {
       return respondFailure(c, error);
@@ -275,8 +282,8 @@ export const filesRoutes = new Hono()
   })
   .get("/file", async (c) => {
     try {
-      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
-      const file = await readFile(c.req.query("path") ?? "", root);
+      const file = await readInspectorProjection(new URL(c.req.url), c.req.raw.headers,
+        root => readFile(c.req.query("path") ?? "", root));
       return c.json(file);
     } catch (error) {
       return respondFailure(c, error);
@@ -294,8 +301,8 @@ export const filesRoutes = new Hono()
       );
     }
     try {
-      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
-      return c.json(await searchFiles(query, root));
+      const result = await readInspectorProjection(new URL(c.req.url), c.req.raw.headers, root => searchFiles(query, root));
+      return c.json(result);
     } catch (error) {
       return respondFailure(c, error);
     }

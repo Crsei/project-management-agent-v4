@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import { closeStore, listRecords, readRecord, writeRecord } from '../durable/store.ts';
 import { mcpIntrospectionRoutes, mcpOAuthRoutes } from './routes.ts';
-import { authenticateMcpRequest, mcpIdentityHeaders, mcpIdentityFromHeaders } from './identity.ts';
+import { authenticateMcpRequest, mcpIdentityHeaders, mcpIdentityFromHeaders, pmRequest } from './identity.ts';
 import { currentGrant, grantIdentity, MCP_GRANTS, type Grant } from './grants.ts';
 import { redirectMatches } from './oauth.ts';
 import type { Authorization } from './oauth.ts';
@@ -16,13 +16,14 @@ import { mcpServiceHeaders, verifyMcpServiceBearer } from '../../../../../packag
 const origin = 'https://pm.example', workspaceId = '11111111-1111-4111-8111-111111111111', actorId = '22222222-2222-4222-8222-222222222222';
 const verifier = 'a'.repeat(43), challenge = createHash('sha256').update(verifier).digest('base64url');
 const scope = { workspaceId, projectId: 'PRJ-001' };
-const savedEnv = { directory: process.env.AGENT_WORKSPACE_DATA_DIR, origin: process.env.MCP_PUBLIC_ORIGIN, secret: process.env.PM_AUTOMATION_SERVICE_SECRET, pmApi: process.env.PM_API_URL };
+const savedEnv = { directory: process.env.AGENT_WORKSPACE_DATA_DIR, origin: process.env.MCP_PUBLIC_ORIGIN, secret: process.env.PM_AUTOMATION_SERVICE_SECRET, pmApi: process.env.PM_API_URL, internalHttpOrigins: process.env.MCP_INTERNAL_HTTP_ORIGINS };
 let directory: string;
 const app = new Hono().route('/', mcpOAuthRoutes).route('/', mcpIntrospectionRoutes);
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'mcp-oauth-test-'));
   process.env.AGENT_WORKSPACE_DATA_DIR = directory; process.env.MCP_PUBLIC_ORIGIN = origin; process.env.PM_AUTOMATION_SERVICE_SECRET = 'test-only-mcp-domain-secret-'.repeat(3);
   process.env.PM_API_URL = 'http://127.0.0.1:4194';
+  process.env.MCP_INTERNAL_HTTP_ORIGINS = '[]';
   mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
     const headers = new Headers(init?.headers);
@@ -37,7 +38,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   mock.restoreAll(); closeStore(); await rm(directory, { recursive: true, force: true });
-  for (const [key, value] of Object.entries({ AGENT_WORKSPACE_DATA_DIR: savedEnv.directory, MCP_PUBLIC_ORIGIN: savedEnv.origin, PM_AUTOMATION_SERVICE_SECRET: savedEnv.secret, PM_API_URL: savedEnv.pmApi })) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  for (const [key, value] of Object.entries({ AGENT_WORKSPACE_DATA_DIR: savedEnv.directory, MCP_PUBLIC_ORIGIN: savedEnv.origin, PM_AUTOMATION_SERVICE_SECRET: savedEnv.secret, PM_API_URL: savedEnv.pmApi, MCP_INTERNAL_HTTP_ORIGINS: savedEnv.internalHttpOrigins })) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
 });
 const post = (path: string, body: unknown, cookie = 'pm_v4_session=valid-test-session', requestOrigin = origin) => app.request(`${origin}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: requestOrigin, cookie }, body: JSON.stringify(body) });
 async function authorize() {
@@ -68,6 +69,51 @@ test('fixed issuer ignores hostile Host and supports no refresh grant', async ()
   const metadata = await response.json() as { issuer: string; grant_types_supported: string[] };
   assert.equal(metadata.issuer, origin); assert.deepEqual(metadata.grant_types_supported, ['authorization_code']);
   const { authorization, code } = await approve(); assert.equal((await token(authorization, code, { grant_type: 'refresh_token' })).status, 400);
+});
+test('explicit private HTTP PM transport supports OAuth without becoming a public issuer', async () => {
+  process.env.PM_API_URL = 'http://custom-pm.internal:7411';
+  mock.restoreAll();
+  let calls = 0;
+  mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    calls++;
+    const endpoint = new URL(String(input)), headers = new Headers(init?.headers);
+    assert.equal(endpoint.origin, process.env.PM_API_URL);
+    assert.equal(init?.redirect, 'error');
+    assert.equal((headers.get('cookie') ?? '').includes('agent_v4_access='), false);
+    if (endpoint.pathname === '/api/v1/auth/me') {
+      assert.equal(headers.get('cookie'), 'pm_v4_session=valid-test-session');
+      assert.equal(headers.has('authorization'), false);
+      return Response.json({ actor: { id: actorId } });
+    }
+    assert.equal(endpoint.pathname, '/api/v1/agent-contexts');
+    if (headers.has('authorization')) assert.match(headers.get('authorization')!, /^Bearer pm-mcp-service-v1\./);
+    return Response.json({ workspaces: [{ id: workspaceId, name: 'Workspace', workspaceAllowed: true, projects: [{ id: 'PRJ-001', name: 'One' }] }] });
+  });
+  await assert.rejects(pmRequest('/api/v1/auth/me', new Headers({ cookie: 'pm_v4_session=valid-test-session' })));
+  assert.equal(calls, 0);
+  process.env.MCP_INTERNAL_HTTP_ORIGINS = JSON.stringify([process.env.PM_API_URL]);
+  const { authorization, code } = await approve();
+  const issued = await token(authorization, code); assert.equal(issued.status, 200);
+  const access = await issued.json() as { access_token: string };
+  const identity = await authenticateMcpRequest(new Request(`${origin}/mcp`, { headers: { authorization: `Bearer ${access.access_token}` } }));
+  assert.equal(identity.actorId, actorId); assert.equal(identity.access, 'read-only');
+  const metadata = await app.request(`${origin}/.well-known/oauth-authorization-server`);
+  assert.equal((await metadata.json() as { issuer: string }).issuer, origin);
+  const before = calls;
+  process.env.MCP_PUBLIC_ORIGIN = process.env.PM_API_URL;
+  assert.equal((await app.request(`${origin}/.well-known/oauth-authorization-server`)).status, 503);
+  assert.equal(calls, before, 'A private transport opt-in is never an OAuth issuer opt-in');
+});
+test('PM authority cannot escape the configured service origin through a request path', async () => {
+  process.env.PM_API_URL = 'http://custom-pm.internal:7411';
+  process.env.MCP_INTERNAL_HTTP_ORIGINS = JSON.stringify([process.env.PM_API_URL]);
+  mock.restoreAll();
+  let calls = 0;
+  mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({}); });
+  for (const path of ['https://attacker.example/api/v1/auth/me', '//attacker.example/api/v1/auth/me']) {
+    await assert.rejects(pmRequest(path, new Headers({ cookie: 'pm_v4_session=valid-test-session' })));
+  }
+  assert.equal(calls, 0);
 });
 test('shared Agent cookie, foreign Origin, forged client and missing state cannot approve', async () => {
   const { authorization } = await authorize();

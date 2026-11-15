@@ -3,14 +3,15 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { FileRepository, revisionOf } from './repository.ts';
 import { inspectFrontmatter } from '../pm-markdown/index.ts';
-import { assertCanonicalAbsolute, checkedFileOpen, directoryIdentity, fileStamp, pathContains, safeRelativePath, syncDirectory, systemStoragePath } from './platform.ts';
+import { assertCanonicalAbsolute, checkedFileOpen, directoryIdentity, fileStamp, pathContains, safeRelativePath, samePath, syncDirectory, systemStoragePath } from './platform.ts';
 import { cacheWindowsPathAttributes } from './windows-reparse.ts';
 
-export interface ProjectDirectory { workspaceId: string; root: string; mode?: 'existing' | 'new' }
+export type ProjectLayout = 'legacy' | 'dovspace-v1';
+export interface ProjectDirectory { workspaceId: string; root: string; mode?: 'existing' | 'new'; layout?: ProjectLayout }
 export interface ProjectRootIdentity { device: string; inode: string }
-export interface ProjectDirectoryCheck { root: string; mode: 'existing' | 'new'; identity?: ProjectRootIdentity; parentIdentity?: ProjectRootIdentity }
+export interface ProjectDirectoryCheck { root: string; mode: 'existing' | 'new'; layout: ProjectLayout; storageRoot: string; identity?: ProjectRootIdentity; parentIdentity?: ProjectRootIdentity }
 export interface ProjectMount {
-  projectId: string; workspaceId: string; storageId: string; root: string;
+  projectId: string; workspaceId: string; storageId: string; root: string; storageRoot: string; layout: ProjectLayout;
   corePath: string; attachmentsPath: string; virtualPrefix: string;
 }
 export interface ProjectLocation extends ProjectMount {
@@ -18,20 +19,33 @@ export interface ProjectLocation extends ProjectMount {
   initialization: { key: string; hash: string; step: 'reserved' | 'directory' | 'marker' | 'content' | 'ready' };
 }
 type RootIdentity = ProjectRootIdentity;
-interface Target { root: string; mode: 'existing' | 'new'; identity?: RootIdentity; parentIdentity?: RootIdentity; attempted?: boolean }
+interface Target { root: string; mode: 'existing' | 'new'; layout: ProjectLayout; identity?: RootIdentity; parentIdentity?: RootIdentity; attempted?: boolean }
 interface TransferFile { source: string; destination: string; revision: string; attachment?: boolean }
 interface Transfer {
-  key: string; hash: string; phase: 'copying' | 'cutover'; source?: { root: string; identity: RootIdentity };
+  key: string; hash: string; phase: 'copying' | 'cutover'; source?: { root: string; layout: ProjectLayout; identity: RootIdentity };
   target: Target; files: TransferFile[];
 }
 interface Entry {
-  projectId: string; workspaceId: string; storageId: string; root: string; mode: 'existing' | 'new';
-  identity?: RootIdentity; parentIdentity?: RootIdentity; rootAttempted?: boolean; initialization: ProjectLocation['initialization']; transfer?: Transfer;
+  projectId: string; workspaceId: string; storageId: string; root: string; mode: 'existing' | 'new'; layout?: ProjectLayout;
+  identity?: RootIdentity; parentIdentity?: RootIdentity; storageIdentity?: RootIdentity; rootAttempted?: boolean; containerAttempted?: boolean;
+  initialization: ProjectLocation['initialization']; transfer?: Transfer;
   completedTransfers?: { key: string; hash: string }[];
 }
 interface Registry { version: 1; entries: Entry[] }
 interface Marker { version: 1; workspaceId: string; projectId: string; storageId: string; core: '.pm/core'; attachments: '.pm/attachments' }
 export const projectLocationsPath = '.pm/state/project-locations.json';
+export const PROJECT_DATA_DIRECTORY = '.dovspace';
+const layoutOf = (entry: { layout?: ProjectLayout }): ProjectLayout => entry.layout === 'dovspace-v1' ? 'dovspace-v1' : 'legacy';
+const storageRootOf = (entry: { root: string; layout?: ProjectLayout }): string => layoutOf(entry) === 'dovspace-v1' ? path.join(entry.root, PROJECT_DATA_DIRECTORY) : entry.root;
+const projectRepository = (entry: { root: string; layout?: ProjectLayout }): FileRepository => new FileRepository(storageRootOf(entry), false);
+const markerIsPresent = (root: string, ownContainerOf?: string): boolean => {
+  try { new FileRepository(root, false).resolve('.pm/project.json'); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  if (ownContainerOf && samePath(root, ownContainerOf)) return false;
+  try { new FileRepository(root, false).resolve(`${PROJECT_DATA_DIRECTORY}/.pm/project.json`); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  return false;
+};
 const projectIdPattern = /^PRJ-\d+$/;
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const sameIdentity = (a: RootIdentity | undefined, b: RootIdentity): boolean => a?.device === b.device && a.inode === b.inode;
@@ -46,7 +60,7 @@ function assertAllowedRoot(root: string): void {
   assertCanonicalAbsolute(root);
   if (systemStoragePath(root)) throw new Error('System directories cannot store projects');
 }
-function validateRoot(root: string, allowMissing = false): string {
+function validateRoot(root: string, allowMissing = false, ownContainerOf?: string): string {
   assertAllowedRoot(root);
   let current = path.parse(root).root;
   const parts = root.slice(current.length).split(path.sep);
@@ -54,23 +68,30 @@ function validateRoot(root: string, allowMissing = false): string {
     current = path.join(current, parts[i]!);
     try { identity(current); }
     catch (error) { if (allowMissing && i === parts.length - 1 && (error as NodeJS.ErrnoException).code === 'ENOENT') return root; throw error; }
-    if (i < parts.length - 1) {
-      try { new FileRepository(current, false).resolve('.pm/project.json'); throw new Error('Project directories cannot be nested inside another marked project'); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    }
+    if (i < parts.length - 1 && markerIsPresent(current, ownContainerOf)) throw new Error('Project directories cannot be nested inside another marked project');
   }
   return root;
 }
 const markerFor = (entry: Entry): Marker => ({ version: 1, workspaceId: entry.workspaceId, projectId: entry.projectId, storageId: entry.storageId, core: '.pm/core', attachments: '.pm/attachments' });
 const markerRaw = (entry: Entry): string => JSON.stringify(markerFor(entry), null, 2) + '\n';
 function mount(entry: Entry): ProjectMount {
-  return { projectId: entry.projectId, workspaceId: entry.workspaceId, storageId: entry.storageId, root: entry.root,
-    corePath: path.join(entry.root, '.pm/core'), attachmentsPath: path.join(entry.root, '.pm/attachments'), virtualPrefix: `project-roots/${entry.projectId}` };
+  const storageRoot = storageRootOf(entry), layout = layoutOf(entry);
+  return { projectId: entry.projectId, workspaceId: entry.workspaceId, storageId: entry.storageId, root: entry.root, storageRoot, layout,
+    corePath: path.join(storageRoot, '.pm/core'), attachmentsPath: path.join(storageRoot, '.pm/attachments'), virtualPrefix: `project-roots/${entry.projectId}` };
+}
+function sourceEntry(entry: Entry, source: NonNullable<Transfer['source']>): Entry {
+  return { ...entry, root: source.root, layout: source.layout, identity: source.identity,
+    ...(source.layout === 'dovspace-v1' ? { storageIdentity: identity(storageRootOf(source)) } : {}) };
 }
 function validateMarker(entry: Entry): void {
   validateRoot(entry.root);
   if (!sameIdentity(entry.identity, identity(entry.root))) throw new Error('Registered project directory was replaced');
-  const repository = new FileRepository(entry.root, false);
+  const storageRoot = storageRootOf(entry), layout = layoutOf(entry);
+  if (layout === 'dovspace-v1') {
+    validateRoot(storageRoot, false, entry.root);
+    if (!entry.storageIdentity || !sameIdentity(entry.storageIdentity, identity(storageRoot))) throw new Error('Registered project data directory was replaced');
+  }
+  const repository = new FileRepository(storageRoot, false);
   const value: unknown = JSON.parse(repository.read('.pm/project.json'));
   if (!object(value) || Object.keys(value).length !== 6 || JSON.stringify(value) !== JSON.stringify(markerFor(entry))) throw new Error('Project directory marker conflicts with registered identity');
   repository.resolve('.pm/core');
@@ -95,7 +116,10 @@ export class ProjectLocations {
         || typeof item.storageId !== 'string' || !/^[a-f0-9-]{36}$/.test(item.storageId) || typeof item.root !== 'string' || !path.isAbsolute(item.root) || path.resolve(item.root) !== item.root
         || !['existing', 'new'].includes(String(item.mode)) || item.identity !== undefined && !validIdentity(item.identity) || item.parentIdentity !== undefined && !validIdentity(item.parentIdentity)
         || !object(item.initialization) || typeof item.initialization.key !== 'string' || !item.initialization.key || typeof item.initialization.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.initialization.hash)
-        || !['reserved', 'directory', 'marker', 'content', 'ready'].includes(String(item.initialization.step)) || item.initialization.step === 'ready' && !item.identity)
+        || !['reserved', 'directory', 'marker', 'content', 'ready'].includes(String(item.initialization.step)) || item.initialization.step === 'ready' && !item.identity
+        || item.layout !== undefined && item.layout !== 'legacy' && item.layout !== 'dovspace-v1'
+        || item.storageIdentity !== undefined && !validIdentity(item.storageIdentity)
+        || item.containerAttempted !== undefined && typeof item.containerAttempted !== 'boolean')
         throw new Error('Invalid project location entry');
       assertAllowedRoot(item.root);
       if (projects.has(item.projectId) || stores.has(item.storageId) || keys.has(item.initialization.key) || roots.some(root => overlaps(root, item.root as string))) throw new Error('Overlapping or duplicate project location entries');
@@ -106,9 +130,9 @@ export class ProjectLocations {
         const move = item.transfer;
         if (!object(move) || typeof move.key !== 'string' || !move.key || typeof move.hash !== 'string' || !/^[a-f0-9]{64}$/.test(move.hash)
           || !['copying', 'cutover'].includes(String(move.phase)) || !object(move.target) || typeof move.target.root !== 'string' || !path.isAbsolute(move.target.root)
-          || path.resolve(move.target.root) !== move.target.root || !['new', 'existing'].includes(String(move.target.mode)) || move.target.identity !== undefined && !validIdentity(move.target.identity) || move.target.parentIdentity !== undefined && !validIdentity(move.target.parentIdentity)
+          || path.resolve(move.target.root) !== move.target.root || !['new', 'existing'].includes(String(move.target.mode)) || move.target.layout !== 'legacy' && move.target.layout !== 'dovspace-v1' || move.target.identity !== undefined && !validIdentity(move.target.identity) || move.target.parentIdentity !== undefined && !validIdentity(move.target.parentIdentity)
           || !Array.isArray(move.files) || move.files.some(file => !object(file) || typeof file.source !== 'string' || !safeRelative(file.source) || typeof file.destination !== 'string' || !safeRelative(file.destination) || typeof file.revision !== 'string' || !/^[a-f0-9]{64}$/.test(file.revision) || file.attachment !== undefined && typeof file.attachment !== 'boolean')
-          || move.source !== undefined && (!object(move.source) || typeof move.source.root !== 'string' || !path.isAbsolute(move.source.root) || !validIdentity(move.source.identity))) throw new Error('Invalid project transfer journal');
+          || move.source !== undefined && (!object(move.source) || typeof move.source.root !== 'string' || !path.isAbsolute(move.source.root) || move.source.layout !== 'legacy' && move.source.layout !== 'dovspace-v1' || !validIdentity(move.source.identity))) throw new Error('Invalid project transfer journal');
         assertAllowedRoot(move.target.root);
         if (object(move.source) && typeof move.source.root === 'string') assertAllowedRoot(move.source.root);
         for (const file of move.files as TransferFile[]) {
@@ -157,7 +181,8 @@ export class ProjectLocations {
     if (!directory.workspaceId || directory.workspaceId.length > 256) throw new Error('Workspace identity is required');
     const mode = directory.mode ?? 'existing';
     if (mode !== 'existing' && mode !== 'new') throw new Error('Invalid project directory mode');
-    const root = validateRoot(directory.root, mode === 'new');
+    const layout = directory.layout === 'legacy' ? 'legacy' : 'dovspace-v1';
+    const root = validateRoot(directory.root, mode === 'new'), storageRoot = layout === 'dovspace-v1' ? path.join(root, PROJECT_DATA_DIRECTORY) : root;
     if (mode === 'new') {
       try { lstatSync(root); throw new Error('New project directory already exists'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
@@ -166,20 +191,23 @@ export class ProjectLocations {
     if (entries.some(entry => entry.workspaceId !== directory.workspaceId)) throw new Error('Foreign workspace directory registration');
     if (overlaps(root, this.repository.root) || entries.some(entry => entry.projectId !== projectId && (overlaps(root, entry.root) || entry.transfer && overlaps(root, entry.transfer.target.root)))) throw new Error('Project directories must not overlap registered storage');
     if (projectId && entries.some(entry => entry.projectId === projectId && overlaps(root, entry.root))) throw new Error('Project destination overlaps current directory');
-    try { new FileRepository(root, false).resolve('.pm'); throw new Error('Directory already contains application metadata'); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    return { root, mode, ...(mode === 'existing' ? { identity: identity(root) } : { parentIdentity: identity(path.dirname(root)) }) };
+    for (const relative of ['.pm', PROJECT_DATA_DIRECTORY]) {
+      try { lstatSync(path.join(root, relative)); throw new Error(`Directory already contains ${relative} application metadata`); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+    return { root, mode, layout, storageRoot, ...(mode === 'existing' ? { identity: identity(root) } : { parentIdentity: identity(path.dirname(root)) }) };
   }
   reserve(projectId: string, key: string, requestHash: string, directory: ProjectDirectory, expected?: ProjectDirectoryCheck): ProjectLocation {
     if (!projectIdPattern.test(projectId) || !key.trim() || key.length > 512 || !/^[a-f0-9]{64}$/.test(requestHash)) throw new Error('Invalid project initialization reservation');
     const existing = this.load().value.entries.find(item => item.projectId === projectId || item.initialization.key === key);
     if (existing) {
-      if (existing.projectId !== projectId || existing.initialization.key !== key || existing.initialization.hash !== requestHash || existing.root !== directory.root || existing.workspaceId !== directory.workspaceId || existing.mode !== (directory.mode ?? 'existing')) throw new Error('Project initialization conflicts with its original request');
+      const requestedLayout = directory.layout ?? expected?.layout;
+      if (existing.projectId !== projectId || existing.initialization.key !== key || existing.initialization.hash !== requestHash || existing.root !== directory.root || existing.workspaceId !== directory.workspaceId || existing.mode !== (directory.mode ?? 'existing') || requestedLayout !== undefined && layoutOf(existing) !== requestedLayout) throw new Error('Project initialization conflicts with its original request');
       return this.entry(projectId)!;
     }
     const checked = this.preview(directory);
-    if (expected && (expected.root !== checked.root || expected.mode !== checked.mode || !(checked.mode === 'existing' ? sameIdentity(expected.identity, checked.identity!) : sameIdentity(expected.parentIdentity, checked.parentIdentity!)))) throw new Error('Project directory changed after preflight');
-    this.update(entries => { entries.push({ projectId, workspaceId: directory.workspaceId, storageId: randomUUID(), ...checked, initialization: { key, hash: requestHash, step: 'reserved' } }); });
+    if (expected && (expected.root !== checked.root || expected.mode !== checked.mode || expected.layout !== checked.layout || expected.storageRoot !== checked.storageRoot || !(checked.mode === 'existing' ? sameIdentity(expected.identity, checked.identity!) : sameIdentity(expected.parentIdentity, checked.parentIdentity!)))) throw new Error('Project directory changed after preflight');
+    this.update(entries => { entries.push({ projectId, workspaceId: directory.workspaceId, storageId: randomUUID(), root: checked.root, mode: checked.mode, layout: checked.layout, ...(checked.identity ? { identity: checked.identity } : {}), ...(checked.parentIdentity ? { parentIdentity: checked.parentIdentity } : {}), initialization: { key, hash: requestHash, step: 'reserved' } }); });
     return this.entry(projectId)!;
   }
   prepare(projectId: string): void {
@@ -198,7 +226,7 @@ export class ProjectLocations {
       } else {
         // A missing attempted root is an unknown result, never permission to recreate an empty project.
         validateRoot(entry.root);
-        if (new FileRepository(entry.root, false).read('.pm/project.json') !== markerRaw(entry)) throw new Error('Attempted project directory requires identity recovery');
+        if (!markerIsPresent(entry.root)) throw new Error('Attempted project directory requires identity recovery');
       }
       const found = identity(entry.root);
       this.update(entries => { const current = entries.find(item => item.projectId === projectId)!; current.identity = found; current.initialization.step = 'directory'; });
@@ -206,14 +234,32 @@ export class ProjectLocations {
     }
     validateRoot(entry.root);
     if (!sameIdentity(entry.identity, identity(entry.root))) throw new Error('Reserved project directory was replaced');
-    const repository = new FileRepository(entry.root, false);
+    if (layoutOf(entry) === 'dovspace-v1') {
+      const storageRoot = storageRootOf(entry);
+      if (!entry.containerAttempted) {
+        try { mkdirSync(storageRoot, { mode: 0o700 }); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; validateRoot(storageRoot, false, entry.root); }
+        this.update(entries => { entries.find(item => item.projectId === projectId)!.containerAttempted = true; });
+        syncDirectory(entry.root);
+      }
+      try {
+        const ignore = checkedFileOpen(path.join(storageRoot, '.gitignore'), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+        try { writeSync(ignore, '*\n'); fsyncSync(ignore); } finally { closeSync(ignore); }
+        syncDirectory(storageRoot);
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+      validateRoot(storageRoot, false, entry.root);
+      if (!entry.storageIdentity) this.update(entries => { entries.find(item => item.projectId === projectId)!.storageIdentity = identity(storageRoot); });
+      entry = this.load().value.entries.find(item => item.projectId === projectId)!;
+      if (!sameIdentity(entry.storageIdentity, identity(storageRoot))) throw new Error('Reserved project data directory was replaced');
+    }
+    const repository = projectRepository(entry);
     if (entry.initialization.step === 'directory') {
       repository.mkdir('.pm');
       try { if (repository.read('.pm/project.json') !== markerRaw(entry)) throw new Error('Conflicting project marker'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; repository.write('.pm/project.json', markerRaw(entry)); }
       repository.mkdir('.pm/core'); repository.mkdir('.pm/core/projects'); repository.mkdir('.pm/core/work-items'); repository.mkdir('.pm/core/docs'); repository.mkdir('.pm/attachments');
       this.update(entries => { entries.find(item => item.projectId === projectId)!.initialization.step = 'marker'; });
-    }
+    } else if (layoutOf(entry) === 'dovspace-v1' && !entry.containerAttempted) throw new Error('Project data directory initialization requires recovery');
     validateMarker(this.load().value.entries.find(item => item.projectId === projectId)!);
   }
   contentWritten(projectId: string): void { this.update(entries => { const entry = entries.find(item => item.projectId === projectId)!; validateMarker(entry); entry.initialization.step = 'content'; }); }
@@ -221,7 +267,7 @@ export class ProjectLocations {
     this.update(entries => { const entry = entries.find(item => item.projectId === projectId)!; validateMarker(entry); if (!['content', 'ready'].includes(entry.initialization.step)) throw new Error('Project content is incomplete'); entry.initialization.step = 'ready'; });
     return this.get(projectId)!;
   }
-  watchPaths(): string[] { return this.load().value.entries.flatMap(entry => [path.join(entry.root, '.pm/core'), path.join(entry.root, '.pm/project.json')]); }
+  watchPaths(): string[] { return this.load().value.entries.flatMap(entry => { const storageRoot = storageRootOf(entry); return [path.join(storageRoot, '.pm/core'), path.join(storageRoot, '.pm/project.json')]; }); }
 
   /** The operator already moved the complete directory. Only an absent original and matching marker authorize rebinding. */
   rebindMoved(projectId: string, key: string, directory: ProjectDirectory, validate: (files: { path: string; raw: string }[]) => void): ProjectMount {
@@ -236,13 +282,13 @@ export class ProjectLocations {
     const root = validateRoot(directory.root);
     const entries = this.load().value.entries;
     if (overlaps(root, this.repository.root) || entries.some(other => other.projectId !== projectId && overlaps(root, other.root))) throw new Error('Moved directory overlaps registered storage');
-    const rebound = { ...entry, root, identity: identity(root) };
+    const rebound = { ...entry, root, identity: identity(root), ...(layoutOf(entry) === 'dovspace-v1' ? { storageIdentity: identity(path.join(root, PROJECT_DATA_DIRECTORY)) } : {}) };
     validateMarker(rebound);
-    const collected = new FileRepository(path.join(root, '.pm/core'), false).collect();
+    const collected = new FileRepository(path.join(storageRootOf(rebound), '.pm/core'), false).collect();
     if (collected.errors.length || !collected.files.some(file => inspectFrontmatter(file.raw).metadata.id === projectId)) throw new Error('Moved project authority is incomplete');
     for (const file of collected.files) assertProjectFile(projectId, file.raw);
     validate(collected.files.map(file => ({ ...file, path: `project-roots/${projectId}/${file.path}` })));
-    const final = new FileRepository(path.join(root, '.pm/core'), false).collect();
+    const final = new FileRepository(path.join(storageRootOf(rebound), '.pm/core'), false).collect();
     if (final.errors.length || final.files.length !== collected.files.length || final.files.some(file => !collected.files.some(before => before.path === file.path && before.raw === file.raw))) throw new Error('Moved project changed during verification');
     this.update(current => {
       validateMarker(rebound);
@@ -250,6 +296,7 @@ export class ProjectLocations {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       const location = current.find(item => item.projectId === projectId)!;
       location.root = root; location.identity = rebound.identity;
+      if (rebound.storageIdentity) location.storageIdentity = rebound.storageIdentity; else delete location.storageIdentity;
       location.completedTransfers = [...(location.completedTransfers ?? []), { key, hash: operationHash }];
     });
     return this.get(projectId)!;
@@ -275,7 +322,7 @@ export class ProjectLocations {
       const files: TransferFile[] = sources.map(source => ({ source: source.path, destination: source.path.startsWith(`project-roots/${projectId}/`) ? source.path.slice(`project-roots/${projectId}/`.length) : source.path, revision: revisionOf(source.raw) }));
       if (!files.length) throw new Error('Project has no readable authority to transfer');
       if (entry) {
-        const attachmentRepository = new FileRepository(entry.root, false);
+        const attachmentRepository = projectRepository(entry);
         const walk = (relative: string): void => {
           const directory = attachmentRepository.resolve(relative);
           const entries = readdirSync(directory, { withFileTypes: true });
@@ -290,10 +337,10 @@ export class ProjectLocations {
         };
         walk('.pm/attachments');
       }
-      const transfer: Transfer = { key, hash: operationHash, phase: 'copying', ...(entry ? { source: { root: entry.root, identity: entry.identity! } } : {}), target: { ...target, ...(target.mode === 'existing' ? { identity: identity(target.root) } : { parentIdentity: identity(path.dirname(target.root)) }) }, files };
+      const transfer: Transfer = { key, hash: operationHash, phase: 'copying', ...(entry ? { source: { root: entry.root, layout: layoutOf(entry), identity: entry.identity! } } : {}), target: { root: target.root, mode: target.mode, layout: target.layout, ...(target.mode === 'existing' ? { identity: identity(target.root) } : { parentIdentity: identity(path.dirname(target.root)) }) }, files };
       this.update(entries => {
         if (entry) entries.find(item => item.projectId === projectId)!.transfer = transfer;
-        else entries.push({ projectId, workspaceId: directory.workspaceId, storageId: randomUUID(), root: target.root, mode: target.mode, initialization: { key, hash: operationHash, step: 'reserved' }, transfer });
+        else entries.push({ projectId, workspaceId: directory.workspaceId, storageId: randomUUID(), root: target.root, mode: target.mode, layout: target.layout, initialization: { key, hash: operationHash, step: 'reserved' }, transfer });
       });
     }
     entry = this.load().value.entries.find(item => item.projectId === projectId)!;
@@ -307,22 +354,29 @@ export class ProjectLocations {
           if (move.target.mode === 'new') { mkdirSync(move.target.root, { mode: 0o700 }); syncDirectory(path.dirname(move.target.root)); }
         } else {
           validateRoot(move.target.root);
-          if (new FileRepository(move.target.root, false).read('.pm/project.json') !== markerRaw(entry)) throw new Error('Attempted transfer destination requires identity recovery');
+          if (!markerIsPresent(move.target.root)) throw new Error('Attempted transfer destination requires identity recovery');
         }
         const found = identity(move.target.root);
         this.update(entries => { entries.find(item => item.projectId === projectId)!.transfer!.target.identity = found; });
         entry = this.load().value.entries.find(item => item.projectId === projectId)!; move = entry.transfer!;
       }
-      const targetEntry: Entry = { ...entry, root: move.target.root, identity: move.target.identity!, mode: move.target.mode };
+      const targetEntry: Entry = { ...entry, root: move.target.root, identity: move.target.identity!, mode: move.target.mode, layout: move.target.layout };
       validateRoot(targetEntry.root);
       if (!sameIdentity(targetEntry.identity, identity(targetEntry.root))) throw new Error('Transfer destination was replaced');
-      const targetRepository = new FileRepository(targetEntry.root, false);
+      const targetStorageRoot = storageRootOf(targetEntry);
+      if (targetEntry.layout === 'dovspace-v1') {
+        try { mkdirSync(targetStorageRoot, { mode: 0o700 }); syncDirectory(targetEntry.root); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+        validateRoot(targetStorageRoot, false, targetEntry.root);
+        targetEntry.storageIdentity = identity(targetStorageRoot);
+      }
+      const targetRepository = projectRepository(targetEntry);
       targetRepository.mkdir('.pm');
       try { if (targetRepository.read('.pm/project.json') !== markerRaw(entry)) throw new Error('Conflicting transfer destination marker'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; targetRepository.write('.pm/project.json', markerRaw(entry)); }
       targetRepository.mkdir('.pm/core/projects'); targetRepository.mkdir('.pm/core/work-items'); targetRepository.mkdir('.pm/core/docs'); targetRepository.mkdir('.pm/attachments');
-      const sourceRepository = move.source ? new FileRepository(move.source.root, false) : this.repository;
-      if (move.source) { if (!sameIdentity(move.source.identity, identity(move.source.root))) throw new Error('Transfer source was replaced'); validateMarker({ ...entry, root: move.source.root, identity: move.source.identity }); }
+      const sourceRepository = move.source ? projectRepository(move.source) : this.repository;
+      if (move.source) { if (!sameIdentity(move.source.identity, identity(move.source.root))) throw new Error('Transfer source was replaced'); validateMarker(sourceEntry(entry, move.source)); }
       for (const file of move.files) {
         const sourcePath = file.attachment ? file.source : move.source ? `.pm/core/${file.source.slice(`project-roots/${projectId}/`.length)}` : file.source;
         const destination = file.attachment ? file.destination : `.pm/core/${file.destination}`;
@@ -339,15 +393,15 @@ export class ProjectLocations {
       // Check the entire tree again, including newly added files, before choosing the single authority.
       verifyTransferContents(projectId, move, sourceRepository, targetRepository, true);
       validateMarker(targetEntry);
-      if (move.source) validateMarker({ ...entry, root: move.source.root, identity: move.source.identity });
-      this.update(entries => { const current = entries.find(item => item.projectId === projectId)!; current.root = move.target.root; current.mode = move.target.mode; current.identity = move.target.identity!; current.initialization.step = 'ready'; current.transfer!.phase = 'cutover'; });
+      if (move.source) validateMarker(sourceEntry(entry, move.source));
+      this.update(entries => { const current = entries.find(item => item.projectId === projectId)!; current.root = move.target.root; current.mode = move.target.mode; current.layout = move.target.layout; current.identity = move.target.identity!; if (move.target.layout === 'dovspace-v1') current.storageIdentity = identity(path.join(move.target.root, PROJECT_DATA_DIRECTORY)); else delete current.storageIdentity; current.containerAttempted = move.target.layout === 'dovspace-v1'; current.initialization.step = 'ready'; current.transfer!.phase = 'cutover'; });
       entry = this.load().value.entries.find(item => item.projectId === projectId)!; move = entry.transfer!;
     }
     validateMarker(entry);
-    const sourceRepository = move.source ? new FileRepository(move.source.root, false) : this.repository;
+    const sourceRepository = move.source ? projectRepository(move.source) : this.repository;
     if (move.source && !sameIdentity(move.source.identity, identity(move.source.root))) throw new Error('Transfer source was replaced before cleanup');
     if (move.source) {
-      try { validateMarker({ ...entry, root: move.source.root, identity: move.source.identity }); }
+      try { validateMarker(sourceEntry(entry, move.source)); }
       catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         for (const file of move.files) {
@@ -357,8 +411,8 @@ export class ProjectLocations {
         }
       }
     }
-    verifyTransferContents(projectId, move, sourceRepository, new FileRepository(entry.root, false), false);
-    const targetRepository = new FileRepository(entry.root, false);
+    const targetRepository = projectRepository(entry);
+    verifyTransferContents(projectId, move, sourceRepository, targetRepository, false);
     for (const file of move.files) {
       const destination = file.attachment ? file.destination : `.pm/core/${file.destination}`;
       if (binaryRevision(targetRepository.resolve(destination)) !== file.revision) throw new Error('Cutover destination changed before cleanup');
@@ -367,7 +421,7 @@ export class ProjectLocations {
         const filename = sourceRepository.resolve(sourcePath);
         if (binaryRevision(filename) !== file.revision) throw new Error('Old authority changed before cleanup');
         validateMarker(entry);
-        if (move.source) validateMarker({ ...entry, root: move.source.root, identity: move.source.identity });
+        if (move.source) validateMarker(sourceEntry(entry, move.source));
         unlinkSync(filename); syncDirectory(path.dirname(filename));
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     }
@@ -415,9 +469,9 @@ function verifyTransferContents(projectId: string, transfer: Transfer, source: F
     walk('.pm/attachments');
     if (complete && count !== expectedAttachments.size) throw new Error('Project attachment set is incomplete');
   };
-  inspectCore(transfer.source ? new FileRepository(path.join(source.root, '.pm/core'), false) : source, !transfer.source, completeSource);
+  inspectCore(transfer.source ? new FileRepository(path.join(storageRootOf(transfer.source), '.pm/core'), false) : source, !transfer.source, completeSource);
   if (transfer.source) inspectAttachments(source, completeSource);
-  inspectCore(new FileRepository(path.join(target.root, '.pm/core'), false), false, true);
+  inspectCore(new FileRepository(path.join(storageRootOf(transfer.target), '.pm/core'), false), false, true);
   inspectAttachments(target, true);
 }
 
@@ -466,7 +520,7 @@ function copyVerifiedFile(source: string, destination: string, revision: string)
 /** Administrative/maintenance interfaces. Returned absolute paths must never be returned through ordinary FileRecord APIs. */
 export const readProjectLocation = (workspaceRoot: string, projectId: string): ProjectMount | null => new ProjectLocations(workspaceRoot).get(projectId);
 export const enumerateProjectMounts = (workspaceRoot: string): ProjectMount[] => new ProjectLocations(workspaceRoot).mounts();
-export function previewProjectDirectory(workspaceRoot: string, directory: ProjectDirectory): { root: string; mode: 'existing' | 'new' } { return new ProjectLocations(workspaceRoot).preview(directory); }
+export function previewProjectDirectory(workspaceRoot: string, directory: ProjectDirectory): ProjectDirectoryCheck { return new ProjectLocations(workspaceRoot).preview(directory); }
 export function assertProjectFile(projectId: string, raw: string): void {
   const { metadata } = inspectFrontmatter(raw);
   if (metadata.entity === 'project' ? metadata.id !== projectId : metadata.project !== projectId) throw new Error('File does not belong to its registered project');
@@ -483,9 +537,10 @@ export function rebindProjectLocations(workspaceRoot: string, bindings: Record<s
     const root = validateRoot(bindings[entry.projectId]!);
     if (overlaps(root, repository.root) || roots.some(other => overlaps(root, other))) throw new Error('Restored roots must not overlap');
     roots.push(root);
-    const rebound = { ...entry, root, identity: identity(root) };
+    const rebound = { ...entry, root, identity: identity(root), ...(layoutOf(entry) === 'dovspace-v1' ? { storageIdentity: identity(path.join(root, PROJECT_DATA_DIRECTORY)) } : {}) };
     validateMarker(rebound);
     entry.root = root; entry.identity = rebound.identity;
+    if (rebound.storageIdentity) entry.storageIdentity = rebound.storageIdentity; else delete entry.storageIdentity;
   }
   repository.write(projectLocationsPath, JSON.stringify(value, null, 2) + '\n', revisionOf(raw));
 }

@@ -22,7 +22,7 @@ import { CoreCommandJournal, type CoreHttpCreation, type CoreHttpOutcome } from 
 import { captureCoreFacts, recoverPreparedCoreCreations } from './core-facts.ts';
 import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
 import { insertServiceFact, type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
-import { initializeLocalProject, beginLocalProjectOperation, readLocalProjectOperation, requireLocalManagement, assertLocalProjectWritable, assertLocalProjectTargetAvailable, type LocalProjectConfiguration } from '../../../../packages/application/src/local-projects.ts';
+import { initializeLocalProject, beginLocalProjectOperation, readLocalProjectOperation, requireLocalManagement, assertLocalProjectWritable, assertLocalProjectTargetAvailable, resolveLocalInitializationDirectory, resolveLocalRecoveryDirectory, toLocalDirectory, type LocalProjectConfiguration } from '../../../../packages/application/src/local-projects.ts';
 import { assertCoreDeletionSafe } from '../../../../packages/application/src/core-deletion.ts';
 import { localDirectorySchema, type LocalDirectory } from '../../../../packages/contracts/src/local-projects.ts';
 import { registerLocalProjectRoutes } from './local-project-routes.ts';
@@ -103,8 +103,8 @@ export class CoreWorkspacePool {
   }
 
   /** Cached projections are refreshed at acquisition, not only by the asynchronous watcher. */
-  async get(workspaceId: string): Promise<Workspace> {
-    if (this.sql) await assertWorkspaceSampleReady(this.sql, workspaceId);
+  async get(workspaceId: string, sql: SqlExecutor | undefined = this.sql): Promise<Workspace> {
+    if (sql) await assertWorkspaceSampleReady(sql, workspaceId);
     const existing = this.entries.get(workspaceId);
     if (existing) {
       const workspace = await existing.ready;
@@ -119,7 +119,7 @@ export class CoreWorkspacePool {
         if (!state.isFile() || state.isSymbolicLink() || state.nlink !== 1) throw new DomainError('core_workspace_storage_missing', 'The authoritative workspace state is unsafe; restore it before continuing', 503);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        const evidence = await this.sql?.query<{ used: boolean }>(`SELECT EXISTS(SELECT 1 FROM project_audit WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM local_project_operations WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM workspace_sample_initializations WHERE workspace_id=$1 AND NOT sample_skipped) OR EXISTS(SELECT 1 FROM command_receipts WHERE workspace_id=$1 AND command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed') AS used`, [workspaceId]);
+        const evidence = await sql?.query<{ used: boolean }>(`SELECT EXISTS(SELECT 1 FROM project_audit WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM local_project_operations WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM workspace_sample_initializations WHERE workspace_id=$1 AND NOT sample_skipped) OR EXISTS(SELECT 1 FROM command_receipts WHERE workspace_id=$1 AND command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed') AS used`, [workspaceId]);
         if (evidence?.rows[0]?.used) throw new DomainError('core_workspace_storage_missing', 'Authoritative workspace state is missing; restore the original data root rather than creating an empty replacement', 503);
       }
       workspace = new Workspace(root);
@@ -312,7 +312,6 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
       if (local) await requireLocalManagement(sql, principal, scope.workspaceId, true);
       if (before) fresh.entity(before);
       if (before) await assertLocalProjectWritable(sql, scope.workspaceId, before.entity.entity === 'project' ? before.id : typeof before.entity.project === 'string' ? before.entity.project : undefined);
-      if (action === 'DeleteCoreEntity' && before) await assertCoreDeletionSafe(sql, scope.workspaceId, before);
       const saved = isCreation ? journal.httpOutcome(commandId, principal.id) : journal.findHttp(commandId, principal.id);
       if (saved) {
         if (saved.hash !== hash) throw new DomainError('command_id_conflict', 'Idempotency key already represents a different native request', 409);
@@ -359,10 +358,18 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
       if (!local?.recovering && isCreation && Workspace.inspectCreation(workspace.root, coreKey).request)
         throw new DomainError('core_write_outcome_unknown', 'A durable creation exists without its native request journal; administrative reconciliation is required', 409);
       if (local) {
-        const targetRoot = local.directory.mode === 'existing' ? path.resolve(local.directory.path) : path.resolve(local.directory.parentPath, local.directory.folderName);
+        const targetRoot = local.directory.mode === 'new' ? path.resolve(local.directory.parentPath, local.directory.folderName) : path.resolve(local.directory.path);
         await assertLocalProjectTargetAvailable(sql, workspace.root, targetRoot, coreKey);
       }
       journal.pendingHttp(commandId, hash, principal.id, creation);
+      if (action === 'DeleteCoreEntity' && before) {
+        try { await assertCoreDeletionSafe(sql, scope.workspaceId, before); }
+        catch (error) {
+          // Only the explicit no-write business rejection is durable evidence.
+          if (error instanceof DomainError && error.code === 'DELETE_REFERENCED') journal.rejectHttp(commandId, hash, principal.id, creation);
+          throw error;
+        }
+      }
       const guard: WorkspaceMutationGuard = async (previous, next) => {
         if (previous) fresh.entity(previous);
         await assertLocalProjectWritable(sql, scope.workspaceId, next.entity === 'project' ? next.id : typeof next.project === 'string' ? next.project : undefined);
@@ -471,14 +478,17 @@ export function registerCoreRoutes(app: FastifyInstance, options: { database: ()
   async function createLocal(request: FastifyRequest, workspaceId: string, input: Record<string, unknown>, directory: LocalDirectory, key: string, recovering: boolean): Promise<FileRecord> {
     const principal = await options.actor(request);
     await requireLocalManagement(options.database(), principal, workspaceId, true);
-    const saved = await beginLocalProjectOperation(options.database(), principal, workspaceId, key, 'initialize', 'native', { input, directory });
+    const previous = await readLocalProjectOperation(options.database(), principal, workspaceId, key);
+    const selected = recovering ? resolveLocalRecoveryDirectory(options.localProjects, directory) : resolveLocalInitializationDirectory(options.localProjects, directory, previous);
+    const resolved: LocalDirectory = toLocalDirectory(selected);
+    const saved = await beginLocalProjectOperation(options.database(), principal, workspaceId, key, 'initialize', 'native', { input, directory: resolved });
     if (saved.status === 'rejected') throw new DomainError('core_creation_rejected', 'The original initialization was rejected', 409);
     const scope = await scopeFor(request, workspaceId, 'planning.edit'), workspace = await pool.get(workspaceId);
     let result: FileRecord | { id: string; deleted: true };
     try {
-      result = await auditedMutation(request, workspace, scope, 'CreateCoreEntity', { ...input, localDirectory: directory }, undefined, undefined,
-        (coreKey, guard, prepared) => initializeLocalProject(workspace, options.localProjects, workspaceId, input, coreKey!, directory, guard, prepared, recovering),
-        'planning.edit', { key, directory, recovering });
+      result = await auditedMutation(request, workspace, scope, 'CreateCoreEntity', { ...input, localDirectory: resolved }, undefined, undefined,
+        (coreKey, guard, prepared) => initializeLocalProject(workspace, options.localProjects, workspaceId, input, coreKey!, resolved, guard, prepared, recovering),
+        'planning.edit', { key, directory: resolved, recovering });
     } catch (error) {
       if (!(error instanceof DomainError) || error.code !== 'core_write_recovered') throw error;
       const original = new CoreCommandJournal(workspace.root).httpOutcome(nativeCommandId(workspaceId, principal.id, 'CreateCoreEntity', undefined, key), principal.id);
@@ -520,8 +530,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: { database: ()
   async function creationAttempt(request: FastifyRequest, recover: boolean, explicit?: { workspaceId: string; key: string }): Promise<CoreCreationAttempt> {
     const route = explicit ?? z.object({ workspaceId: workspaceIdSchema, key: creationKeySchema }).parse(request.params);
     const workspaceId = route.workspaceId, key = route.key;
+    const selector = explicit ? { kind: 'entity' as const } : z.strictObject({ kind: z.enum(['task', 'entity']).optional() }).parse(request.query);
+    const action = selector.kind === 'task' ? 'CreateCoreWorkItem' : 'CreateCoreEntity';
     const principal = await options.actor(request);
-    if (recover) {
+    if (recover && action === 'CreateCoreEntity') {
       const local = await readLocalProjectOperation(options.database(), principal, workspaceId, key);
       const original = new CoreCommandJournal(pool.rootFor(workspaceId)).httpOutcome(nativeCommandId(workspaceId, principal.id, 'CreateCoreEntity', undefined, key), principal.id);
       if (local?.operation === 'initialize' && local.transport === 'native' && local.status !== 'rejected' && original?.kind !== 'http_rejected')
@@ -532,7 +544,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: { database: ()
       if (recover) { await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); }
       const scope = await authorizeCoreScope(sql, principal, workspaceId, 'domain.read');
       const root = pool.rootFor(workspaceId), journal = new CoreCommandJournal(root);
-      const commandId = nativeCommandId(workspaceId, principal.id, 'CreateCoreEntity', undefined, key);
+      const commandId = nativeCommandId(workspaceId, principal.id, action, undefined, key);
       let saved = journal.httpOutcome(commandId, principal.id);
       if (saved) authorizeCreation(scope, saved);
       if (recover) saved = await recoverCoreHttpOutcome(sql, pool, principal, scope, commandId, saved);

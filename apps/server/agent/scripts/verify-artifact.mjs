@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { enforceExternalAgentBoundary, isExternalAgentCliPackage } from "./external-agent-packages.mjs";
 
 if (process.argv[2] !== "--artifact" || !process.argv[3] || process.argv.length !== 4) throw new Error("Usage: node apps/server/agent/scripts/verify-artifact.mjs --artifact RELOCATED_ARTIFACT_ROOT");
@@ -29,6 +30,10 @@ for (const entry of manifest.links) {
   assert.ok(!path.isAbsolute(link));
   assert.equal(link.split(path.sep).join("/"), entry.target);
   assert.ok(contained(await realpath(target)));
+}
+const { readBundledPmResources } = await import(pathToFileURL(path.join(artifact, "packages/skill-resources/catalog.ts")).href);
+for (const [resource, content] of await readBundledPmResources(artifact)) {
+  assert.ok(manifest.files.some(entry => entry.path === resource && entry.sha256 === sha(content)), `Missing bundled PM resource inventory: ${resource}`);
 }
 assert.equal(manifest.packages.filter((entry) => entry.name === "effect").length, 1);
 const temporary = await mkdtemp(path.join(os.tmpdir(), "pm-agent-portable-"));

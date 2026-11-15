@@ -77,8 +77,9 @@ async function executeMaintenance({ serverRoot, runtimeRoot, input, onProgress }
   return promise;
 }
 
-export async function backupDesktop({ serverRoot, runtimeRoot, dataDir, destination, password, onProgress = undefined }) {
+export async function backupDesktop({ serverRoot, runtimeRoot, dataDir, destination, password, stoppedWritersAcknowledged = false, onProgress = undefined }) {
   validateBackupPassword(password, true);
+  if (stoppedWritersAcknowledged !== true) throw Object.assign(new Error('Complete backup requires explicit acknowledgement that all included external writers are actually stopped for the full barrier; no process was stopped automatically.'), { code: 'DESKTOP_BACKUP_STOPPED_WRITERS_REQUIRED' });
   const source = await safePath(dataDir, true);
   const target = await safePath(destination);
   independent(source, target);
@@ -95,6 +96,7 @@ export async function backupDesktop({ serverRoot, runtimeRoot, dataDir, destinat
       const started = await postgres.start();
       await executeMaintenance({ serverRoot, runtimeRoot, onProgress, input: {
         operation: 'backup', databaseUrl: started.databaseUrl, dataDir: source, destination: plaintext,
+        stoppedWritersAcknowledged,
         monitor: await postgres.maintenanceMonitorIdentity(),
         postgresRoot: join(runtimeRoot, 'postgres'), serverRoot,
       } });

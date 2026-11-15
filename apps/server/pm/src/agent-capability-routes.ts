@@ -62,8 +62,8 @@ export function registerAgentCapabilityRoutes(app: FastifyInstance, options: {
         let denyReason: string | null = null;
         if (missing) denyReason = CAPABILITY_REQUIRED;
         else if (!tool.available) denyReason = tool.denyReason ?? TOOL_UNAVAILABLE;
-        else if (tool.name === 'pm_create_project' && scope.kind !== 'workspace') denyReason = WORKSPACE_SCOPE_REQUIRED;
-        else if (tool.write && tool.name !== 'pm_create_project' && scope.kind !== 'projects') denyReason = PROJECT_SCOPE_REQUIRED;
+        else if ((tool.name === 'pm_create_project' || tool.scope === 'workspace-admin' || tool.scope === 'workspace') && scope.kind !== 'workspace') denyReason = WORKSPACE_SCOPE_REQUIRED;
+        else if (tool.write && tool.scope === 'project' && tool.name !== 'pm_create_project' && scope.kind !== 'projects') denyReason = PROJECT_SCOPE_REQUIRED;
         return {
           name: tool.name, description: tool.description, write: tool.write,
           capabilities: [...tool.capabilities], allowed: denyReason === null, denyReason,

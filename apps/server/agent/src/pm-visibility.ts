@@ -8,10 +8,15 @@ import { normalizePmToolResult, pmOutcomeFromToolOutput } from "./pm-outcomes.ts
 import { agentChatContextSourceSchema, agentChatToolEntitySchema, agentChatToolCommentSchema } from "@agent-workspace/contracts/pm-tool-result";
 import { pmReferenceInputSchema, pmReferenceResolutionSchema } from "@agent-workspace/contracts/pm-references";
 import type { UIMessageChunk } from "ai";
+import { readAuthorizedPmToolResult } from "./pm-tool-transport.ts";
+import { acceptedChatContextSchema, chatContextAttachmentBindingSchema, type AcceptedChatContext } from "@agent-workspace/contracts/message-context";
+import { getThread } from "./durable/threads.ts";
+import { resolveChatExecutionScope } from "./task-delivery/binding.ts";
+import { assertMcpThread, mcpIdentityFromHeaders } from "./mcp/identity.ts";
 
 const CALLS = "pm-tool-calls", PROVENANCE = "pm-content-provenance";
 type Visibility = "visible" | "redacted" | "unavailable";
-export type PmContentProvenance = { operationIds: string[]; targets: PmToolTarget[]; authorities?: PmAuthorizedOperation[] };
+export type PmContentProvenance = { operationIds: string[]; targets: PmToolTarget[]; authorities?: PmAuthorizedOperation[]; contextSources?: { threadId: string; messageIds: string[] }[] };
 type QuoteProvenance = PmContentProvenance & { threadId: string; messageId: string; sourceMessageId: string; complete: boolean };
 type ProvenanceRecord = PmContentProvenance & { threadId: string; generationId: string; messageIds: string[] };
 type Generation = { id: string; threadId: string; messageId: string; createdAt?: string; pmOperations?: { actorId: string; target: PmToolTarget }[]; pmReferences?: unknown[] };
@@ -23,7 +28,8 @@ const notice = (visibility: Visibility) => visibility === "unavailable" ? unavai
 function merge(...values: PmContentProvenance[]): PmContentProvenance {
   return { operationIds: [...new Set(values.flatMap(value => value.operationIds))],
     targets: [...new Map(values.flatMap(value => value.targets).map(target => [key(target), target])).values()],
-    authorities: [...new Map(values.flatMap(value => value.authorities ?? []).map(authority => [JSON.stringify([authority.actorId, key(authority.target)]), authority])).values()] };
+    authorities: [...new Map(values.flatMap(value => value.authorities ?? []).map(authority => [JSON.stringify([authority.actorId, key(authority.target)]), authority])).values()],
+    contextSources: [...new Map(values.flatMap(value => value.contextSources ?? []).map(source => [JSON.stringify(source), source])).values()] };
 }
 /** Dependencies come from typed PM evidence, never JSON examples in user prose or tool arguments. */
 export function pmPayloadTargets(value: unknown, workspaceId?: string): PmToolTarget[] {
@@ -64,8 +70,8 @@ export function pmPayloadTargets(value: unknown, workspaceId?: string): PmToolTa
     // Original invocation fields are authoritative; arguments are content, not another ACL.
     if (typeof item.operationId === "string" && typeof item.name === "string" && item.name.startsWith("pm_")) visit(item.target, workspace);
     // Results are validated at the PM boundary. Only their typed source/identity metadata is used.
-    if (typeof item.kind === "string" && Array.isArray(item.sources) && Array.isArray(item.items)) {
-      visit(item.sources, workspace); visit(item.items, workspace);
+    if (typeof item.kind === "string" && Array.isArray(item.sources)) {
+      visit(item.sources, workspace); if (Array.isArray(item.items)) visit(item.items, workspace);
     }
     if (Array.isArray(item.pmReferences)) visit(item.pmReferences, workspace);
     if (Array.isArray(item.pmOperations)) for (const operation of item.pmOperations) if (object(operation)) visit(operation.target, workspace);
@@ -85,10 +91,10 @@ export function pmPayloadTargets(value: unknown, workspaceId?: string): PmToolTa
   visit(value, workspaceId);
   return [...targets.values()];
 }
-export function recordPmContentProvenance(input: { threadId: string; generationId: string; messageIds?: string[]; operationIds: string[]; targets?: PmToolTarget[]; authorities?: PmAuthorizedOperation[] }): void {
+export function recordPmContentProvenance(input: { threadId: string; generationId: string; messageIds?: string[]; operationIds: string[]; targets?: PmToolTarget[]; authorities?: PmAuthorizedOperation[]; contextSources?: PmContentProvenance["contextSources"] }): void {
   const previous = readRecord<ProvenanceRecord>(PROVENANCE, input.generationId);
   if (previous && previous.threadId !== input.threadId) throw new Error("PM provenance belongs to another Session");
-  const deps = merge(previous ?? { operationIds: [], targets: [] }, { operationIds: input.operationIds, targets: input.targets ?? [], authorities: input.authorities ?? [] });
+  const deps = merge(previous ?? { operationIds: [], targets: [] }, { operationIds: input.operationIds, targets: input.targets ?? [], authorities: input.authorities ?? [], contextSources: input.contextSources ?? [] });
   writeRecord<ProvenanceRecord>(PROVENANCE, input.generationId, { ...deps, threadId: input.threadId, generationId: input.generationId,
     messageIds: [...new Set([...(previous?.messageIds ?? []), ...(input.messageIds ?? [])])] });
 }
@@ -98,8 +104,11 @@ export function collectPmContentProvenance(threadId: string, messageIds: readonl
   const saved = listRecords<ProvenanceRecord>(PROVENANCE).filter(value => value.threadId === threadId && value.messageIds.some(id => ids.has(id)));
   const quotes = listRecords<QuoteProvenance>("pm-quote-provenance").filter(value => value.threadId === threadId && ids.has(value.messageId));
   const generations = listRecords<Generation>("chat:generations").filter(value => value.threadId === threadId && ids.has(value.messageId));
-  return merge(...saved, ...quotes, { operationIds: calls.map(call => call.record.operationId),
+  const contexts = listRecords<{ threadId: string; messages: StoredMessage[] }>("chat:history").filter(value => value.threadId === threadId)
+    .flatMap(value => value.messages.filter(message => ids.has(message.id)).flatMap(message => message.turnContext?.contextItems ?? []));
+  return merge(...saved, ...quotes, ...contexts.flatMap(item => item.pmProvenance ? [item.pmProvenance] : []), { operationIds: calls.map(call => call.record.operationId),
     targets: calls.flatMap(call => pmPayloadTargets([call.record, call.request], call.record.workspaceId ?? undefined)),
+    contextSources: contexts.flatMap(item => item.dependencies ?? []),
     authorities: generations.flatMap(value => value.pmOperations ?? []) });
 }
 /** A quote keeps its own immutable source binding; it does not taint the user's unrelated prose. */
@@ -140,7 +149,21 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
   const provenance = listRecords<ProvenanceRecord>(PROVENANCE).filter(value => value.threadId === threadId);
   const quotes = listRecords<QuoteProvenance>("pm-quote-provenance").filter(value => value.threadId === threadId);
   // Only durable, server-written provenance can link another Session's operation.
-  const linkedIds = new Set([...provenance, ...quotes].flatMap(value => value.operationIds));
+  const contextItems = listRecords<{ threadId: string; messages: StoredMessage[] }>("chat:history").filter(value => value.threadId === threadId)
+    .flatMap(value => value.messages.flatMap(message => message.turnContext?.contextItems ?? []));
+  const contextProvenance = contextItems.flatMap(item => item.pmProvenance ? [item.pmProvenance] : []);
+  const sourceVisibility = new Map<string, Visibility>();
+  for (const sourceId of new Set([...contextItems.flatMap(item => item.dependencies ?? []), ...[...provenance, ...quotes].flatMap(value => value.contextSources ?? [])].map(source => source.threadId))) {
+    try {
+      const source = getThread(sourceId);
+      if (!source || source.deletionState) throw new Error("Source Session unavailable");
+      const identity = mcpIdentityFromHeaders(headers);
+      if (identity) await assertMcpThread(identity, sourceId);
+      await resolveChatExecutionScope(source, headers, "inspect");
+      sourceVisibility.set(sourceId, "visible");
+    } catch { sourceVisibility.set(sourceId, "unavailable"); }
+  }
+  const linkedIds = new Set([...provenance, ...quotes, ...contextProvenance].flatMap(value => value.operationIds));
   const calls = [...threadCalls, ...allCalls.filter(call => call.record.threadId !== threadId && linkedIds.has(call.record.operationId))];
   const histories = listRecords<{ threadId: string; messages: StoredMessage[] }>("chat:history").filter(value => value.threadId === threadId);
   const authorities = new Map<string, { target: PmToolTarget }>();
@@ -166,6 +189,10 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
   for (const saved of provenance) for (const target of saved.targets) add(target);
   for (const quote of quotes) for (const target of quote.targets) add(target);
   for (const saved of [...provenance, ...quotes]) for (const authority of saved.authorities ?? []) add(authority.target);
+  for (const context of contextProvenance) {
+    for (const target of context.targets) add(target);
+    for (const authority of context.authorities ?? []) add(authority.target);
+  }
   for (const history of histories) for (const message of history.messages) for (const target of pmPayloadTargets(message)) add(target);
   const currentActors = new Map<string, string>();
   const visibility = new Map<string, Visibility>();
@@ -184,25 +211,62 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
     return statuses.includes("redacted") ? "redacted" : statuses.includes("unavailable") ? "unavailable" : "visible";
   };
   const callVisibility = new Map<string, Visibility>();
-  const projectedCalls: PmToolCallProjection[] = calls.map(call => {
+  const projectedCalls: PmToolCallProjection[] = await Promise.all(calls.map(async call => {
     const targets = callTargets.get(call.record.operationId)!;
-    const state = !call.record.actorId && call.record.name !== "pm_list_workspaces" ? "unavailable"
+    let state: Visibility = !call.record.actorId && call.record.name !== "pm_list_workspaces" ? "unavailable"
       : targets.some(target => call.record.actorId && currentActors.get(key(target)) && currentActors.get(key(target)) !== call.record.actorId) ? "redacted"
       : targets.length === 0 && call.record.name !== "pm_list_workspaces" ? "unavailable" : targetsVisibility(targets);
+    let record = call.record;
+    if (state === "visible" && record.status === "succeeded" && record.name !== "pm_list_workspaces") {
+      try {
+        // Project ACLs do not prove that a linked source, private record or native capability survived.
+        // PM authorizes its original stored payload. Never substitute our older cached payload for it.
+        const authorized = await readAuthorizedPmToolResult(call, headers);
+        if (authorized.status !== "succeeded" || authorized.result === null) throw new Error("Original successful result is not currently available");
+        record = { ...call.record, result: authorized.result, error: authorized.error, changeSet: authorized.changeSet,
+          commandIds: authorized.commandIds ?? call.record.commandIds };
+      } catch (error) {
+        const status = object(error) && "status" in error ? Number(error.status) : 0;
+        state = [401, 403, 404].includes(status) ? "redacted" : "unavailable";
+      }
+    }
+    // Unconfirmed dispatches have no currently authorized result snapshot to justify retained payloads.
+    if (state === "visible" && record.status !== "succeeded" && record.result !== null) state = "unavailable";
     callVisibility.set(call.record.operationId, state);
     if (state !== "visible") return { operationId: call.record.operationId, threadId: call.record.threadId, messageId: call.record.messageId, generationId: call.record.generationId, visibility: state };
+    const normalized = normalizePmToolResult(record);
+    const argumentsReadable = normalized.status === "succeeded" || normalized.status === "pending_approval" || normalized.certainty?.dispatch === "not_sent";
     const args = call.request.arguments;
-    const exposeArguments = args !== undefined && JSON.stringify(args).length <= 16 * 1024;
-    return { ...normalizePmToolResult(call.record), ...(exposeArguments ? { arguments: args } : {}), visibility: "visible" };
-  });
+    const exposeArguments = argumentsReadable && args !== undefined && JSON.stringify(args).length <= 16 * 1024;
+    const projected: PmToolCallProjection = { ...normalized, visibility: "visible" };
+    if (exposeArguments) projected.arguments = args;
+    else delete projected.arguments;
+    if (!argumentsReadable) delete projected.changeSet;
+    return projected;
+  }));
   const depsVisibility = (deps: PmContentProvenance): Visibility => {
     const actorMismatch = (deps.authorities ?? []).some(authority => currentActors.get(key(authority.target)) && currentActors.get(key(authority.target)) !== authority.actorId);
     if (actorMismatch) return "redacted";
-    const statuses = [targetsVisibility([...deps.targets, ...(deps.authorities ?? []).map(authority => authority.target)]), ...deps.operationIds.map(id => callVisibility.get(id) ?? "unavailable")];
+    const statuses = [targetsVisibility([...deps.targets, ...(deps.authorities ?? []).map(authority => authority.target)]),
+      ...deps.operationIds.map(id => callVisibility.get(id) ?? "unavailable"),
+      ...(deps.contextSources ?? []).map(source => sourceVisibility.get(source.threadId) ?? "unavailable")];
     return statuses.includes("redacted") ? "redacted" : statuses.includes("unavailable") ? "unavailable" : "visible";
   };
+  const contextVisibility = (item: AcceptedChatContext): Visibility => {
+    const states = (item.dependencies ?? []).map(source => sourceVisibility.get(source.threadId) ?? "unavailable");
+    if (item.pmProvenance) states.push(item.pmProvenance.complete ? depsVisibility(item.pmProvenance) : "unavailable");
+    if (item.visibility !== "available") states.push("unavailable");
+    return states.includes("redacted") ? "redacted" : states.includes("unavailable") ? "unavailable" : "visible";
+  };
+  const projectContext = (item: AcceptedChatContext): AcceptedChatContext => {
+    const state = contextVisibility(item);
+    if (state === "visible") return item;
+    return { contextId: item.contextId, kind: item.kind, digest: item.digest, inputDigest: item.inputDigest,
+      acceptedAt: item.acceptedAt, truncated: item.truncated, provenance: item.provenance,
+      source: { type: "unavailable" }, text: "", visibility: "unavailable", reason: notice(state) };
+  };
   const hidden = projectedCalls.some(call => call.visibility !== "visible") || [...visibility.values()].some(state => state !== "visible") ||
-    [...provenance, ...quotes].some(value => depsVisibility(value) !== "visible") ||
+    [...provenance, ...quotes].some(value => depsVisibility(value) !== "visible") || contextItems.some(item => contextVisibility(item) !== "visible") ||
     generations.some(value => value.pmOperations?.some(authority => currentActors.get(key(authority.target)) && currentActors.get(key(authority.target)) !== authority.actorId));
   const generationVisibility = (id: string): Visibility => {
     const generation = generations.find(value => value.id === id);
@@ -210,13 +274,15 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
     const saved = provenance.find(value => value.generationId === id);
     if (saved) return depsVisibility(merge(saved, { operationIds: calls.filter(call => call.record.generationId === id).map(call => call.record.operationId), targets: [] }));
     // Legacy summaries/cursors lack complete dependencies. Never guess them clean from text.
-    if (hidden) return [...visibility.values()].includes("redacted") ? "redacted" : "unavailable";
+    if (hidden) return [...visibility.values(), ...callVisibility.values()].includes("redacted") ? "redacted" : "unavailable";
     return targetsVisibility(pmPayloadTargets(generation));
   };
   const safeNested = (value: unknown): unknown => {
     if (typeof value === "string") return value;
     if (Array.isArray(value)) return value.map(safeNested);
     if (!object(value)) return value;
+    const context = acceptedChatContextSchema.safeParse(value);
+    if (context.success) return projectContext(context.data);
     if (typeof value.operationId === "string" && "name" in value && "status" in value && callVisibility.has(value.operationId)) {
       return projectedCalls.find(call => call.operationId === value.operationId)!;
     }
@@ -263,12 +329,17 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
     nativeContextContaminated: hidden,
     visibleProvenance(messageIds) {
       const ids = new Set(messageIds);
-      const deps = merge(...provenance.filter(value => value.messageIds.some(id => ids.has(id))), ...quotes.filter(value => ids.has(value.messageId) && depsVisibility(value) === "visible"), {
+      const deps = merge(...provenance.filter(value => value.messageIds.some(id => ids.has(id))), ...quotes.filter(value => ids.has(value.messageId) && depsVisibility(value) === "visible"),
+        ...histories.flatMap(history => history.messages.filter(message => ids.has(message.id)).flatMap(message => message.turnContext?.contextItems ?? []))
+          .filter(item => contextVisibility(item) === "visible").flatMap(item => item.pmProvenance ? [item.pmProvenance] : []), {
         operationIds: calls.filter(call => ids.has(call.record.messageId)).map(call => call.record.operationId), targets: [],
+        contextSources: histories.flatMap(history => history.messages.filter(message => ids.has(message.id)).flatMap(message => message.turnContext?.contextItems ?? []))
+          .filter(item => contextVisibility(item) === "visible").flatMap(item => item.dependencies ?? []),
         authorities: generations.filter(value => ids.has(value.messageId)).flatMap(value => value.pmOperations ?? []),
       });
       return { operationIds: deps.operationIds.filter(id => callVisibility.get(id) === "visible"), targets: deps.targets.filter(target => targetsVisibility([target]) === "visible"),
-        authorities: (deps.authorities ?? []).filter(authority => currentActors.get(key(authority.target)) === authority.actorId && targetsVisibility([authority.target]) === "visible") };
+        authorities: (deps.authorities ?? []).filter(authority => currentActors.get(key(authority.target)) === authority.actorId && targetsVisibility([authority.target]) === "visible"),
+        contextSources: (deps.contextSources ?? []).filter(source => sourceVisibility.get(source.threadId) === "visible") };
     },
     history(messages) {
       return messages.map(message => {
@@ -306,12 +377,29 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
         }
         const projectedMetadata: Record<string, unknown> = { ...metadata, custom };
         if (quoteState !== "visible") { delete projectedMetadata.quote; delete projectedMetadata.quoteContext; }
+        const hiddenCaptures = new Set((message.turnContext?.contextItems ?? []).flatMap(item =>
+          item.visibility === "available" && item.source.type === "browser" && item.source.attachmentId && contextVisibility(item) !== "visible"
+            ? [item.source.attachmentId] : []));
+        const hiddenParts = new Set<number>();
+        if (hiddenCaptures.size && Array.isArray(custom.contextAttachments)) {
+          const visibleAttachments = custom.contextAttachments.filter(binding => {
+            const parsed = chatContextAttachmentBindingSchema.safeParse(binding);
+            if (!parsed.success || !hiddenCaptures.has(parsed.data.attachmentId)) return true;
+            hiddenParts.add(parsed.data.partIndex); return false;
+          });
+          if (visibleAttachments.length) custom.contextAttachments = visibleAttachments;
+          else delete custom.contextAttachments;
+        }
         const projected = { ...message, content: safeNested({ ...message.content, metadata: projectedMetadata }) as Record<string, unknown> } as StoredMessage & { turnContext?: Record<string, unknown> };
+        if (hiddenParts.size && Array.isArray(projected.content.parts))
+          projected.content.parts = projected.content.parts.map((part, index) => hiddenParts.has(index) && object(part) && part.type === "file"
+            ? { type: "text", text: notice("unavailable") } : part);
         const context = (message as StoredMessage & { turnContext?: Record<string, unknown> }).turnContext;
         if (context) {
           const refs = Array.isArray(context.pmReferences) ? context.pmReferences : [];
           const visibleRefs = refs.filter(reference => targetsVisibility(pmPayloadTargets(reference)) === "visible");
-          projected.turnContext = { ...context, pmReferences: visibleRefs };
+          projected.turnContext = { ...context, pmReferences: visibleRefs,
+            ...(Array.isArray(context.contextItems) ? { contextItems: (context.contextItems as AcceptedChatContext[]).map(projectContext) } : {}) };
           if (visibleRefs.length !== refs.length) {
             delete projected.turnContext.executionGrantId;
             const safeMetadata = projected.content.metadata as Record<string, unknown>;

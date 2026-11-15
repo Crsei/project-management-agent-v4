@@ -9,6 +9,7 @@ import {
   CalendarClock,
   ChartGantt,
   ChevronRight,
+  Columns3,
   FileText,
   FolderKanban,
   Home,
@@ -282,6 +283,7 @@ function PmFrame({ children }: { children: ReactNode }) {
             <Link to="/lab/pm" className="truncate font-medium">
               {en ? "Project Management" : "项目管理"}
             </Link>
+            <Link to="/agent/runs" className="shrink-0 rounded-control px-2 py-1 text-xs hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring">{en ? "Run board" : "运行面板"}</Link>
             {referenceLayout && <div className="flex shrink-0 items-center gap-1"><span className="mr-2 text-xs text-muted-foreground">{en ? "Demo data" : "演示数据"}</span><Preferences />{pageSection && workspace && <PageSwitcher section={pageSection} activeView={pageVariant} />}</div>}
           </div>
         }
@@ -435,6 +437,7 @@ function ServiceHeaderMenu({
       <DropdownMenuSeparator className={shellStyles.menuSeparator} />
       <DropdownMenuItem render={<Link to={`${base}/settings/general`} data-navigation-close />}><SettingsIcon aria-hidden="true" />{en ? "Workspace settings" : "工作区设置"}</DropdownMenuItem>
       <DropdownMenuItem render={<Link to={`${base}/whiteboard`} data-navigation-close />}><PanelsTopLeft aria-hidden="true" />{en ? "Personal whiteboard" : "个人白板"}</DropdownMenuItem>
+      <DropdownMenuItem render={<Link to="/agent/runs" data-navigation-close />}><Columns3 aria-hidden="true" />{en ? "Run board" : "运行面板"}</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 }

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { benchmarkConfig } from '../benchmark.config.ts';
-import { boundedBudget, nativeToolPolicy, runTask } from './index.ts';
+import { boundedBudget, nativeToolPolicy, runSuite, runTask } from './index.ts';
+import { summarizeRuns } from '../reports/index.ts';
+import type { BenchEvent } from '../schemas/types.ts';
 
 test('prerequisite failures emit complete truthful artifacts without provider calls or calibration fallback', async () => {
   await mkdir(benchmarkConfig.outputsRoot, { recursive: true });
@@ -16,6 +18,9 @@ test('prerequisite failures emit complete truthful artifacts without provider ca
     assert.equal(result.usage.modelCalls, null);
     assert.equal(result.usage.costUsd, null);
     assert.equal(result.reproducibility.fixtureId, 'unavailable');
+    assert.equal(result.reproducibility.controlTransport, 'http');
+    assert.equal(result.artifacts.cliObservations, undefined);
+    assert.equal(JSON.parse(await readFile(result.artifacts.configuration!, 'utf8')).controlTransport, 'http');
     assert.equal(result.rework.count, null);
     for (const key of ['result', 'trace', 'report', 'pmDiff', 'gitDiff', 'configuration']) {
       const content = await readFile(result.artifacts[key]!, 'utf8');
@@ -38,6 +43,35 @@ test('raw/full share actual required PM capabilities without destructive privile
   for (const name of ['pm_delete_task', 'pm_archive_task', 'pm_restore_task', 'pm_approve']) assert.ok(!policy.includes(name));
 });
 
-test('non-smoke complete definitions are rejected before any execution is admitted', async () => {
-  await assert.rejects(runTask({ taskId: 'D03', arm: 'raw' }), /not executable in Lite v0.1/);
+test('remaining definition-only tasks are rejected before any execution is admitted', async () => {
+  await assert.rejects(runTask({ taskId: 'D03', arm: 'raw' }), /not executable in Lite v0.2/);
+});
+
+
+test('CLI suite prerequisites preserve every failed attempt and unknown projection sidecars', async () => {
+  await mkdir(benchmarkConfig.outputsRoot, { recursive: true });
+  const root = await mkdtemp(path.join(benchmarkConfig.outputsRoot, 'cli-runner-unit-'));
+  try {
+    const results = await runSuite({ taskIds: ['K02'], arms: ['raw', 'dovspace'], outputRoot: root, config: { controlTransport: 'cli', model: 'explicit-test-model', providerApiKey: 'cli-test-only-secret-never-output' } });
+    assert.equal(results.length, 2);
+    assert.equal(summarizeRuns(results).attempts, 2);
+    assert.equal(summarizeRuns(results).successes, 0);
+    assert.equal(summarizeRuns(results).failures.platform, 2);
+    for (const result of results) {
+      assert.equal(result.success, false);
+      assert.equal(result.reproducibility.controlTransport, 'cli');
+      assert.equal(result.failure?.category, 'infrastructure');
+      assert.ok(result.failure?.evidence.includes('provider_prerequisite'));
+      assert.equal(result.usage.modelCalls, null);
+      assert.equal(result.usage.costUsd, null);
+      const trace = (await readFile(result.artifacts.trace!, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as BenchEvent);
+      assert.equal(trace.find(event => event.type === 'run_admitted')?.data.controlTransport, 'cli');
+      assert.equal(trace.some(event => event.type === 'provider_request'), false);
+      assert.equal(JSON.parse(await readFile(result.artifacts.configuration!, 'utf8')).controlTransport, 'cli');
+      assert.match(await readFile(result.artifacts.report!, 'utf8'), /cli-observations/);
+      for (const key of ['result', 'trace', 'report', 'configuration', 'cliObservations', 'cliObservationReport']) {
+        assert.doesNotMatch(await readFile(result.artifacts[key]!, 'utf8'), /cli-test-only-secret-never-output/);
+      }
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

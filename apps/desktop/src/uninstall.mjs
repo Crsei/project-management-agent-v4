@@ -124,7 +124,7 @@ export async function verifyInstallationManifest(root, stamp) {
     if (entry.path === `${prefix}/${INSTALL_FILES_NAME}`) continue;
     // NSIS creates this exact product-owned executable after payload assembly.
     // No wildcard, directory prefix, or user-provided filename grants ownership.
-    if (entry.path === "Uninstall PM Agent v4.exe" && !expected.has(entry.path)) continue;
+    if (entry.path === "Uninstall Dovspace.exe" && !expected.has(entry.path)) continue;
     const claimed = expected.get(entry.path);
     if (!claimed || claimed.bytes !== entry.bytes || claimed.sha256 !== entry.sha256) throw new Error("Unknown or modified installation file; refusing tree deletion.");
     expected.delete(entry.path);

@@ -3,7 +3,9 @@
 # https://github.com/minio/minio/releases/tag/RELEASE.2025-09-07T16-13-09Z
 # Official Go image manifest:
 # https://hub.docker.com/v2/repositories/library/golang/tags/1.24.7-alpine3.22
-FROM golang:1.24.7-alpine3.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5 AS build
+ARG GO_IMAGE=golang:1.24.7-alpine3.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5
+FROM ${GO_IMAGE} AS build
+ARG GOPROXY=https://proxy.golang.org
 ENV GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS=-mod=readonly
 WORKDIR /src
 RUN wget -O /tmp/minio.tar.gz https://codeload.github.com/minio/minio/tar.gz/07c3a429bfed433e49018cb0f78a52145d4bedeb \

@@ -14,10 +14,11 @@ export const setProjectDependenciesSchema = z.strictObject({
   dependsOn: z.array(identifier).refine(values => new Set(values).size === values.length, 'Duplicate project dependency'),
 });
 export const updateTaskDurationSchema = z.strictObject({ estimatedDurationDays: z.number().finite().nonnegative().nullable() });
-/** Omission preserves metadata; null clears only the date. No implicit body/criteria replacement. */
+/** Omission preserves metadata; null clears the date or owner. No implicit body/criteria replacement. */
 export const updateMilestoneSchema = z.strictObject({
   name: z.string().trim().min(1).max(300).optional(),
   targetDate: date.nullable().optional(),
+  ownerId: z.uuid().toLowerCase().nullable().optional(),
   criteria: z.array(z.string().trim().min(1).max(16000)).max(100).optional(),
 }).refine(value => Object.keys(value).length > 0, 'At least one milestone field is required');
 

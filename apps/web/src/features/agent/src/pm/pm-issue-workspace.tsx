@@ -18,6 +18,7 @@ type Value = {
   addSelectedToReferences: () => void; toggleReference: (issue: PmIssue) => void;
   removeReference: (reference: PmReference) => void; clearReferences: () => void;
   reuseReferences: (references: readonly PmReference[]) => void;
+  replaceReferences: (references: readonly PmReference[]) => void;
   selectCurrentIssue: (id: string | null) => void; openPicker: () => void; closePicker: () => void;
   selectTarget: (target: PmToolTarget | null) => void; setChanges: (changes: readonly PmChangeSet[]) => void;
 };
@@ -152,6 +153,13 @@ export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projec
     setReferenceError(combined.size > PM_REFERENCE_LIMIT ? agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个对象。`, `At most ${PM_REFERENCE_LIMIT} references per message.`) : null);
     setReferences([...combined.values()].slice(0, PM_REFERENCE_LIMIT));
   }, [references]);
+  const replaceReferences = useCallback((next: readonly PmReference[]) => {
+    if (next.length > PM_REFERENCE_LIMIT) throw new Error(agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个对象。`, `At most ${PM_REFERENCE_LIMIT} references per message.`));
+    const identities = new Set(next.map(referenceIdentity));
+    if (identities.size !== next.length) throw new Error(agentText("PM 引用身份重复。", "Duplicate PM reference identity."));
+    setReferences(next.map(reference => ({ ...reference, availability: "unverified" })));
+    setReferenceError(null);
+  }, []);
   const selectTarget = useCallback((next: PmToolTarget | null) => { addSelectedToReferences(); setTarget(next); setQuery(""); setCurrentIssueId(null); }, [addSelectedToReferences]);
   const openPicker = useCallback(() => { setPickerOpen(true); void refreshCatalog().catch(() => {}); }, []);
   const closePicker = useCallback(() => setPickerOpen(false), []);
@@ -161,7 +169,7 @@ export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projec
     workspaceId, projectId, workspaceName: workspace?.name ?? null, projectName, issues, filteredIssues: issues, loading, error,
     hasMore, query, selectedIds, references, currentIssueId, currentIssue: issues.find(issue => issue.id === currentIssueId) ?? null,
     changes, pickerOpen, referenceError, setQuery, loadMore, refresh, toggleSelection, selectVisible, clearSelection,
-    addSelectedToReferences, toggleReference, removeReference, clearReferences, reuseReferences, selectCurrentIssue: setCurrentIssueId,
+    addSelectedToReferences, toggleReference, removeReference, clearReferences, reuseReferences, replaceReferences, selectCurrentIssue: setCurrentIssueId,
     openPicker, closePicker, selectTarget, setChanges,
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;

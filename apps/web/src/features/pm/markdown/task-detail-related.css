@@ -51,7 +51,9 @@ button.td-blocker-link { cursor: pointer; }
 .td-child-link small, .td-child-due { color: var(--muted-foreground); font-size: 10px; }
 .td-child-link .td-related-error { color: var(--destructive); }
 .td-child-due { flex: 0 0 auto; }
-.td-child-create { display: grid; justify-items: start; gap: 4px; margin-top: 8px; }
+.td-child-create { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.td-child-create .issue-text-action { font-size: 12px; }
+.issue-empty { margin: 4px 0 8px; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .td-attachment-list > li { display: flex; align-items: flex-start; gap: 10px; padding-block: 10px; border-bottom: 1px solid var(--border); }
 .td-attachment-info { display: grid; flex: 1 1 auto; gap: 3px; font-size: 12px; overflow-wrap: anywhere; }
 .td-attachment-info strong { font-weight: 500; }

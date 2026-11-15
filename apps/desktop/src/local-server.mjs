@@ -118,12 +118,13 @@ export async function bindServicePorts(input, instanceId) {
 }
 
 export class LocalServer {
-  constructor({ serverRoot, webRoot, runtimeRoot, onExit, onProgress }, { postgresFactory = (options) => new ManagedPostgres(options) } = {}) {
+  constructor({ serverRoot, webRoot, runtimeRoot, onExit, onProgress, onReadinessLost = undefined }, { postgresFactory = (options) => new ManagedPostgres(options) } = {}) {
     this.serverRoot = resolve(serverRoot);
     this.webRoot = resolve(webRoot);
     this.runtimeRoot = runtimeRoot ? absolutePath(runtimeRoot, "Runtime directory") : join(this.serverRoot, "apps/desktop/.runtime/desktop-runtime");
     this.onExit = onExit;
     this.onProgress = onProgress;
+    this.onReadinessLost = onReadinessLost;
     this.postgresFactory = postgresFactory;
     this.children = new Map();
     this.reservations = new Map();
@@ -151,6 +152,15 @@ export class LocalServer {
   }
   get running() { return Boolean(this.startPromise || this.processCount || this.postgres?.running); }
   diagnostic() { return this.logs; }
+
+  invalidateReadiness() {
+    const wasReady = this.ready;
+    this.ready = false;
+    if (wasReady) {
+      try { this.onReadinessLost?.(); }
+      catch { this.record("lifecycle", "Readiness-loss observer failed; services remain unavailable.", true); }
+    }
+  }
 
   redact(value) {
     let text = String(value);
@@ -186,7 +196,7 @@ export class LocalServer {
     this.stopping = false;
     this.stopPromise = null;
     this.failure = "";
-    this.ready = false;
+    this.invalidateReadiness();
     this.logs = "";
     this.workerStarted = false;
     this.setupPending = false;
@@ -371,9 +381,10 @@ export class LocalServer {
   unexpectedExit(role) {
     if (this.stopping || this.cleanupPromise) return;
     this.failure ||= `${role} exited unexpectedly. See the local service diagnostics.`;
+    const wasReady = this.ready;
+    this.invalidateReadiness();
     this.controller?.abort();
-    if (this.ready) {
-      this.ready = false;
+    if (wasReady) {
       const notify = () => this.onExit?.(this.failure, this.diagnostic());
       void this.stop().then(notify, (error) => {
         this.record("shutdown", this.redact(error.message), true);
@@ -480,7 +491,7 @@ export class LocalServer {
   cleanup() {
     if (this.cleanupPromise) return this.cleanupPromise;
     const pending = (async () => {
-      this.ready = false;
+      this.invalidateReadiness();
       const errors = [];
       try { await this.releaseReservations(); }
       catch (error) { errors.push(`Port reservations: ${error.message}`); }
@@ -516,7 +527,7 @@ export class LocalServer {
   stop() {
     if (this.stopPromise) return this.stopPromise;
     this.stopping = true;
-    this.ready = false;
+    this.invalidateReadiness();
     this.controller?.abort();
     const starting = this.startPromise;
     const pending = bounded((async () => {

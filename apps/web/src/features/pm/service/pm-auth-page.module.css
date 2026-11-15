@@ -253,6 +253,38 @@
   border-top: 1px solid var(--border);
 }
 
+.registerAttribution {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.registerAttribution p {
+  margin: 0;
+}
+
+.registerTitle {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.registerLink {
+  color: var(--primary);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.registerLink:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.registerLink:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 @media (max-width: 767px) {
   .header {
     gap: 8px;

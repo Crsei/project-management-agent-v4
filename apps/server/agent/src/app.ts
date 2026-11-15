@@ -19,6 +19,10 @@ import { mcpOAuthRoutes, mcpIntrospectionRoutes } from "./mcp/routes.ts";
 import { mcpRoutes } from "./mcp/server.ts";
 import { mcpAppRoutes } from "./mcp-apps/routes.ts";
 import { extensionRoutes, extensionDefinitionRoutes } from "./extensions/index.ts";
+import { collaborationDefinitionRoutes } from "./collaboration/definition-routes.ts";
+import { runRoutes } from "./collaboration/run-routes.ts";
+import { collaborationCapabilityRoutes } from "./collaboration/capability-routes.ts";
+import { collaborationInboxRoutes } from "./collaboration/inbox-routes.ts";
 
 /** API application; imports alone never start listeners or background workers. */
 export const app = new Hono()
@@ -33,6 +37,10 @@ export const app = new Hono()
   .route("/api", mcpAppRoutes)
   .route("/api", extensionRoutes)
   .route("/api", chatRoutes)
+  .route("/api", collaborationDefinitionRoutes)
+  .route("/api", runRoutes)
+  .route("/api", collaborationCapabilityRoutes)
+  .route("/api", collaborationInboxRoutes)
   .route("/api", taskDeliveryRoutes)
   .route("/api", taskWorkflowRoutes)
   .route("/api", pmToolRoutes)

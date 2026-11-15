@@ -305,3 +305,29 @@ test('workflow catalogue without an explicit Agent folder never probes the serve
   assert.equal(probes, 0); assert.equal(catalog.repository, null); assert.equal(catalog.defaultBase, null);
   assert.equal(catalog.definitions.length, 3);
 });
+
+test('changed requirement replacement preserves workflow CAS and immutable input, while resume still refuses old requirements', async () => {
+  const f = fixture('builtin-validate'); await f.service.start(f.input);
+  await f.service.tick(id); await f.service.tick(id);
+  const paused = await f.service.control(id, 'pause', f.runs.get(id)!.version);
+  const original = structuredClone(paused), delivery = f.deliveries.get(id)!;
+  f.set.revision();
+  const replacement = await f.service.replaceSession(id, paused.version, f.input.executionSelection!);
+  assert.deepEqual(replacement.input, original.input); assert.deepEqual(replacement.nodes, original.nodes);
+  assert.equal(replacement.status, 'paused');
+  assert.notEqual(f.deliveries.get(id)!.threadId, delivery.threadId);
+  assert.equal(f.deliveries.get(id)!.taskRevision, f.input.taskRevision);
+  await assert.rejects(f.service.control(id, 'resume', replacement.version), { code: 'task_changed' });
+  await assert.rejects(f.service.replaceSession(id, paused.version, f.input.executionSelection!), { code: 'workflow_conflict' });
+  assert.deepEqual(f.calls, ['prepare']);
+});
+
+test('green remote CI cannot advance a workflow after a local worktree change', async () => {
+  const f = fixture(); f.input.definitionVersion = 2; await f.service.start(f.input);
+  await f.stepUntil(run => run.graph.nodes.find(node => node.id === run.current)?.kind === 'ci');
+  f.dp.tree = async () => ({ head: 'b'.repeat(40), fingerprint: 'edited-after-commit', files: ['src/unverified.ts'], diff: '+unverified' });
+  const paused = await f.service.tick(id);
+  assert.equal(paused.status, 'paused'); assert.match(paused.message!, /陈旧/);
+  assert.ok(!f.calls.includes('state-review'));
+  assert.equal((await f.p.authorize(scope, false)).status, 'in_progress');
+});

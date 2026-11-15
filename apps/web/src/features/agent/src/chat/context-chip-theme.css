@@ -1,0 +1,8 @@
+/* Native kind hues/chroma from t3code 7379f1969b0f4b579327cf81299ef8cc3ddf8e9c
+   lib/contextChipAccents.ts; Copyright (c) 2026 T3 Tools Inc. MIT, LICENSE.t3code.
+   Host light/dark surface adapter. */
+:root { --context-chip-lightness: 0.46; }
+.dark { --context-chip-lightness: 0.74; }
+@media (forced-colors: active) {
+  [data-slot="context-chip"] { --context-chip-ink: CanvasText; }
+}

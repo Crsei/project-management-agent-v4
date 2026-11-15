@@ -1,0 +1,149 @@
+---
+interface Props {
+  family: "project-board" | "agent-chat-draft" | "task-readback";
+  title?: string;
+  alt?: string;
+  caption?: string;
+  eager?: boolean;
+  id?: string;
+}
+
+const captures = {
+  "project-board": {
+    file: "nova-project-board",
+    title: "项目看板 · 真实界面，合成数据",
+    alt: "Dovspace 的 Nova 合成演示项目看板，六条带合成演示标签的任务按真实 PM 状态分组；移动端展示单独采集的看板可视区域。",
+    caption: "六条任务来自同一隔离合成项目，初始数据由人工建立；不是客户资料或 Agent 交付记录。",
+  },
+  "agent-chat-draft": {
+    file: "nova-agent-chat-draft",
+    title: "Agent Chat · 未发送草稿",
+    alt: "Dovspace 的真实 Agent Chat 输入框，包含手动选择的 TASK-005 任务引用和未发送草稿；没有模型回复，尚未选择 Provider。",
+    caption: "手动引用 TASK-005；未选择 Provider、未发送消息、未执行模型。图中文字是草稿，不是模型回复。",
+  },
+  "task-readback": {
+    file: "nova-task-readback",
+    title: "任务详情 · 人工保存后刷新读回",
+    alt: "Dovspace 的 TASK-005 任务详情，刷新后两项人工核对清单仍为勾选状态，任务状态仍为待办；这不是 Agent 或 Provider 验收。",
+    caption: "人工勾选清单并保存评论后刷新读回，任务仍为待办；不代表 Agent 自动写回、模型执行或任务完成。",
+  },
+};
+
+const { family, title, alt, caption, eager = false, id } = Astro.props;
+const capture = captures[family];
+const desktopImage = `/screenshots/${capture.file}-desktop.webp`;
+const mobileImage = `/screenshots/${capture.file}-mobile.webp`;
+---
+
+<figure id={id} class="product-image" data-product-image={family}>
+  <picture class="product-image-picture" data-product-picture>
+    <source media="(max-width: 640px)" srcset={mobileImage} width="780" height="1688" />
+    <img
+      src={desktopImage}
+      width="1440"
+      height="1000"
+      alt={alt ?? capture.alt}
+      loading={eager ? "eager" : "lazy"}
+      fetchpriority={eager ? "high" : "auto"}
+      decoding="async"
+    />
+  </picture>
+  <figcaption class="product-image-caption">
+    <div class="product-image-description">
+      <strong>{title ?? capture.title}</strong>
+      <p>{caption ?? capture.caption}</p>
+    </div>
+    <div class="product-image-originals">
+      <a href={desktopImage} data-product-original="desktop">桌面原图 <span aria-hidden="true">↗</span></a>
+      <a href={mobileImage} data-product-original="mobile">移动端原图 <span aria-hidden="true">↗</span></a>
+    </div>
+  </figcaption>
+</figure>
+
+<style>
+  .product-image {
+    min-width: 0;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--card);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .product-image-picture {
+    display: block;
+    border-radius: calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px) 0 0;
+    overflow: hidden;
+  }
+
+  .product-image-picture img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1440 / 1000;
+  }
+
+  .product-image-caption {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px 32px;
+    padding: 20px 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.8;
+    text-align: left;
+  }
+
+  .product-image-description {
+    min-width: 0;
+    max-width: 760px;
+  }
+
+  .product-image-description strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--fg);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .product-image-originals {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 0 20px;
+  }
+
+  .product-image-originals a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  .product-image-originals a:hover {
+    color: var(--accent-hover);
+  }
+
+  @media (max-width: 900px) {
+    .product-image-caption {
+      flex-direction: column;
+      gap: 8px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .product-image-picture img {
+      aspect-ratio: 780 / 1688;
+    }
+
+    .product-image-caption {
+      padding: 18px 20px;
+    }
+  }
+</style>

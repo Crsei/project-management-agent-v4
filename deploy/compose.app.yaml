@@ -38,6 +38,7 @@ services:
       PORT: "4194"
       PUBLIC_ORIGIN: ${PM_PUBLIC_ORIGIN:?Set the exact browser-visible origin}
       COOKIE_SECURE: ${PM_COOKIE_SECURE:-true}
+      MCP_INTERNAL_HTTP_ORIGINS: '["http://agent:4325"]'
       BLOB_ROOT: /var/lib/pm/blobs
       CORE_WORKSPACE_ROOT: /var/lib/pm/core
       LOCAL_PROJECTS_ENABLED: ${PM_LOCAL_PROJECTS_ENABLED:-false}
@@ -124,6 +125,7 @@ services:
       HOST: 0.0.0.0
       PORT: "4325"
       PM_API_URL: http://api:4194
+      MCP_INTERNAL_HTTP_ORIGINS: '["http://api:4194"]'
       AGENT_WORKSPACE_API_ONLY: "1"
       AGENT_WORKSPACE_DATA_DIR: /var/lib/agent
       AGENT_WORKSPACE_PROJECT_ROOT: /var/lib/pm/projects

@@ -10,6 +10,7 @@ import { assertWorkflowRunner, scheduleWorkflow } from './runner.ts';
 import { executionSelectionSchema } from '@agent-workspace/contracts/chat';
 import { createDeliverySession } from '../task-delivery/index.ts';
 import { deliveryStore } from '../task-delivery/binding.ts';
+import { readTaskExecutionBrief, taskExecutionPrompt } from '../task-delivery/brief.ts';
 export const taskWorkflowRoutes = new Hono();
 taskWorkflowRoutes.use('/task-workflows/*', bodyLimit({ maxSize: 96 * 1024 }));
 taskWorkflowRoutes.use('/task-workflows', bodyLimit({ maxSize: 96 * 1024 }));
@@ -38,6 +39,7 @@ taskWorkflowRoutes.post('/task-workflows/runs/:id/control', async c => {
   const input = workflowControlSchema.parse(await c.req.json());
   const id = z.uuid().parse(c.req.param('id'));
   if (input.action === 'new-session') {
+    taskExecutionPrompt(await readTaskExecutionBrief(id, 'recovery', c.req.raw.headers, false), '');
     const value = await workflowService(c.req.raw.headers).replaceSession(id, input.version, input.executionSelection);
     const delivery = deliveryStore.read(id);
     if (!delivery) throw new DurableError(409, 'delivery_missing', 'Original delivery receipt is missing.');

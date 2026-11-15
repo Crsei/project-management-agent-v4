@@ -60,7 +60,7 @@ export function validateAdaptationStructure(manifest) {
   const seen = new Set(), retirements = [];
   for (const entry of manifest.outputs) {
     const name = relative(entry.destination);
-    if (!/^(?:vendor\/t3code\/|apps\/server\/|apps\/web\/|packages\/)/.test(name) || name.includes("/node_modules/") || name.includes("/.git/") || seen.has(name)) throw new Error(`Unapproved/duplicate adaptation destination: ${name}`);
+    if (!/^(?:vendor\/t3code\/|apps\/server\/|apps\/web\/|apps\/desktop\/|packages\/)/.test(name) || name.includes("/node_modules/") || name.includes("/.git/") || seen.has(name)) throw new Error(`Unapproved/duplicate adaptation destination: ${name}`);
     seen.add(name);
     if (!sha256(entry.sha256) || !Number.isSafeInteger(entry.bytes) || entry.bytes < 0 || ![0o644, 0o755].includes(entry.mode) || typeof entry.reason !== "string" || !entry.reason.trim() || typeof entry.license !== "string" || !entry.license.trim()) throw new Error(`Incomplete adaptation output identity: ${name}`);
     if (!Array.isArray(entry.inputs) || Boolean(entry.inputs.length) !== (entry.provenance === "adapted-upstream") || !["adapted-upstream", "local-integration"].includes(entry.provenance)) throw new Error(`Invalid adaptation classification: ${name}`);

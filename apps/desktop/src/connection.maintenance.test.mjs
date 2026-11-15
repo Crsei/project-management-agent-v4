@@ -41,15 +41,30 @@ async function connectionPage() {
   await new Promise(resolve => setImmediate(resolve));
   receiveState(state);
   return {
-    element, calls, windowEvents, receiveState, state,
+    element, calls, windowEvents, receiveState, state, dataset: document.body.dataset,
     setResponse(handler) { response = handler; },
     click(selector) { return element(selector).handlers.get('click')(); },
   };
 }
 
+test('brand loading indicators follow real connection and updater activity', async () => {
+  const page = await connectionPage();
+  assert.equal(page.dataset.connectionBusy, 'false');
+  assert.equal(page.dataset.updateBusy, 'false');
+  page.receiveState({ ...page.state, status: 'connecting' });
+  assert.equal(page.dataset.connectionBusy, 'true');
+  page.receiveState({ ...page.state, status: 'error', error: 'Startup failed.' });
+  assert.equal(page.dataset.connectionBusy, 'false');
+  page.receiveState({ ...page.state, update: { status: 'checking', busy: true } });
+  assert.equal(page.dataset.updateBusy, 'true');
+  page.receiveState({ ...page.state, update: { status: 'error', busy: false, error: 'Check failed.' } });
+  assert.equal(page.dataset.updateBusy, 'false');
+});
+
 test('data manager requires matching strong passwords and clears secrets before the backup IPC/dialog phase', async () => {
   const page = await connectionPage();
   await page.click('#manage-workspace');
+  page.element('#backup-stopped-writers').checked = true;
   page.element('#backup-password').value = 'independent backup passphrase';
   page.element('#backup-password-confirm').value = 'different';
   await page.click('#backup');
@@ -60,12 +75,14 @@ test('data manager requires matching strong passwords and clears secrets before 
   const pending = page.click('#backup');
   assert.equal(page.calls[0].action, 'backup');
   assert.equal(page.calls[0].options.password, 'independent backup passphrase');
+  assert.equal(page.calls[0].options.stoppedWritersAcknowledged, true);
   assert.deepEqual(page.calls[0].secretsAtInvoke, ['', '', '']);
   assert.equal(page.element('#restore').disabled, true);
   assert.equal(page.element('#maintenance-back').disabled, true);
   release(); await pending;
   assert.equal(page.element('#backup-password').value, '');
   assert.equal(page.element('#backup-password-confirm').value, '');
+  assert.equal(page.element('#backup-stopped-writers').checked, false);
 });
 
 test('encrypted restore also requires a fresh trusted-source acknowledgement independently of a valid password', async () => {
@@ -164,4 +181,18 @@ test('verified update requires an explicit restart action and UI does not infer 
   assert.equal(page.calls[0].action, 'update-install');
   assert.match(page.element('#error').textContent, /Draft cancellation/);
   assert.doesNotMatch(page.element('#update-status').textContent, /正在启动安装器/);
+});
+
+test('backup requires a fresh external-writer stopped acknowledgement and never infers it from idle managed services', async () => {
+  const page = await connectionPage(); await page.click('#manage-workspace');
+  page.element('#backup-password').value = 'independent strong backup passphrase';
+  page.element('#backup-password-confirm').value = page.element('#backup-password').value;
+  await page.click('#backup'); assert.equal(page.calls.length, 0);
+  page.element('#backup-stopped-writers').checked = true;
+  await page.click('#backup');
+  assert.equal(page.calls[0].options.stoppedWritersAcknowledged, true);
+  assert.equal(page.element('#backup-stopped-writers').checked, false);
+  page.element('#backup-password').value = 'another independent backup passphrase';
+  page.element('#backup-password-confirm').value = page.element('#backup-password').value;
+  await page.click('#backup'); assert.equal(page.calls.length, 1);
 });

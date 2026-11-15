@@ -3,6 +3,9 @@ import { createRequire, isBuiltin } from "node:module";
 import { chmod, lstat, mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, createRetiredImportResolver, validateAdaptationStructure } from "../../vendor/t3code/scripts/mcp-skills-adaptations.mjs";
+import { identity, publish as publishGenerationFile } from "./io.mjs";
+import { exists as supplementalExists, file as supplementalFile } from "./supplemental-fs.mjs";
+import { snapshotRetiredResolver } from "./supplemental-retirements.mjs";
 
 const require = createRequire(import.meta.url);
 const base = "vendor/t3code/";
@@ -719,8 +722,131 @@ export async function recordGeneration({ root, source, targetCommit, plan, readB
   return { changedPaths: sorted(changedPaths), notes: ["Created a fresh production manifest, exact splice/adaptation recipes and scoped dependency/import/resource inventories; supplemental snapshot and local OMP remain independently owned.", "Legacy capture/sync commit guards remain unchanged; verify this generation with the trusted profile verifier, not legacy same-pin capture."], blockers: [] };
 }
 
+/**
+ * Narrow same-pin snapshot authoring. Unlike a production generation refresh,
+ * this never rebinds unselected outputs or host inputs to inherited dirty bytes.
+ * The core authenticates the complete snapshot and original metadata first.
+ */
+export async function recordWorktreeGeneration({ root, targetCommit, plan, readBlob, listTree }) {
+  if (plan.purpose !== "local-authoring" || !plan.worktreeSnapshot || plan.project !== "t3code" || plan.changes?.length || plan.approvedSourcePaths?.length) throw new Error("Invalid isolated worktree authoring intent");
+  const docs = await documents(root), { manifest, inventory, adaptations, imports } = docs;
+  if (targetCommit !== manifest.upstream.commit || plan.upstreamCommit !== targetCommit || plan.targetCommit !== targetCommit) throw new Error("Worktree authoring requires the unchanged production pin");
+  if (typeof readBlob !== "function" || typeof listTree !== "function") throw new Error("Worktree authoring requires immutable object readers");
+  const profile = await loadProfile(root), objects = objectReader(readBlob, listTree);
+  const approved = plan.approvedOutputHashes ?? {}, existing = plan.approvedExistingOutputs ?? {};
+  const snapshots = new Map(plan.worktreeSnapshot.files.map(entry => [entry.path, entry]));
+  const selected = new Set(Object.keys(approved)), blockers = [], pending = new Map();
+  for (const name of [paths.manifest, paths.adaptations, paths.imports]) {
+    const bindings = inventory.files.filter(entry => entry.destination === name);
+    const bytes = docs.bytes.get(name);
+    if (bindings.length !== 1 || bindings[0].asset !== name || bindings[0].provenance !== "local-addition" || bindings[0].sha256 !== hash(bytes) || bindings[0].bytes !== bytes.length) throw new Error(`Unproven original metadata binding: ${name}`);
+  }
+  const reviewNames = (plan.reviews ?? []).map(review => review.outputPath);
+  if (reviewNames.some(name => !selected.has(name)) || new Set(reviewNames).size !== reviewNames.length) throw new Error("Snapshot reviews must identify only exact selected outputs once");
+  const active = new Map(adaptations.outputs.filter(entry => !Object.hasOwn(entry, "retirement")).map(entry => [entry.destination, entry]));
+  const outputBytes = new Map();
+  for (const name of Object.keys(existing)) if (!selected.has(name)) throw new Error(`Existing output needs postimage approval: ${name}`);
+  for (const name of selected) {
+    const entry = active.get(name), snapshot = snapshots.get(name);
+    if (!entry || profile.metadataPaths.includes(name) || profile.policy.protectedPaths.some(prefix => under(name, prefix))) throw new Error(`Unsupported snapshot output: ${name}; only existing supplemental outputs may be authored`);
+    const info = await lstat(await safeFile(root, name)), bytes = await bytesAt(root, name);
+    if (!snapshot || snapshot.deleted || snapshot.mode !== entry.mode || canonicalMode(info.mode & 0o111 ? "100755" : "100644") !== entry.mode || hash(bytes) !== approved[name] || approved[name] === entry.sha256) throw new Error(`Stale snapshot output approval: ${name}`);
+    if (snapshot.sha256 !== entry.sha256) {
+      if (existing[name]?.recordedSha256 !== entry.sha256 || existing[name]?.snapshotSha256 !== snapshot.sha256) throw new Error(`Snapshot preimage proof required: ${name}`);
+    } else if (existing[name]) throw new Error(`Unnecessary existing-output proof: ${name}`);
+    const inputs = entry.inputs.map(input => inputFrom(input));
+    const review = decision(plan, name, inputs);
+    const exactInputs = review && review.inputs.length === inputs.length && review.inputs.every(input => inputs.some(expected => expected.path === input.path && expected.commit === input.commit && expected.sha256 === input.sha256)) && new Set(review.inputs.map(input => `${input.commit}:${input.path}`)).size === inputs.length;
+    if (!exactInputs) blockers.push({ code: "BLOCKED_DERIVED_REVIEW", path: name, inputs, reason: "Exact selected output requires a reasoned review of exactly every original mapped input, including zero-input local integration" });
+    outputBytes.set(name, bytes);
+  }
+  if (!selected.size) return { changedPaths: [], notes: ["No existing outputs selected; no metadata written."], blockers: [] };
+  // Authenticate every original source and retained recipe, not current dirty
+  // output bytes. Inherited drift stays a separate unaccepted diagnostic.
+  for (const input of profile.inputs) await objects.get(input.commit, input.path, input);
+  for (const entry of inventory.files.filter(entry => entry.source)) {
+    const original = (await objects.get(targetCommit, entry.source)).bytes;
+    let reconstructed = original;
+    if (entry.patch) {
+      const bytes = await bytesAt(root, entry.patch.path), patch = JSON.parse(bytes);
+      if (hash(bytes) !== entry.patch.sha256 || patch.version !== 1 || patch.source !== entry.source || patch.beforeSha256 !== entry.upstreamSha256 || patch.afterSha256 !== entry.sha256) throw new Error(`Invalid original snapshot recipe: ${entry.destination}`);
+      reconstructed = replay(original, patch.splices, entry.destination);
+    }
+    if (hash(original) !== entry.upstreamSha256 || hash(reconstructed) !== entry.sha256 || reconstructed.length !== entry.bytes) throw new Error(`Invalid original snapshot replay: ${entry.destination}`);
+  }
+  for (const entry of adaptations.outputs) {
+    let reconstructed;
+    if (entry.inputs.length) {
+      if (entry.recipe.kind !== "exact-line-splices" || entry.recipe.primaryInput !== 0) throw new Error(`Invalid original adaptation recipe: ${entry.destination}`);
+      reconstructed = replay((await objects.get(entry.inputs[0].commit, entry.inputs[0].path)).bytes, entry.recipe.splices, entry.destination);
+    } else {
+      if (entry.recipe.kind !== "local-bytes") throw new Error(`Invalid original local recipe: ${entry.destination}`);
+      reconstructed = Buffer.from(entry.recipe.base64, "base64");
+      if (reconstructed.toString("base64") !== entry.recipe.base64) throw new Error(`Invalid original embedded bytes: ${entry.destination}`);
+    }
+    if (hash(reconstructed) !== entry.sha256 || reconstructed.length !== entry.bytes) throw new Error(`Invalid original adaptation replay: ${entry.destination}`);
+  }
+  for (const source of adaptations.sources) if (!(await objects.get(source.commit, source.license.path)).bytes.equals(await bytesAt(root, source.license.distributedPath))) blockers.push({ code: "BLOCKED_LICENSE", path: source.license.distributedPath, commit: source.commit });
+  if (blockers.length) return { changedPaths: [], notes: [], blockers };
+  for (const name of selected) {
+    const entry = active.get(name), bytes = outputBytes.get(name);
+    entry.sha256 = hash(bytes);
+    entry.bytes = bytes.length;
+    entry.recipe = entry.inputs.length ? { kind: "exact-line-splices", primaryInput: 0, splices: splices((await objects.get(entry.inputs[0].commit, entry.inputs[0].path)).bytes, bytes) } : { kind: "local-bytes", base64: bytes.toString("base64") };
+  }
+  // Only selected sources' edges are replaced. Other live dirty imports are not
+  // silently enrolled through regeneration of the entire graph.
+  const inventoryOutputs = inventory.files.map(entry => entry.destination);
+  const allOutputs = sorted([...inventoryOutputs, ...active.keys()]);
+  const retiredTarget = createRetiredImportResolver(root, adaptations.outputs.filter(entry => Object.hasOwn(entry, "retirement")), require("typescript"));
+  const graph = await scanGraph(allOutputs, name => bytesAt(root, name), name => pathExists(root, name), inventoryOutputs.filter(name => name.endsWith("/package.json") && !name.includes("/third-party/")), new Set(allOutputs), retiredTarget);
+  for (const edge of graph.edges.filter(edge => selected.has(edge.source))) if (["unresolved-local", "unresolved-workspace-export", "uninventoried-vendor", "forbidden-source-path"].includes(edge.disposition)) blockers.push({ code: "BLOCKED_IMPORT_CLOSURE", path: edge.source, dependency: edge.target ?? edge.specifier });
+  if (blockers.length) return { changedPaths: [], notes: [], blockers };
+  imports.edges = [...imports.edges.filter(edge => !selected.has(edge.source)), ...graph.edges.filter(edge => selected.has(edge.source))].sort((left, right) => order(left.source, right.source) || left.line - right.line);
+  const previous = manifest.generation;
+  if (previous && (previous.commit !== targetCommit || !/^[a-f0-9]{40}$/.test(previous.previousCommit))) throw new Error("Invalid existing generation ancestry");
+  manifest.copy_status = "partial-local-authoring-unverified-preserved-baseline";
+  manifest.generation = {
+    ...previous,
+    previousCommit: previous?.previousCommit ?? targetCommit,
+    commit: targetCommit,
+    purpose: previous?.purpose ?? "local-authoring",
+    supplementalCommits: adaptations.sources.filter(entry => entry.commit !== targetCommit).map(entry => entry.commit),
+    reviews: [...(previous?.reviews ?? []), ...(plan.reviews ?? [])],
+    reauthoringRevision: (previous?.reauthoringRevision ?? -1) + 1,
+    evidence: "Exact selected-output authoring in an authenticated current-worktree snapshot; inherited baseline drift is not accepted and full/publication readiness is not established",
+  };
+  pending.set(paths.manifest, encode(manifest));
+  pending.set(paths.adaptations, encode(adaptations));
+  pending.set(paths.imports, encode(imports));
+  for (const entry of inventory.files) {
+    if (selected.has(entry.destination)) {
+      const adaptation = active.get(entry.destination);
+      if (!entry.adaptation || entry.adaptation !== paths.adaptations) throw new Error(`Conflicting snapshot reconstruction owner: ${entry.destination}`);
+      entry.sha256 = adaptation.sha256;
+      entry.bytes = adaptation.bytes;
+    } else if (pending.has(entry.destination)) {
+      if (entry.asset !== entry.destination || entry.provenance !== "local-addition") throw new Error(`Invalid generated metadata binding: ${entry.destination}`);
+      const bytes = pending.get(entry.destination);
+      entry.sha256 = hash(bytes);
+      entry.bytes = bytes.length;
+    }
+  }
+  inventory.sourceManifestSha256 = hash(pending.get(paths.manifest));
+  pending.set(paths.inventory, encode(inventory));
+  for (const [name, bytes] of docs.bytes) if (name !== paths.policy && !bytes.equals(await bytesAt(root, name))) throw new Error(`Concurrent snapshot metadata edit: ${name}`);
+  for (const [name, bytes] of outputBytes) if (!bytes.equals(await bytesAt(root, name))) throw new Error(`Concurrent snapshot output edit: ${name}`);
+  for (const name of pending.keys()) await safeFile(root, name);
+  const changedPaths = [];
+  for (const [name, bytes] of pending) if (!bytes.equals(await bytesAt(root, name))) {
+    await publishGenerationFile(root, name, bytes, 0o644);
+    changedPaths.push(name);
+  }
+  return { changedPaths: sorted(changedPaths), notes: ["Recorded only exact selected existing supplemental outputs and their metadata bindings; all unselected expected output and host-input fingerprints are preserved.", "Unselected import edges and independent source pins are unchanged. Inherited drift remains unaccepted; unchanged full verifier and publication gates still apply."], blockers: [] };
+}
+
 /** Read-only exact reconstruction for any generation, including both source pins. */
-export async function verifyGeneration({ root, readBlob, listTree }) {
+async function replayGeneration({ root, readBlob, listTree }, checkOutputs) {
   if (typeof readBlob !== "function" || typeof listTree !== "function") throw new Error("T3 provenance replay requires immutable object readers");
   const { manifest, inventory, adaptations } = await documents(root);
   const objects = objectReader(readBlob, listTree), profile = await loadProfile(root), blockers = [];
@@ -758,11 +884,157 @@ export async function verifyGeneration({ root, readBlob, listTree }) {
     }
     if (hash(bytes) !== entry.sha256 || bytes.length !== entry.bytes) throw new Error(`Generation derivation replay mismatch: ${entry.destination}`);
   }
-  for (const output of [...profile.outputs, ...profile.hostInputs]) {
+  for (const output of checkOutputs ? [...profile.outputs, ...profile.hostInputs] : []) {
     const info = await lstat(await safeFile(root, output.path)).catch(missing);
     if (!info || hash(await bytesAt(root, output.path)) !== output.sha256 || output.mode !== undefined && Boolean(info.mode & 0o111) !== Boolean(output.mode & 0o111)) blockers.push({ code: "BLOCKED_GENERATION_DRIFT", path: output.path });
   }
   return { blockers, notes: ["Exact committed-input and recipe replay only; not native behavior, full verification or write authorization."], changedPaths: [] };
+}
+
+export async function verifyGeneration(options) {
+  return replayGeneration(options, true);
+}
+
+/** Immutable original recipes only, never a current-generation verification. */
+export async function authenticateOriginalGeneration(options) {
+  const result = await replayGeneration(options, false);
+  return { ...result, notes: ["Authenticated original immutable sources and recipes only; current outputs and inherited baseline drift are not accepted."] };
+}
+
+/**
+ * Explicit supplemental enrollment: retain the production manifest's immutable
+ * sources and all unselected recipes. The caller authenticates the independent
+ * baseline, approvals, original assets, cross-fork bindings and tool identity.
+ * This is not recordGeneration, a pin upgrade, or diagnostic-state promotion.
+ */
+export async function planSupplementalGeneration({ root, originalRoot, targetCommit, reviews, toolAssets = [], readBlob, listTree }) {
+  const docs = await documents(originalRoot);
+  const { manifest, inventory, adaptations, imports, policy } = docs;
+  const profile = await loadProfile(originalRoot);
+  const objects = objectReader(readBlob, listTree);
+  const original = await authenticateOriginalGeneration({ root: originalRoot, readBlob, listTree });
+  if (original.blockers.length) return { ...original, changedPaths: [] };
+  if (manifest.upstream.commit !== "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c" || !adaptations.sources.some(entry => entry.commit === "d53873b6a4799e87afd63c8d288ef0089f5a3748") || targetCommit === manifest.upstream.commit) throw new Error("Supplemental enrollment must preserve the independent production and MCP/Skills pins");
+  const pending = new Map();
+  const active = new Map(adaptations.outputs.filter(entry => !Object.hasOwn(entry, "retirement")).map(entry => [entry.destination, entry]));
+  const baseline = new Map(profile.outputs.map(entry => [entry.path, entry]));
+  const retired = new Set(adaptations.outputs.filter(entry => Object.hasOwn(entry, "retirement")).map(entry => entry.destination));
+  for (const asset of toolAssets) {
+    const entry = inventory.files.find(record => record.destination === asset.path);
+    if (asset.path !== `${base}scripts/mcp-skills-adaptations.mjs` || !entry || entry.asset !== asset.path || entry.provenance !== "local-addition" || entry.sha256 !== asset.recordedSha256 || identity(entry) !== asset.recordedRecipeSha256 || hash(asset.content) !== asset.reviewedSha256 || entry.mode !== asset.mode) throw new Error(`Unapproved maintenance asset binding: ${asset.path}`);
+    pending.set(asset.path, asset.content);
+  }
+  const blockers = [];
+  const license = await objects.get(targetCommit, "LICENSE");
+  const distributed = (await supplementalFile(root, `${base}LICENSE`)).bytes;
+  if (!license.bytes.equals(distributed)) throw new Error("Supplemental license differs from the distributed MIT license; separate license enrollment is required");
+  if (adaptations.sources.some(entry => entry.commit === targetCommit)) throw new Error("Supplemental source is already enrolled; use a fresh explicitly reviewed baseline for another authoring generation");
+  adaptations.sources.push({
+    commit: targetCommit, role: "Explicitly reviewed supplemental native-context UI derivations; no Provider or production pin upgrade",
+    license: { spdx: "MIT", path: "LICENSE", sha256: license.identity.sha256, bytes: license.identity.bytes, gitMode: license.identity.gitMode, gitBlobSha1: license.identity.blob, distributedPath: `${base}LICENSE` },
+  });
+  for (const review of reviews.outputs) {
+    const name = relative(review.path);
+    const pinnedAttachmentBridge = name === "apps/server/agent/src/providers/t3code/execution.ts" || name === "apps/server/agent/src/providers/t3code/execution.test.ts";
+    const frozenPmHost = name === "apps/server/pm/src/app.ts";
+    if (!/^(?:apps\/web\/|apps\/server\/agent\/|apps\/desktop\/|packages\/)/.test(name) && !frozenPmHost || name.startsWith("apps/server/agent/src/providers/t3code/") && !pinnedAttachmentBridge || /(?:^|\/)(?:scripts|AGENTS\.md)(?:\/|$)/.test(name) || policy.protectedPaths.some(prefix => under(name, prefix)) || profile.metadataPaths.includes(name) || retired.has(name)) throw new Error(`Protected supplemental output: ${name}`);
+    const previous = baseline.get(name), prior = active.get(name);
+    const inventoryEntry = inventory.files.find(entry => entry.destination === name);
+    if (previous && !prior || inventoryEntry && inventoryEntry.adaptation !== paths.adaptations) throw new Error(`Conflicting supplemental reconstruction owner: ${name}`);
+    const { bytes, mode } = await supplementalFile(root, name);
+    if (hash(bytes) !== review.sha256 || mode !== review.mode || previous && mode !== previous.mode) throw new Error(`Stale supplemental output approval: ${name}`);
+    const inputs = [];
+    for (const input of review.inputs) {
+      const original = (await objects.get(input.commit, input.path, input)).identity;
+      inputs.push({ commit: original.commit, path: original.path, sha256: original.sha256, bytes: original.bytes, gitBlobSha1: original.blob, gitMode: original.gitMode });
+    }
+    if (review.kind === "local" ? inputs.length !== 0 : !inputs.length) throw new Error(`Local and derived supplemental outputs must be distinguished: ${name}`);
+    if (frozenPmHost) {
+      const approval = reviews.baseline.outputs.find(entry => entry.path === name);
+      if (!prior || !approval || prior.provenance !== "local-integration" || prior.recipe.kind !== "local-bytes" ||
+          prior.inputs.length || review.kind !== "local" || inputs.length || review.removedInputs?.length || review.mode !== prior.mode ||
+          approval.recordedSha256 !== prior.sha256 || review.sha256 !== approval.snapshotSha256) {
+        throw new Error(`Frozen PM host preservation requires its existing local owner and exact independently reviewed snapshot, never feature edits: ${name}`);
+      }
+    }
+    if (pinnedAttachmentBridge && (
+      !prior || prior.provenance !== "adapted-upstream" || prior.recipe.kind !== "exact-line-splices" || prior.recipe.primaryInput !== 0 ||
+      review.kind !== "derived" || review.removedInputs?.length || !prior.inputs.length || inputs.length !== prior.inputs.length ||
+      inputs.some((input, index) => input.path !== prior.inputs[index].path || input.commit !== prior.inputs[index].commit || input.sha256 !== prior.inputs[index].sha256)
+    )) throw new Error(`Pinned attachment bridge must retain its complete ordered historical inputs and primary recipe: ${name}`);
+    if (inputs.length && !pinnedAttachmentBridge && !inputs.some(input => input.commit === targetCommit) && !reviews.baseline.outputs.some(entry => entry.path === name)) throw new Error(`Supplemental derivation needs an explicitly selected target input: ${name}`);
+    // Inputs from previous pins can only retain an existing mapped derivation.
+    for (const input of inputs.filter(entry => entry.commit !== targetCommit)) if (!(prior?.inputs ?? []).some(old => old.path === input.path && old.commit === input.commit && old.sha256 === input.sha256)) throw new Error(`Unapproved historical source expansion: ${name}: ${input.path}`);
+    const removed = (prior?.inputs ?? []).filter(old => !inputs.some(input => input.path === old.path && input.commit === old.commit && input.sha256 === old.sha256));
+    const removalReviews = review.removedInputs ?? [];
+    if (removed.length !== removalReviews.length || removed.some(old => !removalReviews.some(input => input.path === old.path && input.commit === old.commit && input.sha256 === old.sha256 && input.disposition === "no-longer-derived" && typeof input.reason === "string" && input.reason.trim()))) throw new Error(`Explicit mapped-input removal review required: ${name}`);
+    const entry = {
+      ...prior, destination: name, provenance: inputs.length ? "adapted-upstream" : "local-integration",
+      inputs, reason: review.reason, license: inputs.length ? "MIT; see vendor/t3code/LICENSE" : "Existing repository terms; no claim of an upstream original",
+      sha256: hash(bytes), bytes: bytes.length, mode,
+      recipe: inputs.length ? { kind: "exact-line-splices", primaryInput: 0, splices: splices((await objects.get(inputs[0].commit, inputs[0].path)).bytes, bytes) } : { kind: "local-bytes", base64: bytes.toString("base64") },
+    };
+    if (prior) adaptations.outputs[adaptations.outputs.indexOf(prior)] = entry;
+    else adaptations.outputs.push(entry);
+    active.set(name, entry);
+    if (inventoryEntry) Object.assign(inventoryEntry, { sha256: entry.sha256, bytes: entry.bytes, mode });
+  }
+  // Host build inputs are not outputs: only the independent baseline review can
+  // rebind them, and only to the exact frozen snapshot bytes, never feature edits.
+  for (const approval of reviews.baseline.hostInputs) {
+    const entry = (inventory.runtimeResources?.hostBuildInputs ?? []).find(input => input.path === approval.path);
+    if (!entry || entry.sha256 !== approval.recordedSha256) throw new Error(`Unknown baseline host input: ${approval.path}`);
+    const bytes = (await supplementalFile(root, entry.path)).bytes;
+    if (hash(bytes) !== approval.snapshotSha256) throw new Error(`Stale baseline host input: ${entry.path}`);
+    entry.sha256 = hash(bytes);
+    if (Object.hasOwn(entry, "bytes")) entry.bytes = bytes.length;
+  }
+  const inventoryNames = inventory.files.map(entry => entry.destination);
+  const names = sorted([...inventoryNames, ...active.keys()]);
+  const retiredTarget = await snapshotRetiredResolver(root, adaptations.outputs.filter(entry => Object.hasOwn(entry, "retirement")), require("typescript"));
+  const graph = await scanGraph(names, async name => pending.get(name) ?? (await supplementalFile(root, name)).bytes, name => supplementalExists(root, name), inventoryNames.filter(name => name.endsWith("/package.json") && !name.includes("/third-party/")), new Set(names), retiredTarget);
+  const edgeKey = edge => JSON.stringify([edge.source, edge.kind, edge.specifier, edge.expression ?? null]);
+  const oldDependencies = new Set(imports.edges.filter(edge => ["external-package", "runtime-selected-resource"].includes(edge.disposition)).map(edgeKey));
+  const usedDependencies = new Set();
+  for (const edge of graph.edges) {
+    if (["unresolved-local", "unresolved-workspace-export", "uninventoried-vendor", "forbidden-source-path"].includes(edge.disposition)) blockers.push({ code: "BLOCKED_IMPORT_CLOSURE", path: edge.source, dependency: edge.target ?? edge.specifier });
+    if (["external-package", "runtime-selected-resource"].includes(edge.disposition) && !oldDependencies.has(edgeKey(edge))) {
+      const approval = reviews.dependencies.find(entry => entry.path === edge.source && entry.kind === edge.kind && entry.specifier === edge.specifier && (entry.expression ?? null) === (edge.expression ?? null));
+      if (!approval) blockers.push({ code: "BLOCKED_DEPENDENCY_REVIEW", path: edge.source, edge });
+      else usedDependencies.add(approval);
+    }
+  }
+  if (reviews.dependencies.some(entry => !usedDependencies.has(entry))) throw new Error("Unselected or stale dependency approval");
+  if (blockers.length) return { blockers, notes: [], changedPaths: [] };
+  imports.edges = graph.edges;
+  imports.packages = graph.packages;
+  imports.parser = graph.parser;
+  imports.adaptationCommits = adaptations.sources.map(entry => entry.commit);
+  manifest.copy_status = "supplemental-ui-authoring-only-not-publication-evidence";
+  manifest.generation = {
+    ...manifest.generation, previousCommit: manifest.generation?.previousCommit ?? manifest.upstream.commit, commit: manifest.upstream.commit,
+    purpose: "supplemental-ui", supplementalCommits: adaptations.sources.filter(entry => entry.commit !== manifest.upstream.commit).map(entry => entry.commit),
+    reauthoringRevision: (manifest.generation?.reauthoringRevision ?? -1) + 1,
+    reviews: [...(manifest.generation?.reviews ?? []), ...reviews.outputs.map(entry => ({ outputPath: entry.path, disposition: "integrated", reason: entry.reason, inputs: entry.inputs, ...(entry.removedInputs?.length ? { removedInputs: entry.removedInputs } : {}) }))],
+    maintenanceAssetReviews: [...(manifest.generation?.maintenanceAssetReviews ?? []), ...(reviews.toolAssets ?? [])],
+    evidence: "Explicit independently reviewed baseline and supplemental UI authoring only. Source replay is distinct from tests, builds, browser acceptance and publication.",
+  };
+  adaptations.outputs.sort((a, b) => order(a.destination, b.destination));
+  pending.set(paths.manifest, encode(manifest));
+  pending.set(paths.adaptations, encode(adaptations));
+  pending.set(paths.imports, encode(imports));
+  // Exact original self-bindings are mandatory; never convert an unknown owner.
+  for (const [name, bytes] of pending) {
+    const entry = inventory.files.find(item => item.destination === name);
+    if (!entry || entry.asset !== name || entry.provenance !== "local-addition") throw new Error(`Invalid supplemental metadata binding: ${name}`);
+    Object.assign(entry, { sha256: hash(bytes), bytes: bytes.length });
+  }
+  inventory.sourceManifestSha256 = hash(pending.get(paths.manifest));
+  inventory.files.sort((a, b) => order(a.destination, b.destination));
+  inventory.verification = "Supplemental UI authoring only; exact source replay and all runtime/build/behavior acceptance remain distinct.";
+  pending.set(paths.inventory, encode(inventory));
+  const plannedFiles = [...pending].map(([name, bytes]) => ({ path: name, content: bytes, sha256: hash(bytes), bytes: bytes.length, mode: 0o644 }));
+  return { blockers: [], notes: ["Preserved production and MCP/Skills source identities and every unselected recipe; exact selected host outputs remain exclusively owned by adaptations, never the vendor-only baseline inventory.", "Planning only; no candidate metadata was written. Publication requires the external authenticated transaction, not candidate code or a full/handoff promotion."], changedPaths: plannedFiles.map(entry => entry.path), plannedFiles };
 }
 
 /** Check the packager's concrete JSON identities after full isolated commands. */

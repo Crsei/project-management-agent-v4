@@ -17,9 +17,11 @@ import { useAgentText } from "@agent/src/i18n";
 
 export type ComposerModelPickerCatalog = {
   providers: readonly ProviderInstance[];
+  loaded: boolean;
   loading: boolean;
+  refreshing: boolean;
   error?: string | null;
-  refresh: () => void | Promise<void>;
+  refresh: (options?: { afterMutation?: boolean }) => void | Promise<void>;
 };
 
 export type ComposerModelPickerProps = {
@@ -98,12 +100,9 @@ export function ComposerModelPicker({
   const [section, setSection] = useState<Section>({ kind: "provider", instanceId: providerInstanceId });
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const inFlight = useRef(false);
-  const refreshSequence = useRef(0);
-  const refreshingRef = useRef(false);
-  const openSequence = useRef(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -134,7 +133,10 @@ export function ComposerModelPicker({
     }
     return items.filter((item) => section.kind === "favorites" ? favorites.has(item.key) : item.provider.instanceId === selectedProvider?.instanceId);
   }, [items, query, searching, section, favorites, selectedProvider?.instanceId]);
-  const canChoose = !disabled && !saving && !pending && !refreshing && !catalog.loading && !catalog.error;
+  const canChoose = !disabled && !saving && !pending && catalog.loaded;
+  const refreshing = catalog.loading || catalog.refreshing;
+  const catalogError = catalog.error || refreshError;
+  const actionError = saveError || localError;
   const selectable = visible.filter((item) => ready(item.provider) && !item.model.disabledReason);
   const highlightedItem = selectable.find((item) => item.key === highlighted) ?? selectable[0];
 
@@ -143,36 +145,31 @@ export function ComposerModelPicker({
   }, [disabled, open]);
 
   useEffect(() => {
+    if (saving) setLocalError(null);
+  }, [saving]);
+
+  useEffect(() => {
     if (!open || !highlightedItem) return;
     const index = visible.findIndex((item) => item.key === highlightedItem.key);
     listRef.current?.querySelector<HTMLElement>(`[data-model-index="${index}"]`)?.scrollIntoView({ block: "nearest" });
   }, [highlightedItem?.key, open, visible]);
 
-  const refresh = () => {
-    const sequence = ++refreshSequence.current;
-    refreshingRef.current = true;
-    setRefreshing(true);
+  const refresh = async () => {
+    setRefreshError(null);
     try {
-      void Promise.resolve(catalog.refresh()).catch(() => {}).finally(() => {
-        if (refreshSequence.current === sequence) {
-          refreshingRef.current = false;
-          setRefreshing(false);
-        }
-      });
-    } catch {
-      refreshingRef.current = false;
-      setRefreshing(false);
+      await latest.current.catalog.refresh();
+    } catch (cause) {
+      setRefreshError(cause instanceof Error ? cause.message : t("模型目录读取失败，请重试。", "Failed to load the model catalog. Try again."));
     }
   };
   const changeOpen = (next: boolean) => {
     if (next && disabled) return;
     setOpen(next);
-    openSequence.current++;
     if (next) {
       setQuery("");
       setHighlighted(null);
       setSection(!validSelection || favorites.size === 0 ? { kind: "provider", instanceId: providerInstanceId } : { kind: "favorites" });
-      refresh();
+      if (!catalog.loaded || catalog.error || refreshError) void refresh();
     } else {
       setQuery("");
     }
@@ -196,7 +193,7 @@ export function ComposerModelPicker({
         method: "PUT",
         body: JSON.stringify({ revision: item.provider.revision, modelPreferences: { ...preferences, favorites: nextFavorites } }),
       });
-      await catalog.refresh();
+      await catalog.refresh({ afterMutation: true });
     } catch (cause) {
       setLocalError(cause instanceof Error ? cause.message : t("保存收藏失败，请刷新后重试。", "Failed to save favorites. Refresh and try again."));
     } finally {
@@ -207,15 +204,20 @@ export function ComposerModelPicker({
   const selectModel = async (item: ModelItem) => {
     const current = latest.current;
     const provider = current.catalog.providers.find((entry) => entry.instanceId === item.provider.instanceId);
-    if (inFlight.current || refreshingRef.current || current.disabled || current.saving || current.catalog.loading || current.catalog.error || !provider || !ready(provider) || !visibleProviderModels(provider).some((option) => option.id === item.model.id && !option.disabledReason)) return;
+    if (inFlight.current || current.disabled || current.saving || !current.catalog.loaded || !provider || !ready(provider) || !visibleProviderModels(provider).some((option) => option.id === item.model.id && !option.disabledReason)) return;
     if (item.provider.instanceId === providerInstanceId && item.model.id === model) { setOpen(false); return; }
     inFlight.current = true;
     setPending(true);
     setLocalError(null);
-    const opening = openSequence.current;
     try {
-      await current.onChange(item.provider.instanceId, item.model.id);
-      if (openSequence.current === opening) setOpen(false);
+      let save: void | Promise<void>;
+      try {
+        save = current.onChange(item.provider.instanceId, item.model.id);
+      } finally {
+        setOpen(false);
+        setQuery("");
+      }
+      await save;
     } catch (cause) {
       setLocalError(cause instanceof Error ? cause.message : t("保存模型选择失败，请重试。", "Failed to save the model selection. Try again."));
     } finally {
@@ -224,7 +226,7 @@ export function ComposerModelPicker({
     }
   };
   const retrySave = () => {
-    if (!onRetry || inFlight.current || saving) return;
+    if (!onRetry || inFlight.current || saving || disabled) return;
     inFlight.current = true;
     setPending(true);
     setLocalError(null);
@@ -258,7 +260,7 @@ export function ComposerModelPicker({
     }
   };
 
-  return <Popover open={open} onOpenChange={changeOpen}>
+  return <><Popover open={open} onOpenChange={changeOpen}>
     <PopoverTrigger render={<button type="button" disabled={disabled} aria-label={t("切换模型和提供商", "Switch model and provider")} title={validSelection ? `${activeProvider && getProviderInstanceDisplayName(activeProvider)} · ${activeModel?.label}` : `${providerInstanceId} / ${model}`} className={cn("text-muted-foreground hover:text-foreground flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-xs outline-none transition-colors hover:bg-foreground/[0.04] disabled:opacity-50", className)} />}>
       {activeProvider && <Glyph provider={activeProvider} providers={catalog.providers} small />}
       <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel) ?? activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
@@ -284,9 +286,10 @@ export function ComposerModelPicker({
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/40", !searching && "border-l border-border/70")}>
           <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3"><SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><input ref={searchRef} role="combobox" aria-label={t("搜索模型或提供商", "Search models or providers")} aria-expanded="true" aria-controls={listId} aria-activedescendant={highlightedItem ? `${listId}-option-${visible.indexOf(highlightedItem)}` : undefined} aria-autocomplete="list" value={query} onChange={(event) => { setQuery(event.target.value); setHighlighted(null); }} onKeyDown={onSearchKeyDown} placeholder={t("搜索模型…", "Search models…")} className="h-10 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60" /></div>
           <div ref={listRef} id={listId} role="listbox" aria-label={t("模型列表", "Model list")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
-            {(catalog.loading || refreshing) && <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{t("正在加载模型目录…", "Loading model catalog…")}</p>}
-            {catalog.error && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalog.error} <button type="button" className="hover:bg-foreground/[0.05]" onClick={refresh}>{t("重试", "Retry")}</button></div>}
-            {!catalog.loading && !refreshing && !catalog.error && visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{searching ? t("没有匹配的模型。", "No matching models.") : section.kind === "favorites" ? t("尚无收藏模型。", "No favorite models yet.") : t("没有可展示的模型。", "No models to show.")}</p>}
+            {catalog.loading && <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{t("正在加载模型目录…", "Loading model catalog…")}</p>}
+            {catalog.refreshing && <p role="status" className="px-2 py-2 text-xs text-muted-foreground">{t("正在后台刷新模型目录，仍可选择已有模型。", "Refreshing the model catalog; existing models remain selectable.")}</p>}
+            {catalogError && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalogError}{catalog.loaded && t("；显示上次成功读取的目录，刷新成功前无法发送。", "; showing the last loaded catalog. Sending is blocked until refresh succeeds.")} <button type="button" disabled={refreshing} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50" onClick={() => void refresh()}>{t("重试", "Retry")}</button></div>}
+            {catalog.loaded && !catalogError && visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{searching ? t("没有匹配的模型。", "No matching models.") : section.kind === "favorites" ? t("尚无收藏模型。", "No favorite models yet.") : t("没有可展示的模型。", "No models to show.")}</p>}
             {visible.map((item, index) => {
               const selected = item.provider.instanceId === providerInstanceId && item.model.id === activeModel?.id;
               const unavailable = !ready(item.provider) || !!item.model.disabledReason;
@@ -300,10 +303,12 @@ export function ComposerModelPicker({
               </div>;
             })}
           </div>
-          {(saveError || localError) && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{saveError || localError}{onRetry && <> <button type="button" disabled={saving || pending} onClick={retrySave} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("重试保存", "Retry save")}</button></>} <button type="button" disabled={refreshing || catalog.loading} onClick={refresh} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("刷新模型目录", "Refresh catalog")}</button></div>}
-          <div className="shrink-0 border-t border-border/70 p-1"><Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"><Settings2Icon aria-hidden="true" className="size-3.5" />{t("管理模型提供商", "Manage model providers")}</Link></div>
+          {actionError && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{actionError}{saveError && onRetry && <> <button type="button" disabled={disabled || saving || pending} onClick={retrySave} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("重试保存", "Retry save")}</button></>}</div>}
+          <div className="flex shrink-0 items-center justify-between border-t border-border/70 p-1"><Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"><Settings2Icon aria-hidden="true" className="size-3.5" />{t("管理模型提供商", "Manage model providers")}</Link><button type="button" disabled={refreshing} onClick={() => void refresh()} className="rounded-md px-2 py-1.5 text-xs text-muted-foreground enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("刷新目录", "Refresh catalog")}</button></div>
         </div>
       </div>
     </PopoverContent>
-  </Popover>;
+  </Popover>
+    {!open && (actionError || catalogError) && <span role="alert" className="inline-flex min-w-0"><button type="button" disabled={disabled || saving || pending} title={actionError || catalogError || undefined} aria-label={`${actionError || catalogError} ${saveError && onRetry ? t("重试保存", "Retry save") : t("打开模型选择器重试", "Open the model picker to retry")}`} onClick={() => { if (saveError && onRetry) retrySave(); else changeOpen(true); }} className="max-w-32 truncate rounded px-1 text-xs text-destructive enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{actionError ? t("保存失败", "Save failed") : t("目录读取失败", "Catalog unavailable")} · {t("重试", "Retry")}</button></span>}
+  </>;
 }

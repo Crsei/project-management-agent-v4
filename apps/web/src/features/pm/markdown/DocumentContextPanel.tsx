@@ -5,6 +5,7 @@ import { headingSlug } from '@pm-markdown';
 import type { WorkspaceController } from './controller';
 import { scanDocumentOutline } from './document-structure';
 import { AgentAssistantMenu } from '../agent/agent-assistant-menu';
+import { HumanIdentity } from '../service/human-identity';
 
 type Props = {
   controller: WorkspaceController;
@@ -32,7 +33,7 @@ export function DocumentContextPanel({ controller: c, en, onClose, onOutline, on
       </details>
       <details open className="document-context-section">
         <summary><Link2 size={14} /><span>{en ? 'Linked tasks' : '关联任务'}</span><small>{linkedTasks.length}</small></summary>
-        {linkedTasks.length > 0 ? <ul className="document-context-links">{linkedTasks.map(file => <li key={file.id}><StatusIcon category={statusCategory(file.entity, c.configuration)} /><button type="button" onClick={() => onOpenEntity(file)}><strong>{file.entity.title}</strong><small><code>{file.id}</code> · {statusLabel(file)}{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small></button></li>)}</ul> : <p>{en ? 'No saved task links this document.' : '没有已保存任务关联此文档。'}</p>}
+        {linkedTasks.length > 0 ? <ul className="document-context-links">{linkedTasks.map(file => <li key={file.id}><StatusIcon category={statusCategory(file.entity, c.configuration)} /><button type="button" onClick={() => onOpenEntity(file)}><strong>{file.entity.title}</strong><small><code>{file.id}</code> · {statusLabel(file)}{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small></button><HumanIdentity userId={file.entity.assignee} projectId={file.entity.project} size={20} /></li>)}</ul> : <p>{en ? 'No saved task links this document.' : '没有已保存任务关联此文档。'}</p>}
       </details>
       <details className="document-context-section">
         <summary><FileText size={14} /><span>{en ? 'Referenced by' : '引用这份文档'}</span><small>{backlinks.length}</small></summary>

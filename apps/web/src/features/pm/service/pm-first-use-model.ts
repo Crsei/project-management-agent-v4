@@ -4,7 +4,7 @@ import type { InstanceSetupStatus, SetupResponse, Workspace } from "@contracts"
 const statusSchema = z.object({
   initialized: z.boolean(),
   setupAllowed: z.boolean(),
-  registrationMode: z.literal("invite_only"),
+  registrationMode: z.enum(["invite_only", "open"]),
 }).strict().refine(value => !value.initialized || !value.setupAllowed)
 
 const responseSchema = z.object({

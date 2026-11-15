@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { DomainError } from '../../domain/src/core.ts';
 import type { Actor, Entity, EntityKind } from '../../domain/src/core.ts';
 import { assertProjectScope, getMembership, requireCapability } from './access.ts';
-import { entityFromRow, entityProject } from './kernel.ts';
+import { entityFromRow, entityProject, requestHash } from './kernel.ts';
 import type { EntityRow } from './kernel.ts';
 import type { SqlExecutor } from './ports.ts';
 import type { WorkspaceIcon, WorkspaceColor } from '../../domain/src/workspace-identity.ts';
@@ -38,7 +38,9 @@ export async function readEntity(pool: Pool, actor: Actor, workspaceId: string, 
   });
 }
 
-export async function listEntities(pool: Pool, actor: Actor, workspaceId: string, options: { kind: EntityKind; projectId?: string; limit?: number; after?: string; visibility?: 'visible' | 'hidden' | 'all' }): Promise<{ items: Entity[]; nextCursor: string | null; cursor: string }> {
+/** Internal narrowing only; current membership remains authoritative and HTTP queries cannot supply this. */
+type EntityListScope = { projectIds: readonly string[]; includeWorkspace: boolean };
+export async function listEntities(pool: Pool, actor: Actor, workspaceId: string, options: { kind: EntityKind; projectId?: string; limit?: number; after?: string; visibility?: 'visible' | 'hidden' | 'all' }, scope?: EntityListScope): Promise<{ items: Entity[]; nextCursor: string | null; cursor: string }> {
   const parsed = z.object({ kind: z.enum(['project','work_item','milestone','conversation','intent','decision','upload','artifact','artifact_version','evidence','submission','review']), projectId: z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/).optional(), limit: z.number().int().min(1).max(200).optional(), after: z.string().max(1024).optional(), visibility: z.enum(['visible','hidden','all']).optional() }).strict().safeParse(options);
   if (!z.uuid().safeParse(workspaceId).success || !parsed.success) throw new DomainError('validation_failed', 'Invalid list query');
   workspaceId = workspaceId.toLowerCase();
@@ -46,11 +48,13 @@ export async function listEntities(pool: Pool, actor: Actor, workspaceId: string
   const visibility = options.visibility ?? 'visible';
   if (visibility !== 'visible' && options.kind !== 'artifact' && options.kind !== 'artifact_version') throw new DomainError('validation_failed', 'Visibility is only supported for artifacts and artifact versions');
   let afterId: string | null = null;
+  let afterScopeHash: string | undefined;
   if (options.after) {
     try {
-      const value = JSON.parse(Buffer.from(options.after, 'base64url').toString('utf8')) as { id: string; kind: string; projectId: string | null; visibility?: string };
+      const value = JSON.parse(Buffer.from(options.after, 'base64url').toString('utf8')) as { id: string; kind: string; projectId: string | null; visibility?: string; scopeHash?: string };
       if (!z.uuid().safeParse(value.id).success || value.kind !== options.kind || value.projectId !== (options.projectId ?? null) || value.visibility !== visibility) throw new Error('cursor mismatch');
       afterId = value.id;
+      afterScopeHash = value.scopeHash;
     } catch { throw new DomainError('validation_failed', 'Pagination cursor does not match this query'); }
   }
   const limit = options.limit ?? 50;
@@ -58,21 +62,33 @@ export async function listEntities(pool: Pool, actor: Actor, workspaceId: string
     const member = await getMembership(sql, actor, workspaceId);
     if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
     if (options.projectId) assertProjectScope(member, options.projectId);
-    const result = await sql.query<EntityRow>(`SELECT e.* FROM entities e WHERE e.workspace_id=$1 AND e.kind=$2
+    const memberProjects = scope && member.projectIds !== null ? new Set(member.projectIds) : null;
+    const projectIds = scope ? [...new Set(scope.projectIds)].filter(id => memberProjects === null || memberProjects.has(id)).sort() : member.projectIds;
+    const includeWorkspace = scope !== undefined && scope.includeWorkspace && member.projectIds === null;
+    if (scope && options.projectId && !projectIds!.includes(options.projectId)) throw new DomainError('not_found_or_forbidden', 'Resource is outside the explicitly authorized project set', 404);
+    const scopeHash = scope ? requestHash({ actorId: actor.id, workspaceId, kind: options.kind, projectId: options.projectId ?? null, visibility, memberVersion: member.version, projectIds, includeWorkspace }) : undefined;
+    if (scope && options.after && afterScopeHash !== scopeHash) throw new DomainError('validation_failed', 'Pagination cursor does not match the current authorized scope');
+    const from = `FROM entities e WHERE e.workspace_id=$1 AND e.kind=$2
       AND ($3::text IS NULL OR e.project_id=$3 OR (e.kind='project' AND e.id::text=$3))
-      AND ($4::text[] IS NULL OR e.project_id=ANY($4) OR (e.kind='project' AND e.id::text=ANY($4)))
-      AND ($5::uuid IS NULL OR e.id>$5)
+      AND ($4::text[] IS NULL OR e.project_id=ANY($4) OR (e.kind='project' AND e.id::text=ANY($4))
+        OR ($6::boolean AND e.project_id IS NULL AND e.kind<>'project'))
       AND (e.kind NOT IN ('artifact','artifact_version') OR
-        e.kind='artifact' AND ($7='all' OR ($7='visible' AND e.data->'hiddenAt'='null'::jsonb) OR ($7='hidden' AND e.data->'hiddenAt'<>'null'::jsonb)) OR
+        e.kind='artifact' AND ($5='all' OR ($5='visible' AND e.data->'hiddenAt'='null'::jsonb) OR ($5='hidden' AND e.data->'hiddenAt'<>'null'::jsonb)) OR
         e.kind='artifact_version' AND EXISTS (
           SELECT 1 FROM entities parent WHERE parent.workspace_id=e.workspace_id AND parent.kind='artifact'
             AND parent.project_id=e.project_id AND parent.id::text=e.data->>'artifactId'
-            AND ($7='all' OR ($7='visible' AND parent.data->'hiddenAt'='null'::jsonb) OR ($7='hidden' AND parent.data->'hiddenAt'<>'null'::jsonb))))
-      ORDER BY e.id LIMIT $6`, [workspaceId, options.kind, options.projectId ?? null, member.projectIds, afterId, limit + 1, visibility]);
+            AND ($5='all' OR ($5='visible' AND parent.data->'hiddenAt'='null'::jsonb) OR ($5='hidden' AND parent.data->'hiddenAt'<>'null'::jsonb))))`;
+    const parameters: unknown[] = [workspaceId, options.kind, options.projectId ?? null, projectIds, visibility, includeWorkspace];
+    if (scope && afterId) {
+      const anchor = await sql.query<{ id: string }>(`SELECT e.id ${from} AND e.id=$7::uuid`, [...parameters, afterId]);
+      if (!anchor.rows.length) throw new DomainError('validation_failed', 'Pagination cursor is not an authorized current record');
+    }
+    parameters.push(afterId, limit + 1);
+    const result = await sql.query<EntityRow>(`SELECT e.* ${from} AND ($7::uuid IS NULL OR e.id>$7) ORDER BY e.id LIMIT $8`, parameters);
     const more = result.rows.length > limit;
     const rows = result.rows.slice(0, limit);
     const last = rows.at(-1);
     const stream = await sql.query<{ stream_cursor: string }>('SELECT stream_cursor FROM workspaces WHERE id=$1', [workspaceId]);
-    return { items: rows.map(entityFromRow), nextCursor: more && last ? Buffer.from(JSON.stringify({ id: last.id, kind: options.kind, projectId: options.projectId ?? null, visibility })).toString('base64url') : null, cursor: stream.rows[0]!.stream_cursor };
+    return { items: rows.map(entityFromRow), nextCursor: more && last ? Buffer.from(JSON.stringify({ id: last.id, kind: options.kind, projectId: options.projectId ?? null, visibility, ...(scopeHash ? { scopeHash } : {}) })).toString('base64url') : null, cursor: stream.rows[0]!.stream_cursor };
   });
 }

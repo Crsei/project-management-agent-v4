@@ -21,8 +21,10 @@ import { ServiceProjectActivity, ServiceProjectEntry, ServiceProjectFiles, Servi
 import { ServicePeople } from "@/features/pm/service/service-people"
 import { SettingsRoute } from "@/features/pm/service/settings/settings-layout"
 import { PmInvitationAcceptPage } from "@/features/pm/service/pm-invitation-accept"
+import { PmRegisterPage } from "@/features/pm/service/pm-register-page"
 import { ServiceTaskCreationPage } from "@/features/pm/markdown/page"
 import { ServiceWorkspaceHome } from "@/features/pm/service/service-workspace-home"
+import { PmOnboarding } from "@/features/pm/service/pm-onboarding"
 import { AccountSecurityPage, PasswordRecoveryPage, VerifyRecoveryEmailPage } from "@/features/pm/service/account-recovery-pages"
 import { AgentChatPage } from "@/features/pm/agent/agent-chat-page"
 import { useWorkspaceStore } from "@/providers/app-providers"
@@ -32,6 +34,8 @@ import { loadAgentApp } from "@/lib/agent-app-module"
 import { RouteErrorBoundary, RouteLoading } from "@/components/blocks/route-feedback"
 const AgentApp = lazy(loadAgentApp)
 const ConnectAgentPage = lazy(() => import("@/features/agent/src/mcp/connect-agent"))
+const AgentRunBoardDemo = lazy(() => import("@/views/pm/agent-run-board-demo"))
+const MobileDemo = lazy(() => import("@/views/pm/mobile-demo"))
 
 
 
@@ -58,6 +62,7 @@ export function AppRoutes() {
       <Route path="/agent/*" element={<RouteErrorBoundary resetKey={location.pathname}><Suspense fallback={<RouteLoading />}><AgentApp /></Suspense></RouteErrorBoundary>} />
       <Route path="/connect-agent" element={<RouteErrorBoundary resetKey={location.pathname}><Suspense fallback={<RouteLoading message="正在核对连接请求…" />}><ConnectAgentPage /></Suspense></RouteErrorBoundary>} />
       <Route path="/pm/invitations/accept" element={<PmInvitationAcceptPage />} />
+      <Route path="/pm/register" element={<PmServiceProvider><PmRegisterPage /></PmServiceProvider>} />
       <Route path="/pm/account" element={<PmServiceProvider><Outlet /></PmServiceProvider>}>
         <Route index element={<Navigate to="security" replace />} />
         <Route path="security" element={<AccountSecurityPage />} />
@@ -68,6 +73,7 @@ export function AppRoutes() {
         <Route index element={<ServiceHome />} />
         <Route path=":workspaceSlug" element={<WorkspaceStartRoute />} />
         <Route path=":workspaceSlug/home" element={<ServiceWorkspaceHome />} />
+        <Route path=":workspaceSlug/onboarding" element={<PmOnboarding />} />
         <Route path=":workspaceSlug/dashboard" element={<ServiceDashboard />} />
         <Route path=":workspaceSlug/projects" element={<ServiceProjects />} />
         <Route path=":workspaceSlug/projects/:projectId" element={<ServiceProjectLayout />}>
@@ -94,6 +100,7 @@ export function AppRoutes() {
         <Route path=":workspaceSlug/settings" element={<ServiceWorkspaceSettings />} />
         <Route path=":workspaceSlug/settings/:settingsPage" element={<SettingsRoute mode="service" />} />
       </Route>
+      {import.meta.env.PM_LAB_ENABLED && <Route path="/lab/pm/mobile" element={<Suspense fallback={<RouteLoading message="正在加载移动设计预览…" />}><MobileDemo /></Suspense>} />}
       {import.meta.env.PM_LAB_ENABLED && <Route
         path="/lab/pm"
         element={
@@ -103,6 +110,7 @@ export function AppRoutes() {
         }
       >
         <Route index element={<PmHome />} />
+        <Route path=":workspaceSlug/agent-runs" element={<Suspense fallback={<RouteLoading />}><AgentRunBoardDemo /></Suspense>} />
         <Route path=":workspaceSlug/dashboard" element={<PmDashboardRoute />} />
         <Route path=":workspaceSlug/issues" element={<PmIssuesRoute />} />
         <Route path=":workspaceSlug/members" element={<PmMembersRoute />} />

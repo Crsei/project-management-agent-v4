@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { RichTextEditor } from "../components/rich-text-editor"
 import { usePmCommand, usePmService } from "./pm-service"
 import { Field, Choice, Form, Panel, useText, string, required, nullableUuid, criterionReference, makeCommand, allowed, useDraftState, entitySchema } from "./pm-ui"
+import { MemberPicker } from "./people-components"
 
 export function WorkItemForm({ projectId, intent, onSaved }: { projectId: string; intent: Entity; onSaved?: (entity: Entity) => void }) {
   const draftScope = `work:${projectId}:${intent.id}`
@@ -22,7 +23,7 @@ export function WorkItemForm({ projectId, intent, onSaved }: { projectId: string
   }}>
     <Field label={t("标题", "Title")} value={title} onChange={setTitle} required /><RichTextEditor label={t("工作范围 / 描述", "Work scope / description")} value={description} onChange={setDescription} />
     <fieldset className="space-y-2"><legend>{t("验收标准", "Acceptance criteria")}</legend>{criteria.map((criterion, index) => <div key={criterion.id} className="flex items-end gap-2"><Field label={`${t("标准", "Criterion")} ${index + 1}`} value={criterion.text} onChange={value => setCriteria(rows => rows.map(row => row.id === criterion.id ? { ...row, text: value } : row))} required /><Button type="button" variant="outline" onClick={() => setCriteria(rows => rows.filter(row => row.id !== criterion.id))}>{t("移除", "Remove")}</Button></div>)}<Button type="button" variant="outline" onClick={() => setCriteria(rows => [...rows, { id: crypto.randomUUID(), text: "" }])}>{t("添加验收标准", "Add acceptance criterion")}</Button></fieldset>
-    <Field label={t("负责人用户 UUID", "Assignee user UUID")} value={assignee} onChange={setAssignee} /><Choice label={t("优先级", "Priority")} value={priority} onChange={setPriority} options={["low", "normal", "high", "urgent"].map(value => ({ value, label: value }))} />
+    <MemberPicker purpose="assignee" projectId={projectId} label={t("负责人", "Assignee")} value={assignee || null} onChange={value => setAssignee(value ?? "")} disabled={command.pending || !!command.unknownCommand} /><Choice label={t("优先级", "Priority")} value={priority} onChange={setPriority} options={["low", "normal", "high", "urgent"].map(value => ({ value, label: value }))} />
   </Form>
 }
 export function CoreLifecycle({ entity }: { entity: Entity }) {

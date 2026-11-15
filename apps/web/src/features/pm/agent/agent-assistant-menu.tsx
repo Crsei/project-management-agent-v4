@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useLocation } from "react-router"
-import { Bot, ChevronDown, ExternalLink, History, MessageSquare, Play, Settings2 } from "lucide-react"
+import { Bot, ChevronDown, ExternalLink, History, MessageSquare, Play, Plus, Settings2 } from "lucide-react"
 import { StudioApiError, StudioClient } from "../../../../../../packages/contracts/src/automation-studio-client"
 import { studioCanRunWithoutConfirmation, studioCapabilitiesSchema, studioDefinitionSchema, studioPageSchema, type StudioDefinition } from "../../../../../../packages/contracts/src/automation-studio"
 import { Button } from "@/components/ui/button"
@@ -67,6 +67,9 @@ function ScopedAssistantShortcuts({ projectId, disabledReason, className, actorI
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const baseQuery = new URLSearchParams({ workspace: workspace.id, returnTo })
   if (projectId) baseQuery.set("project", projectId)
+  const newQuery = new URLSearchParams(baseQuery)
+  newQuery.set("quickAccess", "1")
+  const newUrl = `/agent/automations/setup?${newQuery}`
   const manageUrl = `/agent/automations?${baseQuery}`
   const historyUrl = `/agent/automations/history?${baseQuery}`
   const chatUrl = `/agent/workspace?${baseQuery}`
@@ -75,7 +78,7 @@ function ScopedAssistantShortcuts({ projectId, disabledReason, className, actorI
   const exactQuery = new URLSearchParams(baseQuery)
   if (accepted) exactQuery.set("run", accepted.id)
   const exactUrl = accepted ? `/agent/automations/detail/${encodeURIComponent(accepted.definitionId)}?${exactQuery}` : ""
-  const scopeReason = !projectId ? t("请先选择项目以使用自动化快捷入口。", "Select a project to use automation shortcuts.")
+  const scopeReason = !projectId ? ""
     : !readable ? t("当前项目不可访问；请重新核对成员授权。", "This project is unavailable. Recheck membership access.")
     : disabledReason || (!allowed(workspace, "planning.edit", projectId) ? t("当前项目为只读，不能派发自动化。", "This project is read only; automations cannot be dispatched.")
       : project.error ? t("无法核对项目状态；请重新读取。", "Project status could not be checked. Read it again.")
@@ -113,10 +116,10 @@ function ScopedAssistantShortcuts({ projectId, disabledReason, className, actorI
   return <span className={styles.entry}>
       <DropdownMenu open={open && !revoked} onOpenChange={value => { if (!revoked) setOpen(value) }}>
         <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" className={[styles.trigger, className].filter(Boolean).join(" ")} disabled={revoked} data-testid="agent-automation-shortcuts" aria-label={t("Agent 助手", "Agent assistant")} title={revoked ? t("项目授权已失效，请重新核对。", "Project access expired. Recheck access.") : t("自动化任务与 Agent Chat", "Automations and Agent Chat")} />}><Bot size={14} aria-hidden="true" /><span>{t("Agent 助手", "Agent assistant")}</span><ChevronDown size={14} aria-hidden="true" /></DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className={styles.menu} aria-label={t("项目自动化快捷入口", "Project automation shortcuts")}>
-          <DropdownMenuLabel className={styles.label}>{t("自动化快捷入口", "Automation shortcuts")}</DropdownMenuLabel>
-          <p className={styles.hint}>{t("仅运行已保存版本，不包含未保存的 PM 草稿；可能产生模型费用。分析候选仍需另外确认应用。", "Runs only the saved revision, excluding unsaved PM drafts; model costs may apply. Analysis candidates still require separate approval to apply.")}</p>
+        <DropdownMenuContent align="end" className={styles.menu} aria-label={t("项目自动化", "Project automation")}>
+          <DropdownMenuLabel className={styles.label}>{t("自动化", "Automation")}</DropdownMenuLabel>
           {scopeReason && <p role="status" className={styles.hint}>{scopeReason}</p>}
+          {!projectId && <p role="status" data-testid="automation-shortcuts-select-project" className={styles.hint}>{t("请先选择项目；新增自动化时也可在配置中明确选择。此菜单不会跨项目运行。", "Choose a project first, or explicitly select one when creating an automation. This menu never runs across projects.")}</p>}
           {readable && <>
             {loading && <p role="status" className={styles.hint}>{t("正在读取快捷入口…", "Loading shortcuts…")}</p>}
             {(definitions.error || capabilities.error || paginationInvalid || project.error) && <div role="alert" className={styles.hint}><p>{t("无法完整读取快捷入口；未运行任何自动化。", "Shortcuts could not be loaded fully. No automation was run.")}</p><Button variant="outline" size="sm" disabled={loading} onClick={() => { void project.refetch(); void definitions.refetch(); void capabilities.refetch() }}>{t("重新读取", "Read again")}</Button></div>}
@@ -132,6 +135,7 @@ function ScopedAssistantShortcuts({ projectId, disabledReason, className, actorI
             {definitions.hasNextPage && !paginationInvalid && <DropdownMenuItem closeOnClick={false} disabled={loading} data-testid="automation-shortcuts-load-more" onSelect={() => { void definitions.fetchNextPage() }}>{t("加载更多", "Load more")}</DropdownMenuItem>}
           </>}
           <DropdownMenuSeparator className={styles.separator} />
+          <DropdownMenuItem render={<a href={newUrl} data-testid="automation-shortcuts-new" />}><Plus size={14} aria-hidden="true" />{t("新增自动化", "Add automation")}</DropdownMenuItem>
           <DropdownMenuItem render={<a href={manageUrl} data-testid="automation-shortcuts-manage" />}><Settings2 size={14} aria-hidden="true" />{t("管理自动化", "Manage automations")}</DropdownMenuItem>
           <DropdownMenuItem render={<a href={historyUrl} data-testid="automation-shortcuts-history" />}><History size={14} aria-hidden="true" />{t("运行历史", "Execution history")}</DropdownMenuItem>
           <DropdownMenuSeparator className={styles.separator} />

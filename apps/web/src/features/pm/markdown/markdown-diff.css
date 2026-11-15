@@ -1,0 +1,44 @@
+.md-diff {
+  --md-diff-add: color-mix(in srgb, #16803d 12%, transparent);
+  --md-diff-remove: color-mix(in srgb, #dc2626 10%, transparent);
+  min-width: 0;
+  width: 100%;
+  color: inherit;
+}
+.md-diff-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; }
+.md-diff-toolbar > span { margin-right: auto; font-variant-numeric: tabular-nums; }
+.md-diff-toolbar button { color: inherit; background: transparent; border: 1px solid var(--border, #8886); border-radius: 5px; padding: 5px 9px; font: inherit; cursor: pointer; }
+.md-diff-toolbar button:disabled { opacity: .45; cursor: default; }
+.md-diff button:focus-visible, .md-diff summary:focus-visible, .md-diff-change:focus { outline: 2px solid var(--primary, #5687e8); outline-offset: 3px; }
+.md-diff-history-note { font-size: 12px; opacity: .75; line-height: 1.6; }
+.md-diff-change { margin: 14px 0; border: 1px solid var(--border, #8886); border-radius: 6px; min-width: 0; scroll-margin-block: 24px; overflow-wrap: anywhere; }
+.md-diff-change-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border, #8886); font-size: 12px; }
+.md-diff-change-heading span { opacity: .8; }
+.md-diff-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+.md-diff-side { min-width: 0; padding: 10px 14px; }
+.md-diff-side-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.md-diff-side.md-diff-added, .md-diff-added:not(.md-diff-change) { background: var(--md-diff-add); }
+.md-diff-side.md-diff-removed, .md-diff-removed:not(.md-diff-change) { background: var(--md-diff-remove); }
+.md-diff .markdown-preview { min-width: 0; padding: 0; max-width: none; background: transparent; }
+.md-diff .markdown-preview > :first-child { margin-top: 0; }
+.md-diff .markdown-preview > :last-child { margin-bottom: 0; }
+.md-diff .markdown-preview table { display: block; max-width: 100%; overflow-x: auto; }
+.md-diff .markdown-preview pre, .md-diff-literal { max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-diff ins.md-diff-inline { background: color-mix(in srgb, #16803d 25%, transparent); text-decoration: underline; text-decoration-thickness: 2px; }
+.md-diff del.md-diff-inline { background: color-mix(in srgb, #dc2626 22%, transparent); text-decoration: line-through; }
+.md-diff-source { border-top: 1px solid var(--border, #8886); padding: 8px 12px; }
+.md-diff-source summary, .md-diff-unchanged summary { cursor: pointer; font-size: 12px; line-height: 1.6; }
+.md-diff-source > :not(summary) { margin-top: 8px; }
+.md-diff-unchanged { border-block: 1px dashed var(--border, #8886); padding: 9px 12px; margin: 12px 0; }
+.md-diff-unchanged > .markdown-preview { padding-top: 12px; }
+.md-diff-reference { border: 1px dashed var(--border, #8886); border-radius: 3px; padding: 1px 4px; overflow-wrap: anywhere; }
+.md-diff-whitespace { font-style: italic; opacity: .7; }
+.md-diff-fallback { min-width: 0; }
+@media (max-width: 600px) {
+  .md-diff-toolbar > span { width: 100%; }
+  .md-diff-side { padding: 8px 10px; }
+}
+@media (prefers-contrast: more) {
+  .md-diff-side.md-diff-added { border-left: 3px solid #16803d; }
+  .md-diff-side.md-diff-removed { border-left: 3px double #dc2626; }
+}

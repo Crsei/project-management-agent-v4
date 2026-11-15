@@ -24,18 +24,20 @@ import { ExecutionSelectionField } from "../execution-workspace";
 
 export type StudioAssistRequest = { prompt: string; projectId: string; definitionId?: string; draftId?: string; templateId?: string; config?: StudioConfig; onApply?: (patch: Partial<StudioConfig>) => void };
 export type StudioAssistCallback = (request: StudioAssistRequest) => void | Promise<void>;
-type Props = { workspaceId: string; actorId: string; membershipVersion: number; projectId?: string; draftId?: string; projects: Entity[]; definition?: StudioDefinition | null; templateId?: string | null; writable: boolean; onSaved: (definition: StudioDefinition) => void; onCancel: () => void; onDirtyChange?: (dirty: boolean) => void; onExecution?: (execution: StudioExecution) => void; onAssist?: StudioAssistCallback; onIntegrations?: () => void; onAccessLost?: () => void };
+type Props = { workspaceId: string; actorId: string; membershipVersion: number; projectId?: string; draftId?: string; projects: Entity[]; definition?: StudioDefinition | null; templateId?: string | null; defaultQuickAccess?: boolean; writable: boolean; onSaved: (definition: StudioDefinition) => void; onCancel: () => void; onDirtyChange?: (dirty: boolean) => void; onExecution?: (execution: StudioExecution) => void; onAssist?: StudioAssistCallback; onIntegrations?: () => void; onAccessLost?: () => void };
 export function StudioEditor(props: Props) {
   const { workspaceId, actorId, membershipVersion, projects, writable, onSaved, onCancel, onDirtyChange, onExecution, onAssist, onIntegrations } = props;
   const t = useAgentText();
-  const template = automationCatalogById.get(props.templateId ?? props.definition?.config.templateId ?? (props.definition?.config.action.kind === "template" ? props.definition.config.action.templateId : ""));
+  const catalogTemplate = automationCatalogById.get(props.templateId ?? props.definition?.config.templateId ?? (props.definition?.config.action.kind === "template" ? props.definition.config.action.templateId : ""));
+  // Assisted/launch wizards create configurations; saved definitions edit their actual config without replaying wizard defaults.
+  const template = props.definition && catalogTemplate?.setup?.mode !== "direct" ? undefined : catalogTemplate;
   const mode = template?.setup?.mode ?? (template ? "launch" : "direct");
   const editorId = props.definition?.id ?? props.draftId ?? `new:${template?.id ?? "blank"}:${props.projectId ?? ""}`;
   const key = studioDraftKey(actorId, workspaceId, membershipVersion, editorId);
   const api = useMemo(() => new StudioClient(workspaceId), [workspaceId]);
   const transfer = useMemo(() => new AutomationTransferClient(workspaceId), [workspaceId]);
   const [initial] = useState(() => {
-    let config = props.definition?.config ?? emptyStudioConfig(props.projectId);
+    let config = props.definition?.config ?? emptyStudioConfig(props.projectId, props.defaultQuickAccess);
     if (!props.definition && template) {
       config = { ...config, name: template.name, description: template.description, templateId: template.id };
       const cron = template.setup?.form.triggers?.cron;
@@ -409,7 +411,7 @@ export function StudioEditor(props: Props) {
   const actionAvailable = capabilities?.actions.find(action => action.id === config.action.kind);
   const timezone = "timezone" in config.trigger ? config.trigger.timezone : "UTC";
   const renderConfiguration = mode === "direct";
-  if (props.templateId && !template) return <article className={styles.editor}><h1>{t("模板不存在", "Template not found")}</h1><p role="alert">{t("此 ID 不在固定的 production 目录中；不会创建空白替代规则。", "This ID is not in the pinned production catalog; no blank replacement rule is created.")}</p><Button onClick={onCancel}>{t("返回", "Back")}</Button></article>;
+  if (props.templateId && !catalogTemplate) return <article className={styles.editor}><h1>{t("模板不存在", "Template not found")}</h1><p role="alert">{t("此 ID 不在固定的 production 目录中；不会创建空白替代规则。", "This ID is not in the pinned production catalog; no blank replacement rule is created.")}</p><Button onClick={onCancel}>{t("返回", "Back")}</Button></article>;
   return <article className={styles.editor} aria-label={t("执行自动化编辑器", "Execution automation editor")}>
     <header className={styles.heading}><div><Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}><ArrowLeft size={14} />{t("返回", "Back")}</Button><h1>{saved ? t("编辑自动化", "Edit automation") : template?.name ?? t("新建自动化", "New automation")}</h1><p>{t("配置 Agent、脚本或原生模板的触发条件与执行动作。", "Configure triggers and actions for an agent, script, or native template.")}</p></div><span className={styles.badge}>{saved ? `${saved.status} · v${saved.revision}` : t("尚未保存至服务器", "Not saved to server")}</span></header>
     {template && <><nav className={styles.steps} aria-label={t("设置步骤", "Setup steps")}>{(["prerequisites", "form", "review"] as const).map((step, index) => <button type="button" key={step} disabled={locked} aria-current={stage === step ? "step" : undefined} onClick={() => step === "review" ? void review() : setStage(step)}>{index + 1}. {step === "prerequisites" ? t("前提条件", "Prerequisites") : step === "form" ? t("配置", "Configure") : t("审查", "Review")}</button>)}</nav><p className={styles.provenance}>{isPmAutomationTemplateId(template.id) ? t("PM 原生 · agent-pm-studio 场景适配", "PM native · agent-pm-studio scenario adaptation") : `OpenHands · extensions ${automationCatalogSource.extensionsVersion} · MIT`} · {template.id}@{template.version ?? "catalog"} · {mode}</p></>}
@@ -421,6 +423,7 @@ export function StudioEditor(props: Props) {
       <div className={styles.actions}><Button variant="outline" disabled={locked} onClick={() => { persist({ ...live.current, definition: latest, baseline: latest.config }); setLatest(null); }}>{t("保留输入，采用当前 revision", "Keep input, adopt current revision")}</Button>
       <Button variant="ghost" disabled={locked} onClick={() => loadServerVersion(latest)}>{t("载入服务器配置", "Load server configuration")}</Button></div>
     </section>}
+    {!config.projectId && <p className={styles.notice} role="status">{t("请明确选择此自动化所属的 PM 项目后再保存、启用或运行；不会自动选择或跨项目执行。", "Explicitly select the automation's PM project before saving, enabling, or running. No project is selected automatically and execution never crosses projects.")}</p>}
     <Field label={t("项目", "Project")} issue={issues.projectId}>{id => <RadixSelect id={id} disabled={locked || Boolean(saved)} value={config.projectId} onChange={event => change({ projectId: event.target.value })}><option value="">{t("选择项目", "Choose a project")}</option>{projects.map(project => <option key={project.id} value={project.id}>{typeof project.data.name === "string" ? project.data.name : project.id} ({project.id})</option>)}</RadixSelect>}</Field>
     {renderConfiguration && <Field label={t("Agent 助手快捷入口", "Agent assistant shortcut")} help={t("在此项目的 Agent 助手箭头菜单显示已保存自动化。不会因勾选或打开菜单而运行；草稿仍不能直接运行。", "Show this saved automation in the project's Agent assistant arrow menu. Checking this or opening the menu never runs it; drafts still cannot run.")} issue={issues.quickAccess}>{id => <input id={id} type="checkbox" data-testid="automation-quick-access" checked={config.quickAccess === true} disabled={locked || !canWrite} onChange={event => change({ quickAccess: event.target.checked })} />}</Field>}
     {scopeMismatch && <section className={styles.warning} role="alert"><strong>{t("恢复草稿与当前项目范围不一致", "Recovery draft does not match the current project scope")}</strong><p>{t(`草稿项目：${config.projectId || "未选择"}；URL 项目：${props.projectId}。输入不会自动改写。请在项目字段选择 URL 项目，或返回草稿所属项目后继续。保存、上传、测试与启用均被阻止。`, `Draft project: ${config.projectId || "not selected"}; URL project: ${props.projectId}. Your input is not rewritten. Select the URL project in the project field, or return to the draft's project. Saving, uploading, testing and enabling are blocked.`)}</p></section>}

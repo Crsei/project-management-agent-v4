@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ComponentType } from "react"
 import { Link, useNavigate, useParams } from "react-router"
-import { Bell, Blocks, ChevronRight, CreditCard, Settings2, ShieldCheck, UserRound, UsersRound } from "lucide-react"
+import { Bell, Blocks, ChevronRight, CreditCard, Puzzle, Settings2, ShieldCheck, UserRound, UsersRound } from "lucide-react"
 import { ServiceGuard, useText } from "../pm-ui"
 import { SettingsGeneral } from "./settings-general"
 import { SettingsProfile } from "./settings-profile"
@@ -18,6 +18,9 @@ import { settingsGroups, settingsPages, workspaceSettingsPages, type SettingsPag
 import type { SettingsPageProps } from "./settings-shared"
 import { SettingsAgent } from "../../agent/agent-settings-overview"
 import { SettingsDesignSystem } from "./settings-design-system"
+import { SettingsIm } from "./settings-im"
+import { SettingsIntegrationEmail } from "./settings-integration-email"
+import { SettingsIntegrationWebhook } from "./settings-integration-webhook"
 import { RadixSelect } from "@/components/ui/radix-select"
 
 const components: Record<SettingsPageSlug, ComponentType<SettingsPageProps>> = {
@@ -46,10 +49,13 @@ const components: Record<SettingsPageSlug, ComponentType<SettingsPageProps>> = {
   billing: SettingsBilling,
   invoices: SettingsInvoices,
   plugins: SettingsPlugins,
+  im: SettingsIm,
+  "integration-email": SettingsIntegrationEmail,
+  "integration-webhook": SettingsIntegrationWebhook,
   agent: SettingsAgent,
 }
 
-const groupIcons = { general: Settings2, workspace: UsersRound, notifications: Bell, personal: UserRound, security: ShieldCheck, billing: CreditCard, integrations: Blocks }
+const groupIcons = { general: Settings2, workspace: UsersRound, notifications: Bell, personal: UserRound, security: ShieldCheck, billing: CreditCard, integrations: Blocks, "agent-extensions": Puzzle }
 
 export function SettingsRoute({ mode }: SettingsPageProps) {
   return mode === "service" ? <ServiceGuard><SettingsLayout mode={mode} /></ServiceGuard> : <SettingsLayout mode={mode} />

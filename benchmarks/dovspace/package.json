@@ -1,6 +1,6 @@
 {
   "name": "@dovspace/bench-lite",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -17,9 +17,11 @@
     "bench:report": "node --conditions=development cli.ts report",
     "bench:calibrate": "node --conditions=development cli.ts calibrate",
     "bench:protocol:calibrate": "node --conditions=development runners/protocol-calibration.ts",
+    "bench:protocol:omp": "node --conditions=development runners/omp-controlled-protocol.ts",
+    "bench:pm-tools": "node --conditions=development pm-tools/service-study.ts",
     "typecheck": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
-    "lint": "../../node_modules/.bin/oxlint --deny-warnings cli.ts benchmark.config.ts adapters calibration fixtures graders isolation reports runners schemas tasks",
-    "test": "node --conditions=development --test adapters/agent-chat.test.ts adapters/sse.test.ts runners/artifacts.test.ts runners/checkpoints.test.ts runners/context.test.ts runners/index.test.ts runners/rework.test.ts runners/telemetry.test.ts reports/cli.test.ts reports/files.test.ts reports/reports.test.ts fixtures/snapshot.test.ts isolation/broker.test.ts isolation/filesystem.test.ts schemas/types.test.ts calibration/graders.test.ts",
-    "test:integration": "node --conditions=development --test fixtures/lifecycle.integration.test.ts"
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings cli.ts benchmark.config.ts adapters calibration fixtures graders isolation pm-tools reports runners schemas tasks",
+    "test": "node --conditions=development --test adapters/agent-chat.test.ts adapters/product-cli.test.ts adapters/product-cli-process.test.ts adapters/sse.test.ts runners/artifacts.test.ts runners/checkpoints.test.ts runners/cli-observations.test.ts runners/context.test.ts runners/index.test.ts runners/rework.test.ts runners/telemetry.test.ts runners/tools-study.test.ts reports/cli.test.ts reports/cli-observations.test.ts reports/files.test.ts reports/reports.test.ts reports/tools-study.test.ts fixtures/snapshot.test.ts isolation/broker.test.ts isolation/container-bridge.test.mjs isolation/filesystem.test.ts isolation/provider-transport.test.ts isolation/source.test.ts schemas/types.test.ts calibration/graders.test.ts pm-tools/measurement.test.ts pm-tools/wire-evidence.test.ts pm-tools/brief-sources.test.ts",
+    "test:integration": "node --conditions=development --test --test-concurrency=1 fixtures/lifecycle.integration.test.ts pm-tools/service-study.integration.test.ts pm-tools/brief-sources.integration.test.ts"
   }
 }

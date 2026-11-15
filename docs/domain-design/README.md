@@ -2,7 +2,7 @@
 
 版本：0.1 历史领域提案（2026-10-16）；公开入口已按当前实现区分适用性。
 
-本规范依据[原始需求参考](../reference/domain-design-background.md)，保留业务术语、责任和稳定追踪编号。它不是当前所有能力的上线声明；现行存储与核心任务语义以[Markdown ADR](../architecture/adr/0003-markdown-core.md)、[模块契约](../architecture/module-contracts.md)和[数据所有权](../architecture/data-ownership.md)为准。
+本规范依据原始需求参考，保留业务术语、责任和稳定追踪编号。它不是当前所有能力的上线声明；现行存储与核心任务语义以[Markdown ADR](../architecture/adr/0003-markdown-core.md)、[模块契约](../architecture/module-contracts.md)和[数据所有权](../architecture/data-ownership.md)为准。
 
 早期三阶段顺序及27步任务是内部历史计划，不再作为公开使用或当前Agent接入的执行指令。当前范围和历史差异见[第七节](#implementation-plan)，完整用法见[公开指南](../guides/project-management.md)。
 

@@ -6,6 +6,7 @@ export const settingsGroups = [
   { id: "security", zh: "安全", en: "Security" },
   { id: "billing", zh: "计费", en: "Billing" },
   { id: "integrations", zh: "集成", en: "Integrations" },
+  { id: "agent-extensions", zh: "Agent 扩展", en: "Agent extensions" },
 ] as const
 
 export const settingsPages = [
@@ -20,7 +21,7 @@ export const settingsPages = [
   { slug: "projects", group: "workspace", zh: "项目", en: "Projects" },
   { slug: "permissions", group: "workspace", zh: "权限", en: "Permissions" },
   { slug: "notifications", group: "notifications", zh: "通知概览", en: "Notification overview" },
-  { slug: "notif-email", group: "notifications", zh: "邮件", en: "Email" },
+  { slug: "notif-email", group: "notifications", zh: "邮件通知", en: "Email notifications" },
   { slug: "notif-push", group: "notifications", zh: "推送", en: "Push" },
   { slug: "notif-mentions", group: "notifications", zh: "提及", en: "Mentions" },
   { slug: "notif-assign", group: "notifications", zh: "任务分配", en: "Task assignments" },
@@ -31,10 +32,13 @@ export const settingsPages = [
   { slug: "sessions", group: "security", zh: "登录会话", en: "Sessions" },
   { slug: "two-factor", group: "security", zh: "双因素认证", en: "Two-factor authentication" },
   { slug: "plans", group: "billing", zh: "套餐与用量", en: "Plans & usage" },
-  { slug: "billing", group: "billing", zh: "付款与账单资料", en: "Payment & billing details" },
+  { slug: "billing", group: "billing", zh: "账单服务", en: "Billing service" },
   { slug: "invoices", group: "billing", zh: "发票", en: "Invoices" },
-  { slug: "plugins", group: "integrations", zh: "插件中心", en: "Plugins" },
-  { slug: "agent", group: "integrations", zh: "Agent", en: "Agent" },
+  { slug: "plugins", group: "integrations", zh: "集成目录", en: "Integration catalog" },
+  { slug: "integration-email", group: "integrations", zh: "邮件", en: "Email" },
+  { slug: "integration-webhook", group: "integrations", zh: "Webhook", en: "Webhook" },
+  { slug: "im", group: "integrations", zh: "即时通讯", en: "Instant messaging" },
+  { slug: "agent", group: "agent-extensions", zh: "Agent 扩展", en: "Agent extensions" },
 ] as const
 
 export type SettingsPageSlug = (typeof settingsPages)[number]["slug"]
@@ -44,6 +48,6 @@ export const workspaceSettingsPages = [
   { section: "preferences", zh: "页面布局", en: "Page layouts" },
   { section: "configuration", zh: "工作流与字段", en: "Workflows & fields" },
   { section: "local-storage", zh: "本地项目存储", en: "Local project storage" },
-  { section: "migrations", zh: "迁移与备份", en: "Migrations & backups" },
+  { section: "migrations", zh: "协议迁移", en: "Protocol migrations" },
   { section: "diagnostics", zh: "诊断", en: "Diagnostics" },
 ] as const

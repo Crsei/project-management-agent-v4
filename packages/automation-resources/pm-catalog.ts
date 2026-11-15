@@ -3,10 +3,9 @@ import { pmAutomationTemplateVersion, type PmAutomationArguments, type PmAutomat
 
 export const pmAutomationCategories = ['tasks/dependencies', 'execution/collaboration', 'knowledge/changes', 'project/planning'] as const;
 export type PmAutomationCategory = typeof pmAutomationCategories[number];
+/** Scenario semantics are adapted from the external agent-pm-studio design reference; no source code is copied or distributed. */
 export const pmAutomationCatalogSource = {
   id: 'pm', name: 'PM native', version: pmAutomationTemplateVersion,
-  reference: '../agent-pm-studio/src/proactive-rules.ts:10-35',
-  semantics: '../agent-pm-studio/integration-scenarios/PROACTIVE.md:27-66',
   runtime: 'pm-native-read-only-analysis',
 } as const;
 

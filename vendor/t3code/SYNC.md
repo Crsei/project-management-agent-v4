@@ -73,7 +73,8 @@ The MCP/Skills source snapshot is pinned separately at `d53873b6a4799e87afd63c8d
 One disposable authoring checkout used for this integration is `/tmp/pm-t3code-t13-30eb-local`, created entirely offline:
 
 ```sh
-git clone --shared --no-checkout /data2-HDD-SATA-20T/Digital_avatar/haoweiyao/t3code /tmp/pm-t3code-t13-30eb-local
+SOURCE=/absolute/path/to/read-only/pinned-t3code
+git clone --shared --no-checkout "$SOURCE" /tmp/pm-t3code-t13-30eb-local
 git -C /tmp/pm-t3code-t13-30eb-local checkout --detach 30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c
 ```
 

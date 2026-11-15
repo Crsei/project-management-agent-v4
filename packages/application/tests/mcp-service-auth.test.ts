@@ -28,6 +28,17 @@ test('delegation rejects generic APIs, readonly execution, cross-project and ung
   ]) assert.throws(() => assertMcpEndpoint(identity, request));
   assert.doesNotThrow(() => assertMcpEndpoint({ ...identity, access: 'full' }, { method: 'POST', url: '/api/v1/agent-contexts/resolve', body: identity.scope }));
 });
+test('exact approval authority reads retain the original write delegation ceiling', () => {
+  const request = { method: 'POST', url: base + '/approval-authority', body: { ...body, name: 'pm_transition_task', arguments: { id: 'TASK-001', revision: 'a'.repeat(64), status: 'done' } } };
+  const full = { ...identity, access: 'full' as const };
+  assert.doesNotThrow(() => assertMcpEndpoint(full, request));
+  assert.throws(() => assertMcpEndpoint(identity, request));
+  for (const changed of [
+    { ...request.body, threadId: 'other-thread' },
+    { ...request.body, target: { ...identity.scope, projectId: 'PRJ-002' } },
+    { ...request.body, target: { ...identity.scope, projectId: null } },
+  ]) assert.throws(() => assertMcpEndpoint(full, { ...request, body: changed }));
+});
 test('workspace grants accept explicit targets without acquiring any directory endpoint', () => {
   const workspaceGrant = { ...identity, scope: { ...identity.scope, projectId: null } };
   for (const projectId of [null, 'PRJ-001', 'PRJ-002']) {

@@ -7,6 +7,7 @@ import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { appendProjectAudit, type ProjectAuditWrite } from './project-audit.ts';
 import { insertServiceFact, type CapturedServiceFact } from './service-facts.ts';
 import type { HistorySnapshotReader } from './change-history.ts';
+import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 
 export { requestHash };
 
@@ -45,7 +46,7 @@ function externalReceiptScope(command: Command, receipt: CommandReceipt): { proj
 }
 
 /** Return a previously committed/rejected external receipt, or null when none exists. */
-export async function readExternalReceipt(pool: Pool, actor: Actor, workspaceId: string, commandId: string, hash: string): Promise<CommandReceipt | null> {
+export async function readExternalReceipt(pool: Pool, actor: Actor, workspaceId: string, commandId: string, hash: string, notificationCore?: NotificationCorePort): Promise<CommandReceipt | null> {
   if (!uuid.safeParse(workspaceId).success || !uuid.safeParse(commandId).success) throw new DomainError('validation_failed', 'Invalid identifier');
   workspaceId = workspaceId.toLowerCase();
   commandId = commandId.toLowerCase();
@@ -53,7 +54,7 @@ export async function readExternalReceipt(pool: Pool, actor: Actor, workspaceId:
   const result = await pool.query<StoredExternalReceipt>('SELECT receipt,request_hash,command_type,scope_project_ids,workspace_scope,actor_scope FROM command_receipts WHERE workspace_id=$1 AND actor_id=$2 AND command_id=$3', [workspaceId, actor.id, commandId]);
   const row = result.rows[0];
   if (!row) return null;
-  await assertReceiptReadable(pool, actor, workspaceId, row);
+  await assertReceiptReadable(pool, actor, workspaceId, row, notificationCore);
   if (row.request_hash !== hash) throw new DomainError('command_id_conflict', 'Command ID already represents a different request', 409);
   return row.receipt;
 }

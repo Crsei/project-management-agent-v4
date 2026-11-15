@@ -16,6 +16,9 @@ const UsagePage = lazy(() => import("./usage/UsagePage"));
 const UsageSettings = lazy(() => import("./usage/UsageSettings"));
 const ExtensionsPage = lazy(() => import("./settings/extensions-page"));
 const NativeSkillsPage = lazy(() => import("./settings/extensions-page").then(module => ({ default: module.NativeSkillsPage })));
+const RunBoardPage = lazy(() => import("./pm/run-board-page"));
+const DefinitionsPage = lazy(() => import("./collaboration/definitions-page"));
+const InboxPage = lazy(() => import("./collaboration/inbox"));
 
 function UsageRedirect() {
   const location = useLocation();
@@ -62,6 +65,10 @@ export function App() {
   <Route element={<ApplicationFrame />}>
     <Route index element={<Assistant />} />
     <Route path="workspace" element={<Assistant />} />
+    <Route path="runs" element={<RunBoardPage />} />
+    <Route path="agents" element={<DefinitionsPage kind="agent" />} />
+    <Route path="teams" element={<DefinitionsPage kind="team" />} />
+    <Route path="inbox" element={<InboxPage />} />
     <Route path="automations/*" element={<Assistant />} />
     <Route path="usage" element={<UsageRedirect />} />
     <Route path="settings" element={<SettingsLayout />}>

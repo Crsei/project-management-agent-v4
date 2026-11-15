@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { AlertTriangle, LoaderCircle } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
+import { DovspaceLoading } from "@/components/dovspace-brand"
 import { useNavigate, useParams } from "react-router"
 import type { EntityKind, FileRecord } from "@pm-schema"
 import { useI18n } from "@/lib/i18n-provider"
@@ -78,6 +79,6 @@ function DetailSurface({ entityId, entityKind, projectId, en, canWrite, canLifec
     <p>{loadError.message}</p>
     <div><button type="button" className="secondary-button" onClick={() => { void controller.refresh() }}>{en ? "Retry" : "重试"}</button><button type="button" className="text-button" onClick={onClose}>{en ? "Close" : "关闭"}</button></div>
   </div>
-  if (controller.query.isPending) return <div className="loading-screen" role="status"><LoaderCircle size={24} className="spin" /><p>{en ? "Loading entity…" : "正在加载对象…"}</p></div>
+  if (controller.query.isPending) return <div className="loading-screen"><DovspaceLoading message={en ? "Loading entity…" : "正在加载对象…"} /></div>
   return <EntityDetail controller={controller} en={en} onClose={onClose} renderBusiness={renderBusiness} />
 }

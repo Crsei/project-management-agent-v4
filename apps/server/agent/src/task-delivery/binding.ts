@@ -1,3 +1,4 @@
+import { resolveCollaborationThreadScope } from '../collaboration/runs.ts';
 import { workflowTaskRevision, type WorkflowRun } from '../../../../../packages/contracts/src/task-workflow.ts';
 import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { listRecords, readRecord, writeRecord, transaction } from '../durable/store.ts';
@@ -30,6 +31,8 @@ export const deliveryStore = {
 export async function resolveChatExecutionScope(thread: ThreadMetadata, headers?: Headers, purpose: 'execute' | 'inspect' = 'execute', signal?: AbortSignal): Promise<AgentExecutionSnapshot> {
   const selection = executionSelectionSchema.safeParse(thread.executionSelection);
   if (!selection.success) throw new DurableError(412, 'session_cutover_required', '旧会话不能继续执行；请创建新版 Session。');
+  const collaboration = await resolveCollaborationThreadScope(thread, headers, purpose, signal);
+  if (collaboration) return collaboration;
   const original = await resolveAgentExecution(selection.data, thread.remoteId, signal);
   const persisted = thread.executionEnvironment;
   original.environment.frozen = persisted?.frozen ?? false;

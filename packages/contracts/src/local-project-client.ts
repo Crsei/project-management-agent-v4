@@ -1,4 +1,4 @@
-import type { LocalDirectory, LocalProjectAttempt, LocalProjectDirectoryListing, LocalProjectInitialization, LocalProjectLocation, LocalProjectPreview, LocalProjectSettings } from './local-projects.ts';
+import type { LocalDirectory, LocalProjectAttempt, LocalProjectDirectoryListing, LocalProjectInitialization, LocalProjectLocation, LocalProjectPreview, LocalProjectProbe, LocalProjectSettings } from './local-projects.ts';
 
 export type LocalProjectTransport = <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) => Promise<T>;
 /** Uses the existing authenticated transport; it never retries an unknown write or replaces its key. */
@@ -8,6 +8,7 @@ export function createLocalProjectClient(send: LocalProjectTransport) {
     settings: (workspaceId: string, signal?: AbortSignal) => send<LocalProjectSettings>('GET', base(workspaceId) + '/settings', undefined, undefined, signal),
     saveSettings: (workspaceId: string, input: { defaultParent: string }, signal?: AbortSignal) => send<LocalProjectSettings>('PUT', base(workspaceId) + '/settings', input, undefined, signal),
     directories: (workspaceId: string, path?: string, signal?: AbortSignal) => send<LocalProjectDirectoryListing>('GET', base(workspaceId) + '/directories' + (path ? `?path=${encodeURIComponent(path)}` : ''), undefined, undefined, signal),
+    probe: (workspaceId: string, path: string, signal?: AbortSignal) => send<LocalProjectProbe>('POST', base(workspaceId) + '/probe', { path }, undefined, signal),
     preview: (workspaceId: string, input: { directory: LocalDirectory }, signal?: AbortSignal) => send<LocalProjectPreview>('POST', base(workspaceId) + '/preview', input, undefined, signal),
     initialize: (workspaceId: string, key: string, input: LocalProjectInitialization, signal?: AbortSignal) => send<LocalProjectAttempt>('POST', base(workspaceId) + '/initializations', input, { 'Idempotency-Key': key }, signal),
     initialization: (workspaceId: string, key: string, signal?: AbortSignal) => send<LocalProjectAttempt>('GET', base(workspaceId) + '/initializations/' + encodeURIComponent(key), undefined, undefined, signal),

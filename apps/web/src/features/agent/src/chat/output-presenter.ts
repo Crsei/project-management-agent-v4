@@ -18,12 +18,21 @@ export function canRespondToInteraction(item: NativeOutputItem, generationStatus
   return item.request?.respondable === true && isItemActive(item) && isGenerationActive(generationStatus);
 }
 
+/** Only a provider-projected accepted automatic decision may become a quiet record. */
+export function isCompletedAutoApproval(item: NativeOutputItem): boolean {
+  const request = item.request;
+  return item.type === "approval_request" && item.status === "completed"
+    && request?.kind === "approval" && request.respondable === false
+    && "resolution" in request && request.resolution === "auto_approved";
+}
+
 /** These details must remain visible, never hidden behind an activity disclosure. */
 export function requiresVisibleDetails(item: NativeOutputItem): boolean {
-  return item.visibility === "redacted" || item.visibility === "unavailable" || item.status === "unknown"
-    || !!item.request || item.type === "approval_request" || item.type === "user_input_request"
+  const unsafe = item.visibility === "redacted" || item.visibility === "unavailable" || item.status === "unknown"
     || item.type === "error" || !!item.error || item.status === "failed" || item.status === "interrupted"
     || (item.exitCode !== undefined && item.exitCode !== 0) || !!item.mcpApp;
+  return unsafe || (!isCompletedAutoApproval(item)
+    && (!!item.request || item.type === "approval_request" || item.type === "user_input_request"));
 }
 
 export function assistantMessageKind(item: NativeOutputItem): "progress" | "final" | "unknown" {
@@ -43,6 +52,8 @@ function operationIdFor(item: NativeOutputItem, operations: ReadonlySet<string>)
 function groupKind(item: NativeOutputItem): "reasoning" | "tools" | undefined {
   if (requiresVisibleDetails(item) || item.status === "waiting") return undefined;
   if (item.type === "reasoning") return "reasoning";
+  if (isCompletedAutoApproval(item)) return "tools";
+  if (isItemActive(item)) return undefined;
   if (["command_execution", "file_change", "file_search", "web_search", "dynamic_tool", "subagent"].includes(item.type)) return "tools";
   return undefined;
 }
@@ -96,6 +107,95 @@ export function presentOutputItems(items: readonly NativeOutputItem[], pmOperati
   return rows;
 }
 
+export type ToolSummary = {
+  action: "read" | "edit" | "search" | "web" | "command" | "tool" | "subagent" | "approval";
+  target?: string;
+};
+
+export function commandText(item: NativeOutputItem): string | undefined {
+  if (typeof item.input === "string") return item.input;
+  const input = item.input;
+  return input && typeof input === "object" && "command" in input && typeof input.command === "string"
+    ? input.command : undefined;
+}
+
+function inputText(item: NativeOutputItem, keys: readonly string[]): string | undefined {
+  const input = item.input;
+  if (!input || typeof input !== "object") return undefined;
+  for (const key of keys) {
+    const value = (input as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/** Labels describe observed inputs, never claim that a command achieved its goal. */
+export function semanticToolSummary(item: NativeOutputItem): ToolSummary {
+  if (item.visibility === "redacted" || item.visibility === "unavailable") return { action: "tool" };
+  if (isCompletedAutoApproval(item)) return { action: "approval" };
+  if (item.type === "file_change") return { action: "edit", target: item.changes?.length ? `${item.changes[0]!.path}${item.changes.length > 1 ? ` (+${item.changes.length - 1})` : ""}` : item.fileName };
+  if (item.type === "file_search") return { action: "search", target: inputText(item, ["query", "pattern", "path"]) || item.title };
+  if (item.type === "web_search") return { action: "web", target: inputText(item, ["query", "search_query"]) || item.title };
+  if (item.type === "subagent") return { action: "subagent", target: item.title || item.model };
+  if (item.type === "command_execution") {
+    const command = commandText(item)?.trim();
+    // Deliberately recognize only simple read commands. Compound shell input
+    // retains a neutral command label and the exact input in expanded details.
+    const read = command && /^(?:cat|head|tail)\s+(?:--\s+)?(["']?)([^;&|<>`$()\r\n]+)\1$/u.exec(command);
+    if (read && read[2] && !read[2].trim().startsWith("-")) return { action: "read", target: read[2].trim() };
+    return { action: "command", target: command?.split(/\r?\n/u, 1)[0] };
+  }
+  const name = item.toolName?.split(/[.:/]/u).at(-1) || item.toolName;
+  if (name && /^(?:read|read_file|readfile)$/iu.test(name)) return { action: "read", target: inputText(item, ["path", "file_path", "filePath", "filename"]) };
+  if (name && /^(?:edit|write|apply_patch|edit_file|write_file)$/iu.test(name)) return { action: "edit", target: inputText(item, ["path", "file_path", "filePath", "filename"]) };
+  if (name && /^(?:grep|glob|search|file_search)$/iu.test(name)) return { action: "search", target: inputText(item, ["pattern", "query", "path"]) };
+  return { action: "tool", target: item.toolName || item.title };
+}
+
+export type ChangedFileSummary = {
+  path: string;
+  oldPath?: string;
+  records: NativeOutputItem[];
+  additions?: number;
+  deletions?: number;
+  partialCounts?: boolean;
+};
+
+/** Only visible, explicitly projected file changes contribute to the summary. */
+export function changedFileSummary(items: readonly NativeOutputItem[]): ChangedFileSummary[] {
+  const files = new Map<string, ChangedFileSummary>();
+  const unique = new Map(items.map(item => [item.id, item]));
+  for (const item of unique.values()) {
+    if (item.type !== "file_change" || item.visibility === "redacted" || item.visibility === "unavailable") continue;
+    const changes = item.changes?.length ? item.changes : item.fileName ? [{ path: item.fileName, operation: "", diff: item.diff }] : [];
+    for (const change of changes) {
+      if (!change.path) continue;
+      let file = files.get(change.path);
+      if (!file) {
+        file = { path: change.path, oldPath: change.oldPath, records: [] };
+        files.set(change.path, file);
+      }
+      if (!file.records.some(record => record.id === item.id)) file.records.push(item);
+      let additions: number | undefined;
+      let deletions: number | undefined;
+      if (changes.length === 1 && (item.additions !== undefined || item.deletions !== undefined)) {
+        additions = item.additions;
+        deletions = item.deletions;
+      } else if (change.diff !== undefined && /^@@ /mu.test(change.diff)) {
+        additions = 0; deletions = 0;
+        for (const line of change.diff.split("\n")) {
+          if (line.startsWith("+") && !line.startsWith("+++ ")) additions++;
+          if (line.startsWith("-") && !line.startsWith("--- ")) deletions++;
+        }
+      }
+      if (additions === undefined || deletions === undefined) file.partialCounts = true;
+      if (additions !== undefined) file.additions = (file.additions ?? 0) + additions;
+      if (deletions !== undefined) file.deletions = (file.deletions ?? 0) + deletions;
+    }
+  }
+  return [...files.values()];
+}
+
 /** Provider text only; the full unmodified parts remain available in the disclosure. */
 export function reasoningPreview(items: readonly NativeOutputItem[]): string {
   const text = items.find(item => item.visibility !== "redacted" && item.visibility !== "unavailable" && item.text?.trim())?.text?.trim();
@@ -109,7 +209,7 @@ export function generationIndicator(status: GenerationOutputStatus, items: reado
   if (status !== "running") return status;
   const specificActivity = items.some(item => isItemActive(item) && (
     (item.request?.respondable === true)
-    || (item.type === "reasoning" ? !!item.text?.trim() : item.type === "assistant_message" ? item.streaming === true : !item.id.startsWith("native-terminal:") && groupKind(item) === "tools")
+    || (item.type === "reasoning" ? !!item.text?.trim() : item.type === "assistant_message" ? item.streaming === true : !item.id.startsWith("native-terminal:") && ["command_execution", "file_change", "file_search", "web_search", "dynamic_tool", "subagent"].includes(item.type))
   ));
   return specificActivity ? undefined : "processing";
 }

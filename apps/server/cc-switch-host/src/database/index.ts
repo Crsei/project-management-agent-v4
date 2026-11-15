@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS skills (
  enabled_opencode BOOLEAN NOT NULL DEFAULT 0, enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
  enabled_agy BOOLEAN NOT NULL DEFAULT 0, enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
  enabled_dsh BOOLEAN NOT NULL DEFAULT 0, enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
- installed_at INTEGER NOT NULL DEFAULT 0, content_hash TEXT, updated_at INTEGER NOT NULL DEFAULT 0
+ installed_at INTEGER NOT NULL DEFAULT 0, content_hash TEXT, updated_at INTEGER NOT NULL DEFAULT 0,
+ source_json TEXT
 );
 CREATE TABLE IF NOT EXISTS skill_repos (
  owner TEXT NOT NULL, name TEXT NOT NULL, branch TEXT NOT NULL DEFAULT 'main',
@@ -91,7 +92,10 @@ export class Database {
       }
       if (version === 1) {
         connection.exec("CREATE TABLE IF NOT EXISTS mcp_agent_overrides (server_id TEXT NOT NULL, app TEXT NOT NULL, patch TEXT NOT NULL, PRIMARY KEY (server_id, app));");
-        connection.exec(`PRAGMA user_version = ${HOST_SCHEMA_VERSION}`);
+      }
+      // Local Dovspace provenance belongs to the installed record and survives backup/restore.
+      if (version === 1 || version === 2) {
+        connection.exec(`BEGIN IMMEDIATE; ALTER TABLE skills ADD COLUMN source_json TEXT; PRAGMA user_version = ${HOST_SCHEMA_VERSION}; COMMIT;`);
       }
     } catch (error) {
       if (release) await release();

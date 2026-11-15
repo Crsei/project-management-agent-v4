@@ -9,7 +9,7 @@ export async function readSetupStatus(origin, { signal } = {}) {
   });
   if (!response.ok) throw new Error(`First-run status read failed (HTTP ${response.status}).`);
   const value = await response.json().catch(() => null);
-  if (!value || typeof value.initialized !== "boolean" || typeof value.setupAllowed !== "boolean" || value.registrationMode !== "invite_only")
+  if (!value || typeof value.initialized !== "boolean" || typeof value.setupAllowed !== "boolean" || (value.registrationMode !== "invite_only" && value.registrationMode !== "open"))
     throw new Error("First-run status response was invalid.");
   return value;
 }

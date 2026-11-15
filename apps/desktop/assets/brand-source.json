@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "master": "apps/web/public/dovspace.svg",
+  "masterSha256": "c1f316072db3f82ac5c3c5001ea50f2858347977d23ae31e285d3c760f9b4121",
+  "reference": {
+    "name": "dovspace_v1_validation_board.png",
+    "sha256": "a51a7842438f56a1423d4af8c44defd88dd614a8ef6070dda07b602cda0ffd20",
+    "origin": "User-provided validation board; not an original vector source."
+  },
+  "approval": {
+    "date": "2026-11-15",
+    "scope": "User approved the reconstructed SVG after removal of the extra wing-fold. Preserve the approved geometry and colors."
+  },
+  "generator": "scripts/generate-brand-assets.mjs",
+  "toolchain": {
+    "node": "24.21.0",
+    "sharp": "0.34.5",
+    "resolution": "Existing locked Astro dependency from apps/marketing; requires the installed native Sharp/libvips package for the host platform."
+  },
+  "rights": {
+    "status": "OPEN",
+    "note": "Visual approval is not proof of original vector authorship, legal ownership, trademark registration or permission for public distribution. See THIRD_PARTY_NOTICES.md."
+  }
+}

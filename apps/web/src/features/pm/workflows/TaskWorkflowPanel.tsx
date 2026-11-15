@@ -15,6 +15,8 @@ import { providerReadinessHint, deliveryTaskStatusLabel, workflowNodeMessage } f
 import { RadixSelect } from "@/components/ui/radix-select"
 import { executionSelectionSchema, type ExecutionSelection } from '@agent-workspace/contracts/chat';
 import { ExecutionSelectionField } from '@agent/src/pm/execution-workspace';
+import { TaskExecutionBriefPanel } from '../markdown/TaskExecutionBriefPanel';
+import { guidanceReadFailure } from '../markdown/task-brief-presentation';
 
 type Catalog = { definitions: WorkflowDefinition[]; runs: WorkflowRun[]; repository: string | null; defaultBase?: string | null; hasManualDelivery: boolean };
 type Props = DeliveryScope & { revision: string; taskStatus: string; disabled: boolean };
@@ -36,6 +38,15 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
   const startId = useRef(crypto.randomUUID()), alive = useRef(true);
   const catalogRequest = useRef<AbortController | null>(null), providerRequest = useRef<AbortController | null>(null);
   const panel = usePmAgentPanel();
+  const reportError = useCallback((reason: unknown, fallback = '读取失败') => {
+    if (guidanceReadFailure(reason) === 'access') {
+      catalogRequest.current?.abort(); providerRequest.current?.abort();
+      setCatalog(null); setRun(null); setDelivery(null); setEditor(null); setShowRun(false); setConfirmStart(false);
+      setProviders([]); setProvider(''); setModel(''); setExecutionSelection(undefined); setAvailableSelection(null);
+      setLoading(false); setProvidersLoading(false);
+      setError('读取权限已失效，敏感工作流及交付内容已清理，请重新登录或核对授权。');
+    } else setError(fallback === '读取失败' && reason instanceof Error ? reason.message : fallback);
+  }, []);
   const scope = { workspaceId, projectId, taskId };
   const parsedExecution = executionSelectionSchema.safeParse(executionSelection ?? run?.executionSelection ?? delivery?.executionSelection ?? run?.input.executionSelection);
   const selectedExecution = parsedExecution.success ? parsedExecution.data : undefined;
@@ -52,14 +63,14 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     catalogRequest.current?.abort(); const request = new AbortController(); catalogRequest.current = request;
     setLoading(true); setError('');
     try { const value = await read<Catalog>(catalogUrl, request.signal); if (alive.current && !request.signal.aborted) { setCatalog(value); setBase(previous => previous || value.defaultBase || ''); setRun(value.runs[0] ?? null); if (value.runs.length) setUncertain(null); } }
-    catch (e) { if (alive.current && !request.signal.aborted) setError(e instanceof Error ? e.message : '读取失败'); }
+    catch (e) { if (alive.current && !request.signal.aborted) reportError(e); }
     finally { if (alive.current && !request.signal.aborted) setLoading(false); }
   };
   const loadProviders = async () => {
     providerRequest.current?.abort(); const request = new AbortController(); providerRequest.current = request;
     setProvidersLoading(true); setProviderError('');
     try { const value = await read<ProvidersResponse>('/api/providers', request.signal, 45000); if (alive.current && !request.signal.aborted) setProviders(value.providers); }
-    catch { if (alive.current && !request.signal.aborted) setProviderError('Provider 读取超时或失败；不影响编辑画布。请刷新 Provider。'); }
+    catch (reason) { if (alive.current && !request.signal.aborted) { if (guidanceReadFailure(reason) === 'access') reportError(reason); else setProviderError('Provider 读取超时或失败；不影响编辑画布。请刷新 Provider。'); } }
     finally { if (alive.current && !request.signal.aborted) setProvidersLoading(false); }
   };
   useEffect(() => { if (expanded) { void load(); void loadProviders(); } }, [expanded, selectionKey]);
@@ -70,9 +81,12 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       try {
         const value = await read<WorkflowRun>(`/api/task-workflows/runs/${run.id}`);
         if (stopped) return; setRun(value); setError('');
-        const result = await read<{ delivery: TaskCodeDelivery }>(`/api/task-deliveries/${run.id}`).catch(() => null);
-        if (!stopped && result) setDelivery(result.delivery);
-      } catch { if (!stopped) setError('进度读取失败，显示上次记录；后台结果未知，请勿重复启动。'); }
+        const result = await read<{ delivery: TaskCodeDelivery }>(`/api/task-deliveries/${run.id}`).catch(reason => {
+          if (reason instanceof WorkspaceClientError && reason.status === 404) return null;
+          throw reason;
+        });
+        if (!stopped) setDelivery(result?.delivery ?? null);
+      } catch (reason) { if (!stopped) reportError(reason, '进度读取失败，显示上次记录；后台结果未知，请勿重复启动。'); }
       finally { if (!stopped) timer = setTimeout(() => void update(), 4000); }
     };
     void update(); return () => { stopped = true; clearTimeout(timer); };
@@ -95,7 +109,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       const value = await workspaceClient.json<WorkflowDefinition>('/api/task-workflows/definitions', { method: 'POST', body: JSON.stringify({ ...scope, id: snapshot.definition.id, expectedRevision: snapshot.definition.revision, graph: snapshot.graph, publish }) });
       if (!alive.current) return;
       setEditor({ definition: value, graph: value.draft, dirty: false, unknown: false }); setSelected(value.id); await load();
-    } catch (e) { if (alive.current) { setError(e instanceof Error ? e.message : '保存结果未知，请重新读取。'); setEditor(v => v && { ...v, unknown: !(e instanceof WorkspaceClientError && e.kind === 'http' && e.status === 400) }); } }
+    } catch (e) { if (alive.current) { reportError(e, e instanceof Error ? e.message : '保存结果未知，请重新读取。'); setEditor(v => v && { ...v, unknown: !(e instanceof WorkspaceClientError && e.kind === 'http' && e.status === 400) }); } }
     finally { if (alive.current) setBusy(false); }
   };
   const start = async (frozen?: WorkflowStart) => {
@@ -113,7 +127,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     } catch (e) { if (alive.current) {
         const rejected = e instanceof WorkspaceClientError && e.kind === 'http' && [400, 401, 403, 412].includes(e.status);
         if (rejected) setUncertain(null);
-        setError(`${e instanceof Error ? e.message : '启动结果未知'}${rejected ? '' : '；请先刷新核对。原启动参数已保留。'}`);
+        reportError(e, `${e instanceof Error ? e.message : '启动结果未知'}${rejected ? '' : '；请先刷新核对。原启动参数已保留。'}`);
       } }
     finally { if (alive.current) setBusy(false); }
   };
@@ -123,7 +137,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     try {
       const value = await workspaceClient.json<WorkflowRun>(`/api/task-workflows/runs/${run.id}/control`, { method: 'POST', body: JSON.stringify({ action, version: run.version, confirm: true, ...(action === 'new-session' ? { executionSelection: selectedExecution } : {}) }) });
       if (alive.current) setRun(value);
-    } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : '操作未确认，请刷新。'); }
+    } catch (e) { if (alive.current) reportError(e, e instanceof Error ? e.message : '操作未确认，请刷新。'); }
     finally { if (alive.current) setBusy(false); }
   };
   const refreshFeedback = async () => {
@@ -132,7 +146,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     try {
       const value = await workspaceClient.json<TaskCodeDelivery>(`/api/task-deliveries/${run.id}/actions`, { method: 'POST', body: JSON.stringify({ action: 'refresh' }) });
       if (alive.current) setDelivery(value);
-    } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : '核对失败，保留上次证据。'); }
+    } catch (e) { if (alive.current) reportError(e, e instanceof Error ? e.message : '核对失败，保留上次证据。'); }
     finally { if (alive.current) setBusy(false); }
   };
   const needWrite = graph?.nodes.some(n => n.kind === 'agent' && n.config.mode === 'develop');
@@ -168,7 +182,8 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       </>}
     </>}
     {run && <section className="workflow-run" aria-label="工作流执行进度"><header><strong>{run.graph.name}</strong><span className="workflow-status">任务：{deliveryTaskStatusLabel(taskStatus)}</span><span className={`workflow-status ${run.status}`}>{statusLabels[run.status]}</span></header><p>{run.message ?? `当前节点：${run.graph.nodes.find(n => n.id === run.current)?.label}`}</p>
-      <details className="workflow-node-records"><summary>{run.graph.nodes.length} 个节点的执行记录</summary><ol>{run.graph.nodes.map(n => <ContextMenu key={n.id}><ContextMenuTrigger asChild><li tabIndex={0} aria-label={`${n.label}：${workflowNodeMessage(run, n.id)}`} data-state={run.nodes[n.id]?.state ?? 'pending'}><span>{run.current === n.id && !['completed', 'failed'].includes(run.status) ? '●' : run.nodes[n.id]?.state === 'succeeded' ? '✓' : run.nodes[n.id]?.state === 'failed' ? '!' : '○'}</span>{n.label}<small>{workflowNodeMessage(run, n.id)}</small></li></ContextMenuTrigger><ContextMenuContent><ContextMenuLabel>{n.label}</ContextMenuLabel><ContextMenuItem onSelect={() => openRun(n.id)}>查看节点执行记录</ContextMenuItem></ContextMenuContent></ContextMenu>)}</ol></details>
+      {delivery ? <TaskExecutionBriefPanel workspaceId={workspaceId} projectId={projectId} taskId={taskId} deliveryId={delivery.id} revision={revision} observationVersion={delivery.version} taskStatus={taskStatus} en={false} originalHref={`#task-workflow-records-${run.id}`} onAccessFailure={reportError} /> : <p>尚无交付原收据，当前无法派生执行简报；请在原节点记录核对，不会为读取摘要创建交付或会话。</p>}
+      <details className="workflow-node-records" id={`task-workflow-records-${run.id}`}><summary>{run.graph.nodes.length} 个节点的执行记录</summary><ol>{run.graph.nodes.map(n => <ContextMenu key={n.id}><ContextMenuTrigger asChild><li tabIndex={0} aria-label={`${n.label}：${workflowNodeMessage(run, n.id)}`} data-state={run.nodes[n.id]?.state ?? 'pending'}><span>{run.current === n.id && !['completed', 'failed'].includes(run.status) ? '●' : run.nodes[n.id]?.state === 'succeeded' ? '✓' : run.nodes[n.id]?.state === 'failed' ? '!' : '○'}</span>{n.label}<small>{workflowNodeMessage(run, n.id)}</small></li></ContextMenuTrigger><ContextMenuContent><ContextMenuLabel>{n.label}</ContextMenuLabel><ContextMenuItem onSelect={() => openRun(n.id)}>查看节点执行记录</ContextMenuItem></ContextMenuContent></ContextMenu>)}</ol></details>
       <div className="workflow-toolbar"><button type="button" onClick={() => openRun()}>查看运行画布</button>{!['completed', 'failed', 'paused'].includes(run.status) && <button type="button" disabled={busy || disabled} onClick={() => void control('pause')}>暂停后续步骤</button>}{run.status === 'paused' && <button type="button" disabled={busy || disabled || (workflowTaskRevision(run) !== revision && run.transitions?.[run.current]?.state !== 'requested')} onClick={() => void control('resume')}>核对并恢复原运行</button>}{run.graph.nodes.find(n => n.id === run.current)?.kind === 'approval' && run.nodes[run.current]?.state === 'waiting' && <button type="button" disabled={busy || disabled} onClick={() => void control('approve')}>确认继续（不是业务审核）</button>}</div>
       {Object.entries(run.transitions ?? {}).map(([id, change]) => <p key={id}>任务状态联动 · {run.graph.nodes.find(n => n.id === id)?.label}：{change.message ?? change.state}</p>)}
       {run.transitions?.[run.current]?.state === 'awaiting' && run.transitions[run.current]?.mode === 'confirm' && <button type="button" className="workflow-primary" disabled={busy || disabled || workflowTaskRevision(run) !== revision} onClick={() => void control('confirm-transition')}>确认任务{run.transitions[run.current]?.phase === 'start' ? '进入进行中' : '进入待审核'}（非验收通过）</button>}

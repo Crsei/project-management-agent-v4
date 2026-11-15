@@ -15,10 +15,12 @@ import { registerAgentCapabilityRoutes } from '../src/agent-capability-routes.ts
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: 'user-1', email: 'fixture@example.invalid', name: 'Fixture' };
 const registry = [
-  { name: 'pm_query', description: 'Query', write: false, capabilities: ['domain.read'], available: true, denyReason: null },
-  { name: 'pm_create_project', description: 'Create project', write: true, capabilities: ['domain.read', 'planning.edit'], available: true, denyReason: null },
-  { name: 'pm_create_task', description: 'Create task', write: true, capabilities: ['domain.read', 'planning.edit'], available: true, denyReason: null },
-  { name: 'pm_create_document', description: 'Create document', write: true, capabilities: ['domain.read', 'planning.edit'], available: false, denyReason: 'local_project_directory_required' },
+  { name: 'pm_query', description: 'Query', write: false, scope: 'project', capabilities: ['domain.read'], available: true, denyReason: null },
+  { name: 'pm_create_project', description: 'Create project', write: true, scope: 'project', capabilities: ['domain.read', 'planning.edit'], available: true, denyReason: null },
+  { name: 'pm_create_task', description: 'Create task', write: true, scope: 'project', capabilities: ['domain.read', 'planning.edit'], available: true, denyReason: null },
+  { name: 'pm_create_document', description: 'Create document', write: true, scope: 'project', capabilities: ['domain.read', 'planning.edit'], available: false, denyReason: 'local_project_directory_required' },
+  { name: 'pm_apply_migration', description: 'Apply migration', write: true, scope: 'workspace-admin', capabilities: ['domain.read', 'planning.lifecycle'], available: true, denyReason: null },
+  { name: 'pm_restore_migration', description: 'Restore migration', write: true, scope: 'workspace-admin', capabilities: ['domain.read', 'planning.lifecycle'], available: true, denyReason: null },
 ] as unknown as AgentChatTools['registry'];
 
 type ToolView = { name: string; allowed: boolean; denyReason: string | null };
@@ -62,6 +64,14 @@ test('capability advertisement follows current membership, explicit scopes and t
       { allowed: false, reason: 'local_project_directory_required' },
     );
 
+    row = member(null, ['domain.read', 'planning.lifecycle']);
+    const workspaceAdmin = tools((await read()).json() as CapabilityView);
+    for (const name of ['pm_apply_migration', 'pm_restore_migration']) {
+      assert.equal(workspaceAdmin.get(name)!.allowed, true, 'Registry workspace-admin writes remain available at a null project target');
+      assert.equal(tools((await read(project.id)).json() as CapabilityView).get(name)!.denyReason, 'workspace_scope_required');
+    }
+    row = member(null, ['domain.read']);
+    assert.equal(tools((await read()).json() as CapabilityView).get('pm_apply_migration')!.denyReason, 'capability_required');
     row = member([project.id]);
     const projectView = await read(project.id);
     assert.equal(projectView.statusCode, 200);

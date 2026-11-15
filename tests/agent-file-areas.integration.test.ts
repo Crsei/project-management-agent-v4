@@ -7,7 +7,10 @@ import { ProjectManagementClient } from '../packages/contracts/src/client.ts';
 import { agentCatalogSchema, type AgentCatalog, type AgentFileArea, type AgentScope, type AgentStorageSettings } from '../packages/contracts/src/agent-file-areas.ts';
 import type { LocalProjectAttempt } from '../packages/contracts/src/local-projects.ts';
 import { createWorkspace } from '../packages/infrastructure/src/auth.ts';
-import { createLocalProjectFixture, localProjectCaseTimeout, type LocalProjectFixture } from './local-project-fixture.ts';
+import { createLocalProjectFixture, localProjectEventually, localProjectCaseTimeout, type LocalProjectFixture } from './local-project-fixture.ts';
+import { lockWorkspace } from '../packages/infrastructure/src/database.ts';
+import type { PmToolCallRecord } from '../packages/agent-contracts/src/pm-tools.ts';
+import type { DocumentSources } from '../packages/contracts/src/document-sources.ts';
 
 type Failure = { error: { code: string; details?: { currentRevision?: number; reason?: string } } };
 async function initialize(f: LocalProjectFixture, name: string, folder: string) {
@@ -47,7 +50,7 @@ describe('PM document/storage preferences without Agent execution authority', { 
     const workspaceAuthority = await client.agentContexts.authorize({ workspaceId: f.workspaceId, projectId: null });
     assert.equal(workspaceAuthority.scope.projectId, null);
     await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
-    const coreFile = join(project.location.path!, '.pm/core/projects', `${project.record.id}.md`);
+    const coreFile = join(project.location.path!, '.dovspace/.pm/core/projects', `${project.record.id}.md`);
     const before = await readFile(coreFile);
     const existing = join(f.parents[1], 'workspace-area'); await mkdir(existing);
     await writeFile(join(existing, 'user-file.txt'), 'Do not modify');
@@ -165,7 +168,7 @@ describe('PM document/storage preferences without Agent execution authority', { 
     assert.equal((await f.request<AgentCatalog>('/api/v1/agent-contexts')).body.workspaces[0]?.fileArea.revision, 1);
     const project = await initialize(f, 'Native identity check', 'native-identity');
     const projectScope = { workspaceId: f.workspaceId, projectId: project.record.id };
-    await writeFile(join(project.location.path!, '.pm/project.json'), '{}');
+    await writeFile(join(project.location.path!, '.dovspace/.pm/project.json'), '{}');
     const invalid = await f.request<AgentCatalog>('/api/v1/agent-contexts');
     assert.equal(invalid.body.workspaces[0]?.projects.find(entry => entry.id === project.record.id)?.fileArea.status, 'unavailable');
     const nativeResolve = await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', body: projectScope });
@@ -219,5 +222,96 @@ describe('PM document/storage preferences without Agent execution authority', { 
     const raced = await Promise.all(f.parents.map(path => f.request(endpoint, { method: 'PUT', body: { directory: { mode: 'existing', path }, expectedRevision: 0 } })));
     assert.deepEqual(raced.map(result => result.status).sort(), [200, 409]);
     assert.equal((await f.request<AgentStorageSettings>(endpoint)).body.revision, 1);
+  });
+  it('authorizes concurrent reads with a saturated business pool without borrowing another connection', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
+    const project = await initialize(f, 'Concurrent authorization project', 'concurrent-authority');
+    const scope = { workspaceId: f.workspaceId, projectId: project.record.id };
+    const blocker = await f.pool.connect();
+    let requests: ReturnType<typeof f.request<{ actorId: string; scope: AgentScope }>>[] = [];
+    try {
+      await blocker.query('BEGIN');
+      await lockWorkspace(blocker, f.workspaceId);
+      const pid = (await blocker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+      // Fill all ten API business connections at the existing workspace lock.
+      requests = Array.from({ length: 10 }, () => f.request<{ actorId: string; scope: AgentScope }>('/api/v1/agent-contexts/authorize', { method: 'POST', body: scope }));
+      await localProjectEventually(async () => {
+        const result = await f.pool.query<{ n: number }>(`SELECT count(*)::integer AS n FROM pg_locks waiting JOIN pg_locks held
+          ON waiting.locktype=held.locktype AND waiting.database=held.database AND waiting.classid=held.classid
+          AND waiting.objid=held.objid AND waiting.objsubid=held.objsubid
+          WHERE held.pid=$1 AND held.granted AND NOT waiting.granted AND held.locktype='advisory'`, [pid]);
+        return result.rows[0]!.n === 10;
+      }, 'all authorization readers reach the workspace lock', 4000, f.signal);
+    } finally {
+      await blocker.query('ROLLBACK'); blocker.release();
+    }
+    const results = await Promise.all(requests);
+    assert.deepEqual(results.map(result => result.status), Array(10).fill(200), 'Authorized reads must not fail from nested connection acquisition');
+    for (const result of results) {
+      assert.equal(result.body.actorId, f.owner.id);
+      assert.deepEqual(result.body.scope, scope);
+    }
+    const unavailable = await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', body: { ...scope, projectId: 'PRJ-999999' } });
+    assert.equal(unavailable.status, 404, 'Concurrency fix does not bypass current project authority');
+  });
+  it('creates a task and records its comment while document and authorization readers fill the pool', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
+    const project = await initialize(f, 'Concurrent task flow', 'concurrent-task-flow');
+    const scope = { workspaceId: f.workspaceId, projectId: project.record.id };
+    const base = `/api/v1/workspaces/${f.workspaceId}/agent-tools`;
+    async function underReaders(input: Record<string, unknown>, documents: boolean) {
+      const blocker = await f.pool.connect();
+      const readers: ReturnType<typeof f.request<DocumentSources | { actorId: string; scope: AgentScope }>>[] = [];
+      let operation: ReturnType<typeof f.request<PmToolCallRecord>> | undefined, barrierError: unknown;
+      try {
+        await blocker.query('BEGIN'); await lockWorkspace(blocker, f.workspaceId);
+        const pid = (await blocker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+        const waitingFor = (expected: number) => localProjectEventually(async () => {
+          const result = await f.pool.query<{ n: number }>(`SELECT count(*)::integer AS n FROM pg_locks waiting JOIN pg_locks held
+            ON waiting.locktype=held.locktype AND waiting.database=held.database AND waiting.classid=held.classid
+            AND waiting.objid=held.objid AND waiting.objsubid=held.objsubid
+            WHERE held.pid=$1 AND held.granted AND NOT waiting.granted AND held.locktype='advisory'`, [pid]);
+          return result.rows[0]!.n === expected;
+        }, `${expected} readers/writer reach the workspace lock`, 4000, f.signal);
+        operation = f.request<PmToolCallRecord>(`${base}/call`, { method: 'POST', body: input });
+        await waitingFor(1); // The write must own the first lock position.
+        for (let index = 0; index < 9; index++) readers.push(documents
+          ? f.request<DocumentSources>(`/api/v1/workspaces/${f.workspaceId}/document-sources`)
+          : f.request<{ actorId: string; scope: AgentScope }>('/api/v1/agent-contexts/authorize', { method: 'POST', body: scope }));
+        await waitingFor(10);
+      } catch (error) { barrierError = error; }
+      finally { await blocker.query('ROLLBACK'); blocker.release(); }
+      const [write, reads] = await Promise.all([operation, Promise.all(readers)]);
+      if (barrierError) throw barrierError;
+      assert.ok(write);
+      assert.equal(write.status, 200);
+      assert.equal(write.body.status, 'succeeded', JSON.stringify(write.body.error));
+      assert.deepEqual(reads.map(read => read.status), Array(9).fill(200));
+      if (documents) for (const read of reads) {
+        assert.ok('scopes' in read.body);
+        assert.deepEqual(read.body.scopes.map(item => item.projectId).sort(), [null, project.record.id].sort());
+      }
+      return write.body;
+    }
+    const identity = { target: scope, threadId: randomUUID(), messageId: randomUUID(), generationId: randomUUID() };
+    const create = { ...identity, operationId: randomUUID(), name: 'pm_create_task', arguments: {
+      projectId: project.record.id, title: 'Task with concurrent readers', description: 'Record progress without connection starvation',
+      assigneeId: null, priority: 'medium', startDate: null, dueDate: null, labels: null,
+    } };
+    const created = await underReaders(create, true);
+    assert.ok(created.result?.receipt);
+    const taskId = created.result.receipt.targetId;
+    const comment = await underReaders({ ...identity, operationId: randomUUID(), name: 'pm_create_comment',
+      arguments: { projectId: project.record.id, taskId, content: 'Progress recorded while authorization streams are active' } }, false);
+    assert.ok(comment.result?.receipt);
+    const recovered = await f.request<PmToolCallRecord>(`${base}/result`, { method: 'POST', body: create });
+    assert.equal(recovered.body.status, 'succeeded');
+    assert.equal(recovered.body.result?.receipt?.targetId, taskId);
+    const comments = await f.request<PmToolCallRecord>(`${base}/call`, { method: 'POST', body: {
+      ...identity, operationId: randomUUID(), name: 'pm_read_comments', arguments: { taskId, after: null, limit: 10 },
+    } });
+    assert.equal(comments.body.status, 'succeeded');
+    assert.ok(comments.body.result && 'items' in comments.body.result);
+    assert.deepEqual(comments.body.result.items.map(item => 'content' in item ? item.content : null), ['Progress recorded while authorization streams are active']);
   });
 });

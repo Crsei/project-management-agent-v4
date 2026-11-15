@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileClock, GitBranch, LayoutDashboard, LockKeyhole, Plug, RefreshCw, Shapes } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
@@ -25,9 +25,9 @@ import styles from "./studio.module.css";
 import "./theme.css";
 import { RadixSelect } from "@/components/ui/radix-select"
 
-export type AutomationPageProps = { workspace: Workspace; actorId: string; onExit: () => void; onRecheckAccess: () => void; onLeaveGuardChange?: (guard: (() => boolean) | null) => void; embedded?: boolean; onAssist?: StudioAssistCallback; onOpenThread?: (threadId: string) => void | Promise<void> };
+export type AutomationPageProps = { workspace: Workspace; actorId: string; onExit: () => void; onRecheckAccess: () => void; projectFlow: ReactNode; onLeaveGuardChange?: (guard: (() => boolean) | null) => void; embedded?: boolean; onAssist?: StudioAssistCallback; onOpenThread?: (threadId: string) => void | Promise<void> };
 type Confirmation = { command: StudioCommand; name: string };
-const featureKeys = ["automationId", "templateId", "draftId", "run", "cursor"];
+const featureKeys = ["automationId", "templateId", "draftId", "quickAccess", "run", "cursor"];
 async function readProjects(workspaceId: string, signal: AbortSignal): Promise<Entity[]> {
   const projects = new Map<string, Entity>(); const seen = new Set<string>(); let after: string | undefined;
   do {
@@ -43,7 +43,7 @@ async function readProjects(workspaceId: string, signal: AbortSignal): Promise<E
 function StudioLeaveBoundary({ active, message }: { active: boolean; message: string }) { useAutomationLeaveProtection(active, message); return null; }
 
 /** One PM-authorized execution automation shell. */
-export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, onLeaveGuardChange, embedded = false, onAssist, onOpenThread }: AutomationPageProps) {
+export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, projectFlow, onLeaveGuardChange, embedded = false, onAssist, onOpenThread }: AutomationPageProps) {
   const t = useAgentText(); const location = useLocation(); const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
   const route = embedded ? params.get("automationPage") ?? "dashboard" : location.pathname.replace(/^\/agent\/automations\/?/, "") || "dashboard";
@@ -53,12 +53,13 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
   const templateId = params.get("templateId") ?? localDraft?.templateId ?? null;
   const definitionId = page === "detail" ? route.slice(7) : params.get("automationId") ?? (localDraft ? "" : params.get("draftId") ?? "");
   const projectId = params.get("project") || localDraft?.projectId || "";
+  const shortcutCreation = page === "setup" && params.get("quickAccess") === "1" && !definitionId && !localDraftId;
   const runId = params.get("run"); const cursor = params.get("cursor") || undefined;
   const [api] = useState(() => new StudioClient(workspace.id));
   const [version, setVersion] = useState(0); const [accessLost, setAccessLost] = useState(false); const [notice, setNotice] = useState("");
   const [definitions, setDefinitions] = useState<StudioDefinition[]>([]); const [definitionCursor, setDefinitionCursor] = useState<string>();
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null); const [importOpen, setImportOpen] = useState(false);
-  const editorKey = `${actorId}:${workspace.id}:${workspace.version}:${definitionId || "new"}:${localDraftId ?? ""}:${templateId ?? ""}:${projectId}`;
+  const editorKey = `${actorId}:${workspace.id}:${workspace.version}:${definitionId || "new"}:${localDraftId ?? ""}:${templateId ?? ""}:${projectId}:${shortcutCreation ? "shortcut" : ""}`;
   const [draftState, setDraftState] = useState({ key: "", dirty: false });
   const studioDirty = page === "setup" && draftState.key === editorKey && draftState.dirty;
   const surfaceKey = `${page}:${projectId}:${importOpen ? "import" : "page"}`;
@@ -97,7 +98,7 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
   function go(destination: string, query: Record<string, string | undefined> = {}, bypass = false) {
     if (!bypass && !canLeave()) return;
     const next = new URLSearchParams(location.search); for (const key of featureKeys) next.delete(key);
-    next.delete("view"); next.delete("thread"); next.set("workspace", workspace.id);
+    next.delete("view"); next.set("workspace", workspace.id);
     for (const [key, value] of Object.entries(query)) if (value) next.set(key, value);
     if (embedded) next.set("automationPage", destination); else next.delete("automationPage");
     navigate({ pathname: embedded ? location.pathname : `/agent/automations${destination === "dashboard" ? "" : `/${destination}`}`, search: next.toString() });
@@ -167,7 +168,7 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
   }} onKeyDown={event => { if (event.key === "Escape") event.currentTarget.querySelectorAll("details[open]").forEach(item => item.removeAttribute("open")); }}>
     <div className={styles.frame}>
     <StudioLeaveBoundary active={leaveActive} message={leaveMessage} />
-    <aside className={styles.secondaryNav}><div className={styles.navHeading}>{t("自动化", "Automate")}</div><nav aria-label={t("自动化导航", "Automation navigation")}>{nav.map(item => <button type="button" key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => go(item.id)}><item.Icon size={16} /><span>{item.label}</span></button>)}</nav><div className={styles.navFooter}><LockKeyhole size={13} />{t("当前主体与项目授权", "Current actor & project access")}</div><Button variant="ghost" size="sm" onClick={() => { if (canLeave()) onExit(); }}><ArrowLeft size={14} />{t("返回对话", "Back to Chat")}</Button></aside>
+    <aside className={styles.secondaryNav}><div className={styles.navHeading}>{t("自动化", "Automate")}</div><nav aria-label={t("自动化导航", "Automation navigation")}>{nav.map(item => <button type="button" key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => go(item.id)}><item.Icon size={16} /><span>{item.label}</span></button>)}{!accessLost && projectFlow}</nav><div className={styles.navFooter}><LockKeyhole size={13} />{t("当前主体与项目授权", "Current actor & project access")}</div><Button variant="ghost" size="sm" onClick={() => { if (canLeave()) onExit(); }}><ArrowLeft size={14} />{t("返回对话", "Back to Chat")}</Button></aside>
     <main className={styles.main}><div className={styles.body}>
       <div className={styles.scopeBar}><label>{t("项目范围", "Project scope")}<RadixSelect aria-label={t("自动化项目范围", "Automation project scope")} value={projectId} disabled={projects.loading} onChange={event => { if (canLeave()) { setQuery({ project: event.target.value || undefined }, false); } }}><option value="">{t("工作区 / 选择项目配置", "Workspace / choose project to configure")}</option>{projectId && !allProjects.some(item => item.id === projectId) && <option value={projectId}>{projectId}</option>}{allProjects.map(item => <option value={item.id} key={item.id}>{String(item.data.name ?? item.data.title ?? item.id)}</option>)}</RadixSelect></label><Button variant="ghost" size="sm" aria-label={t("刷新自动化", "Refresh automations")} disabled={list.loading || projects.loading} onClick={refresh}><RefreshCw size={15} /></Button></div>
       {accessLost ? <section className={styles.empty} role="alert"><LockKeyhole size={28} /><h1>{t("授权已失效", "Access is no longer available")}</h1><p>{t("私有页面数据已隐藏。重新读取当前授权后继续。", "Private page data is hidden. Recheck current authorization to continue.")}</p><Button variant="outline" onClick={() => { onRecheckAccess(); scopeCurrent.current = true; setAccessLost(false); refresh(); }}>{t("重新读取授权", "Recheck access")}</Button></section> : <>
@@ -184,12 +185,18 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
         {definitionScopeMismatch && ["setup", "detail"].includes(page) && <div className={styles.error} role="alert"><h2>{t("定义与当前项目不一致", "Definition does not match the current project")}</h2><p>{t("不会在另一个项目范围中打开或修改此定义。", "This definition will not be opened or edited under another project scope.")}</p><Button variant="outline" onClick={() => { if (canLeave()) setQuery({ project: selectedDefinition?.config.projectId, cursor: undefined, run: undefined }, false); }}>{t("切换到定义所属项目", "Switch to the definition's project")}</Button></div>}
         {page === "setup" && !definitionScopeMismatch && projects.data && (!definitionId || (!detail.loading && !detail.error && selectedDefinition)) && <StudioEditor key={editorKey}
           workspaceId={workspace.id} actorId={actorId} membershipVersion={workspace.version} projectId={projectId || undefined}
-          projects={allProjects.filter(item => !item.data.archivedAt)} definition={selectedDefinition} templateId={templateId} draftId={localDraftId}
+          projects={allProjects.filter(item => !item.data.archivedAt)} definition={selectedDefinition} templateId={templateId} draftId={localDraftId} defaultQuickAccess={shortcutCreation}
           writable={!locked && workspace.capabilities.includes("planning.edit") && !selectedProjectUnavailable}
           onSaved={definition => { refresh(); go(`detail/${definition.id}`, {}, true); }} onExecution={selectExecution} onCancel={() => go("dashboard")}
           onDirtyChange={onDirtyChange} onAssist={onAssist} onIntegrations={() => go("integrations")} onAccessLost={revoke} />}
         {page === "setup" && !!definitionId && !!detail.error && <div className={styles.error} role="alert"><h2>{t("定义无法读取，未创建空白替代项", "Definition unavailable; no blank replacement created")}</h2><Button variant="outline" onClick={detail.refetch}>{t("重试", "Retry")}</Button></div>}
         {page === "detail" && !!detail.error && !(detail.error instanceof StudioApiError && detail.error.status === 404) && <div className={styles.error} role="alert"><h2>{t("定义详情读取失败", "Could not load definition details")}</h2><p>{detail.error instanceof Error ? detail.error.message : t("网络或服务返回异常。历史仍单独按当前授权读取。", "A network or service error occurred. History is read separately under current authorization.")}</p><Button variant="outline" onClick={detail.refetch}>{t("重试详情", "Retry details")}</Button></div>}
+        {page === "detail" && !definitionScopeMismatch && selectedDefinition && !detail.loading && !detail.error && <div className={styles.notice}>
+          {selectedDefinition.config.quickAccess === true
+            ? t("已加入此项目的 PM Agent 助手菜单。可在编辑器取消勾选并保存以移除快捷入口，定义与历史仍保留。", "Shown in this project's PM Agent assistant menu. Uncheck the shortcut in the editor and save to remove it; the definition and history remain.")
+            : t("想从 PM 运行此自动化？在编辑器勾选“Agent 助手快捷入口”并保存。使用同一定义，不会复制、启用或运行。", "Want to run this automation from PM? Check “Agent assistant shortcut” in the editor and save. This uses the same definition; it does not copy, enable, or run it.")}
+          <Button variant="ghost" size="sm" data-testid="automation-shortcut-configure" disabled={!writableFor(selectedDefinition.config.projectId) || locked} onClick={() => go("setup", { automationId: selectedDefinition.id })}>{t("设置 PM Agent 助手快捷入口", "Configure PM Agent assistant shortcut")}</Button>
+        </div>}
         {page === "detail" && !definitionScopeMismatch && (detail.loading && detail.data?.id !== definitionId ? <div className={styles.skeleton} role="status">{t("读取详情…", "Loading detail…")}</div> : <StudioDetail key={`${actorId}:${workspace.id}:${workspace.version}:${definitionId}:${projectId}`}
           definition={selectedDefinition} definitionId={definitionId} api={api} reloadKey={version} runId={runId} cursor={cursor} projectId={projectId || undefined}
           pmContext={{ actorId, workspaceId: workspace.id, membershipVersion: workspace.version, reviewProjectIds, planningProjectIds, commentProjectIds, onDirtyChange: onSurfaceDirtyChange }}

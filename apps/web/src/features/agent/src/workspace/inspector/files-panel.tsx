@@ -27,8 +27,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { File as PierreFile, Virtualizer } from "@pierre/diffs/react";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@agent/components/ui/button";
 import {
   ContextMenu,
@@ -43,12 +42,13 @@ import type {
   InspectorTreeResponse,
 } from "@agent-workspace/contracts/inspector";
 import { useI18n } from "@/lib/i18n-provider";
-import { useTheme } from "@agent/hooks/use-theme";
 import { errorMessage } from "./api";
 import { InspectorExecution, useInspectorScope, useInspectorUrl } from "./scope";
 import { workspaceClient } from "@agent/src/network";
 import { Markdown } from "../../chat/markdown";
 import { useAgentText } from "../../i18n";
+import { useMessageContextDraft } from "../../chat/message-context";
+import { ContextCodeView } from "./context-code-view";
 
 const EXPLORER_STORAGE_KEY = "pm.agent.files.explorer";
 const WRAP_STORAGE_KEY = "pm.agent.files.wrap";
@@ -208,27 +208,6 @@ function HighlightedMatch({ text, query }: { text: string; query: string }) {
   );
 }
 
-function SourcePreview({ path, contents, wrap }: { path: string; contents: string; wrap: boolean }) {
-  const { theme } = useTheme();
-  return (
-    <Virtualizer
-      key={`${path}:${contents.length}:${wrap}:${theme}`}
-      className="inspector-file-virtualizer"
-      config={{ overscrollSize: 600, intersectionObserverMargin: 1200 }}
-    >
-      <PierreFile
-        file={{ name: path, contents }}
-        options={{
-          disableFileHeader: true,
-          overflow: wrap ? "wrap" : "scroll",
-          themeType: theme,
-        }}
-        disableWorkerPool
-        className="inspector-file-source"
-      />
-    </Virtualizer>
-  );
-}
 
 export function FilesPanel({ active = true }: { active?: boolean }) {
   return <InspectorExecution><FilesRootPanel active={active} /></InspectorExecution>;
@@ -239,6 +218,9 @@ function FilesRootPanel({ active }: { active: boolean }) {
   const { locale } = useI18n();
   const inspectUrl = useInspectorUrl();
   const inspectorScope = useInspectorScope();
+  const messageContext = useMessageContextDraft();
+  const [mentionPending, setMentionPending] = useState<string>();
+  const [mentionError, setMentionError] = useState<string>();
   const [trees, setTrees] = useState<Record<string, InspectorTreeResponse>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [dirLoading, setDirLoading] = useState<Set<string>>(new Set());
@@ -247,6 +229,7 @@ function FilesRootPanel({ active }: { active: boolean }) {
   const [treeError, setTreeError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedLine, setSelectedLine] = useState<number>();
   const [file, setFile] = useState<InspectorFileResponse | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<{ message: string; code?: string } | null>(null);
@@ -271,6 +254,7 @@ function FilesRootPanel({ active }: { active: boolean }) {
   const treeRef = useRef<HTMLDivElement | null>(null);
   const breadcrumbsRef = useRef<HTMLElement | null>(null);
   const revealSelected = useRef(false);
+  const consumedOpenRequest = useRef<string | undefined>(undefined);
 
   async function loadTree(path: string) {
     treeRequests.current.get(path)?.abort();
@@ -405,6 +389,9 @@ function FilesRootPanel({ active }: { active: boolean }) {
       pendingTrees.clear();
       pendingFile.current?.abort();
       pendingFile.current = null;
+      // StrictMode replays these effects after aborting the first read. Let the
+      // same open request start a fresh read instead of remaining consumed.
+      consumedOpenRequest.current = undefined;
       pendingSearch.current?.abort();
       pendingSearch.current = null;
     };
@@ -538,9 +525,11 @@ function FilesRootPanel({ active }: { active: boolean }) {
     }
   }
 
-  function selectFile(path: string) {
+  function selectFile(path: string, line?: number) {
     revealSelected.current = true;
     setSelectedPath(path);
+    setSelectedLine(line);
+    if (line) setRenderMarkdown(false);
     setQuery("");
     setDebouncedQuery("");
     setSearchEntries([]);
@@ -549,6 +538,13 @@ function FilesRootPanel({ active }: { active: boolean }) {
     revealFile(path);
     void loadFile(path);
   }
+
+  useEffect(() => {
+    const request = inspectorScope.openRequest;
+    if (!active || !request || request.kind !== "files" || !request.path || request.threadId !== inspectorScope.threadId || request.executionPath !== inspectorScope.environment?.executionPath || consumedOpenRequest.current === request.id) return;
+    consumedOpenRequest.current = request.id;
+    selectFile(request.path, request.line);
+  }, [active, inspectorScope.environment?.executionPath, inspectorScope.openRequest, inspectorScope.threadId]);
 
   function toggleExpandAll() {
     if (expandAll) {
@@ -559,6 +555,19 @@ function FilesRootPanel({ active }: { active: boolean }) {
     }
     setExpandAll(true);
     setExpandAllCapped(false);
+  }
+
+  async function addFileMention(path: string) {
+    if (mentionPending) return;
+    setMentionPending(path);
+    setMentionError(undefined);
+    try {
+      await messageContext.addFileMention(path);
+    } catch (cause) {
+      if (mounted.current) setMentionError(errorMessage(cause));
+    } finally {
+      if (mounted.current) setMentionPending(undefined);
+    }
   }
 
   function renderTree(path: string, depth: number): ReactNode {
@@ -627,6 +636,9 @@ function FilesRootPanel({ active }: { active: boolean }) {
                   >
                     {directory ? t("刷新目录", "Refresh directory") : t("刷新文件内容", "Refresh file contents")}
                   </ContextMenuItem>
+                  {!directory && messageContext.available && <ContextMenuItem disabled={!!mentionPending} onSelect={() => void addFileMention(entry.path)}>
+                    {t("添加到对话", "Add to chat")}
+                  </ContextMenuItem>}
                   {directory && inspectorScope.onOpenTerminal && <>
                     <ContextMenuItem onSelect={() => inspectorScope.onOpenTerminal?.({ relativePath: entry.path, scope: "workspace" })}>{t("在此目录新建 Workspace 终端", "New Workspace terminal here")}</ContextMenuItem>
                     <ContextMenuItem onSelect={() => inspectorScope.onOpenTerminal?.({ relativePath: entry.path, scope: "session" })}>{t("在此目录新建 Session 终端", "New Session terminal here")}</ContextMenuItem>
@@ -675,7 +687,7 @@ function FilesRootPanel({ active }: { active: boolean }) {
   const breadcrumb = selectedPath ? selectedPath.split("/") : [];
   const showSearch = debouncedQuery.length > 0;
   const markdown = selectedPath !== null && /\.(md|mdx|markdown)$/i.test(selectedPath);
-  const lines = file ? countLines(file.content) : 0;
+  const lines = useMemo(() => file ? countLines(file.content) : 0, [file]);
 
   const treePanel = (
     <aside className="inspector-file-explorer" aria-label={t("项目文件", "Project files")}>
@@ -735,6 +747,7 @@ function FilesRootPanel({ active }: { active: boolean }) {
         </Button>
       </div>
 
+      {mentionError && <p className="inspector-file-note inspector-file-note--error" role="alert">{mentionError}</p>}
       {expandAllCapped ? (
         <p className="inspector-file-note" role="status">
           {t(
@@ -923,6 +936,7 @@ function FilesRootPanel({ active }: { active: boolean }) {
                   )}
                 </p>
               ) : null}
+              {file && selectedLine !== undefined && selectedLine > lines && <p className="inspector-file-notice" role="status">{t(`第 ${selectedLine} 行不在此文件的可用预览内。`, `Line ${selectedLine} is outside the available preview of this file.`)}</p>}
               {fileLoading && !file ? (
                 <div className="inspector-file-loading" role="status">
                   <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -951,10 +965,10 @@ function FilesRootPanel({ active }: { active: boolean }) {
               {file && !fileLoading ? (
                 markdown && renderMarkdown ? (
                   <div className="inspector-file-markdown">
-                    <Markdown content={file.content} locale={locale === "en" ? "en" : "zh-CN"} />
+                    <Markdown key={selectedPath ?? undefined} content={file.content} documentPath={selectedPath ?? undefined} locale={locale === "en" ? "en" : "zh-CN"} />
                   </div>
                 ) : (
-                  <SourcePreview path={selectedPath ?? ""} contents={file.content} wrap={wrap} />
+                  <ContextCodeView snapshot={{ kind: "file", path: file.path, contents: file.content }} wrap={wrap} {...(selectedLine !== undefined && selectedLine <= lines ? { line: selectedLine } : {})} />
                 )
               ) : null}
             </div>

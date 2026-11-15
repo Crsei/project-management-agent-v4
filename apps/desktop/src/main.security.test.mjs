@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { LocalServer } from "./local-server.mjs";
+import { readPrivateJson } from "./private-state.mjs";
 
 const cancellable = (details = {}) => ({ ...details, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } });
 const frame = (url, parent = null) => ({ url, parent, detached: false, destroyed: false, isDestroyed() { return this.destroyed; } });
@@ -128,13 +129,14 @@ test("main enforces frame identity, sandbox preferences, navigation, guest and p
   const signals = new Map(["SIGINT", "SIGTERM"].map(name => [name, new Set(process.listeners(name))]));
   t.mock.method(LocalServer.prototype, "start", async function () {
     this.testRunning = true;
+    this.ready = true;
     Object.defineProperties(this, {
       running: { get: () => this.testRunning }, processCount: { get: () => this.testRunning ? 4 : 0 },
     });
     servers.push(this);
     return { phase: "ready", origin: "http://127.0.0.1:58764", instanceId: "isolated-security-test", token: "isolated-private-token", runtime: "test" };
   });
-  t.mock.method(LocalServer.prototype, "stop", async function () { this.testRunning = false; });
+  t.mock.method(LocalServer.prototype, "stop", async function () { this.stopping = true; this.invalidateReadiness(); this.testRunning = false; this.stopping = false; });
   try {
     await import("./main.mjs");
     const connection = await ready.promise;
@@ -154,6 +156,31 @@ test("main enforces frame identity, sandbox preferences, navigation, guest and p
     const created = await preview({ action: "create-tab", tabId: "security-preview" });
     const guest = webContents(sessionFor(created.partition), `${origin}/agent/workspace`);
 
+
+    await t.test("Browser CLI requires captured service readiness and blocks the quit confirmation window", async () => {
+      const descriptor = await readPrivateJson(join(paths.userData, "browser-cli.json"));
+      const request = () => fetch(descriptor.endpoint, { method: "POST", headers: { Authorization: `Bearer ${descriptor.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ instanceId: descriptor.instanceId, serviceUrl: descriptor.serviceUrl, action: "status" }) });
+      const server = servers[0];
+      for (const field of ["ready", "stopping", "failure"]) {
+        const previous = server[field];
+        server[field] = field === "ready" ? false : field === "stopping" ? true : "service failed";
+        try { const result = await request(); assert.equal(result.status, 503, field); await result.body.cancel(); }
+        finally { server[field] = previous; }
+      }
+      const entered = Promise.withResolvers(), release = Promise.withResolvers();
+      const originalDialog = electron.dialog.showMessageBox;
+      electron.dialog.showMessageBox = async (...args) => {
+        if (args.at(-1).buttons?.includes("Stop local services")) { entered.resolve(); return release.promise; }
+        return originalDialog(...args);
+      };
+      const quit = action("quit");
+      try {
+        await entered.promise;
+        const result = await request(); assert.equal(result.status, 503); await result.body.cancel();
+      } finally { release.resolve({ response: 0 }); await quit; electron.dialog.showMessageBox = originalDialog; }
+      const restored = await request(); assert.equal(restored.status, 200); await restored.body.cancel();
+    });
     await t.test("actual window construction enables sandbox/isolation and denies renderer Node privileges", () => {
       for (const window of [connection, workspace]) {
         const preferences = window.options.webPreferences;
@@ -354,6 +381,32 @@ test("main enforces frame identity, sandbox preferences, navigation, guest and p
       for (const name of ["nodeIntegration", "nodeIntegrationInWorker", "nodeIntegrationInSubFrames", "allowRunningInsecureContent", "webviewTag", "navigateOnDragDrop"]) assert.equal(preferences[name], false, name);
       assert.equal(preferences.contextIsolation, false); // Deliberate picker overlay, never the privileged workspace bridge.
       assert.deepEqual(preferences.additionalArguments, []);
+    });
+
+    await t.test("readiness loss aborts pending Browser creation before owned service cleanup", async () => {
+      const descriptor = await readPrivateJson(join(paths.userData, "browser-cli.json"));
+      const requested = Promise.withResolvers(), removed = Promise.withResolvers();
+      const originalSend = contents.send;
+      contents.send = (channel, value) => {
+        originalSend.call(contents, channel, value);
+        if (value?.tabId === "readiness-pending" && channel === "desktop:preview-cli-create") requested.resolve();
+        if (value?.tabId === "readiness-pending" && channel === "desktop:preview-cli-close") removed.resolve();
+      };
+      const request = action => fetch(descriptor.endpoint, { method: "POST", headers: { Authorization: `Bearer ${descriptor.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ instanceId: descriptor.instanceId, serviceUrl: descriptor.serviceUrl, action, ...(action === "create" ? { tabId: "readiness-pending" } : {}) }) });
+      const pending = request("create").then(async response => { await response.body.cancel(); return response.status; }, () => 0);
+      try {
+        await requested.promise;
+        const server = servers[0];
+        assert.equal(server.processCount, 4);
+        server.invalidateReadiness();
+        assert.equal(server.ready, false); assert.equal(server.running, true, "owned processes still exist during invalidation");
+        await removed.promise;
+        assert.notEqual(await pending, 200);
+        const stale = await request("status").then(async response => { await response.body.cancel(); return response.status; }, () => 0);
+        assert.notEqual(stale, 200, "the old capability cannot dispatch while teardown is pending");
+        assert.equal(await preview({ action: "state", tabId: "readiness-pending" }), null);
+      } finally { contents.send = originalSend; }
     });
 
     await t.test("remote workspace never enables or attaches local preview guests", async () => {

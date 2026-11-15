@@ -4,6 +4,8 @@ import type { ProjectDirectoryManagement as DirectoryManagement, ProjectDirector
 import { Button } from "@/components/ui/button"
 import { usePmService, useProjectDirectory } from "./pm-service"
 import { CommandNotice, Form, allowed, useAction, useDraftState, useText } from "./pm-ui"
+import { Link } from "react-router"
+import { MemberAvatar } from "./people-components"
 
 const committedRecordVersion = z.object({ id: z.string().uuid(), version: z.number().int().positive() })
 
@@ -19,13 +21,14 @@ function Selection({ label, options, selected, onChange }: { label: string; opti
 /** Authorized fragments only: the backend has already removed unrelated identities. */
 export function ProjectTeams({ projectId }: { projectId: string }) {
   const query = useProjectDirectory()
+  const { workspace } = usePmService()
   const t = useText()
   if (query.isPending) return <p role="status">{t("加载项目团队…", "Loading project teams…")}</p>
   if (query.error) return <div role="alert"><p>{query.error.message}</p><Button variant="outline" onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button></div>
   const current = query.data?.projects.find(project => project.projectId === projectId)
   if (!current) return <p>{t("项目不可访问。", "Project unavailable.")}</p>
   return <div className="space-y-3 text-sm">
-    {current.teams.length ? current.teams.map(team => <div key={team.id} className="rounded-md border p-3"><p className="font-medium">{team.name}</p><p className="break-words text-muted-foreground">{team.members.map(member => member.name).join(" · ") || t("没有当前可见成员。", "No currently visible members.")}</p></div>) : <p className="text-muted-foreground">{t("尚未关联团队。", "No teams assigned.")}</p>}
+    {current.teams.length ? current.teams.map(team => <div key={team.id} className="space-y-2 rounded-md border p-3"><Link className="font-medium hover:underline" to={`/pm/${encodeURIComponent(workspace!.id)}/members?tab=teams&teamId=${encodeURIComponent(team.id)}`}>{team.name}</Link><div className="flex flex-wrap gap-2">{team.members.length ? team.members.map(member => <MemberAvatar key={member.id} member={{ userId: member.id, name: member.name }} workspaceSlug={workspace!.id} showName />) : t("没有当前可见成员。", "No currently visible members.")}</div></div>) : <p className="text-muted-foreground">{t("尚未关联团队。", "No teams assigned.")}</p>}
     <p className="text-xs text-muted-foreground">{t("团队关联不会授予项目访问权限；仅展示当前有权访问本项目的成员。", "Team assignments never grant project access; only members currently authorized for this project are shown.")}</p>
   </div>
 }

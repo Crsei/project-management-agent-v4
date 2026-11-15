@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, FileText, LoaderCircle, Maximize2, Minimize2, PanelLeft, PanelRight, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileText, Maximize2, Minimize2, PanelLeft, PanelRight, X } from 'lucide-react';
+import { DovspaceLoading } from '@/components/dovspace-brand';
 import type { FileRecord } from '@pm-schema';
 import { useWorkspaceController } from './controller';
 import { DocumentFileTree } from './DocumentFileTree';
@@ -190,7 +191,7 @@ export function DocumentWorkbench(props: DocumentWorkbenchProps) {
           {props.invalidTarget ? <div className="document-workbench-empty" role="alert"><AlertTriangle size={28} /><h1>{en ? 'Invalid document link' : '文档链接无效'}</h1><p>{en ? 'Choose a document from the authorized workspace files.' : '请从有权访问的工作区文件中选择文档。'}</p><button type="button" className="secondary-button" onClick={() => props.onTargetChange(null, { replace: true })}>{en ? 'Clear invalid selection' : '清除无效选择'}</button></div>
             : !target ? <div className="document-workbench-empty"><FileText size={32} /><h1>{en ? 'No document open' : '尚未打开文档'}</h1><p>{en ? 'Open a PM document or an authorized external document. External files can be edited and managed when your existing permissions allow.' : '打开PM文档或已授权的外部文档。现有权限允许时，可直接编辑和管理外部文件。'}</p><button type="button" className="secondary-button" onClick={() => setTreeOpen(true)}><PanelLeft size={15} />{en ? 'Browse workspace files' : '浏览工作区文件'}</button></div>
               : target.kind === 'external' ? <ExternalDocumentEditor key={documentTargetKey(target)} target={target} refreshKey={sourceGeneration} en={en} onBack={() => { void close(target); }} onManage={setManagement} />
-                : c.query.isPending ? <div className="loading-screen" role="status"><LoaderCircle size={24} className="spin" /><p>{en ? 'Loading document…' : '正在加载文档…'}</p></div>
+                : c.query.isPending ? <div className="loading-screen"><DovspaceLoading message={en ? 'Loading document…' : '正在加载文档…'} /></div>
                   : nativeError ? <div className="loading-screen" role="alert"><AlertTriangle size={28} /><h1>{en ? 'Workspace unavailable' : '工作区不可用'}</h1><p>{nativeError.message}</p><button type="button" className="secondary-button" onClick={() => { void c.refresh(); }}>{en ? 'Retry' : '重试'}</button></div>
                     : !c.selected || c.unsupported || c.selected.entity.entity !== 'document' ? <div className="document-workbench-empty" role="alert"><AlertTriangle size={28} /><h1>{en ? 'Document unavailable' : '文档不可用'}</h1><p>{en ? 'This document is missing or no longer authorized. No other entity is opened in its place.' : '文档不存在或已无权访问，不会替换为其他对象。'}</p><button type="button" className="secondary-button" onClick={() => { void close(target); }}>{en ? 'Close tab' : '关闭标签页'}</button></div>
                       : <EntityDetail controller={c} en={en} fullPage onClose={() => { void close(target); }} renderBusiness={props.renderBusiness} />}

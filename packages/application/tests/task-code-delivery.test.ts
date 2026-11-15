@@ -154,3 +154,38 @@ test('historical delivery receipts remain readable but never inspect or resume o
   assert.equal(replaced.worktreeWriteConfirmed, false, 'A replacement Session does not inherit an old development-attempt grant');
   assert.ok(!f.calls.some(call => call.startsWith('develop:')));
 });
+
+test('a changed requirement permits only explicit replacement for handoff, never rebinding or old execution', async () => {
+  const f = fixture(), old = await f.developed();
+  f.task.revision = 'changed-requirement';
+  const replacement = await f.service.act(old.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true });
+  assert.notEqual(replacement.threadId, old.threadId);
+  assert.equal(replacement.taskRevision, old.taskRevision); assert.equal(replacement.description, old.description);
+  assert.deepEqual(replacement.test, old.test);
+  for (const action of [
+    { action: 'develop' as const, providerInstanceId: 'p', model: 'm' },
+    { action: 'test' as const, command: 'test', confirm: true as const },
+    { action: 'push' as const, head: 'commit-sha', confirm: true as const },
+  ]) await assert.rejects(f.service.act(old.id, action), { code: 'task_changed' });
+  assert.equal(f.calls.filter(call => call.startsWith('develop:')).length, 1);
+});
+test('review and recovery dispatch cannot inherit a worktree-write grant, and tests bind requirement plus HEAD', async () => {
+  const f = fixture(); await f.service.prepare(f.input);
+  for (const purpose of ['review', 'recovery'] as const) {
+    const record = await f.service.act(f.input.id, { action: 'develop', providerInstanceId: 'p', model: 'm', purpose, allowWorktreeWrite: true });
+    assert.equal(record.developmentPurpose, purpose); assert.equal(record.worktreeWriteConfirmed, false);
+    await f.service.act(f.input.id, { action: 'refresh' });
+  }
+  const tested = await f.service.act(f.input.id, { action: 'test', command: 'test-command', confirm: true });
+  assert.equal(tested.test?.taskRevision, f.input.taskRevision); assert.equal(tested.test?.head, 'base');
+});
+test('replacement still rejects unknown side effects, active Agent work and changed directory identity', async () => {
+  const f = fixture(); await f.committed(); f.ports.push = async () => { throw new Error('unknown'); };
+  await f.service.act(f.input.id, { action: 'push', head: 'commit-sha', confirm: true });
+  await assert.rejects(f.service.act(f.input.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true }), { code: 'outcome_unknown' });
+  const record = f.records.get(f.input.id)!; delete record.pending; f.records.set(record.id, record);
+  f.ports.busy = () => true;
+  await assert.rejects(f.service.act(f.input.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true }), { code: 'agent_busy' });
+  f.ports.busy = () => false; f.ports.verify = async () => { throw new Error('directory identity changed'); };
+  await assert.rejects(f.service.act(f.input.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true }), /directory identity/);
+});

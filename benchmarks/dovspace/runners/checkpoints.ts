@@ -1,7 +1,8 @@
 import type { BenchEvent, FixtureHandle, FixtureSnapshot } from '../schemas/types.ts';
 import { HANDOFF_PATH } from '../tasks/index.ts';
+import { inspectGuidanceCheckpoint } from './guidance-checkpoints.ts';
 
-export type CheckpointEvidence = { phaseId: string; operationId: string; targetId: string; revision: string; receiptIdentity: string; authorityVerified: true; handoffVerified: true };
+export type CheckpointEvidence = { phaseId: string; operationId: string; targetId: string; revision: string; receiptIdentity: string; authorityVerified: true; handoffVerified: true; publicFiles?: Record<string, string>; sourceHash?: string; memoryHash?: string };
 
 function structuredArtifact(snapshot: FixtureSnapshot, name: string): Record<string, unknown> | null {
   const bytes = snapshot.publicFiles[name];
@@ -14,6 +15,7 @@ function structuredArtifact(snapshot: FixtureSnapshot, name: string): Record<str
 
 /** A runner checkpoint is a conjunction of captured authority and persisted model output. */
 export function inspectCheckpoint(taskId: string, phaseId: string, fixture: FixtureHandle, before: FixtureSnapshot, after: FixtureSnapshot, events: readonly BenchEvent[]): CheckpointEvidence | null {
+  if (['K04', 'D04', 'L03'].includes(taskId)) return inspectGuidanceCheckpoint(taskId, phaseId, fixture, before, after, events);
   // Snapshot construction refuses symlinks/hardlinks; parse those captured bytes, not a racy second read.
   const handoff = structuredArtifact(after, HANDOFF_PATH);
   if (!handoff) return null;

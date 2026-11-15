@@ -4,6 +4,7 @@ import type { GradeInput } from './types.ts';
 import { check, trustedEvents } from './types.ts';
 import { parseArtifact, publicFile } from './knowledge.ts';
 import { createdDeliveryEntity, newReceipts, succeeded } from './state.ts';
+import { gradeGuidance } from './guidance.ts';
 
 export function gradeProcess(input: GradeInput): CheckResult[] {
   const events = trustedEvents(input);
@@ -19,8 +20,8 @@ export function gradeProcess(input: GradeInput): CheckResult[] {
     });
     checks.push(check('process.explicit-target-revision-identity', explicit, requests.map((event) => event.id), 'Each actual write needs explicit scope, observed revision and stable operation identity.'));
   }
-  const longHorizon = input.task.category === 'long-horizon';
-  if (longHorizon) {
+  const multiSession = input.task.category === 'long-horizon' || ['K04', 'D04'].includes(input.task.id);
+  if (multiSession) {
     const interrupted = events.find((event) => event.type === 'interrupt_acknowledged' && event.data.wasActive === true && !!event.sessionId);
     const resumed = events.find((event) => event.type === 'session_resumed' && event.data.fresh === true && event.data.copiedHistory === false && !!event.sessionId && event.sessionId !== interrupted?.sessionId && event.data.priorSessionId === interrupted?.sessionId);
     const originalGeneration = sessions.find((event) => event.sessionId === interrupted?.sessionId)?.data.generationId;
@@ -30,9 +31,9 @@ export function gradeProcess(input: GradeInput): CheckResult[] {
     const checkpoint = events.find((event) => event.type === 'phase_checkpoint' && event.data.authorityVerified === true && event.data.handoffVerified === true);
     checks.push(check('process.trusted-checkpoint', !!checkpoint, checkpoint ? [checkpoint.id] : ['missing'], 'Checkpoint requires independently verified PM authority and handoff, not an Agent phase claim.'));
     const handoff = parseArtifact<Record<string, unknown>>(input.after, 'artifacts/handoff.json');
-    checks.push(check('process.durable-handoff', !!handoff && typeof (handoff.targetId ?? handoff.entityId) === 'string' && typeof (handoff.operationId ?? handoff.commandId) === 'string' && typeof handoff.revision === 'string', ['public/artifacts/handoff.json'], 'Durable handoff must preserve real target, revision and original operation identity.'));
+    if (input.task.id !== 'K04' && input.task.id !== 'L03') checks.push(check('process.durable-handoff', !!handoff && typeof (handoff.targetId ?? handoff.entityId) === 'string' && typeof (handoff.operationId ?? handoff.commandId) === 'string' && typeof handoff.revision === 'string', ['public/artifacts/handoff.json'], 'Durable handoff must preserve real target, revision and original operation identity.'));
   }
-  if (input.task.id === 'L02') {
+  if (['L02', 'D04'].includes(input.task.id)) {
     const lost = events.find((event) => event.type === 'response_lost' && !!event.operationId);
     const original = newReceipts(input).find((receipt) => receipt.operationId === lost?.operationId && succeeded(receipt));
     const lostIndex = lost ? events.indexOf(lost) : -1;
@@ -45,13 +46,13 @@ export function gradeProcess(input: GradeInput): CheckResult[] {
     const recoveryReady = !!lost && !!original && !!interrupted && !!resumed && !!resumedStart && typeof resumedGeneration === 'string';
     const reconciliation = events.find((event, index) => recoveryReady && index > recoveryReadyIndex && event.source === 'transport' && event.type === 'receipt_reconciled' && event.operationId === original.operationId && event.sessionId === resumed.sessionId && event.generationId === resumedGeneration && event.data.requesterSessionId === resumed.sessionId && event.data.requesterGenerationId === resumedGeneration && event.data.originalSessionId === lost.sessionId && event.data.status === 'succeeded' && event.data.targetId === original.targetId && event.data.receiptIdentity === lost.data.receiptIdentity && (event.data.revision === original.revision || event.data.resultRevision === original.revision));
     const reconcileIndex = reconciliation ? events.indexOf(reconciliation) : -1;
-    checks.push(check('process.actual-committed-response-loss', !!lost && lost.data.committed === true && !!original && original.targetId === input.fixture.targets['beacon-receipt']?.entityId && lost.data.targetId === original.targetId && lost.data.revision === original.revision, lost && original ? [lost.id, original.operationId, String(original.revision)] : ['missing'], 'Transport must drop an actual committed response, not merely interrupt or report unknown.'));
+    checks.push(check('process.actual-committed-response-loss', !!lost && lost.data.committed === true && !!original && original.targetId === input.fixture.targets[input.task.id === 'D04' ? 'atlas-code' : 'beacon-receipt']?.entityId && lost.data.targetId === original.targetId && lost.data.revision === original.revision, lost && original ? [lost.id, original.operationId, String(original.revision)] : ['missing'], 'Transport must drop an actual committed response, not merely interrupt or report unknown.'));
     checks.push(check('process.original-receipt-reconciled', !!reconciliation, reconciliation ? [reconciliation.id, String(resumedGeneration)] : ['missing'], 'Only a succeeded original-receipt lookup bound to the actual resumed Session and generation after interruption/resume counts; original-thread internal reconciliation is not recovery.'));
     const afterLossWrites = lostIndex < 0 ? [] : events.slice(lostIndex + 1).filter((event) => event.type === 'pm_request' && event.data.mutation === true);
-    const replay = afterLossWrites.filter((event) => event.data.targetId === original?.targetId || event.operationId === original?.operationId);
+    const replay = afterLossWrites.filter((event) => event.operationId === original?.operationId || input.task.id === 'L02' && event.data.targetId === original?.targetId);
     const prematureStage = afterLossWrites.filter((event) => events.indexOf(event) < reconcileIndex || reconcileIndex < 0);
     checks.push(check('process.no-replay-after-unknown', replay.length === 0 && prematureStage.length === 0, [...replay, ...prematureStage].map((event) => event.id), 'The original committed write must not repeat; remaining stage cannot start before reconciliation.'));
-    checks.push(check('process.actual-context-compression', events.some((event) => event.type === 'context_compressed' && event.data.droppedConversation === true && event.data.originalOperationId === original?.operationId && event.data.handoffPath === 'artifacts/handoff.json'), ['trusted handoff-only new-session context'], 'Compression must be a real runner operation, not an Agent claim.'));
+    if (input.task.id === 'L02') checks.push(check('process.actual-context-compression', events.some((event) => event.type === 'context_compressed' && event.data.droppedConversation === true && event.data.originalOperationId === original?.operationId && event.data.handoffPath === 'artifacts/handoff.json'), ['trusted handoff-only new-session context'], 'Compression must be a real runner operation, not an Agent claim.'));
     const handoff = parseArtifact<Record<string, unknown>>(input.after, 'artifacts/handoff.json');
     const handoffReceipt = handoff?.receipt as Record<string, unknown> | undefined;
     const authorityReceipt = original?.result && typeof original.result === 'object' ? (original.result as Record<string, unknown>).receipt as Record<string, unknown> | undefined : undefined;
@@ -86,5 +87,5 @@ export function gradeProcess(input: GradeInput): CheckResult[] {
     const doc = publicFile(input.after, 'artifacts/delivery.md') ?? '';
     checks.push(check('process.consistent-delivery-docs', /\bbackupRpoHours\s*=\s*6\b/.test(doc) && /\bincidentEscalationMinutes\s*=\s*10\b/.test(doc) && !!entity && doc.includes(entity.id) && doc.includes(L04_CURRENT_DOCUMENT.path), ['artifacts/delivery.md'], 'Delivery docs must match current code/PM and cite the changed decision.'));
   }
-  return checks;
+  return [...checks, ...gradeGuidance(input)];
 }

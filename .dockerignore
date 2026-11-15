@@ -40,7 +40,37 @@
 !deploy/manage.mjs
 !docs/
 !docs/**
+docs/agent-source/
+docs/frontend-design-adoption.md
 docs/implementation/
+docs/reference/
+# Exact first-party runtime Skill sources and plugin generation inputs.
+!.agents/
+!.agents/skills/
+!.agents/skills/pm-requirement-review/
+!.agents/skills/pm-requirement-review/SKILL.md
+!.agents/skills/pm-plan-draft/
+!.agents/skills/pm-plan-draft/SKILL.md
+!.agents/skills/pm-evidence-review/
+!.agents/skills/pm-evidence-review/SKILL.md
+!.agents/skills/pm-project-digest/
+!.agents/skills/pm-project-digest/SKILL.md
+!.agents/skills/pm-collaboration-review/
+!.agents/skills/pm-collaboration-review/SKILL.md
+!.agents/skills/pm-automation-candidate-review/
+!.agents/skills/pm-automation-candidate-review/SKILL.md
+!plugins/
+!plugins/dovspace-pm/
+!plugins/dovspace-pm/plugin.json
+!plugins/dovspace-pm/LICENSE
+!plugins/dovspace-pm/README.md
+!plugins/dovspace-pm/skills/
+!plugins/dovspace-pm/skills/project-management/
+!plugins/dovspace-pm/skills/project-management/SKILL.md
+!plugins/dovspace-pm/skills/issue-management/
+!plugins/dovspace-pm/skills/issue-management/SKILL.md
+!plugins/dovspace-pm/skills/task-planning/
+!plugins/dovspace-pm/skills/task-planning/SKILL.md
 # Reapply exclusions after recursively allowing package source directories.
 **/node_modules
 **/tests

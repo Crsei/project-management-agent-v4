@@ -36,9 +36,9 @@ const componentDescriptions = Object.freeze({
   other: "Paths outside the explicit component allowlist; never silently assigned to a product component",
 });
 const pmPackages = ["application", "contracts", "domain", "infrastructure", "pm-cli", "pm-core", "pm-markdown", "pm-schema", "pm-views"];
-const sharedPackages = ["agent-client-runtime", "agent-contracts", "automation-resources", "ui"];
+const sharedPackages = ["agent-client-runtime", "agent-contracts", "automation-resources", "skill-resources", "ui"];
 const electronFiles = new Set([
-  "PM Agent v4.exe", "Uninstall PM Agent v4.exe", "chrome_100_percent.pak", "chrome_200_percent.pak",
+  "Dovspace.exe", "Uninstall Dovspace.exe", "chrome_100_percent.pak", "chrome_200_percent.pak",
   "d3dcompiler_47.dll", "dxcompiler.dll", "dxil.dll", "ffmpeg.dll", "icudtl.dat",
   "libEGL.dll", "libGLESv2.dll", "resources.pak", "snapshot_blob.bin", "v8_context_snapshot.bin",
   "vk_swiftshader.dll", "vk_swiftshader_icd.json", "vulkan-1.dll",
@@ -69,6 +69,7 @@ function componentFor(path) {
         || pmPackages.some((name) => under(workspace, `packages/${name}`))) return "pm";
       if (under(workspace, "apps/web") || under(workspace, "apps/desktop/src")
         || under(workspace, "licenses") || under(workspace, "vendor/openhands-automations")
+        || under(workspace, ".agents/skills") || under(workspace, "plugins/dovspace-pm")
         || sharedPackages.some((name) => under(workspace, `packages/${name}`))
         || workspaceMetadata.has(workspace)) return "shared";
     }

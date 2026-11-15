@@ -1,21 +1,23 @@
 import { ideaBoardScenario, scenarioFitsDraft } from './app-scenarios';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ApiError as PmApiError, type MemberDirectory, type CommandReceipt } from '@contracts';
+import { ApiError as PmApiError, type CommandReceipt } from '@contracts';
 import { relationFields } from '@pm-schema/relations';
 import { workflowFor, type Diagnostic, type EntityKind, type FileRecord, type WorkspaceSnapshot } from '@pm-schema';
 import { ApiError } from './api';
 import { useCoreSession, useCreationDrafts, useSessionDrafts } from './session';
-import { applyCreationResult, applyLocalProjectResult, creationChildHasContent, creationComplete, creationDraftEditable, creationDraftIsPristine, creationFieldIssues, creationHasRemainingNativeWrites, creationRequest, editCreationDraft, editRejectedChild, editRejectedCreation, hasUncertainCreationDrafts, initialCreationValues, newCreationDraft, prepareCreationAttempt, resumableCreationDraft, type CreationChild, type CreationDraft, type CreationInitial, type NativeCreationAttempt } from './creation-model';
+import { applyCreationResult, applyLocalProjectResult, creationChildHasContent, creationComplete, creationDraftEditable, creationDraftIsPristine, creationFieldIssues, creationHasRemainingNativeWrites, creationRequest, editCreationDraft, editRejectedChild, editRejectedCreation, hasUncertainCreationDrafts, initialCreationValues, newCreationDraft, prepareCreationAttempt, resumableCreationDraft, type CreationChild, type CreationDraft, type CreationDrafts, type CreationInitial, type NativeCreationAttempt } from './creation-model';
 import { withCreationLock } from './creation-store';
 import { usePmCommand, usePmService, usePrivateQuery } from '../service/pm-service';
 import { PmCommandError } from '../service/pm-errors';
 import { allowed } from '../service/pm-ui';
 import { hasUncertainProjectTaskDraft } from '../service/project-task-editing-model';
 import { teamTaskCreateProjectProblem } from '../service/team-task-actions-model';
-import { localDirectorySchema, localProjectInputSchema, type LocalDirectory, type LocalProjectSettings } from '../../../../../../packages/contracts/src/local-projects';
+import { localDirectorySchema, localProjectInputSchema, type LocalDirectory, type LocalProjectProbe, type LocalProjectSettings } from '../../../../../../packages/contracts/src/local-projects';
 import { localProjectApi } from '../service/local-project-api';
 import { useLocalProjectSettings } from '../service/local-project-hooks';
+import { usePeopleCandidates } from '../service/people-hooks';
+import type { PeopleCandidatePage } from '../../../../../../packages/domain/src/people';
 
 export interface EntityCreationOptions { initial?: CreationInitial; projectId?: string; draftId?: string; onCreated: (file: FileRecord) => void }
 export interface LocalProjectCreationState {
@@ -23,7 +25,9 @@ export interface LocalProjectCreationState {
   localSettings: { data: LocalProjectSettings | undefined; error: Error | null; refetch: () => Promise<unknown> };
   busy: boolean;
   canWrite: boolean;
-  changeDirectory: (directory: LocalDirectory) => void;
+  changeDirectory: (directory: LocalDirectory | undefined) => void;
+  suggestTitle: (title: string) => void;
+  recoverExisting: (projectId: string, path: string) => Promise<void>;
 }
 
 function subscribeOnline(notify: () => void): () => void {
@@ -47,7 +51,8 @@ export function useEntityCreation(options: EntityCreationOptions) {
   const [id] = useState(() => {
     if (options.draftId) return options.draftId;
     const project = options.projectId || options.initial?.project || '';
-    return resumableCreationDraft(session.creationDrafts.getSnapshot(), options.initial?.entity ?? 'work_item', project)?.draftId ?? crypto.randomUUID();
+    const preseeded = !!(options.initial?.title || options.initial?.parent || options.initial?.workKind);
+    return (!preseeded ? resumableCreationDraft(session.creationDrafts.getSnapshot(), options.initial?.entity ?? 'work_item', project)?.draftId : undefined) ?? crypto.randomUUID();
   });
   const draft = drafts[id];
   const localSettings = useLocalProjectSettings((draft?.kind ?? options.initial?.entity) === 'project');
@@ -68,8 +73,9 @@ export function useEntityCreation(options: EntityCreationOptions) {
       throw cause;
     }
   });
-  const canReadDirectory = service.workspace?.capabilities.includes('directory.read') === true || allowed(service.workspace, 'access.manage');
-  const directory = usePrivateQuery<MemberDirectory>([...session.queryKey.slice(0, 4), 'members', 'directory'], allowed(service.workspace, 'access.manage') ? 'access.manage' : 'directory.read', undefined, (client, workspaceId, signal) => client.getMemberDirectory(workspaceId, { signal }), (draft?.kind ?? options.initial?.entity ?? 'work_item') === 'work_item' && canReadDirectory);
+  const candidateProject = String(draft?.values.project ?? options.projectId ?? options.initial?.project ?? '');
+  const candidateKind = draft?.kind ?? options.initial?.entity ?? 'work_item';
+  const directory = usePeopleCandidates({ purpose: candidateKind === 'project' ? 'project_owner' : 'assignee', projectId: candidateKind === 'project' ? undefined : candidateProject, enabled: candidateKind === 'project' || candidateKind === 'work_item' && !!candidateProject });
   useEffect(() => {
     if (draft) { initialized.current = true; return; }
     if (initialized.current || !sources.data || session.creationDrafts.persistenceError()) return;
@@ -94,15 +100,6 @@ export function useEntityCreation(options: EntityCreationOptions) {
       });
     }).catch(cause => { if (active.current) setError(cause instanceof Error ? cause.message : String(cause)); });
   }, [draft, id, options.draftId, options.initial, options.projectId, session, sources.data]);
-  useEffect(() => {
-    if (draft?.kind !== 'project' || draft.localDirectory || draft.attempt || !localSettings.data?.enabled || !localSettings.data.canManage) return;
-    void withCreationLock(session.namespace, async () => {
-      session.creationDrafts.update(current => {
-        const value = current[id];
-        return !value || value.localDirectory || value.attempt ? current : { ...current, [id]: { ...value, localDirectory: { mode: 'new', parentPath: localSettings.data!.defaultParent ?? '', folderName: '' }, updatedAt: Date.now() } };
-      });
-    }).catch(cause => { if (active.current) setError(cause instanceof Error ? cause.message : String(cause)); });
-  }, [draft, id, localSettings.data, session]);
 
   function mutate(change: (current: CreationDraft) => CreationDraft, durable = false): boolean {
     const update = durable ? session.creationDrafts.commit : session.creationDrafts.update;
@@ -126,6 +123,11 @@ export function useEntityCreation(options: EntityCreationOptions) {
     if (options.projectId && 'project' in changes && changes.project !== options.projectId) { setError('The route project is fixed. Open the other project to create there. / 当前路由项目不可更改，请进入其他项目后创建。'); return; }
     edit(current => editCreationDraft(current, { values: { ...current.values, ...changes } })); setIssues([]);
   }
+  function suggestTitle(title: string) {
+    const current = session.creationDrafts.getSnapshot()[id];
+    if (!current || current.kind !== 'project' || String(current.values.title ?? '').trim()) return;
+    changeFields({ title });
+  }
   function changeKind(kind: EntityKind) {
     if (options.projectId && kind === 'project') { setError('Create projects from the workspace, not within another project. / 请从工作区创建项目，而非在另一项目内创建。'); return; }
     edit(current => {
@@ -142,7 +144,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
       return { ...current, children: current.children.map(item => item.draftId === childId ? { ...item, ...changes, ...(changes.values ? { values: { ...item.values, ...changes.values } } : {}) } : item), updatedAt: Date.now() };
     });
   }
-  function changeDirectory(localDirectory: LocalDirectory) {
+  function changeDirectory(localDirectory: LocalDirectory | undefined) {
     edit(current => current.attempt?.phase === 'prepared' && !current.attempt.localDirectory ? { ...current, localDirectory, updatedAt: Date.now() } : editCreationDraft(current, { localDirectory }));
   }
   function writeProblem(current: CreationDraft, isOnline = navigator.onLine): string | null {
@@ -170,7 +172,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
     }
     return null;
   }
-  function validateGroup(current: CreationDraft, snapshot: WorkspaceSnapshot, members: MemberDirectory | undefined): Diagnostic[] {
+  function validateGroup(current: CreationDraft, snapshot: WorkspaceSnapshot, members: PeopleCandidatePage | undefined): Diagnostic[] {
     const configuration = snapshot.configuration;
     const parentPending = current.attempt?.phase !== 'committed';
     const result = parentPending ? creationFieldIssues(current.kind, current.values, configuration) : [];
@@ -189,10 +191,11 @@ export function useEntityCreation(options: EntityCreationOptions) {
         const capability = category === 'completed' ? 'workitem.complete' : category === 'canceled' ? 'workitem.cancel_reopen' : null;
         if (capability && !allowed(latest.current.service.workspace, capability, project)) add(`${prefix}status`, `Permission required: ${capability}. / 所选状态需要相应权限。`);
         if (values.assignee) {
-          const member = members?.members.find(item => item.userId === values.assignee && !item.access?.revokedAt);
-          if (!member || member.access && (!member.access.capabilities.includes('domain.read') || member.access.projectIds !== null && !member.access.projectIds.includes(project))) add(`${prefix}assignee`, 'This member cannot be assigned to the selected project. / 此成员不可分派到所选项目。');
+          const member = members?.items.find(item => item.userId === values.assignee);
+          if (!member || project !== candidateProject) add(`${prefix}assignee`, 'This member cannot be assigned to the selected project. / 此成员不可分派到所选项目。');
         }
       }
+      if (kind === 'project' && values.owner && !members?.items.some(member => member.userId === values.owner)) add(`${prefix}owner`, 'This member is not an eligible new-project owner. / 此成员不可担任新项目负责人。');
       for (const reference of relationFields(configuration).filter(field => field.entities.includes(kind))) {
         const input = values[reference.name];
         if (input === undefined || input === null) continue;
@@ -218,8 +221,12 @@ export function useEntityCreation(options: EntityCreationOptions) {
     queryClient.setQueryData<WorkspaceSnapshot>(session.queryKey, previous => previous ? { ...previous, files: [...previous.files.filter(item => item.id !== file.id), file], unsupportedFiles: previous.unsupportedFiles.filter(item => item.path !== file.path) } : previous);
     void queryClient.invalidateQueries({ queryKey: session.queryKey.slice(0, 4) });
   }
-  function setAttempt(childId: string | undefined, change: (attempt: NativeCreationAttempt) => NativeCreationAttempt) {
-    requireDurable(current => childId ? { ...current, children: current.children.map(child => child.draftId === childId && child.attempt ? { ...child, attempt: change(child.attempt) } : child), updatedAt: Date.now() } : current.attempt ? { ...current, attempt: change(current.attempt), updatedAt: Date.now() } : current);
+  function setAttempt(childId: string | undefined, change: (attempt: NativeCreationAttempt) => NativeCreationAttempt, durable = true) {
+    const update = (current: CreationDraft) => childId ? { ...current, children: current.children.map(child => child.draftId === childId && child.attempt ? { ...child, attempt: change(child.attempt) } : child), updatedAt: Date.now() } : current.attempt ? { ...current, attempt: change(current.attempt), updatedAt: Date.now() } : current;
+    if (durable) { requireDurable(update); return; }
+    // A server-confirmed result is authoritative even when browser recovery storage is full:
+    // keep it in memory so the user can finish, instead of stranding a confirmed write.
+    if (!mutate(update, true)) mutate(update, false);
   }
   async function reconcileNative(childId?: string, recover = false) {
     const current = session.creationDrafts.getSnapshot()[id];
@@ -237,12 +244,12 @@ export function useEntityCreation(options: EntityCreationOptions) {
           // The original frozen key/input/directory also deduplicate a late arrival.
           result = await api.initialize({ input: localProjectInputSchema.parse(attempt.request), directory: attempt.localDirectory }, attempt.key);
         }
-        setAttempt(childId, original => applyLocalProjectResult(original, result));
+        setAttempt(childId, original => applyLocalProjectResult(original, result), false);
         if (result.status === 'ready' && result.location.status === 'available') acceptFile(result.record);
         return;
       }
       const result = await (recover ? session.api.recoverCreationAttempt(attempt.key) : session.api.creationAttempt(attempt.key));
-      setAttempt(childId, original => applyCreationResult(original, result));
+      setAttempt(childId, original => applyCreationResult(original, result), false);
       if (result.status === 'committed' && result.current.status === 'present') acceptFile(result.current.record);
     } catch (cause) {
       if ((cause instanceof ApiError || cause instanceof PmApiError) && [401, 403, 404].includes(cause.status)) await session.onAccessFailure();
@@ -259,19 +266,50 @@ export function useEntityCreation(options: EntityCreationOptions) {
     try {
       if (attempt.localDirectory) {
         const result = await localProjectApi(service.client, session.queryKey[3]).initialize({ input: localProjectInputSchema.parse(attempt.request), directory: attempt.localDirectory }, attempt.key);
-        setAttempt(childId, original => applyLocalProjectResult(original, result));
+        setAttempt(childId, original => applyLocalProjectResult(original, result), false);
         if (result.status === 'ready' && result.location.status === 'available') acceptFile(result.record);
         return;
       }
       const file = await session.api.createEntity(attempt.request, attempt.key);
-      setAttempt(childId, original => ({ ...original, phase: 'committed', entityId: file.id, revision: file.revision, currentStatus: 'present', message: '', diagnostics: [] }));
+      setAttempt(childId, original => ({ ...original, phase: 'committed', entityId: file.id, revision: file.revision, currentStatus: 'present', message: '', diagnostics: [] }), false);
       acceptFile(file);
     } catch (cause) {
-      setAttempt(childId, original => ({ ...original, phase: 'unknown', message: cause instanceof Error ? cause.message : String(cause), diagnostics: cause instanceof ApiError ? cause.diagnostics : [] }));
+      setAttempt(childId, original => ({ ...original, phase: 'unknown', message: cause instanceof Error ? cause.message : String(cause), diagnostics: cause instanceof ApiError ? cause.diagnostics : [] }), false);
       if ((cause instanceof ApiError || cause instanceof PmApiError) && [401, 403, 404].includes(cause.status)) await session.onAccessFailure();
       else if ((cause instanceof ApiError || cause instanceof PmApiError) && cause.status < 500) await reconcileNative(childId);
       throw cause;
     }
+  }
+  async function resolveSelection(api: { probe: (path: string, signal?: AbortSignal) => Promise<LocalProjectProbe> }, directory: LocalDirectory): Promise<LocalDirectory> {
+    if (directory.mode !== 'auto') return directory;
+    const probe = await api.probe(directory.path);
+    if (probe.markerProblem) throw new Error('This directory contains an incomplete or invalid project marker and cannot be adopted. / 该目录包含不完整或无效的项目标记，不能接管。');
+    if (probe.problem === 'foreign_workspace') throw new Error('This directory belongs to another workspace and cannot be imported here. / 该目录属于其他工作区，不能在当前工作区导入。');
+    if (probe.problem === 'unknown_project') throw new Error('The marked project is not in this workspace and cannot be created as a new project. / 标记中的项目不在当前工作区，不能作为新项目创建。');
+    if (probe.project) throw new Error(probe.project.locationStatus === 'available'
+      ? `Project ${probe.project.title} is already registered here; open it instead of creating another. / 项目「${probe.project.title}」已登记在此，请直接打开，不要重复创建。`
+      : `Project ${probe.project.title} is already registered but its folder is missing; use Recover and open. / 项目「${probe.project.title}」已登记但目录缺失，请使用“找回并打开”。`);
+    if (probe.marker) throw new Error('This directory is already a project; it cannot be initialized as a new project. / 该目录已是项目目录，不能作为新项目初始化。');
+    return probe.directory;
+  }
+  const recoveryKeys = useRef(new Map<string, string>());
+  async function recoverExisting(projectId: string, path: string) {
+    const mapKey = `${projectId}:${path}`;
+    const key = recoveryKeys.current.get(mapKey) ?? crypto.randomUUID();
+    recoveryKeys.current.set(mapKey, key);
+    await run(async () => {
+      if (!allowed(latest.current.service.workspace, 'planning.edit')) throw new Error('Project permission is required to recover storage. / 找回存储需要项目写入权限。');
+      const api = localProjectApi(service.client, session.queryKey[3]);
+      const result = await api.move(projectId, 'relocate', { mode: 'existing', path }, key, 'rebind');
+      if (result.status === 'pending') throw new Error('Recovery is pending. Check the original request; do not create a replacement. / 找回结果待核对，请检查原请求，不要新建替代项目。');
+      if (result.status === 'rejected') throw new Error(`Recovery was rejected (${result.code}). Inspect project storage. / 找回被拒绝（${result.code}），请核对项目存储。`);
+      if (result.status === 'not_found') throw new Error('The original recovery record was not found; retry this action. / 未找到原找回记录，请重试。');
+      if (result.location.status !== 'available') throw new Error('Recovery was submitted, but the directory is not currently available. / 找回已提交，但目录当前不可用。');
+      recoveryKeys.current.delete(mapKey);
+      acceptFile(result.record);
+      discardDraft();
+      latest.current.options.onCreated(result.record);
+    });
   }
   function storeWatchReceipt(receipt: CommandReceipt) {
     requireDurable(current => current.watchAttempt && current.watchAttempt.command.commandId === receipt.commandId ? { ...current, watchAttempt: { ...current.watchAttempt, phase: receipt.status, receipt, message: receipt.status === 'rejected' ? receipt.error.message : '' }, updatedAt: Date.now() } : current);
@@ -289,6 +327,10 @@ export function useEntityCreation(options: EntityCreationOptions) {
       else throw cause;
     }
   }
+  function discardDraft() {
+    const change = (values: CreationDrafts) => { const next = { ...values }; delete next[id]; return next; };
+    if (!session.creationDrafts.commit(change)) session.creationDrafts.update(change);
+  }
   async function finish() {
     const current = session.creationDrafts.getSnapshot()[id];
     if (!current || !creationComplete(current) || !active.current) return;
@@ -297,7 +339,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
     if (!('entity' in file)) throw new Error('Creation committed, but the current file is unavailable. The original creation will not be repeated. / 创建已提交，但当前文件不可用，不会重复创建。');
     if (latest.current.options.projectId && (file.entity.entity === 'project' ? file.id : file.entity.project) !== latest.current.options.projectId) throw new Error('The confirmed source is not in this route project. The creation intent is retained; reopen it from workspace recovery. / 已确认源码不属于当前路由项目，创建意图已保留，请从工作区恢复入口打开。');
     acceptFile(file);
-    if (!session.creationDrafts.commit(values => { const next = { ...values }; delete next[id]; return next; })) throw new Error('Created successfully. Restore browser storage to finish safely. / 已创建成功；请恢复浏览器存储后安全完成。');
+    discardDraft();
     latest.current.options.onCreated(file);
   }
   async function run(action: () => Promise<void>) {
@@ -322,7 +364,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
       }
       const fresh = await sources.refetch({ throwOnError: true });
       if (!fresh.data) throw new Error('Read the authoritative workspace first. / 请先读取权威工作区。');
-      const members = current.kind === 'work_item' && creationHasRemainingNativeWrites(current) && canReadDirectory ? (await directory.refetch({ throwOnError: true })).data : undefined;
+      const members = creationHasRemainingNativeWrites(current) && (current.kind === 'project' || current.kind === 'work_item' && candidateProject) ? (await directory.refetch({ throwOnError: true })).data : undefined;
       current = session.creationDrafts.getSnapshot()[id]!;
       if (current.kind === 'project' && !current.attempt && latest.current.localSettings.data?.enabled) {
         const initialStatus = workflowFor('project', fresh.data.configuration)?.initial;
@@ -336,8 +378,12 @@ export function useEntityCreation(options: EntityCreationOptions) {
       if (diagnostics.length) throw new Error('Review the marked fields; no additional write was sent. / 请检查标记字段，未发送后续写入。');
       if (!current.attempt) {
         const request = creationRequest(current.kind, current.values, current.body, fresh.data.configuration);
-        const directory = current.kind === 'project' && latest.current.localSettings.data?.enabled ? localDirectorySchema.parse(current.localDirectory) : undefined;
-        if (directory) await localProjectApi(service.client, session.queryKey[3]).preview(directory);
+        let directory = current.kind === 'project' && latest.current.localSettings.data?.enabled ? localDirectorySchema.parse(current.localDirectory) : undefined;
+        if (directory) {
+          const api = localProjectApi(service.client, session.queryKey[3]);
+          directory = await resolveSelection(api, directory);
+          await api.preview(directory);
+        }
         const attempt = { ...prepareCreationAttempt(request, crypto.randomUUID()), ...(directory ? { localDirectory: directory } : {}) };
         requireDurable(value => value.attempt ? value : { ...value, attempt, updatedAt: Date.now() });
       }
@@ -345,8 +391,9 @@ export function useEntityCreation(options: EntityCreationOptions) {
       // Once sent, transport is immutable and reconciliation uses its own journal.
       current = session.creationDrafts.getSnapshot()[id]!;
       if (current.kind === 'project' && current.attempt?.phase === 'prepared' && !current.attempt.localDirectory && latest.current.localSettings.data?.enabled) {
-        const directory = localDirectorySchema.parse(current.localDirectory);
-        await localProjectApi(service.client, session.queryKey[3]).preview(directory);
+        const api = localProjectApi(service.client, session.queryKey[3]);
+        const directory = await resolveSelection(api, localDirectorySchema.parse(current.localDirectory));
+        await api.preview(directory);
         setAttempt(undefined, original => ({ ...original, localDirectory: directory }));
       }
       await sendNative();
@@ -399,6 +446,8 @@ export function useEntityCreation(options: EntityCreationOptions) {
     draft, draftId: id, busy, error, issues, sources, directory, sourceDrafts, canWrite, guard, recoveryDraftId,
     localSettings,
     changeDirectory,
+    suggestTitle,
+    recoverExisting,
     storageFailed: session.creationDrafts.persistenceError(),
     applyAppScenario: () => edit(current => {
       if (!scenarioFitsDraft(current) || !creationDraftEditable(current)) throw new Error('场景只可填入空白任务草稿，不覆盖已有标题、描述或已发送请求。');

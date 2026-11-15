@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { studioConfigSchema, studioNativeTemplateRequiresProvider, studioRequiredProviderToolFeature, studioActionRequiresAgentWorkspace, type StudioActionKind, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioDefinitionFilters, type StudioExecution, type StudioExecutionEvent, type StudioExecutionPort, type StudioPage, type StudioReceipt, type StudioValidation } from '../../contracts/src/automation-studio.ts';
+import { studioConfigSchema, studioNativeTemplateRequiresProvider, studioRequiredProviderToolFeature, type StudioActionKind, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioDefinitionFilters, type StudioExecution, type StudioExecutionEvent, type StudioExecutionPort, type StudioPage, type StudioReceipt, type StudioValidation } from '../../contracts/src/automation-studio.ts';
 import type { StudioWorkspaceExecutionPort } from '../../contracts/src/automation-studio.ts';
 import { validateNativeTemplateArguments } from '../../automation-resources/native-template-arguments.ts'
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema } from '../../contracts/src/automation-pm.ts';
@@ -16,6 +16,7 @@ import { createAutomationIntegrationsService } from './automation-integrations.t
 import { validatePmAutomationScope } from './automation-pm.ts';
 import type { AutomationDefinitionResolver } from './automation-integrations-definitions.ts';
 import { automationSnapshot, authorizeAutomationProject } from './automation-report.ts';
+import type { SqlExecutor } from './ports.ts';
 export { enqueueAutomationStudioEvent } from './automation-studio-store.ts';
 
 type ReceiptRow = { request_hash: string; project_ids: string[]; http_status: number; result: unknown };
@@ -33,14 +34,15 @@ export interface AutomationStudioService {
   remove(actor: Actor, workspaceId: string, id: string, input: Revision): Promise<{ deleted: true }>;
   run(actor: Actor, workspaceId: string, id: string, input: Revision & { payload?: Record<string, unknown> }): Promise<StudioExecution>;
   dispatchTest(actor: Actor, workspaceId: string, id: string, input: Revision & { payload?: Record<string, unknown> }): Promise<StudioExecution>;
-  executions(actor: Actor, workspaceId: string, definitionId?: string, cursor?: string): Promise<StudioPage<StudioExecution>>;
+  executions(actor: Actor, workspaceId: string, definitionId?: string, cursor?: string, projectId?: string): Promise<StudioPage<StudioExecution>>;
   execution(actor: Actor, workspaceId: string, id: string): Promise<StudioExecution>;
   logs(actor: Actor, workspaceId: string, id: string, cursor?: string): Promise<StudioPage<StudioExecutionEvent>>;
   query(actor: Actor, workspaceId: string, id: string): Promise<StudioExecution>;
   cancel(actor: Actor, workspaceId: string, id: string, input: { requestId: string }): Promise<StudioExecution>;
   receipt(actor: Actor, workspaceId: string, requestId: string): Promise<StudioReceipt>;
+  inspectReceipt(actor: Actor, workspaceId: string, requestId: string): Promise<{ hash: string; projectIds: string[]; status: 'succeeded' | 'failed' | 'unknown' }>;
 }
-export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort; definitionResolver?: AutomationDefinitionResolver; workspaceExecution?: StudioWorkspaceExecutionPort }): AutomationStudioService {
+export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort; definitionResolver?: AutomationDefinitionResolver; workspaceExecution?: StudioWorkspaceExecutionPort; checkAuthorization?: (sql: SqlExecutor) => Promise<void> }): AutomationStudioService {
   const integrations = createAutomationIntegrationsService(options);
   async function scoped<T>(actor: Actor, workspaceId: string, operation: (sql: PoolClient) => Promise<T>): Promise<T> {
     const sql = await options.database().connect();
@@ -48,6 +50,7 @@ export function createAutomationStudioService(options: { database: () => Pool; c
       await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId);
       const member = await getMembership(sql, actor, workspaceId);
       if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
+      await options.checkAuthorization?.(sql);
       const result = await operation(sql); await sql.query('COMMIT'); return result;
     } catch (error) { await sql.query('ROLLBACK'); throw error; } finally { sql.release(); }
   }
@@ -82,9 +85,9 @@ export function createAutomationStudioService(options: { database: () => Pool; c
           return definitionRow(sql, actor, workspaceId, input.id);
         });
         const dispatch = input.kind === 'run' || input.kind === 'test';
-        if (current && (dispatch ? studioRequiredProviderToolFeature(current.config) !== null || studioActionRequiresAgentWorkspace(current.config.action) || current.config.action.executionSelection !== undefined : input.kind === 'status' || current.status === 'enabled')) {
+        if (current && (dispatch || input.kind === 'status' || current.status === 'enabled')) {
           const validation = await service.validate(actor, workspaceId, input.kind === 'update' ? input.config : current.config);
-          const issues = dispatch ? validation.issues.filter(issue => issue.code === 'provider_tool_protocol_unavailable' || issue.path === 'action.executionSelection') : validation.issues;
+          const issues = dispatch ? validation.issues.filter(issue => issue.code === 'runtime_unavailable' || issue.code === 'provider_unavailable' || issue.code === 'provider_tool_protocol_unavailable' || issue.path === 'action.executionSelection') : validation.issues;
           if (issues.length) preflightError = new DomainError('automation_configuration_unavailable', issues.map(issue => `${issue.path}: ${issue.message}`).join('; '), 409);
         }
       } catch (error) { if (!(error instanceof DomainError)) throw error; preflightError = error; }
@@ -216,10 +219,26 @@ export function createAutomationStudioService(options: { database: () => Pool; c
     remove: (actor: Actor, workspaceId: string, id: string, input: Revision) => mutate(actor, workspaceId, { ...input, kind: 'remove', id }) as Promise<{ deleted: true }>,
     run: (actor: Actor, workspaceId: string, id: string, input: Revision & { payload?: Record<string, unknown> }) => mutate(actor, workspaceId, { ...input, kind: 'run', id }) as Promise<StudioExecution>,
     dispatchTest: (actor: Actor, workspaceId: string, id: string, input: Revision & { payload?: Record<string, unknown> }) => mutate(actor, workspaceId, { ...input, kind: 'test', id }) as Promise<StudioExecution>,
-    executions: (actor: Actor, workspaceId: string, definitionId?: string, cursor?: string): Promise<StudioPage<StudioExecution>> => scoped(actor, workspaceId, async sql => {
-      const rows = (await sql.query<StudioExecutionRow>('SELECT * FROM automation_studio_executions e WHERE workspace_id=$1 AND actor_id=$2 AND ($3::uuid IS NULL OR definition_id=$3) AND ($4::uuid IS NULL OR (e.created_at,e.id)<(SELECT c.created_at,c.id FROM automation_studio_executions c WHERE c.id=$4 AND c.workspace_id=$1 AND c.actor_id=$2)) ORDER BY created_at DESC,id DESC LIMIT 51', [workspaceId, actor.id, definitionId ?? null, cursor ?? null])).rows;
-      const items: StudioExecution[] = []; for (const row of rows.slice(0,50)) { try { await studioAuthorize(sql, options.core, actor, workspaceId, row.project_id); items.push(studioExecutionDto(row)); } catch (error) { if (!(error instanceof DomainError) || ![403,404].includes(error.status)) throw error; } }
-      return { items, nextCursor: rows.length > 50 ? rows[49]!.id : null };
+    executions: (actor: Actor, workspaceId: string, definitionId?: string, cursor?: string, projectId?: string): Promise<StudioPage<StudioExecution>> => scoped(actor, workspaceId, async sql => {
+      const projects = projectId === undefined
+        ? (await sql.query<{ project_id: string }>('SELECT DISTINCT project_id FROM automation_studio_executions WHERE workspace_id=$1 AND actor_id=$2 AND ($3::uuid IS NULL OR definition_id=$3)', [workspaceId, actor.id, definitionId ?? null])).rows.map(row => row.project_id)
+        : [projectId];
+      if (!projects.length) return { items: [], nextCursor: null };
+      const snapshot = await automationSnapshot(options.core, workspaceId), authorizedProjects: string[] = [];
+      for (const candidate of projects) {
+        try { await authorizeAutomationProject(sql, actor, workspaceId, candidate, snapshot); authorizedProjects.push(candidate); }
+        catch (error) { if (projectId !== undefined || !(error instanceof DomainError) || ![403, 404].includes(error.status)) throw error; }
+      }
+      const rows = (await sql.query<StudioExecutionRow>(`
+        WITH visible AS (
+          SELECT * FROM automation_studio_executions
+          WHERE workspace_id=$1 AND actor_id=$2 AND ($3::uuid IS NULL OR definition_id=$3) AND project_id=ANY($5::text[])
+        )
+        SELECT * FROM visible e
+        WHERE $4::uuid IS NULL OR (e.created_at,e.id)<(SELECT c.created_at,c.id FROM visible c WHERE c.id=$4)
+        ORDER BY created_at DESC,id DESC LIMIT 51
+      `, [workspaceId, actor.id, definitionId ?? null, cursor ?? null, authorizedProjects])).rows;
+      return { items: rows.slice(0, 50).map(studioExecutionDto), nextCursor: rows.length > 50 ? rows[49]!.id : null };
     }),
     execution: (actor: Actor, workspaceId: string, id: string): Promise<StudioExecution> => scoped(actor, workspaceId, async sql => studioExecutionDto(await executionRow(sql, actor, workspaceId, id))),
     logs: (actor: Actor, workspaceId: string, id: string, cursor?: string): Promise<StudioPage<StudioExecutionEvent>> => scoped(actor, workspaceId, async sql => {
@@ -229,6 +248,12 @@ export function createAutomationStudioService(options: { database: () => Pool; c
     }),
     async query(actor: Actor, workspaceId: string, id: string): Promise<StudioExecution> { await scoped(actor, workspaceId, async sql => { const row = await executionRow(sql, actor, workspaceId, id); await studioAuthorize(sql, options.core, actor, workspaceId, row.project_id, true, false); }); await reconcileStudioExecution(options.database(), options.core, options.runtime, id); return service.execution(actor, workspaceId, id); },
     cancel: (actor: Actor, workspaceId: string, id: string, input: { requestId: string }) => mutate(actor, workspaceId, { ...input, kind: 'cancel', id }) as Promise<StudioExecution>,
+    inspectReceipt: (actor: Actor, workspaceId: string, requestId: string) => scoped(actor, workspaceId, async sql => {
+      const row = (await sql.query<ReceiptRow>('SELECT * FROM automation_studio_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0];
+      if (!row) throw new DomainError('not_found_or_forbidden', 'Studio receipt is not accessible', 404);
+      await receiptReadable(sql, actor, workspaceId, row);
+      return { hash: row.request_hash, projectIds: row.project_ids, status: row.http_status < 400 ? 'succeeded' as const : row.http_status >= 500 ? 'unknown' as const : 'failed' as const };
+    }),
     receipt: (actor: Actor, workspaceId: string, requestId: string): Promise<StudioReceipt> => scoped(actor, workspaceId, async sql => { const row = (await sql.query<ReceiptRow>('SELECT * FROM automation_studio_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0]; if (!row) throw new DomainError('not_found_or_forbidden', 'Studio receipt is not accessible', 404); await receiptReadable(sql, actor, workspaceId, row); return { requestId, result: row.result, httpStatus: row.http_status }; }),
   };
   return { ...service, get: service.definition };

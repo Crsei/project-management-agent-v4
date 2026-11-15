@@ -20,9 +20,11 @@ import { taskCommentsCommands } from './task-comments.ts';
 import { notificationCommands } from './notifications.ts';
 import { createWebhookCommands } from './webhooks.ts';
 import type { WebhookConfig } from '../../infrastructure/src/webhook-config.ts';
+import { peopleCommands } from './people.ts';
+import { memberLifecycleCommands } from './member-lifecycle.ts';
 
 export function createRegistry(blobs: BlobStore, invitationMail?: InvitationMailConfig, validateInvitationProjects?: InvitationProjectValidator, webhooks?: WebhookConfig): CommandRegistry {
-  const registries = [planningCommands, intentCommands, accessCommands, createDeliveryCommands(blobs), dashboardPersonalCommands, dashboardTimeCommands, dashboardSprintsCommands, dashboardPortfolioCommands, dashboardPlanningCommands, projectExtrasCommands(blobs), projectDirectoryCommands, memberDirectoryCommands, createInvitationCommands(invitationMail, validateInvitationProjects), teamWorkloadCommands, workspaceIdentityCommands, taskCommentsCommands, notificationCommands, createWebhookCommands(webhooks, validateInvitationProjects)];
+  const registries = [planningCommands, intentCommands, accessCommands, createDeliveryCommands(blobs), dashboardPersonalCommands, dashboardTimeCommands, dashboardSprintsCommands, dashboardPortfolioCommands, dashboardPlanningCommands, projectExtrasCommands(blobs), projectDirectoryCommands, peopleCommands, memberLifecycleCommands, memberDirectoryCommands, createInvitationCommands(invitationMail, validateInvitationProjects), teamWorkloadCommands, workspaceIdentityCommands, taskCommentsCommands, notificationCommands, createWebhookCommands(webhooks, validateInvitationProjects)];
   const result: CommandRegistry = {};
   for (const entries of registries) {
     for (const [name, definition] of Object.entries(entries)) {

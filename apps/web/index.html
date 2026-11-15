@@ -3,12 +3,43 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="/dovspace.svg" />
+    <link rel="icon" href="/favicon.ico?v=20261115" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/dovspace.svg?v=20261115" />
     <title>Dovspace</title>
     <meta name="description" content="Dovspace · 项目管理与 Agent 协作空间" />
+    <style>
+      #dovspace-boot { position: fixed; inset: 0; z-index: 10000; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; overflow: auto; padding: 32px; background: #fafafa; color: #202124; font: 14px/1.6 system-ui, sans-serif; text-align: center; color-scheme: light; }
+      #dovspace-boot .boot-brand { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 900; letter-spacing: -0.055em; }
+      #dovspace-boot img { display: block; flex-shrink: 0; }
+      #dovspace-boot p { max-width: 480px; margin: 0; }
+      #dovspace-boot .boot-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+      #dovspace-boot :is(button, a) { border: 1px solid currentColor; border-radius: 6px; background: transparent; padding: 8px 14px; color: inherit; font: inherit; text-decoration: none; cursor: pointer; }
+      #dovspace-boot :is(button, a):focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+      #dovspace-boot [hidden] { display: none; }
+      #dovspace-boot[data-loading] img { animation: dovspace-boot-breathe 2s ease-in-out infinite; }
+      @keyframes dovspace-boot-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }
+      @media (prefers-color-scheme: dark) { #dovspace-boot { background: #171717; color: #f5f5f5; color-scheme: dark; } }
+      #dovspace-boot[data-theme="light"] { background: #fafafa; color: #202124; color-scheme: light; }
+      #dovspace-boot[data-theme="dark"] { background: #171717; color: #f5f5f5; color-scheme: dark; }
+      @media (prefers-reduced-motion: reduce) { #dovspace-boot[data-loading] img { animation: none; } }
+      #dovspace-boot[data-motion="reduce"] img { animation: none; }
+    </style>
   </head>
   <body>
+    <main id="dovspace-boot" aria-label="Dovspace">
+      <div class="boot-brand"><img src="/dovspace.svg?v=20261115" width="36" height="36" alt="" /><span>Dovspace</span></div>
+      <p id="dovspace-boot-status" role="status">正在加载应用…</p>
+      <div id="dovspace-boot-actions" class="boot-actions">
+        <a id="dovspace-boot-reload" href="">重新加载</a>
+        <a id="dovspace-boot-home" href="/pm">返回项目管理</a>
+      </div>
+      <noscript>
+        <style>#dovspace-boot-status { display: none; }</style>
+        <p>此应用需要 JavaScript。请启用后重新加载。<br /><span lang="en">JavaScript is required. Enable it and reload this page.</span></p>
+      </noscript>
+    </main>
     <div id="root"></div>
+    <script src="/dovspace-boot.js?v=20261115"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

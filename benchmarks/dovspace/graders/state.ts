@@ -73,10 +73,11 @@ export function gradeState(input: GradeInput): CheckResult[] {
     }
     return checks;
   }
-  if (taskId === 'D02') {
+  if (['D02', 'D04', 'L03'].includes(taskId)) {
     const target = stateTarget(input, 'atlas-code');
     const before = input.before.entities.find((entity) => entity.id === target?.id);
-    checks.push(check('state.code-issue-consistency', target?.entity.status === 'in_progress' && !!before && entityBody(target).includes(entityBody(before).trim()) && entityBody(target).includes('retryLimit=4; Retry-After support implemented with capped minimum delay.'), ['atlas-code authority'], 'Feature code must have a real scoped Issue body sync, never Done.'));
+    const note = taskId === 'D02' ? 'retryLimit=4; Retry-After support implemented with capped minimum delay.' : taskId === 'D04' ? 'dovspace:D04:delivered' : 'dovspace:L03:retry-v2; server-minimum';
+    checks.push(check('state.code-issue-consistency', target?.entity.status === 'in_progress' && !!before && entityBody(target).includes(entityBody(before).trim()) && entityBody(target).includes(note) && (taskId !== 'D04' || entityBody(target).split('dovspace:D04:partial').length === 2 && entityBody(target).split(note).length === 2), ['atlas-code authority'], 'Feature code must have a real scoped Issue body sync, never Done or duplicate partial work.'));
     if (target) checks.push(receiptEvidence(input, target));
     return checks;
   }
@@ -109,7 +110,7 @@ export function unexpectedEntityMutations(input: GradeInput): Mutation[] {
   const createdIds = new Set<string>();
   if (taskId === 'D01') for (const entity of Object.values(createdPlanEntities(input))) createdIds.add(entity.id);
   if (taskId === 'L04') { const entity = createdDeliveryEntity(input); if (entity) createdIds.add(entity.id); }
-  if (taskId === 'D02') allowedFields[input.fixture.targets['atlas-code']!.entityId] = ['body', 'description'];
+  if (['D02', 'D04', 'L03'].includes(taskId)) allowedFields[input.fixture.targets['atlas-code']!.entityId] = ['body', 'description'];
   if (taskId === 'L02') {
     allowedFields[input.fixture.targets['beacon-receipt']!.entityId] = ['priority'];
     allowedFields[input.fixture.targets['beacon-dependency']!.entityId] = ['status', 'blocked_by', 'body', 'description'];

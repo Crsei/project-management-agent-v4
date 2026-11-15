@@ -18,7 +18,7 @@ import { writeInstallStamp } from "./install-stamp.mjs";
 
 const execute = promisify(execFile);
 export const repository = resolve(desktopRoot, "../..");
-const publicRoots = ["apps", "packages", "vendor", "scripts", "tests", "patches", "deploy", "docs", ".github", ".agents"];
+const publicRoots = ["apps", "packages", "plugins", "vendor", "scripts", "tests", "patches", "deploy", "docs", ".github", ".agents"];
 const publicFiles = ["README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "LICENSE.t3code", "THIRD_PARTY_NOTICES.md", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "turbo.json", ".node-version", ".gitattributes", ".gitignore", ".dockerignore", "eslint.config.mjs", "tsconfig.base.json", "tsconfig.backend.json", "tsconfig.check.json", "tsconfig.agent.json"];
 // Explicitly reviewed new public files, not an archive of every untracked file.
 const additions = [
@@ -68,8 +68,6 @@ const additions = [
   "apps/desktop/src/tests/updater-fixture.mjs",
   "scripts/desktop-release.mjs",
   "scripts/desktop-release.test.mjs",
-  "docs/reference/desktop-github-updates-plan.zh.md",
-  "apps/desktop/src/process-identity.mjs",
   "apps/desktop/src/lifecycle-cli.mjs",
   "apps/desktop/src/lifecycle-cli.test.mjs",
   "apps/desktop/src/lifecycle-fixtures.mjs",
@@ -89,18 +87,31 @@ const additions = [
   "apps/desktop/src/windows-private-state.test.mjs",
   "apps/desktop/assets/desktop-lifecycle.nsh",
   "apps/desktop/assets/desktop-maintenance.ps1",
-  "docs/reference/desktop-benchmark-cherry-studio.zh.md",
-  "docs/reference/desktop-benchmark-hermes-agent.zh.md",
-  "docs/reference/desktop-engineering-benchmark.zh.md",
-  "docs/reference/desktop-release-alignment-2026-11-08.zh.md",
-  "docs/reference/windows-build-runbook.zh.md",
+  "packages/skill-resources/catalog.ts",
+  "packages/skill-resources/catalog.test.mjs",
+  "packages/skill-resources/stage.mjs",
+  ".agents/skills/pm-collaboration-review/SKILL.md",
+  ".agents/skills/pm-collaboration-review/evals.json",
+  ".agents/skills/pm-automation-candidate-review/SKILL.md",
+  ".agents/skills/pm-automation-candidate-review/evals.json",
+  "packages/agent-contracts/src/bundled-skills.ts",
+  "apps/server/cc-switch-host/src/skills/bundled.ts",
+  "apps/server/agent/src/extensions/bundled-skills.test.ts",
+  "apps/server/cc-switch-host/tests/bundled-skills.test.ts",
+  "apps/web/src/lib/bundled-skills.ts",
+  "apps/web/src/lib/bundled-skills.test.ts",
+  "apps/web/src/components/bundled-skills-panel.tsx",
+  "apps/web/src/components/bundled-skills-panel.module.css",
+  "apps/web/src/features/pm/service/pm-onboarding.tsx",
+  "apps/web/src/features/pm/service/pm-onboarding-ai.tsx",
 ];
 const generated = new Set(["node_modules", "dist", "target", ".git", ".local", ".cache", ".runtime", ".ref", ".omp", ".tmp", ".astro", ".vite", "releases", "release", "test-results", "playwright-report", "storybook-static", "__pycache__"]);
 export function publicSourcePath(path) {
   if (typeof path !== "string" || !path || path.includes("\\") || path.includes(":") || path.includes("\0")) return false;
   const parts = path.split("/");
   if (parts.some((part) => !part || part === "." || part === ".." || generated.has(part) || part.toLowerCase().startsWith(".env") || [".npmrc", ".pnpmfile.cjs", "credentials.json", ".credentials", ".token", "token", "id_rsa", "id_ed25519"].includes(part) || /\.(?:p12|pfx|pem|key)$/i.test(part))) return false;
-  if (path === "docs/implementation" || path.startsWith("docs/implementation/")) return false;
+  if (["docs/agent-source", "docs/implementation", "docs/reference"].some(root => path === root || path.startsWith(`${root}/`))) return false;
+  if (path === "benchmarks/dovspace/PLAN.md" || path === "docs/frontend-design-adoption.md") return false;
   return publicFiles.includes(path) || publicRoots.includes(parts[0]);
 }
 export const contentDigest = (files) => createHash("sha256").update(JSON.stringify(files)).digest("hex");

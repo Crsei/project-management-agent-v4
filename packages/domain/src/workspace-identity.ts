@@ -12,4 +12,16 @@ export type WorkspaceIdentity = {
   version: number;
   updatedAt: string;
 };
-export type UpdateWorkspaceIdentityPayload = Pick<WorkspaceIdentity, 'name' | 'icon' | 'color'>;
+export type WorkspaceOrganization = {
+  workspaceId: string;
+  taxId: string | null;
+  businessAddress: string | null;
+  /** Shared with presentation identity; organization edits also advance it. */
+  version: number;
+  updatedAt: string;
+};
+/** Organization fields are optional so existing identity editors do not clear them. */
+export type UpdateWorkspaceIdentityPayload = Pick<WorkspaceIdentity, 'name' | 'icon' | 'color'> & {
+  taxId?: string | null;
+  businessAddress?: string | null;
+};

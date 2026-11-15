@@ -513,8 +513,8 @@ async function dispatch(context: CoreCommandContext, idempotencyKey?: string): P
         if (!parsedDirectory.success) throw new DomainError('local_project_directory_required', 'Choose a trusted local project directory before creating a project', 400);
         const directory = parsedDirectory.data;
         if (!context.sql) throw new DomainError('local_project_binding_missing', 'Local initialization requires the authorization transaction', 503);
-        const targetRoot = directory.mode === 'existing' ? path.resolve(directory.path) : path.resolve(directory.parentPath, directory.folderName);
-        await assertLocalProjectTargetAvailable(context.sql, workspace.root, targetRoot, key);
+        const selected = context.recoveringLocalProject ? resolveLocalRecoveryDirectory(context.localProjects, directory) : resolveLocalDirectory(context.localProjects, directory);
+        await assertLocalProjectTargetAvailable(context.sql, workspace.root, selected.root, key);
         const record = await initializeLocalProject(workspace, context.localProjects, scope.workspaceId, input, key, directory, mutationGuard, undefined, context.recoveringLocalProject);
         const mount = workspace.projectLocation(record.id);
         if (!mount || !context.bindLocalProject || !context.sql) throw new DomainError('local_project_binding_missing', 'Project attachment binding is unavailable', 503);
@@ -654,13 +654,14 @@ async function dispatch(context: CoreCommandContext, idempotencyKey?: string): P
       const changes: Record<string, unknown> = {};
       if ('name' in payload) changes.title = requiredText(payload.name, 'name');
       if ('targetDate' in payload) changes.due = assertCalendarDate(payload.targetDate);
+      if ('ownerId' in payload) changes.owner = typeof payload.ownerId === 'string' && payload.ownerId ? payload.ownerId : null;
       if (Array.isArray(payload.criteria)) {
         const titled = Object.keys(changes).length ? patchMarkdown(record.raw, changes, workspace.configuration().config) : record.raw;
         const raw = replaceBody(titled, workItemBody('', asStringArray(payload.criteria).map(text => ({ text }))));
-        return coreRecordToEntity(scope.workspaceId, await workspace.save(record.id, raw, record.revision));
+        return coreRecordToEntity(scope.workspaceId, await workspace.save(record.id, raw, record.revision, mutationGuard));
       }
       if (!Object.keys(changes).length) return coreRecordToEntity(scope.workspaceId, record);
-      return coreRecordToEntity(scope.workspaceId, await workspace.patch(record.id, changes, record.revision));
+      return coreRecordToEntity(scope.workspaceId, await workspace.patch(record.id, changes, record.revision, mutationGuard));
     }
     case 'AssignMilestone': {
       authorize(scope, 'planning.edit');
@@ -788,7 +789,12 @@ export async function executeCoreCommand(context: CoreCommandContext, idempotenc
         mutationGuard: async (current, after, batch) => {
           if (current) scope.entity(current);
           if (!isCreate && current && current.id === context.command.targetId) validateTarget(current, scope);
-          if ((context.localProjects?.enabled || context.command.commandType === 'DuplicateProject') && after.entity === 'project' && typeof after.owner === 'string') await requireTaskAssignee(sql, scope.workspaceId, after.id, after.owner);
+          if ((after.entity === 'project' || after.entity === 'milestone') && typeof after.owner === 'string'
+            && (current?.entity.owner !== after.owner || context.localProjects?.enabled || context.command.commandType === 'DuplicateProject')) {
+            const ownerProject = after.entity === 'project' ? after.id : after.project;
+            if (typeof ownerProject !== 'string') throw new DomainError('project_required', 'Owner responsibility requires a project', 409);
+            await requireTaskAssignee(sql, scope.workspaceId, ownerProject, after.owner);
+          }
           await assertCoreTaskMutation({
             get: id => batch?.find(record => record.id === id) ?? context.workspace.get(id),
             configuration: context.workspace.configuration().config,

@@ -17,16 +17,19 @@ async function server(t, handler) {
   return `http://127.0.0.1:${mock.address().port}`;
 }
 
-test("first-run status requires the strict invite-only contract", async t => {
-  let valid = true;
+test("first-run status accepts open signup after initialization and rejects unknown policy", async t => {
+  let state = { initialized: false, setupAllowed: true, registrationMode: "invite_only" };
   const origin = await server(t, ({ response }) => {
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify(valid
-      ? { initialized: false, setupAllowed: true, registrationMode: "invite_only" }
-      : { initialized: false, setupAllowed: true, registrationMode: "public" }));
+    response.end(JSON.stringify(state));
   });
-  assert.deepEqual(await readSetupStatus(origin), { initialized: false, setupAllowed: true, registrationMode: "invite_only" });
-  valid = false;
+  assert.deepEqual(await readSetupStatus(origin), state);
+  state = { initialized: true, setupAllowed: false, registrationMode: "open" };
+  const initialized = await readSetupStatus(origin);
+  assert.equal(initialized.initialized, true);
+  assert.equal(initialized.setupAllowed, false);
+  assert.equal(initialized.registrationMode, "open");
+  state = { initialized: false, setupAllowed: true, registrationMode: "public" };
   await assert.rejects(readSetupStatus(origin), /invalid/);
 });
 

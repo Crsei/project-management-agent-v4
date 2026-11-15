@@ -20,9 +20,11 @@ import { withCreationLock } from '../markdown/creation-store';
 import { usePmService } from './pm-service';
 import { useText } from './pm-ui';
 import { decodeWorkspaceCreationDraft, prepareWorkspaceCreation, runWorkspaceCreation, workspaceCreationStorageKey, type WorkspaceCreationDraft } from './workspace-creation-model';
+import { useOnboarding } from './pm-onboarding-state';
 
 export function PmWorkspaceCreate() {
   const service = usePmService();
+  const onboarding = useOnboarding();
   const t = useText();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -72,7 +74,7 @@ export function PmWorkspaceCreate() {
 
   if (!service.actor) return null;
 
-  const submissionBlocked = busy || storageFailed || service.loading || initializationPending;
+  const submissionBlocked = busy || storageFailed || service.loading || initializationPending || onboarding.isPending || !!onboarding.error || onboarding.busy;
   const changeOpen = (next: boolean) => {
     if (!next && busy) return;
     setOpen(next);
@@ -105,7 +107,15 @@ export function PmWorkspaceCreate() {
           localStorage.removeItem(storageKey);
           setDraft(null);
           setOpen(false);
-          navigate(`/pm/${encodeURIComponent(settled.workspaceId)}/${startPage}`);
+          if (!onboarding.data) {
+            navigate('/pm?pick=1');
+          } else if (!onboarding.data.completedAt) {
+            const next = await onboarding.update('select-workspace', settled.workspaceId);
+            if (!isCurrent()) return;
+            navigate(next ? `/pm/${encodeURIComponent(settled.workspaceId)}/onboarding` : '/pm?pick=1');
+          } else {
+            navigate(`/pm/${encodeURIComponent(settled.workspaceId)}/${startPage}`);
+          }
         }
       });
     } catch (cause) { if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause)); }

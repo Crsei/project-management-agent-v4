@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AlertTriangle, Braces, CalendarDays, ChevronDown, CircleHelp, Columns3, FileText, Folder, GitBranch, List, ListFilter, LoaderCircle, Network, PanelLeft, Plus, Save, Search, Settings2, Table2, X } from 'lucide-react';
+import { AlertTriangle, Braces, CalendarDays, ChevronDown, CircleHelp, Columns3, FileText, Folder, GitBranch, List, ListFilter, Network, PanelLeft, Plus, Save, Search, Settings2, Table2, X } from 'lucide-react';
+import { DovspaceLoading } from '@/components/dovspace-brand';
 import { entityDefinitions, entityKinds, workflowFor, type EntityKind, type FileRecord, type ProtocolConfiguration, type SavedView, type ViewConfig } from '@pm-schema';
 import { PMView, documentKindLabels, priorities, type ArchiveFilter } from '@pm-views';
 import { useWorkspaceController, type CollectionLayout, type ControllerOptions, type Preferences } from './controller';
@@ -11,7 +12,8 @@ import { WorkspaceDialogs } from './WorkspaceDialogs';
 import { TaskCollectionView } from './TaskCollectionView';
 import TaskCollectionControls from './TaskCollectionControls';
 import type { TaskScope } from './task-collection-model';
-import { CommandNotice } from '../service/pm-ui';
+import { allowed, CommandNotice } from '../service/pm-ui';
+import { usePmService } from '../service/pm-service';
 import personalStyles from './task-personal-chrome.module.css';
 import { DocumentSources, useDocumentSourceCatalog } from './DocumentSources';
 
@@ -71,6 +73,12 @@ const scopeLabels: Record<TaskScope, { en: string; zh: string }> = { all: { en: 
 export default function Workspace(props: WorkspaceProps) {
   const c = useWorkspaceController(props);
   const { en, mode } = props;
+  const { workspace } = usePmService();
+  const workspaceScope = workspace?.projectIds === null;
+  const canConfigure = props.canWrite && allowed(workspace, 'planning.edit');
+  const canMigrate = props.canLifecycle && allowed(workspace, 'planning.lifecycle');
+  const settingsSnapshotReady = c.query.isSuccess && !!c.query.data;
+  const settingsWriteBlocked = !settingsSnapshotReady || c.query.isFetching || c.writesBlocked || !!c.busy;
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [advancedSplit, setAdvancedSplit] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -88,6 +96,7 @@ export default function Workspace(props: WorkspaceProps) {
   const [graphToggleTarget, setGraphToggleTarget] = useState<HTMLElement | null>(null);
   const [, setDetail] = useDetailState();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const collectionSearchRef = useRef<HTMLInputElement>(null);
   const restoredContext = useRef(false);
   useEffect(() => {
     if (mode === 'collection' && props.collectionContext && !restoredContext.current) {
@@ -102,14 +111,29 @@ export default function Workspace(props: WorkspaceProps) {
   useEffect(() => {
     if (advancedSplit && c.selectedId) setDetail({ tab: 'source', entityId: c.selectedId });
   }, [advancedSplit, c.selectedId, setDetail]);
+  useEffect(() => {
+    if (mode !== 'collection' || props.taskContext) return;
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.composedPath()[0] ?? event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="searchbox"]')) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]')) return;
+      const input = collectionSearchRef.current;
+      if (!input?.isConnected || !input.getClientRects().length) return;
+      event.preventDefault();
+      input.focus();
+    };
+    window.addEventListener('keydown', focusSearch);
+    return () => window.removeEventListener('keydown', focusSearch);
+  }, [mode, props.taskContext]);
   const openingDocument = mode !== 'settings' && c.selected?.entity.entity === 'document' && !c.unsupported && (!props.projectId || c.selected.entity.project === props.projectId);
   useEffect(() => {
     if (openingDocument) props.onOpenDocument({ kind: 'native', id: c.selectedId }, { replace: true });
   }, [openingDocument, c.selectedId, props.onOpenDocument]);
   if (c.accessError || (c.query.isError && !c.query.data)) return <div className="loading-screen" role="alert"><AlertTriangle size={28} /><h2>{en ? 'Workspace unavailable' : '工作区不可用'}</h2><p>{(c.accessError || c.query.error)?.message}</p><button className="primary-button" onClick={() => void c.refresh()}>{en ? 'Retry connection' : '重试连接'}</button></div>;
-  if (c.query.isPending) return <div className="loading-screen" role="status"><LoaderCircle size={24} className="spin" /><p>{en ? 'Loading workspace…' : '正在加载工作区…'}</p></div>;
+  if (c.query.isPending) return <div className="loading-screen"><DovspaceLoading message={en ? 'Loading workspace…' : '正在加载工作区…'} /></div>;
   if (props.projectId && c.selectedId && (c.unsupported || !c.selected || (c.selected.entity.entity === 'project' ? c.selected.id : c.selected.entity.project) !== props.projectId)) return <section className="loading-screen" role="alert"><AlertTriangle size={28} /><h2>{en ? 'Entity unavailable in this project' : '此项目中无法访问该对象'}</h2><p>{en ? 'The source does not belong to this project, is missing, or its project cannot be verified. No unrelated source is shown.' : '对象不属于此项目、已不可用，或无法确认其项目；不会展示其他项目的源码。'}</p><button className="secondary-button" onClick={props.onClose}>{en ? 'Back to project tasks' : '返回项目任务'}</button></section>;
-  if (openingDocument) return <div className="loading-screen" role="status"><LoaderCircle size={24} className="spin" /><p>{en ? 'Opening document workbench…' : '正在打开文档工作台…'}</p></div>;
+  if (openingDocument) return <div className="loading-screen"><DovspaceLoading message={en ? 'Opening document workbench…' : '正在打开文档工作台…'} /></div>;
   const explorerFiles = props.projectId ? c.files.filter(file => (file.entity.entity === 'project' ? file.id : file.entity.project) === props.projectId) : c.files;
   const selected = !!c.selectedId;
   const taskInspector = c.selected?.entity.entity === 'work_item' && !c.unsupported;
@@ -150,15 +174,36 @@ export default function Workspace(props: WorkspaceProps) {
     {(c.error || c.query.isError) && <div className="error-banner" role="alert"><AlertTriangle size={15} /><span>{c.error || c.query.error?.message}</span><button className="icon-button" aria-label={en ? 'Dismiss error' : '关闭错误'} onClick={() => { c.setError(''); c.setRequestDiagnostics([]); }}><X size={14} /></button></div>}
     <Diagnostics diagnostics={c.requestDiagnostics} />
     {(c.session.drafts.persistenceError() || c.session.creationDrafts.persistenceError()) && <p className="inline-error" role="alert">{en ? 'Browser draft recovery is unavailable. Current drafts remain in memory; keep this tab open until saved or recovery storage is restored.' : '浏览器草稿恢复存储不可用。当前草稿仍在内存中，请保留此标签页，直至保存或恢复浏览器存储。'}</p>}
-    {c.configurationInvalid && <div className="inline-error" role="alert">{en ? 'Configuration is invalid. Writes are blocked; local drafts are preserved.' : '配置无效，写入已暂停，本地草稿仍予以保留。'} <button data-testid="open-configuration" onClick={() => props.onSettings('configuration')}>{en ? 'Repair configuration' : '修复配置'}</button></div>}
-    {!c.canWrite && <p className="readonly-notice" role="status">{en ? 'Source editing is read only. Business actions follow their own permissions.' : '源码编辑为只读，业务操作遵循各自的权限。'}</p>}
+    {c.configurationInvalid && <div className="inline-error" role="alert">{en ? 'Configuration is invalid. Business source writes are blocked; local drafts are preserved. Authorized configuration repair and protocol migration remain available.' : '配置无效，业务源码写入已暂停，本地草稿仍保留。获授权的配置修复与协议迁移仍可使用。'} <button data-testid="open-configuration" onClick={() => props.onSettings('configuration')}>{en ? 'Repair configuration' : '修复配置'}</button></div>}
+    {mode !== 'settings' && !c.canWrite && <p className="readonly-notice" role="status">{en ? 'Source editing is read only. Business actions follow their own permissions.' : '源码编辑为只读，业务操作遵循各自的权限。'}</p>}
     {mode === 'settings' ? <section className="core-settings">
       <div className="collection-heading"><div><h1>{en ? 'Workspace settings' : '工作区设置'}</h1></div></div>
-      <div className="settings-tabs" role="tablist" aria-label={en ? 'Workspace settings sections' : '工作区设置分区'}>{(['configuration', 'migrations', 'diagnostics'] as const).map(section => <button key={section} role="tab" aria-selected={props.settingsSection === section} className={props.settingsSection === section ? 'active' : ''} data-testid={`open-${section}`} onClick={() => props.onSettings(section)}>{section === 'configuration' ? (en ? 'Workflows & fields' : '工作流与字段') : section === 'migrations' ? (en ? 'Migrations & backups' : '迁移与备份') : (en ? 'Diagnostics' : '诊断')}</button>)}</div>
+      <div className="settings-tabs" role="tablist" aria-label={en ? 'Workspace settings sections' : '工作区设置分区'}>{(['configuration', 'migrations', 'diagnostics'] as const).map(section => <button key={section} role="tab" aria-selected={props.settingsSection === section} className={props.settingsSection === section ? 'active' : ''} data-testid={`open-${section}`} onClick={() => props.onSettings(section)}>{section === 'configuration' ? (en ? 'Workflows & fields' : '工作流与字段') : section === 'migrations' ? (en ? 'Protocol migrations' : '协议迁移') : (en ? 'Diagnostics' : '诊断')}</button>)}</div>
       <div className="settings-body">
-        <div hidden={props.settingsSection !== 'configuration'}><fieldset disabled={!c.canWrite}><ConfigurationEditor configuration={c.configuration} revision={c.query.data?.configurationRevision || 'absent'} diagnostics={c.query.data?.configurationErrors || []} onSaved={() => void c.refresh()} onError={c.handleAccessError} /></fieldset></div>
-        <div hidden={props.settingsSection !== 'migrations'}><fieldset disabled={!c.canWrite}><MigrationEditor onChanged={() => void c.refresh()} onError={c.handleAccessError} /></fieldset></div>
-        <div hidden={props.settingsSection !== 'diagnostics'} className="diagnostics-page"><h2>{en ? 'Workspace source diagnostics' : '工作区源码诊断'}</h2><p className="muted">{en ? 'Warnings do not block saving. Invalid configuration, unknown protocols and revision conflicts retain their repair protections.' : '警告不会阻止保存。无效配置、未知协议和版本冲突始终受修复保护。'}</p><Diagnostics diagnostics={[...(c.query.data?.configurationErrors || []), ...(c.query.data?.errors || [])]} />{!c.query.data?.errors.length && !c.query.data?.configurationErrors.length && <p>{en ? 'No workspace diagnostics.' : '暂无工作区诊断。'}</p>}{c.files.filter(file => file.stale || file.diagnostics?.length).map(file => <button key={file.id} className="diagnostic-source" onClick={() => { setDetail({ tab: 'source', entityId: file.id }); c.select(file.id); }}><AlertTriangle size={14} />{file.id} · {file.path}</button>)}{c.unsupportedFiles.map(file => <button key={file.path} className="diagnostic-source" onClick={() => c.select(`source:${file.path}`)}><FileText size={14} />{file.path} · {en ? 'Read only' : '只读'}</button>)}<button className="secondary-button" onClick={() => void c.refresh()}>{en ? 'Refresh diagnostics' : '刷新诊断'}</button><h3>{en ? 'Synchronization' : '同步状态'}</h3><p>{c.connection} · {c.files.length + c.unsupportedFiles.length} {en ? 'source files' : '个源码文件'} · {c.draftIds.size} {en ? 'local drafts' : '个本地草稿'}</p>{c.activity.map((entry, index) => <p className="activity-entry" key={index}>{entry}</p>)}</div>
+        {c.writesBlocked && <p className="readonly-notice" role="status">{en ? 'A write is pending or its result is unknown. Configuration saves and migration previews, applies and restores are locked until the original request is reconciled. Drafts are retained.' : '有写入待确认或结果未知。在核对原请求前，配置保存与迁移预览、应用、恢复均已锁定；草稿仍保留。'}</p>}
+        {!settingsSnapshotReady && <p className="readonly-notice" role="status">{en ? 'A successful workspace snapshot is required before settings can be written or diagnostics can be declared clean.' : '须成功读取工作区快照后，才能写入设置或确认诊断无异常。'}</p>}
+        {settingsSnapshotReady && c.query.isFetching && <p className="readonly-notice" role="status">{en ? 'The workspace snapshot is refreshing. Configuration saves and migration writes are paused; editor drafts are retained.' : '正在刷新工作区快照，配置保存与迁移写入暂时暂停，编辑草稿仍保留。'}</p>}
+        <div hidden={props.settingsSection !== 'configuration'}>
+          {!canConfigure && <p className="readonly-notice" role="status">{!workspaceScope ? (en ? 'Read only: configuration is workspace-wide. Project-restricted members cannot save global workflows or fields.' : '只读：配置属于整个工作区，项目受限成员不能保存全局工作流或字段。') : (en ? 'Read only: saving workflows and fields requires planning.edit and enabled PM business writes.' : '只读：保存工作流与字段需要 planning.edit 能力，且 PM 业务写入须已启用。')}</p>}
+          <ConfigurationEditor configuration={c.configuration} revision={c.query.data?.configurationRevision || 'absent'} diagnostics={c.query.data?.configurationErrors || []} onSaved={() => void c.refresh()} onError={c.handleAccessError} en={en} disabled={!canConfigure || settingsWriteBlocked} />
+        </div>
+        <div hidden={props.settingsSection !== 'migrations'}>
+          {!canMigrate && <p className="readonly-notice" role="status">{!workspaceScope ? (en ? 'No migration access: migration history, previews, applies and restores require unrestricted workspace scope.' : '无迁移权限：迁移历史、预览、应用与恢复均要求不受项目限制的工作区范围。') : (en ? 'No migration access: history, previews, applies and restores require planning.lifecycle and enabled PM business writes. planning.edit alone does not grant migration access.' : '无迁移权限：历史、预览、应用与恢复需要 planning.lifecycle 能力，且 PM 业务写入须已启用；仅有 planning.edit 不授予迁移权限。')}</p>}
+          <MigrationEditor onChanged={() => void c.refresh()} onError={c.handleAccessError} en={en} active={props.settingsSection === 'migrations' && settingsSnapshotReady} authorized={canMigrate} disabled={!canMigrate || settingsWriteBlocked} />
+        </div>
+        <div hidden={props.settingsSection !== 'diagnostics'} className="diagnostics-page">
+          <h2>{en ? 'Workspace source diagnostics' : '工作区源码诊断'}</h2>
+          <p className="muted">{en ? 'Warnings do not block saving. Invalid configuration, unknown protocols and revision conflicts retain their repair protections.' : '警告不会阻止保存。无效配置、未知协议和版本冲突始终受修复保护。'}</p>
+          {!workspaceScope && <p className="readonly-notice" role="status">{en ? 'Only diagnostics within your authorized project scope are returned. This view cannot establish that the entire workspace is clean.' : '仅返回授权项目范围内的诊断，本页不能据此确认整个工作区无异常。'}</p>}
+          {(c.query.isError || c.query.isFetching) && <p role="status">{c.query.isError ? (en ? 'The latest workspace read failed. Any diagnostics below belong to the retained snapshot; a clean result is not confirmed.' : '最新工作区读取失败，下方如有诊断仅属于保留快照，不能确认当前无异常。') : (en ? 'Refreshing workspace diagnostics…' : '正在刷新工作区诊断…')}</p>}
+          <Diagnostics diagnostics={[...(c.query.data?.configurationErrors || []), ...(c.query.data?.errors || [])]} />
+          {settingsSnapshotReady && !c.query.isFetching && !c.query.data!.errors.length && !c.query.data!.configurationErrors.length && !c.files.some(file => file.stale || file.diagnostics?.length) && !c.unsupportedFiles.length && <p>{en ? 'No diagnostics in the loaded, authorized snapshot.' : '已读取的授权范围快照中暂无诊断。'}</p>}
+          {c.files.filter(file => file.stale || file.diagnostics?.length).map(file => <button key={file.id} className="diagnostic-source" onClick={() => { setDetail({ tab: 'source', entityId: file.id }); c.select(file.id); }}><AlertTriangle size={14} />{file.id} · {file.path}</button>)}
+          {c.unsupportedFiles.map(file => <button key={file.path} className="diagnostic-source" onClick={() => c.select(`source:${file.path}`)}><FileText size={14} />{file.path} · {en ? 'Read only' : '只读'}</button>)}
+          <button className="secondary-button" onClick={() => void c.refresh()}>{en ? 'Refresh diagnostics' : '刷新诊断'}</button>
+          <h3>{en ? 'Synchronization' : '同步状态'}</h3><p>{c.connection} · {c.files.length + c.unsupportedFiles.length} {en ? 'source files' : '个源码文件'} · {c.draftIds.size} {en ? 'local drafts' : '个本地草稿'}</p>
+          {c.activity.map((entry, index) => <p className="activity-entry" key={index}>{entry}</p>)}
+        </div>
       </div>
     </section> : mode === 'entity' ? <EntityDetail controller={c} en={en} fullPage onClose={props.onClose} renderBusiness={props.renderBusiness} /> : <>
       {c.writesBlocked && <><CommandNotice /><p className="readonly-notice" role="status">{en ? 'A write is pending or its result is unknown. Resolve its original native attempt or PM command receipt before another write.' : '有写入待确认或结果未知。请先核对原生创建请求或原 PM 命令收据，再进行其他写入。'}</p></>}
@@ -185,7 +230,7 @@ export default function Workspace(props: WorkspaceProps) {
               <option value="title">{en ? 'Document name' : '文档名称'}</option>
             </RadixSelect>
           </> : <><RadixSelect aria-label={props.projectId ? en ? 'Fixed project' : '固定项目' : en ? 'Project filter' : '项目筛选'} value={c.prefs.project} disabled={!!props.projectId} onChange={event => c.preference('project', event.target.value)}><option value="">{en ? 'All projects' : '全部项目'}</option>{c.prefs.project && !c.projects.some(file => file.id === c.prefs.project) && <option value={c.prefs.project}>{en ? 'Project unavailable' : '项目不可用'} · {c.prefs.project}</option>}{c.projects.map(file => <option key={file.id} value={file.id}>{file.entity.title}</option>)}</RadixSelect>{!props.projectId && c.prefs.project && <button className="text-button" type="button" onClick={() => c.preference('project', '')}>{en ? 'Clear project filter' : '清除项目筛选'}</button>}</>}
-          <label className="collection-search"><Search size={14} /><input aria-label={documentCollection ? (en ? 'Search documents' : '搜索文档') : 'Search work items'} value={c.search} onChange={event => c.setSearch(event.target.value)} placeholder={documentCollection ? (en ? 'Search documents…' : '搜索文档…') : (en ? 'Search entities…' : '搜索对象…')} /><kbd>/</kbd></label>
+          <label className="collection-search"><Search size={14} /><input ref={collectionSearchRef} type="search" aria-label={documentCollection ? (en ? 'Search documents' : '搜索文档') : (en ? 'Search entities' : '搜索对象')} value={c.search} onChange={event => c.setSearch(event.target.value)} placeholder={documentCollection ? (en ? 'Search documents…' : '搜索文档…') : (en ? 'Search entities…' : '搜索对象…')} /><kbd>/</kbd></label>
           {!documentCollection && <Popover open={filtersOpen} onOpenChange={setFiltersOpen}><PopoverTrigger render={<button type="button" className={`secondary-button ${filtersOpen ? 'active' : ''}`} data-testid="view-filters" aria-expanded={filtersOpen} />}><ListFilter size={14} aria-hidden="true" />{en ? 'Filters' : '筛选'}</PopoverTrigger><PopoverContent align="start" side="bottom" style={{ width: 'min(400px, calc(100vw - 2rem))' }}><FilterCard title={en ? 'Filters' : '筛选'} fields={filterFields} conditions={filterConditions} onChange={updateFilters} emptyHint={en ? 'No filters yet. Add an entity, priority or status condition.' : '暂无筛选条件。可添加对象类型、优先级或状态。'} addLabel={en ? 'Add' : '添加'} clearLabel={en ? 'Clear' : '清除'} whereLabel={en ? 'Where' : '条件'} andLabel={en ? 'and' : '且'} anyLabel={en ? 'Any' : '任意'} removeLabel={en ? 'Remove filter' : '移除筛选'} footer={<div style={{ display: 'grid', gap: 6, inlineSize: '100%' }}><label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-foreground)' }}>{en ? 'Sort' : '排序'}<RadixSelect aria-label="Sort items" value={c.prefs.sort} onChange={event => c.preference('sort', event.target.value)} style={{ flex: 1 }}>{sortFields.map(field => <option key={field}>{field}</option>)}</RadixSelect></label><label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted-foreground)' }}>{en ? 'Archive' : '归档'}<RadixSelect aria-label="Archive filter" data-testid="archive-filter" value={c.prefs.archived} onChange={event => c.preference('archived', event.target.value as ArchiveFilter)} style={{ flex: 1 }}><option value="exclude">{en ? 'Active objects' : '活动对象'}</option><option value="include">{en ? 'Include archived' : '包含归档'}</option><option value="only">{en ? 'Archived only' : '仅归档'}</option></RadixSelect></label>{!documentCollection && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button className="secondary-button" data-testid="save-view" onClick={() => { setFiltersOpen(false); c.setSaveViewOpen(true); }}><Save size={13} aria-hidden="true" />{en ? 'Edit / save view' : '编辑 / 保存视图'}</button><button className="text-button" onClick={() => { c.clearView(); props.onSavedView(''); }}>{en ? 'Clear query' : '清除查询'}</button></div>}</div>} /></PopoverContent></Popover>}
           {!documentCollection && <button className={`secondary-button ${advancedSplit ? 'active' : ''}`} aria-pressed={advancedSplit} onClick={() => { setAdvancedSplit(value => !value); if (!advancedSplit) setDetail({ tab: 'source' }); }}><Columns3 size={14} />{en ? 'Advanced split' : '高级分栏'}</button>}
         </div>

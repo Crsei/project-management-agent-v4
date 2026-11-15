@@ -1,11 +1,9 @@
 import {
   ComposerAddAttachment,
-  ComposerAttachments,
   UserMessageAttachments,
 } from "@agent/components/assistant-ui/elements/attachment.aui";
 import { MarkdownText } from "@agent/components/assistant-ui/elements/markdown-text";
 import {
-  ComposerQuotePreview,
   QuoteBlock,
   SelectionToolbar,
 } from "@agent/components/assistant-ui/elements/quote.aui";
@@ -15,14 +13,6 @@ import { ComposerTraitsPicker } from "@agent/components/assistant-ui/elements/co
 import { TooltipIconButton } from "@agent/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@agent/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@agent/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -38,10 +28,24 @@ import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
-import { setResponseStreamingMode, useResponseStreamingMode } from "@agent/src/chat/response-streaming";
 import { ComposerUsage } from "@agent/src/usage/ComposerUsage";
 import { consumeUsageLimitsCommand } from "@agent/src/usage/ComposerUsageModel";
 import { useComposerSuggestions } from "@agent/src/chat/composer-suggestions";
+import { RichComposerInput } from "@agent/src/chat/rich-composer";
+import { ComposerDraftActions } from "@agent/src/chat/composer-draft-actions";
+import { QueuedMessages, ThreadMessageActions } from "@agent/src/chat/message-actions";
+import { ComposerPendingRequests } from "@agent/src/chat/composer-pending-requests";
+import { ThreadHistoryMessage, ThreadHistoryNavigation } from "@agent/src/chat/history-navigation";
+import { MessageContextEditProvider, useMessageContextDraft } from "@agent/src/chat/message-context";
+import { turnContextSchema, type TurnContext } from "@agent-workspace/contracts/pm-references";
+import { workspaceClient } from "@agent/src/network";
+import { MessageContextDraftStatus } from "@agent/src/chat/context-presentation";
+import { usePmIssueWorkspace } from "@agent/src/pm/pm-issue-workspace";
+import { UserContextText } from "@agent/src/chat/user-context-text";
+import { getEditedContextReferences, getMessageContextItems, prepareMessageContextDraftSubmission, prepareMessageContextEditSubmission, subscribeMessageContext } from "@agent/src/chat/message-context-store";
+import { getExternalStoreMessages } from "@assistant-ui/core";
+import type { UIMessage } from "ai";
+import { canonicalContextAttachments, readContextAttachmentBindings } from "@agent/src/chat/context-attachments";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -71,8 +75,9 @@ import {
   PencilIcon,
   RefreshCwIcon,
   SquareIcon,
+  MessageSquareReplyIcon,
 } from "lucide-react";
-import { useRef, useState, type FC, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FC, type ReactElement, type ReactNode } from "react";
 import styles from "./composer-layout.module.css";
 
 
@@ -154,6 +159,7 @@ export const Thread: FC<ThreadProps> = (props) => {
         ["--composer-shadow" as string]: "var(--shadow-composer)",
       }}
     >
+      <ThreadHistoryNavigation />
       <ThreadPrimitive.Viewport
         autoScroll
         turnAnchor="top"
@@ -181,10 +187,10 @@ export const Thread: FC<ThreadProps> = (props) => {
           </div>}
 
           <div data-slot="aui_message-group" className="mb-16 flex flex-col gap-y-7 empty:hidden">
-            <ThreadPrimitive.Messages>{() => <ThreadMessage
+            <ThreadPrimitive.Messages>{() => <ThreadHistoryMessage><ThreadMessage
               providerInstanceId={props.providerInstanceId}
               actionsDisabled={!!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || history.status === "error" || historyMissing}
-            />}</ThreadPrimitive.Messages>
+            /></ThreadHistoryMessage>}</ThreadPrimitive.Messages>
           </div>
 
           <ThreadPrimitive.ViewportFooter
@@ -194,6 +200,10 @@ export const Thread: FC<ThreadProps> = (props) => {
             )}
           >
             <ThreadScrollToBottom />
+            <div className={styles.contextPanels}>
+              <ComposerPendingRequests />
+              {remoteId && <QueuedMessages key={remoteId} threadId={remoteId} />}
+            </div>
             <Composer {...props} historyBlocked={history.status === "error" || historyMissing} />
             {isEmpty && <AuiIf condition={(s) => s.composer.isEmpty}>
               <ThreadSuggestions />
@@ -212,14 +222,52 @@ const ThreadMessage: FC<{ providerInstanceId: string; actionsDisabled: boolean }
   const runtimeBlocked = useAuiState((s) => s.thread.isRunning || s.thread.isLoading || s.thread.isDisabled || s.thread.isSendDisabled || s.thread.voice !== undefined);
   const disabled = actionsDisabled || runtimeBlocked;
 
-  if (isEditing) return <EditComposer providerInstanceId={providerInstanceId} disabled={disabled} />;
+  if (isEditing) return <EditMessageContextBoundary><EditComposer providerInstanceId={providerInstanceId} disabled={disabled} /></EditMessageContextBoundary>;
   if (role === "user") return <UserMessage actionsDisabled={disabled} />;
   return <AssistantMessage actionsDisabled={disabled} />;
 };
 
+const EditMessageContextBoundary: FC<{ children: ReactNode }> = ({ children }) => {
+  const t = useAgentText();
+  const threadId = useAuiState(state => state.threadListItem.remoteId);
+  const messageId = useAuiState(state => state.message.id);
+  const [binding, setBinding] = useState<{ key: string; context?: TurnContext; error?: string }>();
+  const key = JSON.stringify([threadId, messageId]);
+  useEffect(() => {
+    if (!threadId) return;
+    const controller = new AbortController();
+    void workspaceClient.fetch(`/api/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/context`, { signal: controller.signal }).then(async response => {
+      if (response.status === 404) { if (!controller.signal.aborted) setBinding({ key }); return; }
+      if (!response.ok) throw new Error("Message context cannot be authorized.");
+      const body = await response.json() as { turnContext?: unknown; visibility?: string };
+      if (body.visibility !== "visible") throw new Error("Message context is missing or no longer accessible. The original draft is unchanged.");
+      const context = body.turnContext === undefined ? undefined : turnContextSchema.parse(body.turnContext);
+      if (context && (context.threadId !== threadId || context.messageId !== messageId || context.contextItems?.some(item => item.visibility !== "available"))) throw new Error("Message context is unavailable; editing cannot silently drop it.");
+      if (!controller.signal.aborted) setBinding({ key, context });
+    }).catch(cause => { if (!controller.signal.aborted) setBinding({ key, error: String(cause) }); });
+    return () => controller.abort();
+  }, [threadId, messageId, key]);
+  if (!threadId || binding?.key !== key) return <p role="status">{t("核验原消息上下文…", "Checking original message context…")}</p>;
+  if (binding.error) return <div role="alert" className="text-sm text-destructive">{binding.error}<ComposerPrimitive.Cancel asChild><Button variant="ghost">{t("取消编辑", "Cancel edit")}</Button></ComposerPrimitive.Cancel></div>;
+  return <MessageContextEditProvider threadId={threadId} messageId={messageId} items={binding.context?.contextItems ?? []} references={binding.context?.pmReferences ?? []}>{children}</MessageContextEditProvider>;
+};
+
+const ResponseReferenceAction: FC = () => {
+  const draft = useMessageContextDraft();
+  const threadId = useAuiState(state => state.threadListItem.remoteId);
+  const messageId = useAuiState(state => state.message.id);
+  const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
+  return <><TooltipIconButton type="button" tooltip="Reply to this response" disabled={!draft.available || !threadId || pending} onClick={() => {
+    if (!threadId) return;
+    setPending(true); setError(undefined);
+    void draft.add({ contextId: crypto.randomUUID(), kind: "response", source: { type: "response", threadId, messageId } }).catch(cause => { if (draft.isCurrent()) setError(String(cause)); }).finally(() => { if (draft.isCurrent()) setPending(false); });
+  }}><MessageSquareReplyIcon /></TooltipIconButton>{error && <span role="alert" className="text-xs text-destructive">{error}</span>}</>;
+};
+
+
 const ThreadScrollToBottom: FC = () => {
-  // DESIGN-PATTERNS「对话阅读」：新输出不把阅读位置拉回底部，改为显式入口。
-  // 该按钮仅在已上滚时可见（到底即 disabled:invisible），运行中额外显示 “New content” 文字（与界面其余英文串一致）。
+  const t = useAgentText();
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <button
@@ -229,9 +277,9 @@ const ThreadScrollToBottom: FC = () => {
       >
         <ArrowDownIcon className="size-3.5" />
         <AuiIf condition={(s) => s.thread.isRunning}>
-          <span>New content</span>
+          <span>{t("有新内容", "New content")}</span>
         </AuiIf>
-        <span className="sr-only">Scroll to bottom</span>
+        <span className="sr-only">{t("滚动到底部", "Scroll to bottom")}</span>
       </button>
     </ThreadPrimitive.ScrollToBottom>
   );
@@ -287,45 +335,51 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
   const t = useAgentText();
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
+  const threadId = useAuiState((state) => state.threads.mainThreadId);
+  const threadRunning = useAuiState((state) => state.thread.isRunning);
+  const quotePending = useAuiState(state => !!state.composer.quote);
+  const submitting = useAuiState(state => state.composer.submission !== undefined);
+  const contextDraft = useMessageContextDraft();
+  const pmWorkspace = usePmIssueWorkspace();
   const [limitsRequest, setLimitsRequest] = useState(0);
   const suggestions = useComposerSuggestions(props.providerInstanceId, !!props.disabled || props.historyBlocked);
   const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
-  const handleSendCommand = () => handleUsageCommand() || !suggestions.beforeSend();
+  const handleSendCommand = () => {
+    const composer = aui.composer.getState();
+    const thread = aui.thread.getState();
+    if (composer.submission !== undefined || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled) return true;
+    if (handleUsageCommand() || !suggestions.beforeSend()) return true;
+    prepareMessageContextDraftSubmission(threadId, composer.attachments);
+    return false;
+  };
+  const actionsBlocked = !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || suggestions.blocked || quotePending || contextDraft.blocked || submitting;
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col" onSubmit={(event) => {
-      if (handleSendCommand() || props.historyBlocked || suggestions.blocked) event.preventDefault();
+      if (actionsBlocked || threadRunning || handleSendCommand()) { event.preventDefault(); return; }
+      const composer = aui.composer.getState();
+      if (!composer.text.trim() && !composer.attachments.length && (contextDraft.items.length || pmWorkspace.references.length)) {
+        event.preventDefault();
+        const thread = aui.thread.getState();
+        if (!thread.isDisabled && !thread.isLoading && !thread.isSendDisabled) aui.thread.append({ role: "user", content: [{ type: "text", text: composer.text }] });
+      }
     }}>
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
           className="aui-composer-surface border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[var(--composer-shadow)] transition-[border-color] duration-[var(--motion-hover)] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
-          <ComposerQuotePreview />
-          <ComposerAttachments />
           {props.composerLeading}
           {suggestions.surface}
-          <ComposerPrimitive.Input
-            ref={suggestions.inputRef}
-            role="combobox"
-            {...suggestions.inputAria}
-            onChange={(event) => suggestions.onInput(event.currentTarget)}
-            onSelect={(event) => suggestions.onInput(event.currentTarget)}
-            onCompositionStart={suggestions.onCompositionStart}
-            onCompositionEnd={(event) => suggestions.onCompositionEnd(event.currentTarget)}
+          <RichComposerInput
+            suggestions={suggestions}
             placeholder={t("输入消息… 使用 @ 引用文件、$ 引用 Skill、/ 调用命令", "Type a message… use @ for files, $ for skills, / for commands")}
-            className="aui-composer-input placeholder:text-muted-foreground/60 max-h-[240px] min-h-[68px] w-full resize-none bg-transparent px-2.5 py-2 text-sm leading-5 outline-none"
-            rows={1}
-            autoFocus
-            aria-label={t("消息输入", "Message input")}
+            label={t("消息输入", "Message input")}
             submitMode={preferences.sendShortcut}
-            onKeyDown={(event) => {
-              if (suggestions.onKeyDown(event)) return;
-              // assistant-ui's steer shortcut sends directly instead of submitting the form.
-              if (event.key === "Enter" && event.shiftKey && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && (handleSendCommand() || props.historyBlocked || suggestions.blocked)) event.preventDefault();
-            }}
-            cancelOnEscape={false}
+            disabled={!!props.disabled}
+            beforeSend={() => actionsBlocked || threadRunning || handleSendCommand()}
           />
-          <ComposerAction {...props} historyBlocked={props.historyBlocked || suggestions.blocked} onUsageCommand={handleSendCommand} />
+          <ComposerDraftActions key={threadId} disabled={actionsBlocked} />
+          <ComposerAction {...props} historyBlocked={actionsBlocked || threadRunning} onUsageCommand={handleSendCommand} />
           <ComposerUsage providerInstanceId={props.providerInstanceId} limitsRequest={limitsRequest} onCloseLimits={() => setLimitsRequest(0)} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
@@ -338,9 +392,12 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
   const aui = useAui();
   const prompt = useAuiState((state) => state.composer.text);
   const { preferences } = useChatBrowserPreferences();
-  const responseMode = useResponseStreamingMode();
   const threadId = useAuiState((s) => s.threads.mainThreadId);
   const threadBusy = useAuiState((s) => s.thread.isRunning || s.thread.isLoading || s.threads.isLoading);
+  const contextDraft = useMessageContextDraft();
+  const pmWorkspace = usePmIssueWorkspace();
+  const emptyComposer = useAuiState(state => !state.composer.text.trim() && !state.composer.attachments.length && !state.composer.quote);
+  const contextOnly = emptyComposer && (contextDraft.items.length > 0 || pmWorkspace.references.length > 0);
   const selection = resolveProviderModelSelection(catalog.providers, providerInstanceId, model);
   const provider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : undefined;
@@ -376,18 +433,6 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
           catalogError={catalog.error}
           onRetry={onRetry}
         />}
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<button type="button" aria-label={t("更多输入选项", "More input options")} title={t("更多输入选项", "More input options")} className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground" />}>
-            <MoreHorizontalIcon aria-hidden="true" className="size-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" aria-label={t("更多输入选项", "More input options")} onKeyDown={(event) => event.stopPropagation()}>
-            <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground">{t("回复显示方式", "Response display")}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup aria-label={t("回复显示方式", "Response display")} value={responseMode}>
-              <DropdownMenuRadioItem value="paragraph" closeOnClick onSelect={() => setResponseStreamingMode("paragraph")}>{t("逐段显示", "Stream by paragraph")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="turn" closeOnClick onSelect={() => setResponseStreamingMode("turn")}>{t("整轮显示", "Show full turn")}</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
       <div className={styles.rightControls}>
         {composerActions}
@@ -396,13 +441,13 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>
               <TooltipIconButton
-                tooltip="Voice input"
+                tooltip={t("语音输入", "Voice input")}
                 side="bottom"
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
-                aria-label="Start voice input"
+                aria-label={t("开始语音输入", "Start voice input")}
               >
                 <MicIcon className="aui-composer-dictate-icon size-4" />
               </TooltipIconButton>
@@ -411,13 +456,13 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
           <AuiIf condition={(s) => s.composer.dictation != null}>
             <ComposerPrimitive.StopDictation asChild>
               <TooltipIconButton
-                tooltip="Stop dictation"
+                tooltip={t("停止听写", "Stop dictation")}
                 side="bottom"
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="aui-composer-stop-dictation text-destructive size-7 rounded-full"
-                aria-label="Stop voice input"
+                aria-label={t("停止听写", "Stop dictation")}
               >
                 <SquareIcon className="aui-composer-stop-dictation-icon size-3.5 animate-pulse fill-current" />
               </TooltipIconButton>
@@ -430,7 +475,11 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
             (s.thread.voice !== undefined && s.composer.submission === undefined)
           }
         >
-          <ComposerPrimitive.Send asChild onClick={(event) => { if (historyBlocked || onUsageCommand()) event.preventDefault(); }}>
+          {contextOnly ? <TooltipIconButton type="button" tooltip={t("发送已选上下文", "Send selected context")} aria-label={t("发送已选上下文", "Send selected context")} disabled={historyBlocked || threadBusy} variant="default" className="aui-composer-send size-7 rounded-full" onClick={() => {
+            const thread = aui.thread.getState();
+            if (historyBlocked || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled || onUsageCommand()) return;
+            aui.thread.append({ role: "user", content: [{ type: "text", text: aui.composer.getState().text }] });
+          }}><ArrowUpIcon className="size-4" /></TooltipIconButton> : <ComposerPrimitive.Send asChild onClick={(event) => { if (historyBlocked || onUsageCommand()) event.preventDefault(); }}>
             <TooltipIconButton
               tooltip={t(
                 preferences.sendShortcut === "enter" ? "发送消息 · Enter" : "发送消息 · Ctrl / ⌘ + Enter",
@@ -446,7 +495,7 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4" />
             </TooltipIconButton>
-          </ComposerPrimitive.Send>
+          </ComposerPrimitive.Send>}
         </AuiIf>
         <AuiIf
           condition={(s) =>
@@ -472,6 +521,7 @@ const MessageError: FC = () => {
 };
 
 const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
+  const t = useAgentText();
   const ACTION_BAR_PT = "pt-1.5";
   const ACTION_BAR_HEIGHT = `min-h-7.5 ${ACTION_BAR_PT}`;
   const durable = useAuiState((s) => s.message.metadata.custom.durable) as { generationId?: unknown; nativeOutput?: unknown } | undefined;
@@ -500,12 +550,12 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
                 >
                   <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-left font-medium">
                     <BrainIcon className="size-3.5 shrink-0" />
-                    Reasoning
+                    {t("推理", "Reasoning")}
                     <ChevronDownIcon className="ms-auto size-3.5 shrink-0 transition-transform group-data-[panel-open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden">
-                    <div className="border-border mt-1.5 border-t pt-1.5 leading-5 whitespace-pre-wrap">
-                      {part.text}
+                    <div className="border-border mt-1.5 border-t pt-1.5 leading-5">
+                      <MarkdownText />
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -520,7 +570,7 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
           <span
             data-slot="aui_assistant-message-indicator"
             className="animate-pulse font-sans"
-            aria-label="Assistant is working"
+            aria-label={t("助手正在工作", "Assistant is working")}
           >
             {"●"}
           </span>
@@ -597,14 +647,19 @@ const MessageContextMenu: FC<{
 };
 
 const AssistantActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
+  const t = useAgentText();
+  const threadId = useAuiState((state) => state.threads.threadItems.find((item) => item.id === state.threads.mainThreadId)?.remoteId);
+  const messageId = useAuiState((state) => state.message.id);
+  const [threadActionsOpen, setThreadActionsOpen] = useState(false);
+  useEffect(() => { setThreadActionsOpen(false); }, [actionsDisabled, threadId, messageId]);
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
-      autohide="not-last"
-      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex gap-1 duration-200"
+      autohide={threadActionsOpen ? "never" : "not-last"}
+      className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in col-start-3 row-start-2 -ms-1 flex min-w-0 flex-wrap items-start gap-1 duration-200"
     >
       <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="Copy">
+        <TooltipIconButton tooltip={t("复制", "Copy")}>
           <AuiIf condition={(s) => s.message.isCopied}>
             <CheckIcon className="animate-in zoom-in-50 fade-in duration-200 ease-out" />
           </AuiIf>
@@ -613,24 +668,25 @@ const AssistantActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled 
           </AuiIf>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
-      <ActionBarPrimitive.Speak asChild>
-        <TooltipIconButton tooltip="Read aloud">
-          <AudioLinesIcon />
-        </TooltipIconButton>
-      </ActionBarPrimitive.Speak>
-      <ActionBarPrimitive.StopSpeaking asChild>
-        <TooltipIconButton tooltip="Stop reading">
-          <SquareIcon className="size-3.5 fill-current" />
-        </TooltipIconButton>
-      </ActionBarPrimitive.StopSpeaking>
+      {!actionsDisabled && <ResponseReferenceAction />}
+      <AuiIf condition={(s) => s.thread.capabilities.speech && s.message.speech == null}>
+        <ActionBarPrimitive.Speak asChild>
+          <TooltipIconButton tooltip={t("朗读", "Read aloud")}><AudioLinesIcon /></TooltipIconButton>
+        </ActionBarPrimitive.Speak>
+      </AuiIf>
+      <AuiIf condition={(s) => s.message.speech != null}>
+        <ActionBarPrimitive.StopSpeaking asChild>
+          <TooltipIconButton tooltip={t("停止朗读", "Stop reading")}><SquareIcon className="size-3.5 fill-current" /></TooltipIconButton>
+        </ActionBarPrimitive.StopSpeaking>
+      </AuiIf>
       <ActionBarPrimitive.Reload asChild disabled={actionsDisabled}>
-        <TooltipIconButton tooltip="Refresh">
+        <TooltipIconButton tooltip={t("重新生成", "Regenerate")}>
           <RefreshCwIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Reload>
       <ActionBarMorePrimitive.Root>
         <ActionBarMorePrimitive.Trigger asChild>
-          <TooltipIconButton tooltip="More" className="data-[state=open]:bg-accent">
+          <TooltipIconButton tooltip={t("更多操作", "More actions")} className="data-[state=open]:bg-accent">
             <MoreHorizontalIcon />
           </TooltipIconButton>
         </ActionBarMorePrimitive.Trigger>
@@ -643,6 +699,7 @@ const AssistantActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled 
           <MessageMenuActions variant="dropdown" role="assistant" actionsDisabled={actionsDisabled} />
         </ActionBarMorePrimitive.Content>
       </ActionBarMorePrimitive.Root>
+      {threadId && !actionsDisabled && <ThreadMessageActions threadId={threadId} messageId={messageId} open={threadActionsOpen} onOpenChange={setThreadActionsOpen} />}
     </ActionBarPrimitive.Root>
   );
 };
@@ -660,16 +717,11 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0 max-w-(--bubble-max-width)">
         <div className="aui-user-message-content peer bg-secondary text-foreground rounded-(--bubble-radius) px-4 py-2 text-sm leading-6 wrap-break-word empty:hidden">
-          <MessagePrimitive.Parts />
+          <MessagePrimitive.Parts components={{ Text: UserContextText }} />
         </div>
         <PmMessageContext />
         <MessagePrimitive.Quote>
-          {({ text }) => (
-            <QuoteBlock.Root className="mt-1 ms-1 max-w-[min(100%,42rem)]">
-              <QuoteBlock.Icon />
-              <QuoteBlock.Text>{text}</QuoteBlock.Text>
-            </QuoteBlock.Root>
-          )}
+          {quote => <QuoteBlock {...quote} />}
         </MessagePrimitive.Quote>
         <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
           <UserActionBar actionsDisabled={actionsDisabled} />
@@ -686,6 +738,7 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
 };
 
 const UserActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
+  const t = useAgentText();
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -693,7 +746,7 @@ const UserActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) =>
       className="aui-user-action-bar-root flex flex-col items-end"
     >
       <ActionBarPrimitive.Edit asChild disabled={actionsDisabled}>
-        <TooltipIconButton tooltip="Edit" className="aui-user-action-edit">
+        <TooltipIconButton tooltip={t("编辑", "Edit")} className="aui-user-action-edit">
           <PencilIcon />
         </TooltipIconButton>
       </ActionBarPrimitive.Edit>
@@ -702,35 +755,75 @@ const UserActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) =>
 };
 
 const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ providerInstanceId, disabled }) => {
+  const t = useAgentText();
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
   const [limitsRequest, setLimitsRequest] = useState(0);
+  const suggestions = useComposerSuggestions(providerInstanceId, disabled);
   const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
+  const handleSendCommand = () => handleUsageCommand() || !suggestions.beforeSend();
+  const quotePending = useAuiState(state => !!state.composer.quote);
+  const submitting = useAuiState(state => state.composer.submission !== undefined);
+  const contextDraft = useMessageContextDraft();
+  const references = useSyncExternalStore(subscribeMessageContext, () => getEditedContextReferences(contextDraft.targetKey), () => getEditedContextReferences(contextDraft.targetKey));
+  const emptyComposer = useAuiState(state => !state.composer.text.trim() && !state.composer.attachments.length && !state.composer.quote);
+  const contextOnly = emptyComposer && (contextDraft.items.length > 0 || references.length > 0);
+  const manuallySubmitted = useRef(false);
+  const [submissionError, setSubmissionError] = useState<string>();
+  const blocked = disabled || suggestions.blocked || quotePending || contextDraft.blocked || submitting;
+  const threadId = useAuiState(state => state.threadListItem.remoteId);
+  const originalMessage = useAuiState(state => state.message);
+  const prepareSend = () => {
+    const thread = aui.thread.getState();
+    if (manuallySubmitted.current || aui.composer.getState().submission !== undefined || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled) return true;
+    if (blocked || handleSendCommand()) return true;
+    if (threadId) {
+      const original = (getExternalStoreMessages(originalMessage) as UIMessage[]).at(-1);
+      const attachments = canonicalContextAttachments(aui.composer.getState().attachments, original?.parts ?? [], readContextAttachmentBindings(originalMessage.metadata.custom.contextAttachments));
+      prepareMessageContextEditSubmission(threadId, attachments);
+    }
+    return false;
+  };
+  const handleSubmit = () => {
+    if (prepareSend()) return true;
+    const composer = aui.composer.getState();
+    if (composer.text.trim() || composer.attachments.length || !(getMessageContextItems(contextDraft.targetKey).length || getEditedContextReferences(contextDraft.targetKey).length)) return false;
+    // The store projection omits edit IDs; require the actual runtime before appending context-only input.
+    const runtime = aui.composer.__internal_getRuntime?.();
+    const edit = runtime?.getState();
+    if (!runtime || edit?.type !== "edit" || edit.sourceId !== originalMessage.id || originalMessage.role !== "user") {
+      setSubmissionError(t("无法确认原消息编辑身份；消息未提交。", "The original edit identity is unavailable. The message was not submitted."));
+      return true;
+    }
+    manuallySubmitted.current = true;
+    try {
+      aui.thread.append({ parentId: edit.parentId, sourceId: edit.sourceId, role: edit.role, content: [{ type: "text", text: composer.text }], attachments: [], runConfig: composer.runConfig, metadata: { custom: {} } });
+      runtime.cancel();
+    } catch (cause) {
+      manuallySubmitted.current = false;
+      setSubmissionError(cause instanceof Error ? cause.message : String(cause));
+    }
+    return true;
+  };
   return (
     <MessagePrimitive.Root
       data-slot="aui_edit-composer-wrapper"
       className="flex flex-col px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
-      <ComposerPrimitive.Root className="aui-edit-composer-root border-border ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] duration-[var(--motion-hover)] dark:shadow-none" onSubmit={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
-        <ComposerPrimitive.Input
-          className="aui-edit-composer-input text-foreground min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none"
-          autoFocus
-          submitMode={preferences.sendShortcut}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && event.shiftKey && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && handleUsageCommand()) event.preventDefault();
-          }}
-        />
+      <ComposerPrimitive.Root className="aui-edit-composer-root border-border ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] duration-[var(--motion-hover)] dark:shadow-none" onSubmit={(event) => { if (handleSubmit()) event.preventDefault(); }}>
+        <MessageContextDraftStatus />
+        {submissionError && <p role="alert" className="px-3 py-1 text-sm text-destructive">{submissionError}</p>}
+        {suggestions.surface}
+        <RichComposerInput editing suggestions={suggestions} disabled={disabled}
+          placeholder={t("编辑消息…", "Edit message…")} label={t("编辑消息", "Edit message")}
+          submitMode={preferences.sendShortcut} beforeSend={handleSubmit} />
         <div className="aui-edit-composer-footer mx-2.5 mb-2.5 flex items-center gap-1.5 self-end">
           <ComposerPrimitive.Cancel asChild>
-            <Button variant="ghost" size="sm" className="h-8 px-3">
-              Cancel
-            </Button>
+            <Button variant="ghost" size="sm" className="h-8 px-3">{t("取消", "Cancel")}</Button>
           </ComposerPrimitive.Cancel>
-          <ComposerPrimitive.Send asChild disabled={disabled} onClick={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
-            <Button size="sm" className="h-8 px-3">
-              Update
-            </Button>
-          </ComposerPrimitive.Send>
+          {contextOnly ? <Button type="submit" size="sm" className="h-8 px-3" disabled={blocked}>{t("更新消息", "Update message")}</Button> : <ComposerPrimitive.Send asChild disabled={blocked} onClick={(event) => { if (handleSubmit()) event.preventDefault(); }}>
+            <Button type="button" size="sm" className="h-8 px-3">{t("更新消息", "Update message")}</Button>
+          </ComposerPrimitive.Send>}
         </div>
         {limitsRequest > 0 && <ComposerUsage providerInstanceId={providerInstanceId} limitsRequest={limitsRequest} onCloseLimits={() => setLimitsRequest(0)} />}
       </ComposerPrimitive.Root>
@@ -739,6 +832,7 @@ const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ p
 };
 
 const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest }) => {
+  const t = useAgentText();
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
@@ -749,7 +843,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest
       {...rest}
     >
       <BranchPickerPrimitive.Previous asChild>
-        <TooltipIconButton tooltip="Previous">
+        <TooltipIconButton tooltip={t("上一分支", "Previous branch")}>
           <ChevronLeftIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Previous>
@@ -757,7 +851,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </span>
       <BranchPickerPrimitive.Next asChild>
-        <TooltipIconButton tooltip="Next">
+        <TooltipIconButton tooltip={t("下一分支", "Next branch")}>
           <ChevronRightIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Next>

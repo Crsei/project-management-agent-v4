@@ -10,7 +10,7 @@ import { allowed, string, today, useText, writable } from "./pm-ui"
 import { ProjectFilesPage } from "./project-files"
 import { ProjectAuditHistory } from "./project-audit"
 import { ProjectCoverEditor, ProjectScopeEditor } from "./project-extras"
-import { ProjectTeamAssignment } from "./project-directory"
+import { ProjectPeoplePanel } from "./project-people"
 import { ProjectFinancialRegion, ProjectHealthRegion, ProjectPortfolioSummary } from "./project-portfolio"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { MilestoneReschedule } from "./dashboard-planning"
@@ -79,8 +79,8 @@ export function ServiceProjectOverview() {
   }).length
   const members = useMemo(() => {
     const current = directory.data?.projects.find(entry => entry.projectId === projectId)
-    return current ? new Set(current.teams.flatMap(team => team.members.map(member => member.id))).size : null
-  }, [directory.data, projectId])
+    return current && !directory.error ? current.participants.length : null
+  }, [directory.data, directory.error, projectId])
   const goal = string(project?.data.goal)
   const description = string(project?.data.description)
   if (projectQuery.isPending) return <p role="status" className="p-6">{t("正在加载项目…", "Loading project…")}</p>
@@ -94,7 +94,7 @@ export function ServiceProjectOverview() {
           <ProjectMetric label={t("任务总数", "Issues")} value={String(tasks.length)} detail={t("当前项目任务快照", "Current project task snapshot")} />
           <ProjectMetric label={t("已完成", "Done")} value={String(completed)} detail={t("按工作流完成类别统计", "Workflow completed category")} />
           <ProjectMetric label={t("已逾期", "Overdue")} value={items.data ? String(overdue) : "—"} detail={t("未关闭的逾期任务", "Open overdue tasks")} />
-          <ProjectMetric label={t("成员", "Members")} value={members === null ? "—" : String(members)} detail={t("有项目访问权限的团队成员", "Authorized project team members")} />
+          <ProjectMetric label={t("参与人", "Participants")} value={members === null ? "—" : String(members)} detail={t("显式设置且当前可访问的参与人", "Explicit participants with current access")} />
         </section>
         <section className="rounded-module border bg-surface p-4">
           <h2 className="text-base font-medium">{t("项目简报", "Project brief")}</h2>
@@ -127,7 +127,7 @@ export function ServiceProjectOverview() {
       <aside className="min-w-0 space-y-4">
         <section className="rounded-module border bg-surface p-4"><h2 className="text-base font-medium">{t("项目属性", "Project properties")}</h2><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-3"><dt className="text-muted-foreground">{t("编号", "Identifier")}</dt><dd className="font-mono">{project.id}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">{t("状态", "Status")}</dt><dd>{string(project.data.status) || "—"}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">{t("目标日期", "Target date")}</dt><dd>{display.date(string(project.data.dueDate) || null)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">{t("更新时间", "Updated")}</dt><dd>{display.dateTime(project.updatedAt)}</dd></div></dl><Badge className="mt-3">{project.id}</Badge></section>
         <section className="rounded-module border bg-surface p-4"><ProjectPortfolioSummary projectId={projectId} /><details className="mt-3 space-y-3"><summary className="cursor-pointer text-sm font-medium">{t("评估、预算与历史", "Assessments, budget and history")}</summary><ProjectHealthRegion project={project} /><ProjectFinancialRegion project={project} /></details></section>
-        <section className="rounded-module border bg-surface p-4"><h2 className="text-base font-medium">{t("项目团队", "Project teams")}</h2><div className="mt-3"><ProjectTeamAssignment project={project} /></div></section>
+        <section className="rounded-module border bg-surface p-4"><ProjectPeoplePanel project={project} /></section>
         <section className="rounded-module border bg-surface p-4"><details><summary className="cursor-pointer text-sm font-medium">{t("项目封面", "Project cover")}</summary><div className="mt-3"><ProjectCoverEditor project={project} /></div></details></section>
       </aside>
     </div>

@@ -121,7 +121,7 @@ describe('multiple document sources: real physical aliases and authorization', {
     const b = await createDocumentProject(f, 'PRIVATE_UNAUTHORIZED_PROJECT', 'shared-authorization-b');
     const parent = join(f.parents[1], 'ordinary-parent'), shared = join(parent, 'ordinary-shared');
     await mkdir(shared, { recursive: true }); await writeFile(join(shared, 'shared.md'), '# Intentionally shared ordinary body\n');
-    for (const component of ['.pm', '.git', '.ssh', '.aws', '.config', '.codex', '.claude', '.agent-workspace', 'provider-homes']) {
+    for (const component of ['.pm', '.dovspace', '.git', '.ssh', '.aws', '.config', '.codex', '.claude', '.agent-workspace', 'provider-homes']) {
       const privateRoot = join(shared, component); await mkdir(privateRoot);
       await writeFile(join(privateRoot, 'secret.md'), '# PRIVATE_CREDENTIAL_BYTES\n');
       const rejected = await f.request(`${documentSourcesPath(f)}/configuration`, { method: 'PUT', body: { projectId: a.record.id, expectedRevision: 0, paths: [privateRoot] } });

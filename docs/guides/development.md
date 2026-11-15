@@ -36,6 +36,8 @@ pnpm run pm logout
 
 CLI 默认连接 `http://127.0.0.1:4194`，可用 `PM_API_URL` 覆盖；远程要求 HTTPS，HTTP 仅允许回环。`pnpm run pm <args>` 直接传参（不要额外加 `--`）。`login` 仅保存有期限的会话，不保存密码，默认私有目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`，可用绝对路径 `PM_CLI_SESSION_DIR` 覆盖。会话按 origin 隔离，过期要求重新登录，`logout` 在服务端撤销确认后清除对应文件；已移除 `access.json` 和 `PM_ACCESS_FILE` 回退。更新默认先读取当前 revision；冲突返回非零退出码且不自动重试。
 
+完整资源命令、Agent 本机直连／令牌登录、原结果核对及机器消费见 [CLI 操作指南](cli.md)。`pnpm pm` 的现有脚本会加载本仓库 `.env`；隔离检查使用 `node packages/pm-cli/index.ts ...` 配合干净环境、独立 HOME 和临时服务，不继承真实账号／Provider 凭据。`plugin call/result` 的退出 0 不代表业务成功，脚本继续前必须使用 `plugin check --file RESULT.json` 校验可见且已成功的结果。
+
 `smoke` 使用显式环境凭据或上述 CLI 会话（通过 `PUBLIC_ORIGIN` 选择同一 origin），从真实授权目录确定 `PM_WORKSPACE_ID`，不读取旧访问文件。它在实际服务创建人工交付/审核/关闭/归档验收数据并保存 `.local/evidence/service-smoke.json`；只应对隔离实例运行。`smoke:verify` 复读原对象、收据和成果摘要。`backup:verify --stopped` 使用实际 provider 备份 SQL、共享核心、全部已登记项目托管目录和引用 blob，在新数据库、新核心/项目目录和新 Local 存储根恢复并设置认证、通知与外发围栏，再通过真实 API 校验授权下载字节；不修改源库或归档。恢复旧凭据信任与生产切换必须另行批准，详见[部署手册](../../deploy/README.md)。
 
 ## 账号与维护
@@ -79,7 +81,15 @@ PM 后端编译到根 `dist`，Agent 服务编译到 `apps/server/agent/dist`；
 
 
 
-当前 PM 限制仍包括单文件 8 MiB、单 API/本地 Markdown 核心、同工作区写入串行，实体 data/命令 result 仍较通用；尚无自动孤立文件 GC、通用 job 编排、公开注册、MFA/SSO 或业务 Session/Run/Runner。独立 Agent Chat 不改变这些业务边界。私有 S3、可信邮箱找回与受限 Webhook 的供应商/SMTP/接收器、生产恢复、公网 TLS、多实例/HA、容量和真实设备仍需独立输入及验收；Provider 未配置或未实测时不宣称真实模型通过。
+当前 PM 限制仍包括单文件 8 MiB、单 API/本地 Markdown 核心、同工作区写入串行，实体 data/命令 result 仍较通用；尚无自动孤立文件 GC、通用 job 编排、MFA/SSO 或业务 Session/Run/Runner。独立 Agent Chat 不改变这些业务边界。私有 S3、可信邮箱找回与受限 Webhook 的供应商/SMTP/接收器、生产恢复、公网 TLS、多实例/HA、容量和真实设备仍需独立输入及验收；Provider 未配置或未实测时不宣称真实模型通过。
+
+## 品牌素材与加载展示
+
+Web 与桌面共享 `apps/web/public/dovspace.svg` 彩色母版；透明／纯单色版本、favicon、桌面图标与安装器位图按[品牌素材导出流程](desktop.md#品牌素材的可复现导出)生成。不要分别重画或手工替换派生图；视觉调整先确认母版和来源记录，再生成并运行一致性检查。第三方 Provider 标识、用户头像和项目图标不随产品品牌替换。
+
+`DovspaceLoading` 只展示调用方的真实读取状态，局部按钮、进度与骨架屏保留原有语义。首屏 HTML 在 React 挂载前显示品牌；`public/dovspace-boot.js` 作为同源外部脚本加载，不放宽账号／连接页的 CSP。验证需覆盖冷启动、入口脚本失败、懒加载失败、严格 CSP 路由、脚本辅助文件不可用、无 JavaScript、明暗主题和减少动态效果；重载入口不自动重发消息或业务操作。
+
+品牌变更不迁移会话／数据或修改安装身份。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口；Web 页面与图片格式检查也不能替代 Windows/macOS 的原生安装、系统图标和 Electron GUI 验收。
 
 ## 工具链与隔离聚合入口
 
@@ -128,7 +138,7 @@ PM_OPENHANDS_AUTHORING_SOURCE=/ABS/authenticated-public-openhands node scripts/c
 4. `host` 阶段单独构建宿主并运行协议和 Agent 扩展集成；`agent` 阶段校验 Agent 随包 host 的清单/哈希并显式使用其入口运行全量 Node 回归。源码宿主和打包入口的行为覆盖不合并。
 5. 独立 backend/agent 先检查 contracts/client 声明、PM 主入口及 Agent bundle；这些存在性检查只是前提，不能证明产物仍对应当前源码。源码变化后先重新执行 build。
 
-默认 CI 的完整阶段不由开发者选择器或缓存替换。Turbo 承接六 lint、九 build/typecheck 叶与独立 host，均按完整公共输入/输出复用成功结果；声明/完整类型/PM emit/Agent/Web/marketing 不因看似重复而合并。文档、合同、边界、许可/来源、host 测试、完整 backend/agent、真实夹具与清理始终新鲜。完整任务表、恢复输出及本轮实际证据/外部阻塞见 [Turbo 落地计划](../reference/turbo-rollout-plan.zh.md)；文件/glob 与计时协议见[测试说明](../../tests/README.md)。
+默认 CI 的完整阶段不由开发者选择器或缓存替换。Turbo 承接六 lint、九 build/typecheck 叶与独立 host，均按完整公共输入/输出复用成功结果；声明/完整类型/PM emit/Agent/Web/marketing 不因看似重复而合并。文档、合同、边界、许可/来源、host 测试、完整 backend/agent、真实夹具与清理始终新鲜。文件/glob 与计时协议见[测试说明](../../tests/README.md)。
 
 ### 开发者受影响检查
 
@@ -170,7 +180,7 @@ PM_OPENHANDS_AUTHORING_SOURCE=/ABS/authenticated-public-openhands node scripts/c
 PM_OPENHANDS_AUTHORING_SOURCE=/ABS/authenticated-public-openhands node scripts/check-ci.mjs --cache-name full-review
 ```
 
-底层 CLI 接受 `--stage lint|build|host-build` 或重复 `--task ID`，加互斥 `--dry` / `--baseline`；baseline 不读写 task cache，因此拒绝显式 `--cache-name`。缓存名为 1–64 位字母数字/下划线/连字符、首位字母数字；未知/重复/冲突选择失败，不回退 broad task。`--dry` 使用固定 native Turbo `2.11.10` 解析真实图，不执行叶、不代表检查通过；缺失/错版不自动下载。baseline 只要求固定 Node/pnpm 与 Turbo manifest pin，不要求 native Turbo。完整叶/依赖/输出见[任务表](../reference/turbo-rollout-plan.zh.md#纳入-turbo-的明确叶任务)。
+底层 CLI 接受 `--stage lint|build|host-build` 或重复 `--task ID`，加互斥 `--dry` / `--baseline`；baseline 不读写 task cache，因此拒绝显式 `--cache-name`。缓存名为 1–64 位字母数字/下划线/连字符、首位字母数字；未知/重复/冲突选择失败，不回退 broad task。`--dry` 使用固定 native Turbo `2.11.10` 解析真实图，不执行叶、不代表检查通过；缺失/错版不自动下载。baseline 只要求固定 Node/pnpm 与 Turbo manifest pin，不要求 native Turbo。完整叶/依赖/输出属于内部计划，不随公开树分发。
 
 依赖安装是单独前提。runner 在每次 pnpm 调用边界固定 `pnpm_config_verify_deps_before_run=error`，每次 dispatch/cache read 前都新鲜执行真实 pnpm 依赖预检；缺失/陈旧状态不能被 HIT 绕过，不隐式安装。固定 pnpm 对后代下传 `false` 是正常行为，边界保护不依赖 ESLint 内该变量仍为 `error`。**普通外层 `pnpm check:turbo` 在 Node 启动前仍遵循 pnpm 自身策略**，完整保护用 direct Node 或显式环境变量，不宣称 runner 能拦截尚未启动前的安装。
 
@@ -190,7 +200,7 @@ Web dist 要完整恢复 CSS/JS/worker/font/public 与来源/许可输出，Vite
 
 `check-ci --stage agent` / 默认 `all` 必须显式 `PM_OPENHANDS_AUTHORING_SOURCE`，指向仓库外 canonical 只读 PUBLIC checkout：[OpenHands/OpenHands](https://github.com/OpenHands/OpenHands) 的完整 commit `b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1`，与随仓 source manifest 一致。入口只向私有测试环境加入这一路径，并在用例前调用既有 verifier 认证 pinned HEAD、Git tree/blob、选中 worktree 字节/模式、随仓 npm tarball 和许可身份；原真实 authoring 拒绝/无写入/精确批准用例不变。缺 source 明确失败，原 skip 不算通过；不删用例、不做 fake upstream、不复制开发者凭据/私有来源、不运行 upstream hooks/安装/脚本。
 
-Actions 以干净临时 HOME、无 Git credentials 的显式 fetch 准备同一 PUBLIC pin；本机可用主线程已认证 archive 解出的新 owned public checkout。这个来源仅供真实 provenance authoring 回归，**不是安装/生产运行的常驻依赖**，也不把前提认证替代实际完整回归。`static`/`build`/`host` 本身不要求该 source。
+Actions 以干净临时 HOME、无 Git credentials 的显式 fetch 准备同一 PUBLIC pin；本机可使用维护者从已认证 archive 解出的新 owned public checkout。这个来源仅供真实 provenance authoring 回归，**不是安装/生产运行的常驻依赖**，也不把前提认证替代实际完整回归。`static`/`build`/`host` 本身不要求该 source。
 
 #### Actions 持久化与真实 hosted 限制
 
@@ -200,7 +210,7 @@ restore 前逐层安全准备 `.local/check-turbo/actions-trusted` 的三个 070
 
 namespace `full-v1-trusted` 按 OS/arch、hosted image、固定 Node/pnpm/Turbo/native 工具链及锁定/runner/graph/workflow policy 隔离；只允许同一 policy 前缀恢复，提交用于 immutable 外层 key，native task hash 继续认证实际输入。pnpm store 是单独精确缓存，恢复后仍冻结安装。安全 JSONL 保留原 14 天工件；真实数据库/测试/来源/许可永不缓存。
 
-本轮 Main 在相同冻结代码/配置和依赖/环境串行测得全 16 工程叶 n=3：baseline/MISS/HIT 中位 **178.507 / 182.319 / 13.388 秒**；MISS 每次 0/16、HIT 每次 16/16，暖降约 **92.50%**、冷 miss 增约 **2.14%**。Gateway 改注释后的实际 8 HIT/8 MISS 为 n=1、161.982 秒，不能当所有修改的稳定收益。最初因 89 个合法公开源硬链而全 bypass 的 pair 保留且排除统计；所有临时输入已恢复，原 16 hash 全恢复。完整原始值、失效/错误/隐私证据及测量身份见[本轮证据表](../reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)，文档更新之后不冒称旧 hash 仍为当前输入 HIT。
+本轮 Main 在相同冻结代码/配置和依赖/环境串行测得全 16 工程叶 n=3：baseline/MISS/HIT 中位 **178.507 / 182.319 / 13.388 秒**；MISS 每次 0/16、HIT 每次 16/16，暖降约 **92.50%**、冷 miss 增约 **2.14%**。Gateway 改注释后的实际 8 HIT/8 MISS 为 n=1、161.982 秒，不能当所有修改的稳定收益。最初因 89 个合法公开源硬链而全 bypass 的 pair 保留且排除统计；所有临时输入已恢复，原 16 hash 全恢复。完整原始值、失效/错误/隐私证据及测量身份保留在内部记录中，文档更新之后不冒称旧 hash 仍为当前输入 HIT。
 
 8 个输出 root 全删及植入 8 个陈余文件后，HIT 均恢复相同 **2121 files/197 dirs、103,480,412 bytes** 和模式；真实 Web `/pm` 登录页、marketing 首页/下载导航渲染且 0 pageerror。HIT 产物上未重建的完整 Agent **166/166 文件、1434/1434 用例通过，0 fail/skip/cancel/todo**，含原 OH authoring 9/9；最终行为 76/76、upstream 120/120。真实 client 完整 noEmit TS2322 同 hash 两次 MISS/exit 1 且无失败 archive，较窄声明依然成功，移除错误后 3/3 HIT，未削减完整类型检查。
 
@@ -208,7 +218,7 @@ static/build/host 通过各一轮 MISS/HIT，HIT 仍实际执行 docs/合同/边
 
 #### 2026-11-08 试点测量与决策
 
-以下为**阶段 1 扩展前的单 Web lint 历史记录**，不代表当前六 lint 或默认 CI 的实测。在 Linux、Node 24.21.0、pnpm 11.9.0、Turbo 2.11.10 下，当时由主线程交错执行 baseline → 新命名空间 MISS → 同名未变 HIT，共 3 轮、9 次，全部退出 0。三组使用相同 wrapper 和未变化的任务 hash；没有另行并发的本任务下载、安装、构建、测试或来源 authoring。保留已安装依赖、OS/共享缓存及正常业务服务，MISS 只表示空任务缓存，不是系统冷启动。
+以下为**阶段 1 扩展前的单 Web lint 历史记录**，不代表当前六 lint 或默认 CI 的实测。在 Linux、Node 24.21.0、pnpm 11.9.0、Turbo 2.11.10 下，当时由维护者交错执行 baseline → 新命名空间 MISS → 同名未变 HIT，共 3 轮、9 次，全部退出 0。三组使用相同 wrapper 和未变化的任务 hash；没有另行并发的本任务下载、安装、构建、测试或来源 authoring。保留已安装依赖、OS/共享缓存及正常业务服务，MISS 只表示空任务缓存，不是系统冷启动。
 
 计时是入口的**端到端墙钟时间**，包含外层 pnpm 启动、依赖重新链接及供应链策略检查的实际开销，不是纯 ESLint CPU 时间。最后一轮 HIT 的实际外层 pnpm 仍重新链接 6 个复用包、下载 0 个包；HIT 重放的缓存任务日志也含内层 pnpm 准备/策略检查文字，**重放文字不表示这些内层操作重新执行**。本轮没有关闭或修改 pnpm 供应链策略；“无并发安装”不等于计时命令内部没有包管理器准备。
 

@@ -19,6 +19,7 @@ import {
   type SkillUninstallResult,
 } from "../types.ts";
 import { createUninstallBackup, deleteSkillBackup, listSkillBackups, restoreFromBackup } from "./backup.ts";
+import { assertBundledSkillDestinations } from "./bundled.ts";
 import {
   ensurePiSkillDestinationMatches,
   inspectPiSkillDestination,
@@ -119,6 +120,7 @@ export class SkillManager {
   uninstallUnified(id: string): SkillUninstallResult {
     const skill = this.#db.skills.getInstalled(id);
     if (skill === undefined) throw new AppError("COMMAND_FAILED", `Skill not found: ${id}`);
+    assertBundledSkillDestinations(skill);
 
     let directory: string;
     try {
@@ -238,6 +240,7 @@ export class SkillManager {
   toggleApp(id: string, app: AppId, enabled: boolean): void {
     const skill = this.#db.skills.getInstalled(id);
     if (skill === undefined) throw new AppError("COMMAND_FAILED", `Skill not found: ${id}`);
+    assertBundledSkillDestinations(skill);
 
     if (STAGED_TOGGLE_APPS.includes(app)) {
       if (!enabled && !skill.apps[app]) return;
@@ -339,6 +342,8 @@ export class SkillManager {
     if (!isSyncManagedApp(app)) return failed;
 
     const skills = this.#db.skills.getAllInstalled();
+    // Builtins retain their full-tree ownership checks under the existing managed UI too.
+    for (const skill of skills.values()) assertBundledSkillDestinations(skill);
     const ssot = ssotDir();
     const appDir = distinctAppSkillsDir(ssot, app);
     const indexed = new Map<string, InstalledSkill>();

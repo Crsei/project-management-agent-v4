@@ -92,6 +92,40 @@ test('PM broker denies wrong credentials/targets/direct writes, drops only a pro
     assert.ok(!JSON.stringify(broker.events).includes('synthetic-only'));
   } finally { await broker.close(); await close(authority); await rm(root, { recursive: true, force: true }); }
 });
+
+test('PM broker accepts only the fixture native bearer and retains bearer precedence and route scope', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dovspace-broker-auth-'));
+  const token = 'p'.repeat(43), cookie = `pm_v4_session=${token}`;
+  const workspaceId = '11111111-1111-4111-8111-111111111111';
+  const seen: Array<{ authorization: string | undefined; path: string | undefined }> = [];
+  const authority = createServer((incoming, outgoing) => {
+    incoming.resume();
+    seen.push({ authorization: incoming.headers.authorization, path: incoming.url });
+    outgoing.writeHead(200, { 'content-type': 'application/json' });
+    outgoing.end(JSON.stringify({ allowed: true }));
+  });
+  const port = await listening(authority), socketPath = path.join(root, 'broker.sock');
+  const target = { key: 'assigned', workspaceId, projectId: 'PRJ-001', entityId: 'TASK-001', revision: 'original', kind: 'work_item' };
+  const fixture: FixtureHandle = { fixtureId: 'native-bearer-boundary', fixtureVersion: 'test', root, publicRoot: root, authorityRoot: root, agentDataRoot: root, workspaceId, actorId: 'owner', targets: { assigned: target }, pm: { baseUrl: `http://127.0.0.1:${port}`, token: cookie }, runtime: null, isolation: null };
+  const config = parseBenchmarkConfig();
+  const broker = await startBroker(config, fixture, { runId: 'native-bearer', budget: config.budget, allowedTools: ['pm_read'], allowedTargets: [target], providerToken: 'provider-only', agentAccessToken: 'agent-only', socketPath });
+  const context = { workspaceId, projectId: target.projectId };
+  try {
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, '', { authorization: `Bearer ${token}` })).status, 200);
+    assert.deepEqual(seen, [{ authorization: `Bearer ${token}`, path: '/api/v1/agent-contexts/authorize' }]);
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, cookie, { authorization: 'Bearer another-identity' })).status, 403);
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, '', { authorization: 'Bearer provider-only' })).status, 403);
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', { ...context, projectId: 'PRJ-999' }, '', { authorization: `Bearer ${token}` })).status, 403);
+    assert.equal((await call(socketPath, `/api/v1/workspaces/${workspaceId}/core/entities`, {}, '', { authorization: `Bearer ${token}` })).status, 403);
+    assert.equal(seen.length, 1, 'Rejected identity, target and direct-write requests never reach PM authority');
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, cookie)).status, 200);
+    assert.equal(seen.length, 2);
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, cookie, { authorization: 'Bearer agent-only' })).status, 200);
+    assert.deepEqual(seen[2], { authorization: undefined, path: '/api/v1/agent-contexts/authorize' }, 'HTTP Agent credentials are stripped before PM authority');
+    assert.equal((await call(socketPath, '/api/v1/agent-contexts/authorize', context, '', { authorization: 'Bearer agent-only' })).status, 403);
+    assert.ok(!JSON.stringify(broker.events).includes(token));
+  } finally { await broker.close(); await close(authority); await rm(root, { recursive: true, force: true }); }
+});
 test('signed platform signals require owned scope and actual prior Session/generation; forwarding retains exact HMAC bytes', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'dovspace-signal-'));
   const secret = 'explicit-benchmark-platform-secret-32-bytes', workspaceId = '11111111-1111-4111-8111-111111111111', actorId = '22222222-2222-4222-8222-222222222222';

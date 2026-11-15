@@ -374,6 +374,12 @@ export class MigrationManager {
     this.repository.write(`${directory}/${id}/manifest.json`, boundedJson({ ...payload, revision }));
     return { id, revision, kind: request.kind, createdAt, files, diagnostics };
   }
+  /** Verified existing preview, never a new migration or an apply/restore operation. */
+  read(id: string): MigrationPlan & { status: MigrationSummary['status'] } {
+    const { manifest, plan } = this.load(id), journal = this.journal()?.value;
+    const status = journal?.id === id ? journal.direction === 'apply' ? 'applying' : 'restoring' : this.status(manifest)?.status ?? 'preview';
+    return { ...plan, status };
+  }
 
   private verifyInputs(expected: Fingerprints, files: MigrationFile[] = [], mixed = false, direction: Journal['direction'] = 'apply'): MigrationSnapshot {
     const current = this.snapshot();

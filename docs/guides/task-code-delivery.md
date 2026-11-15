@@ -26,9 +26,18 @@
 7. 审查完整变更文件清单、diff 和新增文件，分别确认**提交**、**推送**、**创建 Draft PR**。首次推送使用远端分支不存在的空 lease 条件，不重写任何已有分支。独立工作目录内变更合计最多 1000 文件/16 MiB，拒绝私有管理路径、凭据类文件和符号链接；不要在当前项目仓库广泛暂存。
 8. 点击刷新读取 PR 当前 HEAD 的 check runs、commit statuses 和 reviews；分页有界且不接受不完整快照，读取期间 HEAD 改变则拒绝混合快照。无 CI 是「未发现」不是通过；旧 commit 的 review 标记旧版本，远端 HEAD 变化时提示原本地测试不覆盖它。刷新失败保留上次快照及采集时间，不当作最新结果。
 
-旧 Session 清理后，可显式“新建会话”关联原交付：必须重新核验同一仓库与当前授权，保留之前的线程 ID、generation、测试和 Git 证据；该动作本身不启动模型、不重放提交或推送。正在执行、原操作未核对或仓库身份改变时拒绝替换。
+旧 Session 清理后，可显式“新建会话”关联原交付：必须重新核验同一仓库与当前授权，保留之前的线程 ID、generation、测试和 Git 证据，并将原收据派生的恢复简报保存到新 Session。该动作会持久化会话／关联，但不启动模型、不复制原聊天、不重放提交或推送。正在执行、原操作未核对或仓库身份改变时拒绝替换。需求 revision 改变后只允许创建核对会话，不改绑原任务快照；旧版本开发、验证、恢复和发布仍拒绝。
 
 这是**受信任本机 CLI**的使用约定，不是完整隔离 Runner。已确认的 Codex 任务使用原生沙箱限制写入根目录，关闭原生命令网络与额外临时目录写入；越界权限请求仍拒绝。这不保证容器内其他文件不可读，也不把用户手动 Terminal 操作变成受限 Runner。Agent 原生 shell 和 Terminal 本来就可执行命令；提示词中的「不要提交/推送」不是安全权限边界。本模块保证自己的发布接口分别确认，不声称能拦截任意原生 shell 副作用。若需强制发布隔离，需要另行设计隔离 Runner、凭据分离及网络策略。
+
+## 执行与交接简报
+
+任务的代码交付／工作流区域提供只读执行简报，分开显示当前 PM 要求、原任务快照、Delivery／Workflow／Session／generation 身份、当前 Git 观察、测试／CI／Review、原操作身份与下一步。读取只查询原事实，不刷新收据、创建会话或重放操作；Git 不可读取时为 unknown，目录身份变化时拒绝。
+
+实际派发的 `purpose` 支持 `analysis`、`development`、`review`、`recovery`。只有 development 可使用本次明确确认的 worktree 写入能力，其余阶段是只读指导；这仍不是完整文件系统沙箱。必需正文、约束或关系被裁剪，以及组合输入超过预算时拒绝派发，不默默截断。缺失验收作为缺口交给 Agent 核对，不补造成通过标准。
+
+测试证据绑定 task revision、HEAD 与代码指纹；CI／Review 同时核对当前任务及代码版本。旧收据缺少绑定信息显示 unknown，需求或代码变化显示 stale；提交未改变被验证内容时可以保留原测试覆盖，但旧绿色 CI 不能覆盖新的工作树。历史实际 generation 输入与仅保存、尚未派发的 handoff 分开标识，当前读取成功不意味着历史输入已更新。
+
 
 ## 接口（Agent API，经网关加 `/agent` 前缀）
 
@@ -37,6 +46,7 @@
 | `GET /api/task-deliveries?workspaceId=...&projectId=PRJ-...&taskId=TASK-...` | 当前授权范围内的任务交付记录 |
 | `POST /api/task-deliveries` | `{id,workspaceId,projectId,taskId,taskRevision,baseBranch}`；客户端稳定 UUID 为准备幂等键 |
 | `GET /api/task-deliveries/:id` | 收据、当前差异及任务版本是否变化 |
+| `GET /api/task-deliveries/:id/brief?stage=analysis` | 当前授权下派生执行／交接简报；stage 可选四阶段，不产生执行副作用 |
 | `POST /api/task-deliveries/:id/actions` | `develop`、`test`、`commit`、`push`、`draft-pr`、`refresh`；严格输入 schema，验证/发布须明确确认 |
 
 每步写前保存 pending 收据并进行 CAS，原生进程/外部 API 副作用与本地 SQLite **不是跨系统原子事务**。并发、网络丢响应、服务重启不能直接重放副作用：

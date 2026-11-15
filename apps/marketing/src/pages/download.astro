@@ -7,18 +7,27 @@ import {
   releaseRepository,
   releaseSnapshot,
 } from "../lib/release-inventory";
+import "../styles/download.css";
 ---
 <SiteLayout title="下载与发行状态 — Dovspace" description="核对 Dovspace 当前源码与历史桌面预发布的版本、平台、摘要、签名及源码证据。未完成验收的安装入口保持禁用。">
-  <section class="download-page container">
+  <div class="download-page container">
     <header class="download-head">
       <img class="app-icon" src="/dovspace.svg?v=20261115" width="66" height="66" alt="" />
-      <h1>Dovspace 下载与发行状态</h1>
-      <p>有历史预发布材料，不等于当前版本已经可以安装。</p>
+      <div>
+        <h1>Dovspace 下载与发行状态</h1>
+        <p>有历史预发布材料，不等于当前版本已经可以安装。</p>
+      </div>
     </header>
 
-    <section class="release-summary" aria-labelledby="current-release-heading">
-      <p class="eyebrow">CURRENT SOURCE · NOT A RELEASE</p>
-      <h2 id="current-release-heading">当前源码：暂不提供安装下载</h2>
+    <section class="release-summary release-summary-current" aria-labelledby="current-release-heading">
+      <div class="release-summary-heading">
+        <p class="eyebrow">CURRENT SOURCE · NOT A RELEASE</p>
+        <h2 id="current-release-heading">当前源码：暂不提供安装下载</h2>
+        <div class="release-links">
+          <a class="btn btn-primary" href="/get-started/">开始源码自托管 →</a>
+          <a class="text-link" href="/desktop/#build">原生构建前提 →</a>
+        </div>
+      </div>
       <dl class="release-meta">
         <div><dt>源码声明版本</dt><dd><code>{currentDesktopSource.declaredVersion}</code>；不是已验收的安装包版本</dd></div>
         <div><dt>发行通道</dt><dd>未发布；不能仅按版本后缀认定已有 preview 安装包</dd></div>
@@ -27,7 +36,6 @@ import {
         <div><dt>精确源码身份</dt><dd>{currentDesktopSource.sourceIdentity.reason}</dd></div>
         <div><dt>发行许可门禁</dt><dd>{currentDesktopSource.openReleaseBlockers.map((blocker, index) => <>{index > 0 && "、"}<code>{blocker}</code></>)} 仍为 OPEN；<a href="/THIRD_PARTY_NOTICES.txt">核对第三方说明</a></dd></div>
       </dl>
-      <p class="release-links"><a class="text-link" href="/get-started/">开始源码自托管 →</a><a class="text-link" href="/desktop/#build">原生构建前提 →</a></p>
     </section>
 
     <section aria-labelledby="historical-release-heading">
@@ -41,9 +49,13 @@ import {
       <div class="download-grid">
         {release.platforms.map((platform) => (
           <article class="download-card" aria-labelledby={`release-${platform.target}-heading`}>
-            <span class="platform-mark" aria-hidden="true">{platform.mark}</span>
-            <h3 id={`release-${platform.target}-heading`}>{platform.name}</h3>
-            <p class="arch">{platform.architecture}</p>
+            <header class="download-card-head">
+              <span class="platform-mark" aria-hidden="true">{platform.mark}</span>
+              <div>
+                <h3 id={`release-${platform.target}-heading`}>{platform.name}</h3>
+                <p class="arch">{platform.architecture}</p>
+              </div>
+            </header>
             <p class="format">{platform.format}</p>
             <dl class="release-meta">
               <div><dt>历史包内版本</dt><dd><code>{release.applicationVersion}</code></dd></div>
@@ -76,7 +88,7 @@ import {
       <p class="download-note">上方是历史资产记录，不是面向当前版本的安装推荐。Windows unsigned preview 仅供测试；macOS ad-hoc 不等于正式签名或公证。平台清单、摘要和历史冒烟不能替代安装／升级／卸载、GUI、真实 Provider 及许可验收。<a href="/desktop/">查看桌面说明</a>。</p>
     </section>
 
-    <section class="release-summary" aria-labelledby="release-evidence-heading">
+    <section class="release-summary release-summary-evidence" aria-labelledby="release-evidence-heading">
       <h2 id="release-evidence-heading">摘要、源码与缺失材料分别核对</h2>
       <p class="release-evidence-note">{release.checksums.evidence}</p>
       <p class="release-links"><a class="text-link" href={release.checksums.url} target="_blank" rel="noopener noreferrer">历史 SHA256SUMS.txt ↗</a><a class="text-link" href={release.source.tagEvidenceUrl} target="_blank" rel="noopener noreferrer">历史 tag → commit 证据 ↗</a></p>
@@ -105,5 +117,5 @@ pnpm --filter @agent-workspace/desktop package</code></pre>
       <a class="text-link" href={releaseRepository.url} target="_blank" rel="noopener noreferrer">浏览公开源码仓库，自行选择构建提交 ↗</a>
     </details>
     <a class="back-link" href="/">← 返回首页</a>
-  </section>
+  </div>
 </SiteLayout>

@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react"
+import type { PreferenceStorage } from "@/features/workspace/store"
 
 /**
  * Browser-local display preferences for the real project-management service.
@@ -162,19 +163,11 @@ function normalizeSettings(value: unknown): PmDisplaySettings {
   }
 }
 
-function parseStored(raw: string | null): PmDisplaySettings {
-  if (!raw) return pmDisplayDefaults
-  try {
-    return normalizeSettings(JSON.parse(raw))
-  } catch {
-    return pmDisplayDefaults
-  }
-}
-
 type Listener = () => void
+type DisplaySnapshot = { settings: PmDisplaySettings; storage: PreferenceStorage; dirty: boolean }
 
 /** Cached snapshots keep `useSyncExternalStore` from looping on every read. */
-const snapshots = new Map<string, PmDisplaySettings>()
+const snapshots = new Map<string, DisplaySnapshot>()
 const listeners = new Map<string, Set<Listener>>()
 let storageListening = false
 
@@ -184,35 +177,61 @@ function emit(key: string) {
   for (const listener of set) listener()
 }
 
+function loadSnapshot(key: string, previous?: DisplaySnapshot): DisplaySnapshot {
+  try {
+    const storage = getStorage()
+    if (!storage) throw new Error("Browser storage unavailable")
+    const raw = storage.getItem(key)
+    if (!raw) return { settings: pmDisplayDefaults, storage: "available", dirty: false }
+    const parsed: unknown = JSON.parse(raw)
+    const settings = normalizeSettings(parsed)
+    const recovered = typeof parsed !== "object" || parsed === null || Array.isArray(parsed)
+      || pmDisplaySettingKeys.some(field => (parsed as Record<string, unknown>)[field] !== settings[field])
+    return { settings, storage: recovered ? "recovered" : "available", dirty: false }
+  } catch (error) {
+    return error instanceof SyntaxError
+      ? { settings: pmDisplayDefaults, storage: "recovered", dirty: false }
+      : { settings: previous?.settings ?? pmDisplayDefaults, storage: "unavailable", dirty: false }
+  }
+}
+
+function refreshStoredSnapshot(key: string) {
+  const previous = snapshots.get(key)
+  // A failed local write remains authoritative in this tab until explicitly
+  // saved again. Another tab must not replace it with an older persisted value.
+  if (previous?.dirty) return
+  snapshots.set(key, loadSnapshot(key, previous))
+  emit(key)
+}
+
 function ensureStorageListener() {
   if (storageListening || typeof window === "undefined") return
   storageListening = true
   window.addEventListener("storage", (event) => {
+    if (event.storageArea && event.storageArea !== getStorage()) return
     if (event.key === null) {
-      snapshots.clear()
-      for (const key of listeners.keys()) emit(key)
+      for (const key of snapshots.keys()) refreshStoredSnapshot(key)
       return
     }
-    if (!event.key.startsWith(storagePrefix)) return
-    snapshots.delete(event.key)
-    emit(event.key)
+    if (!event.key.startsWith(`${storagePrefix}:`)) return
+    refreshStoredSnapshot(event.key)
   })
 }
 
-function snapshotFor(workspaceId?: string | null): PmDisplaySettings {
+function snapshotFor(workspaceId?: string | null): DisplaySnapshot {
   const key = storageKey(workspaceId)
   const cached = snapshots.get(key)
   if (cached) return cached
-  const next = parseStored(getStorage()?.getItem(key) ?? null)
+  const next = loadSnapshot(key)
   snapshots.set(key, next)
   return next
 }
 
-/** Read and validate the stored preferences for a workspace. */
+/** Read the current browser-local snapshot, including unpersisted session edits. */
 export function readPmDisplaySettings(
   workspaceId?: string | null,
 ): PmDisplaySettings {
-  return parseStored(getStorage()?.getItem(storageKey(workspaceId)) ?? null)
+  return snapshotFor(workspaceId).settings
 }
 
 /** Persist validated preferences for a workspace and update mounted consumers. */
@@ -222,25 +241,30 @@ export function writePmDisplaySettings(
 ): void {
   const key = storageKey(workspaceId)
   const next = normalizeSettings(settings)
+  let storageStatus: PreferenceStorage = "available"
   try {
-    getStorage()?.setItem(key, JSON.stringify(next))
+    const storage = getStorage()
+    if (!storage) throw new Error("Browser storage unavailable")
+    storage.setItem(key, JSON.stringify(next))
   } catch {
-    // Storage can be unavailable (private mode/quota); the in-memory snapshot
-    // still keeps the current session consistent.
+    storageStatus = "unavailable"
   }
-  snapshots.set(key, next)
+  snapshots.set(key, { settings: next, storage: storageStatus, dirty: storageStatus === "unavailable" })
   emit(key)
 }
 
-/** Remove stored preferences for a workspace and restore showcase defaults. */
+/** Remove stored preferences for a workspace and restore layout defaults. */
 export function resetPmDisplaySettings(workspaceId?: string | null): void {
   const key = storageKey(workspaceId)
+  let storageStatus: PreferenceStorage = "available"
   try {
-    getStorage()?.removeItem(key)
+    const storage = getStorage()
+    if (!storage) throw new Error("Browser storage unavailable")
+    storage.removeItem(key)
   } catch {
-    // Ignore unavailable storage; the in-memory snapshot is still reset.
+    storageStatus = "unavailable"
   }
-  snapshots.set(key, pmDisplayDefaults)
+  snapshots.set(key, { settings: pmDisplayDefaults, storage: storageStatus, dirty: storageStatus === "unavailable" })
   emit(key)
 }
 
@@ -274,8 +298,25 @@ export function usePmDisplaySettings(
       subscribePmDisplaySettings(workspaceId, onStoreChange),
     [workspaceId],
   )
-  const getSnapshot = useCallback(() => snapshotFor(workspaceId), [workspaceId])
+  const getSnapshot = useCallback(() => snapshotFor(workspaceId).settings, [workspaceId])
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
+
+const getServerStorageSnapshot = (): PreferenceStorage => "unavailable"
+
+/** Read this workspace's persistence status without rereading older storage. */
+export function readPmDisplayStorage(workspaceId?: string | null): PreferenceStorage {
+  return snapshotFor(workspaceId).storage
+}
+
+/** Persistence status for this workspace's layouts, separate from site preferences. */
+export function usePmDisplayStorage(workspaceId?: string | null): PreferenceStorage {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => subscribePmDisplaySettings(workspaceId, onStoreChange),
+    [workspaceId],
+  )
+  const getSnapshot = useCallback(() => readPmDisplayStorage(workspaceId), [workspaceId])
+  return useSyncExternalStore(subscribe, getSnapshot, getServerStorageSnapshot)
 }
 
 /** One display preference for a workspace, reactive and cached. */

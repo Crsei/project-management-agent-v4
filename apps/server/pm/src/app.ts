@@ -41,10 +41,14 @@ import { readMemberDirectory } from '../../../../packages/application/src/member
 import type { InvitationMailConfig } from '../../../../packages/infrastructure/src/invitation-mail.ts';
 import { registerInvitationRoutes } from './invitation-routes.ts';
 import { registerInstanceSetupRoutes } from './instance-setup-routes.ts';
+import { registerRegistrationRoutes } from './registration-routes.ts';
 import { registerWorkspaceCreationRoutes } from './workspace-creation-routes.ts';
+import { registerOnboardingRoutes } from './onboarding-routes.ts';
 import { readTeamDirectory } from '../../../../packages/application/src/team-directory.ts';
 import { readTeamWorkload } from '../../../../packages/application/src/team-workload.ts';
 import { registerWorkspaceIdentityRoutes } from './workspace-identity-routes.ts';
+import { registerPeopleRoutes } from './people-routes.ts';
+import { registerMemberLifecycleRoutes } from './member-lifecycle-routes.ts';
 import { registerAccountSecurityRoutes } from './account-security-routes.ts';
 import { readTaskComments, readTaskCommentHistory, taskCommentsOptionsSchema, taskCommentHistoryOptionsSchema } from '../../../../packages/application/src/task-comments.ts';
 import { taskCommentIdSchema } from '../../../../packages/domain/src/task-comments.ts';
@@ -74,21 +78,38 @@ import { authorizeAutomationStudioService } from '../../../../packages/applicati
 import { createAgentWorkspaceExecutionClient, createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
 import { createAutomationDefinitionClient } from '../../../../packages/infrastructure/src/automation-integrations-definitions.ts';
 import type { StudioExecutionPort, StudioWorkspaceExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
+import type { ImGatewayConfig } from '../../../../packages/infrastructure/src/im-gateway-config.ts';
+import { findImTaskWatch } from '../../../../packages/application/src/im-gateway.ts';
+import { registerImRoutes } from './im-routes.ts';
+import { createImSatoriRuntime, type ImRuntime } from './im-satori.ts';
 import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import { registerDocumentSourceRoutes } from './document-source-routes.ts';
 import { registerWorkflowTaskTransitionRoutes } from './workflow-task-transition-routes.ts';
 import { registerChangeHistoryRoutes } from './change-history-routes.ts';
+import { registerTaskBriefRoutes } from './task-brief-routes.ts';
 import { recordExternalDocumentHistory } from '../../../../packages/application/src/change-history.ts';
 import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
 import { currentPmAutomationOrigin } from '../../../../packages/application/src/automation-pm-signals.ts';
 import { createAgentChatTools } from './agent-chat-tools.ts';
+import { createCollaborationToolFamily } from './agent-tool-collaboration.ts';
+import { createAdministrationToolFamily } from './agent-tool-administration.ts';
+import { createDocumentsFilesToolFamily } from './agent-tool-documents-files.ts';
+import { createDashboardToolFamily } from './agent-tool-dashboard.ts';
+import { createPlanningRecordsToolFamily } from './agent-tool-planning-records.ts';
+import { createAutomationToolFamily } from './agent-tool-automation.ts';
+import { createIntegrationsToolFamily } from './agent-tool-integrations.ts';
+import { createAutomationIntegrationsService } from '../../../../packages/application/src/automation-integrations.ts';
+import { createAutomationEventsService } from '../../../../packages/application/src/automation-events.ts';
+import { inspectAutomationIntegrationReceipt } from '../../../../packages/application/src/automation-integrations-store.ts';
+import type { PmAutomationMutationPort } from '../../../../packages/application/src/automation-pm.ts';
+import type { ImConnectivity } from '../../../../packages/contracts/src/im-gateway.ts';
 import { artifactVisibilitySchema, type ArtifactVisibility } from '../../../../packages/contracts/src/artifact-files.ts';
 import { createProjectBlobStore, initializeProjectBlobStorage, checkProjectBlobStorage } from '../../../../packages/infrastructure/src/project-blobs.ts';
 import { readProjectLocation, enumerateProjectMounts, type ProjectMount } from '../../../../packages/pm-core/project-locations.ts';
 import { allowedDirectory, assertLocalProjectWritable, beginLocalProjectOperation, requireLocalManagement, type LocalProjectConfiguration } from '../../../../packages/application/src/local-projects.ts';
 import { maintainLocalProjectStorage } from '../../../../packages/infrastructure/src/local-project-storage-maintenance.ts';
 
-const projectMetadataWrites: Readonly<Record<string, true>> = { SetProjectCover: true, SetProjectScope: true, SetProjectTeams: true, CreateTaskComment: true, UpdateTaskComment: true, DeleteTaskComment: true, RestoreTaskComment: true, StageUpload: true, RegisterArtifact: true, AddArtifactVersion: true, RenameArtifact: true, HideArtifact: true, RestoreArtifact: true, CopyArtifactVersion: true };
+const projectMetadataWrites: Readonly<Record<string, true>> = { SetProjectCover: true, SetProjectScope: true, SetProjectTeams: true, SetProjectParticipants: true, CreateTaskComment: true, UpdateTaskComment: true, DeleteTaskComment: true, RestoreTaskComment: true, StageUpload: true, RegisterArtifact: true, AddArtifactVersion: true, RenameArtifact: true, HideArtifact: true, RestoreArtifact: true, CopyArtifactVersion: true };
 
 const coreLocks = new Map<string, Promise<void>>();
 async function withCoreLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
@@ -117,7 +138,7 @@ function browserOriginAllowed(origin: string, configured: string): boolean {
   } catch { return false; }
 }
 
-export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; automationRuntime?: StudioExecutionPort; agentWorkspaceExecution?: StudioWorkspaceExecutionPort; signal?: AbortSignal } = {}) {
+export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; automationRuntime?: StudioExecutionPort; agentWorkspaceExecution?: StudioWorkspaceExecutionPort; im?: ImGatewayConfig; signal?: AbortSignal } = {}) {
   if ((options.blobStore === undefined) !== (options.blobStorageLocator === undefined)) throw new Error('Blob provider and locator must be supplied together');
   // Bound receiving a request, not durable work after its body has arrived.
   // A socket idle timer otherwise cuts off valid slow commits as unknown.
@@ -151,7 +172,9 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   const automationRuntime = options.automationRuntime ?? createConfiguredAutomationExecutionPort();
   const automationDefinitions = createAutomationDefinitionClient();
-  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime, definitionResolver: automationDefinitions, workspaceExecution: options.agentWorkspaceExecution ?? createAgentWorkspaceExecutionClient() });
+  const automationWorkspaceExecution = options.agentWorkspaceExecution ?? createAgentWorkspaceExecutionClient();
+  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime, definitionResolver: automationDefinitions, workspaceExecution: automationWorkspaceExecution });
+  let imRuntime: ImRuntime | undefined;
   const controller = new AbortController();
   const abort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abort, { once: true });
@@ -192,6 +215,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     await startupWork;
   });
   app.addHook('onClose', async () => {
+    imRuntime?.stop();
     controller.abort();
     options.signal?.removeEventListener('abort', abort);
     // A hook timeout does not cancel its Promise. Join late initialization before
@@ -207,7 +231,8 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       }
     }
   });
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.routeOptions.url === '/api/v1/auth/register') reply.header('Cache-Control', 'private, no-store').header('Referrer-Policy', 'no-referrer');
     const origin = request.headers.origin;
     if (origin && !browserOriginAllowed(origin, options.publicOrigin ?? 'http://127.0.0.1:4194')) {
       request.log.warn({ origin }, 'Request origin is not allowed');
@@ -253,7 +278,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   async function validateInvitationProjects(sql: SqlExecutor, principal: Actor, workspaceId: string, projectIds: string[]): Promise<void> {
     await requireCapability(sql, principal, workspaceId, 'access.manage');
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
-    const workspace = await coreWorkspaces.get(workspaceId);
+    const workspace = await coreWorkspaces.get(workspaceId, sql);
     for (const projectId of projectIds) {
       let record;
       try { record = workspace.get(projectId); }
@@ -267,7 +292,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     const requireRead = () => {
       if (!coreScope.membership.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
     };
-    const workspace = await coreWorkspaces.get(workspaceId);
+    const workspace = await coreWorkspaces.get(workspaceId, sql);
     let writableInputs: Promise<void> | undefined;
     const prepareProjectWrite = () => writableInputs ??= workspace.rescan('project_metadata').then(() => {
       workspace.assertWritable();
@@ -383,6 +408,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   app.get('/api/v1/capabilities', async () => ({ stage: pool ? 'backend' : 'bootstrap', business: { enabled: Boolean(pool) }, database: { enabled: Boolean(pool) }, storage: { enabled: Boolean(pool && options.blobStorageLocator) }, markdownCore: { enabled: Boolean(pool) }, localProjects: { enabled: Boolean(pool && localProjects.enabled) }, worker: { enabled: Boolean(pool) }, realtime: { enabled: Boolean(pool) }, execution: { enabled: false }, accountRecovery: { request: { enabled: Boolean(pool && options.accountRecoveryMail) }, verification: { enabled: Boolean(pool && options.accountRecoveryMail) } } }));
   app.get('/openapi.json', async () => buildOpenApi(registry));
   registerInstanceSetupRoutes(app, { database, cookieOptions, sample: { coreRoot, localProjects } });
+  registerRegistrationRoutes(app, { database, cookieOptions });
   app.post('/api/v1/auth/login', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const body = z.strictObject({ email: z.string().max(254), password: z.string().max(256) }).parse(request.body);
@@ -394,6 +420,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   app.get('/api/v1/auth/me', async (request, reply) => { reply.header('Cache-Control', 'no-store'); return { actor: await actor(request) }; });
   registerAccountSecurityRoutes(app, { database, token });
   registerAccountRecoveryRoutes(app, { database, token, ...(options.accountRecoveryMail ? { mailConfig: options.accountRecoveryMail } : {}) });
+  registerOnboardingRoutes(app, { database, actor });
   registerWorkspaceCreationRoutes(app, { database, actor, sample: { coreRoot, localProjects } });
   app.get('/api/v1/workspaces/:workspaceId/members', async (request) => listMembers(database(), await actor(request), params(request).workspaceId));
   app.get('/api/v1/workspaces/:workspaceId/members/directory', async request => {
@@ -402,17 +429,60 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   registerInvitationRoutes(app, { database, actor, ...(options.invitationMail ? { mailConfig: options.invitationMail } : {}), validateProjects: validateInvitationProjects });
   registerWorkspaceIdentityRoutes(app, { database, actor });
+  registerPeopleRoutes(app, { read: (request, workspaceId, reader) => dashboardRead(request, workspaceId, reader, true) });
+  registerMemberLifecycleRoutes(app, { database, actor, read: applicationRead, execute: executeNativeCommand, receipt: readNativeCommandReceipt });
   registerArtifactFilesRoutes(app, { database, actor, coreAccessFor });
   registerAutomationRoutes(app, { database, actor, core: notificationCore });
   registerAutomationStudioRoutes(app, { database, actor, core: notificationCore, runtime: automationRuntime, studio: automationStudio });
   registerAutomationGitSyncRoutes(app, { database, actor, core: notificationCore, studio: automationStudio });
   registerAutomationEventsRoutes(app, { database, actor, core: notificationCore, definitionResolver: automationDefinitions, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) });
+  const documentSourceOptions = { database, actor, history: recordExternalDocumentHistory, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async (workspaceId: string, sql: SqlExecutor) => {
+    if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
+    return coreWorkspaces.get(workspaceId, sql);
+  } };
+  function executeToolCommand(principal: Actor, workspaceId: string, command: Command, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<CommandReceipt> {
+    return executeNativeCommand(principal, workspaceId, command, checkAuthorization, { kind: currentPmAutomationOrigin() ? 'automation' : 'agent', requesterId: principal.id });
+  }
+  function readToolCommandReceipt(principal: Actor, workspaceId: string, command: Command): Promise<CommandReceipt | null> {
+    return readExternalReceipt(database(), principal, workspaceId, command.commandId, requestHash(command as unknown as Record<string, unknown>), notificationCore);
+  }
+  function imConnectivity(): ImConnectivity {
+    return imRuntime?.status() ?? { satori: { state: 'disconnected', readyAt: null, lastEventAt: null, lastErrorCode: null }, bots: [] };
+  }
+  let automationMutations: PmAutomationMutationPort | undefined;
   const chatTools = coreWorkspaces ? createAgentChatTools({
-    database, coreWorkspaces, executeCommand: (principal, workspaceId, command, checkAuthorization) => executeNativeCommand(principal, workspaceId, command, checkAuthorization, { kind: currentPmAutomationOrigin() ? 'automation' : 'agent', requesterId: principal.id }), readCommandReceipt: readNativeCommandReceipt,
+    database, coreWorkspaces, executeCommand: executeToolCommand, readCommandReceipt: readNativeCommandReceipt,
     readComments: (principal, workspaceId, taskId, input) => applicationRead(principal, workspaceId, ctx => readTaskComments(ctx, taskId, input)),
     localProjects: { enabled: localProjects.enabled, defaultParent: localProjects.defaultParent },
+    families: [
+      createCollaborationToolFamily({ database, core: notificationCore, sources: documentSourceOptions, applicationRead, executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
+      createAdministrationToolFamily({ database, applicationRead, coreWorkspaces, localProjects,
+        executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt,
+        checkMount: mount => checkProjectBlobStorage(storagePool ?? database(), mount),
+        ...(options.invitationMail ? { invitationMail: options.invitationMail } : {}) }),
+      createDocumentsFilesToolFamily({ database, sources: documentSourceOptions, coreAccessFor,
+        executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
+      createDashboardToolFamily({ readDashboard: applicationRead, coreAccessFor,
+        executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
+      createPlanningRecordsToolFamily({ database, coreWorkspaces, executeCommand: executeToolCommand }),
+      createAutomationToolFamily({ database, core: notificationCore, runtime: automationRuntime,
+        definitionResolver: automationDefinitions, workspaceExecution: automationWorkspaceExecution,
+        // Native candidate application uses the final shared tool set, initialized below.
+        get mutations() {
+          if (!automationMutations) throw new DomainError('backend_not_initialized', 'Automation mutations are unavailable', 503);
+          return automationMutations;
+        } }),
+      createIntegrationsToolFamily({ database,
+        integrations: createAutomationIntegrationsService({ database, core: notificationCore, definitionResolver: automationDefinitions }),
+        events: createAutomationEventsService({ database, core: notificationCore, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) }),
+        inspectIntegrationReceipt: (actorId, workspaceId, requestId) => inspectAutomationIntegrationReceipt(database(), actorId, workspaceId, requestId),
+        ...(options.webhooks ? { webhookConfig: options.webhooks } : {}),
+        imConfiguration: () => options.im ? 'configured' : 'disabled', imConnectivity,
+        executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
+    ],
   }) : undefined;
-  registerPmAutomationRoutes(app, { database, actor, core: notificationCore, ...(coreWorkspaces && chatTools ? { mutations: createPmAutomationMutationPort({ database, coreWorkspaces, tools: chatTools }) } : {}) });
+  if (coreWorkspaces && chatTools) automationMutations = createPmAutomationMutationPort({ database, coreWorkspaces, tools: chatTools });
+  registerPmAutomationRoutes(app, { database, actor, core: notificationCore, ...(automationMutations ? { mutations: automationMutations } : {}) });
   registerAgentToolRoutes(app, { database, actor, coreWorkspaces, tools: chatTools });
   registerAgentCoreFilesRoutes(app, { database, actor, coreWorkspaces });
   registerAgentReferenceRoutes(app, { database, actor, coreWorkspaces });
@@ -420,6 +490,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAgentIssueSearchRoutes(app, { database, actor, coreWorkspaces });
   registerAgentPreviewRoutes(app, { database, actor, coreWorkspaces });
   registerWorkflowTaskTransitionRoutes(app, { database, actor, coreWorkspaces });
+  registerTaskBriefRoutes(app, { database, actor, coreWorkspaces });
   registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces });
   registerNotificationRoutes(app, { database, actor, core: notificationCore });
   registerWebhookRoutes(app, { database, actor, ...(options.webhooks ? { config: options.webhooks } : {}) });
@@ -488,7 +559,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
         ? `${scope.workspaceId}:intent:${String(parsed.payload.intentId).toLowerCase()}:${String(parsed.payload.acceptedRevision)}`
         : `${scope.workspaceId}:${principal.id}:${parsed.commandId}`;
       const receipt = await withCoreLock(lockKey, async () => {
-        const prior = await readExternalReceipt(database(), principal, scope.workspaceId, parsed.commandId, hash);
+        const prior = await readExternalReceipt(database(), principal, scope.workspaceId, parsed.commandId, hash, notificationCore);
         if (prior) return prior;
         const saved = journal.find(parsed.commandId, principal.id);
         if (saved) {
@@ -546,12 +617,12 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     const parsed = parseNativeCommand(input);
     if (/^(CreateSession|CloseSession|CreateRun|RetryRun|StartRun|RequestApproval|GrantApproval|DenyApproval|RecordRun|ReconcileRun)/.test(parsed.commandType)) throw new DomainError('capability_not_enabled', 'Agent execution belongs to phase three', 409);
     if (coreWorkspaces && isCoreCommand(parsed.commandType)) return executeCoreRequest(principal, { workspaceId }, parsed, false, checkAuthorization, trustedSource);
-    const coreAccess = coreWorkspaces ? await coreAccessFor(principal, workspaceId, database(), Object.hasOwn(projectMetadataWrites, parsed.commandType)) : undefined;
+    const coreAccess = coreWorkspaces ? (sql: SqlExecutor) => coreAccessFor(principal, workspaceId, sql, Object.hasOwn(projectMetadataWrites, parsed.commandType)) : undefined;
     return runCommand(database(), principal, workspaceId, parsed, registry, coreAccess, notificationCore, checkAuthorization, trustedSource);
   }
   async function readNativeCommandReceipt(principal: Actor, workspaceId: string, input: Command): Promise<CommandReceipt | null> {
     const parsed = parseNativeCommand(input), hash = requestHash(parsed as unknown as Record<string, unknown>);
-    const prior = await readExternalReceipt(database(), principal, workspaceId, parsed.commandId, hash);
+    const prior = await readExternalReceipt(database(), principal, workspaceId, parsed.commandId, hash, notificationCore);
     if (prior || !coreWorkspaces || !isCoreCommand(parsed.commandType)) return prior;
     const scope = await authorizeCoreScope(database(), principal, workspaceId, 'domain.read');
     const workspace = await coreWorkspaces.get(workspaceId);
@@ -623,14 +694,10 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     return readChanges(database(), await actor(request), params(request).workspaceId, query.after, query.projectId);
   });
   registerEventStream(app, database, actor);
-  registerAgentFileAreaRoutes(app, { database, actor, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async workspaceId => {
+  registerAgentFileAreaRoutes(app, { database, actor, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async (workspaceId, sql) => {
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
-    return coreWorkspaces.get(workspaceId);
+    return coreWorkspaces.get(workspaceId, sql);
   } });
-  const documentSourceOptions = { database, actor, history: recordExternalDocumentHistory, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async (workspaceId: string) => {
-    if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
-    return coreWorkspaces.get(workspaceId);
-  } };
   registerDocumentSourceRoutes(app, documentSourceOptions);
   registerChangeHistoryRoutes(app, { database, actor, core: notificationCore, sources: documentSourceOptions });
   // The Markdown core is authoritative for its objects; PM-only modules keep their own storage.
@@ -640,5 +707,35 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       await maintainLocalProjectStorage({ pool: database(), coreRoot, workspaceId, projectId, targetRoot, targetMode, operationId, kind, stopped: writersStopped, legacy: legacyBlobs, workspace, sql, persistSql: storagePool ?? database() });
     },
     recoverLocalCommand: async (request, workspaceId, command) => { await executeCoreRequest(await actor(request), { workspaceId }, command, true); } });
+  if (options.im) {
+    imRuntime = createImSatoriRuntime({
+      config: options.im,
+      database,
+      publicOrigin: options.publicOrigin ?? 'http://127.0.0.1:3224',
+      log: (event, fields) => app.log.info(fields ?? {}, event),
+      ports: {
+        execute: (principal, workspaceId, command) => executeNativeCommand(principal, workspaceId, command),
+        list: async (principal, workspaceId, kind, limit, projectId) => {
+          if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
+          const scope = await authorizeCoreScope(database(), principal, workspaceId, 'domain.read');
+          const page = await listCoreEntities(await coreWorkspaces.get(workspaceId), scope, { kind, limit, ...(projectId ? { project: projectId } : {}) });
+          return page.items;
+        },
+        read: async (principal, workspaceId, id) => {
+          if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
+          const scope = await authorizeCoreScope(database(), principal, workspaceId, 'domain.read');
+          return readCoreEntity(await coreWorkspaces.get(workspaceId), scope, id);
+        },
+        findWatch: (principal, workspaceId, taskId, projectId) => findImTaskWatch(database(), principal, workspaceId, taskId, projectId),
+      },
+    });
+    app.addHook('onReady', async () => { imRuntime?.start(); });
+  }
+  registerImRoutes(app, {
+    database,
+    actor,
+    config: options.im,
+    status: imConnectivity,
+  });
   return app;
 }

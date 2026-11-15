@@ -72,3 +72,20 @@ export function roadmapRead(project: FileRecord, files: FileRecord[]): RoadmapRe
   return { projectId: project.id, title: project.entity.title, revision: project.revision, archived: !!project.entity.archived, store, tasks };
 }
 export function saveRoadmapDraft(store: RoadmapStore, draft: RoadmapPlan): RoadmapStore { return { ...store, draft: structuredClone(draft) }; }
+
+/** Stable original published node keys, topologically ordered with the complete dependency closure. */
+export function roadmapDependencyClosure(release: RoadmapRelease, selectedNodeIds: readonly string[]): string[] {
+  if (!selectedNodeIds.length || selectedNodeIds.length > 24 || new Set(selectedNodeIds).size !== selectedNodeIds.length) fail('请选择1至24个不重复的发布节点。');
+  const nodes = new Map(release.plan.nodes.map(node => [node.id, node]));
+  const visiting = new Set<string>(), visited = new Set<string>(), result: string[] = [];
+  const visit = (id: string): void => {
+    if (visited.has(id)) return;
+    const node = nodes.get(id);
+    if (!node || visiting.has(id)) fail('发布节点或依赖无效；不会创建任务。');
+    visiting.add(id);
+    for (const dependency of node!.dependsOn) visit(dependency);
+    visiting.delete(id); visited.add(id); result.push(id);
+  };
+  for (const id of selectedNodeIds) visit(id);
+  return result;
+}

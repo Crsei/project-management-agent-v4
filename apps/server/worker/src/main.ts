@@ -18,6 +18,8 @@ import { createAgentWorkspaceExecutionClient, createConfiguredAutomationExecutio
 import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
 import { runAutomationGitSyncCycle } from '../../../../packages/application/src/automation-git-sync.ts';
 import { runPmAutomationSignalBatch } from '../../../../packages/application/src/automation-pm-signals.ts';
+import { readImGatewayConfig } from '../../../../packages/infrastructure/src/im-gateway-config.ts';
+import { deliverImBatch, enqueueImNotifications } from '../../../../packages/application/src/im-delivery.ts';
 
 if (Object.keys(process.env).some(key => /^(?:AWS_|S3_|SOURCE_S3_|TARGET_S3_)/.test(key))) throw new Error('Worker must not receive blob credentials or ambient cloud identity');
 
@@ -25,6 +27,7 @@ const config = runtimeConfig();
 const invitationMail = readInvitationMailConfig();
 const recoveryMail = readAccountRecoveryMailConfig();
 const webhooks = readWebhookConfig();
+const im = readImGatewayConfig();
 // The readonly core port follows the same durable project mapping as the API,
 // including external mounts; it never initializes or repairs missing roots.
 const notificationCore = readonlyCorePort(workspaceId => path.join(config.coreWorkspaceRoot, workspaceId));
@@ -64,12 +67,17 @@ try {
     runAuxiliaryLoop('automation_execution_cycle_failed', () => runAutomationStudioBatch(pool, notificationCore, automationRuntime, id, { workspaceExecution })),
     runAuxiliaryLoop('automation_git_sync_cycle_failed', () => runAutomationGitSyncCycle({ database: () => pool, core: notificationCore, studio: automationStudio })),
     runWebhookLoop(pool, webhooks, controller.signal, { intervalMs: config.workerIntervalMs, workerId: id }),
+    ...(im ? [
+      runAuxiliaryLoop('im_notification_cycle_failed', () => enqueueImNotifications(pool, notificationCore, config.publicOrigin)),
+      runAuxiliaryLoop('im_delivery_cycle_failed', () => deliverImBatch(pool, im)),
+    ] : []),
   );
   while (!controller.signal.aborted) {
     try {
       const published = await publishOutboxBatch(pool);
       if (Date.now() - lastMaintenance > 60_000) {
         await pruneEventHistory(pool, config.eventRetentionDays);
+        if (im) await pool.query("DELETE FROM im_link_attempts WHERE attempted_at<now()-interval '1 day'").catch(() => undefined);
         lastMaintenance = Date.now();
       }
       await recordHeartbeat(pool, id, { published, state: 'running' });

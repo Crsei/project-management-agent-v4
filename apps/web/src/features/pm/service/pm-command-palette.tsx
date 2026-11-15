@@ -47,7 +47,7 @@ export function PmCommandPalette() {
           {workspace.capabilities.includes("access.manage") && workspace.projectIds === null && <Command.Item onSelect={() => go(`${base}/members?tab=members&panel=invitations`)}>{en ? "Member invitations" : "成员邀请"}</Command.Item>}
         </Command.Group>}
         {workspace && <Command.Group heading={en ? "Settings" : "设置"}>
-          {[["general", en ? "General" : "通用设置"], ["profile", en ? "Profile" : "个人资料"], ["billing", en ? "Billing" : "账单与支付"], ["plans", en ? "Plans" : "套餐"], ["plugins", en ? "Plugins" : "插件中心"], ["notifications", en ? "Notification preferences" : "通知偏好"]].map(([path, label]) => <Command.Item key={path} value={`settings ${path} ${label}`} onSelect={() => go(`${base}/settings/${path}`)}>{label}</Command.Item>)}
+          {[["general", en ? "General" : "通用设置"], ["profile", en ? "Profile" : "个人资料"], ["billing", en ? "Billing service" : "账单服务"], ["plans", en ? "Plans & usage" : "套餐与用量"], ["plugins", en ? "Integration catalog" : "集成目录"], ["im", en ? "Instant messaging" : "即时通讯"], ["notifications", en ? "Notification preferences" : "通知偏好"]].map(([path, label]) => <Command.Item key={path} value={`settings ${path} ${label}`} onSelect={() => go(`${base}/settings/${path}`)}>{label}</Command.Item>)}
           <Command.Item onSelect={() => go(`${base}/settings?section=local-storage`)}>{en ? "Local project storage" : "本地项目存储"}</Command.Item>
         </Command.Group>}
         <Command.Group heading={en ? "Projects" : "项目"}>{projects.data?.map(project => <Command.Item key={project.id} value={`${project.id} ${project.data.name}`} onSelect={() => openEntity(project.id, "project")}>{String(project.data.name ?? project.id)}</Command.Item>)}</Command.Group>

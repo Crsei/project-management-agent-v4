@@ -13,6 +13,7 @@ export function localProjectApi(client: ProjectManagementClient, workspaceId: st
     settings: (signal?: AbortSignal) => local.settings(workspaceId, signal),
     saveSettings: (defaultParent: string) => local.saveSettings(workspaceId, { defaultParent }),
     directories: (path?: string, signal?: AbortSignal) => local.directories(workspaceId, path, signal),
+    probe: (path: string, signal?: AbortSignal) => local.probe(workspaceId, path, signal),
     preview: (directory: LocalDirectory) => local.preview(workspaceId, { directory }),
     initialize: (input: LocalProjectInitialization, key: string) => attempt(local.initialize(workspaceId, key, input)),
     attempt: (key: string) => attempt(local.initialization(workspaceId, key)),

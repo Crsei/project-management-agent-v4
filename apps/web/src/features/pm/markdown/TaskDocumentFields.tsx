@@ -239,7 +239,7 @@ export function TaskProperties({
     <PropertyChip icon={UserRound} label={en ? 'Assignee' : '负责人'} display={member?.name ?? (assignee || (en ? 'Assignee' : '负责人'))} empty={!member && !assignee} disabled={disabled} invalid={!!propertyError('assignee')} testId="field-assignee">
       {close => <>
         <Option selected={!assignee} muted onClick={() => { onChange({ assignee: null }); close(); }}>{en ? 'Unassigned' : '未分配'}</Option>
-        {assignee && !member && <Option selected onClick={() => { onChange({ assignee }); close(); }}>{en ? 'Current assignee unavailable' : '原负责人不可用'}<span className="doc-option-meta">{assignee}</span></Option>}
+        {assignee && !member && <p className="doc-popover-empty" role="status">{en ? 'Current assignee unavailable' : '原负责人不可用'}<span className="doc-option-meta">{assignee}</span></p>}
         {members.map(item => <Option key={item.userId} selected={item.userId === assignee} onClick={() => { onChange({ assignee: item.userId }); close(); }}><UserRound size={13} aria-hidden="true" />{item.name}<span className="doc-option-meta">{item.userId}</span></Option>)}
         {members.length === 0 && <p className="doc-popover-empty">{en ? 'No assignable member is available.' : '没有可分派的成员。'}</p>}
       </>}
@@ -406,7 +406,7 @@ export function InlineSubtasks({ items, configuration, members, disabled, en, ma
               <span>{en ? 'Assignee' : '负责人'}</span>
               <RadixSelect value={assignee} disabled={locked} onChange={event => onChange(item.draftId, { values: { assignee: event.target.value || null } })}>
                 <option value="">{en ? 'Unassigned' : '未分配'}</option>
-                {assignee && !member && <option value={assignee}>{en ? 'Current assignee unavailable' : '原负责人不可用'}</option>}
+                {assignee && !member && <option value={assignee} disabled>{en ? 'Current assignee unavailable' : '原负责人不可用'}</option>}
                 {members.map(candidate => <option key={candidate.userId} value={candidate.userId}>{candidate.name} · {candidate.userId}</option>)}
               </RadixSelect>
             </label>

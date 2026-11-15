@@ -3,7 +3,7 @@ import test from "node:test"
 import { parseSetupResponse, parseSetupStatus, setupEntryState, setupWorkspaceId } from "./pm-first-use-model.ts"
 
 const prepared = { initialized: false, setupAllowed: true, registrationMode: "invite_only" } as const
-const initialized = { initialized: true, setupAllowed: false, registrationMode: "invite_only" } as const
+const initialized = { initialized: true, setupAllowed: false, registrationMode: "open" } as const
 const firstWorkspace = "63d855c1-e5bb-4cda-b393-389fe4689a68"
 const otherWorkspace = "f7b459ac-81f7-4f1e-9c73-c48daa404705"
 
@@ -24,6 +24,7 @@ test("a failed or malformed status is never interpreted as an empty instance", (
   for (const value of [null, {}, { error: { code: "temporarily_unavailable" } }, { ...prepared, initialized: "false" }, { ...prepared, registrationMode: "public" }]) {
     assert.throws(() => parseSetupStatus(value))
   }
+  assert.equal(parseSetupStatus({ ...initialized, registrationMode: "invite_only" }).registrationMode, "invite_only")
   assert.throws(() => parseSetupStatus({ ...initialized, setupAllowed: true }))
 })
 

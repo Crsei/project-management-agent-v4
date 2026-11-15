@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, open, readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { z } from 'zod';
@@ -13,12 +13,14 @@ import { readProjectLocation } from '../../../../packages/pm-core/project-locati
 import { readStoredBlob } from '../../../../packages/infrastructure/src/project-blobs.ts';
 import { registerRestoredBootstrap, validateBootstrapState } from './bootstrap.ts';
 import { ensurePrivateDirectory } from '../private-state.mjs';
-import { copyTree, hashFile, snapshotTree, treeManifestSchema, verifyTree } from './maintenance-files.ts';
+import { copyTree } from './maintenance-files.ts';
+import { hashFile, snapshotTree, treeManifestSchema, verifyTree } from '../../../../packages/infrastructure/src/maintenance-tree.ts';
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
 import { verifyInventoryObjects } from '../../../../packages/infrastructure/src/blob-storage-inventory.ts';
 import { assertBackupCompatibility, requireTrustedBackupSource, withPrivateMaintenanceDirectory } from '../maintenance-archive.mjs';
 import { directoryIdentity } from '../../../../packages/pm-core/platform.ts';
 import { maintenanceDiagnostic, maintenanceErrorReason } from '../maintenance-diagnostics.mjs';
+import { createStoppedRecoverySet, recoverySetSchema, verifyStoppedRecoverySet, writeStoppedRecoverySet } from '../../../server/agent/src/maintenance/recovery-set.ts';
 
 let diagnosticOperation = 'unknown';
 let diagnosticPhase = 'request';
@@ -28,6 +30,7 @@ const requestSchema = z.strictObject({
   operation: z.enum(['backup', 'restore', 'validate']), databaseUrl: z.string(), dataDir: z.string(),
   destination: z.string().optional(), source: z.string().optional(), postgresRoot: z.string(), serverRoot: z.string(),
   trustedSourceAcknowledged: z.boolean().optional(),
+  stoppedWritersAcknowledged: z.boolean().optional(),
   monitor: z.strictObject({ pid: z.number().int().positive(), backendStart: z.string().min(1).max(64) }).optional(),
 });
 type Request = z.infer<typeof requestSchema>;
@@ -38,6 +41,7 @@ const manifestSchema = z.strictObject({
   blobManifestSha256: digest, files: localProjectCheckpointSchema, sourceChatRoot: z.string(),
   chatFiles: treeManifestSchema.nullable(), agentPresent: z.boolean(), agentManifestSha256: digest.nullable(),
   exclusions: z.array(z.string()),
+  recoverySet: recoverySetSchema.optional(),
 });
 
 async function exists(filename: string): Promise<boolean> {
@@ -73,9 +77,9 @@ function pgEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
     PGPASSWORD: decodeURIComponent(database.password), PGDATABASE: decodeURIComponent(database.pathname.slice(1)), PGCONNECT_TIMEOUT: '10' };
 }
 function pgCommand(request: Request, name: string): string { return join(request.postgresRoot, 'bin', name + (process.platform === 'win32' ? '.exe' : '')); }
-async function agentMaintenance(request: Request, operation: 'backup' | 'restore', source: string, destination: string): Promise<void> {
+async function agentMaintenance(request: Request, operation: 'backup' | 'restore' | 'source-state', source: string, destination?: string): Promise<string> {
   const entry = join(request.serverRoot, 'apps/server/agent/dist/desktop-agent-maintenance.mjs');
-  await command(process.execPath, [entry], { ...process.env, PM_DESKTOP_MANAGED: '1' }, { operation, source, destination });
+  return command(process.execPath, [entry], { ...process.env, PM_DESKTOP_MANAGED: '1' }, { operation, source, destination });
 }
 async function assertStopped(pool: Pool, monitor: Request['monitor']): Promise<void> {
   diagnosticPhase = 'stopped-clients';
@@ -98,6 +102,8 @@ async function assertStopped(pool: Pool, monitor: Request['monitor']): Promise<v
 
 async function createBackup(request: Request): Promise<void> {
   if (!request.destination) throw new Error('A new backup destination is required.');
+  if (request.stoppedWritersAcknowledged !== true)
+    throw new Error('Explicit acknowledgement that external Markdown editors, native CLI and all included writers remain stopped is required; stopping owned services alone is insufficient.');
   const destination = request.destination;
   if (await exists(destination)) throw new Error('Backup destination already exists.');
   const bootstrap = validateBootstrapState(await jsonFile(join(request.dataDir, 'bootstrap.json')));
@@ -112,6 +118,10 @@ async function createBackup(request: Request): Promise<void> {
   const source = createBlobStore({ provider: 'local', root: blobRoot });
   try {
     await assertStopped(pool, request.monitor);
+    const barrierId = randomUUID(), barrierStartedAt = new Date().toISOString();
+    const agentRoot = join(request.dataDir, 'agent-data');
+    const agentPresent = await exists(join(agentRoot, 'workspace.sqlite'));
+    const agentState = agentPresent ? z.strictObject({ fingerprint: digest, storeId: z.string().nullable(), restoreEpoch: z.number().int().nonnegative().nullable() }).parse(JSON.parse(await agentMaintenance(request, 'source-state', agentRoot))) : null;
     await mkdir(destination, { mode: 0o700 });
     await ensurePrivateDirectory(destination, { newlyCreated: true });
     diagnosticPhase = 'project-export';
@@ -137,8 +147,6 @@ async function createBackup(request: Request): Promise<void> {
     const sourceChatRoot = join(request.dataDir, 'chat-spaces');
     const chatFiles = await exists(sourceChatRoot) ? await snapshotTree(sourceChatRoot) : null;
     if (chatFiles) await copyTree(sourceChatRoot, join(destination, 'chat-spaces'), chatFiles);
-    const agentRoot = join(request.dataDir, 'agent-data');
-    const agentPresent = await exists(join(agentRoot, 'workspace.sqlite'));
     let agentManifestSha256: string | null = null;
     if (agentPresent) {
       diagnosticPhase = 'agent-backup';
@@ -147,13 +155,28 @@ async function createBackup(request: Request): Promise<void> {
     } else if (await exists(agentRoot) && (await readdir(agentRoot)).length) throw new Error('Uninitialized Agent directory contains unclassified data.');
     diagnosticPhase = 'manifest';
     if (localProjectCheckpointSha256(await captureLocalProjectCheckpoint(coreRoot)) !== files.manifestSha256) throw new Error('Project files changed during backup.');
+    if (chatFiles) await verifyTree(sourceChatRoot, chatFiles);
+    if (agentState) {
+      const finalAgentState = JSON.parse(await agentMaintenance(request, 'source-state', agentRoot)) as { fingerprint?: string };
+      if (finalAgentState.fingerprint !== agentState.fingerprint) throw new Error('Agent source changed inside the common stopped recovery barrier.');
+    }
+    await assertStopped(pool, request.monitor);
     const applicationVersion = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
     const manifest = manifestSchema.parse({ format: 'pm-agent-desktop-backup', version: 2, applicationVersion, createdAt: new Date().toISOString(), postgresMajor: 16, platform: process.platform,
       privateData: true, bootstrap, databaseDumpSha256, coreManifestSha256: files.manifestSha256, blobManifestSha256: blobs.manifestSha256,
       files: files.manifest, sourceChatRoot, chatFiles, agentPresent, agentManifestSha256,
       exclusions: ['External/global Provider CLI homes and process environment', 'External project source code and external document-source directories; PM-managed .pm data is included', 'Electron browser cookies, drafts/preferences and unknown-request journal (retain original desktop profile)', 'Rebuildable Agent caches; copied MCP authority is revoked by Agent backup'],
     });
+    const agentManifest = agentPresent ? await jsonFile(join(destination, 'agent/manifest.json')) as { sourceIdentity: { storeId: string; restoreEpoch: number }; secrets: 'include' | 'exclude' } : null;
+    const recoverySet = createStoppedRecoverySet({ applicationVersion,
+      quiescence: { barrierId, startedAt: barrierStartedAt, endedAt: new Date().toISOString(), writers: ['pm-api', 'pm-worker', 'pm-markdown-editors', 'agent', 'owned-native-processes'], operatorConfirmedStopped: true, sourceRechecked: true },
+      components: { databaseDumpSha256, coreManifestSha256: files.manifestSha256, blobManifestSha256: blobs.manifestSha256, agentManifestSha256,
+        chatFilesSha256: chatFiles ? createHash('sha256').update(JSON.stringify(chatFiles)).digest('hex') : null },
+      agent: agentManifest && agentState ? { sourceStoreId: agentManifest.sourceIdentity.storeId, restoreEpoch: agentManifest.sourceIdentity.restoreEpoch,
+        sourceFingerprint: agentState.fingerprint, secrets: agentManifest.secrets } : null, exclusions: manifest.exclusions });
+    manifest.recoverySet = recoverySet;
     await writeJson(join(destination, 'desktop-backup.json'), manifest);
+    await writeStoppedRecoverySet(destination, recoverySet);
   } finally {
     source.close();
     await clone?.end();
@@ -172,6 +195,13 @@ async function validateBackup(request: Request): Promise<void> {
   const manifest = manifestSchema.parse(await jsonFile(join(source, 'desktop-backup.json')));
   const version = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
   assertBackupCompatibility(manifest, version);
+  if (manifest.recoverySet) {
+    const set = await verifyStoppedRecoverySet(source, manifest.recoverySet);
+    if (set.components.databaseDumpSha256 !== manifest.databaseDumpSha256 || set.components.coreManifestSha256 !== manifest.coreManifestSha256 ||
+        set.components.blobManifestSha256 !== manifest.blobManifestSha256 || set.components.agentManifestSha256 !== manifest.agentManifestSha256 ||
+        set.components.chatFilesSha256 !== (manifest.chatFiles ? createHash('sha256').update(JSON.stringify(manifest.chatFiles)).digest('hex') : null))
+      throw new Error('Desktop component references do not belong to this stopped recovery set.');
+  }
   const bootstrap = validateBootstrapState(manifest.bootstrap);
   if (bootstrap.phase !== 'ready' || (await hashFile(join(source, 'database.dump'))).sha256 !== manifest.databaseDumpSha256) throw new Error('Backup database or setup metadata does not match.');
   if (manifest.version === 1 && manifest.applicationVersion !== undefined) throw new Error('Unexpected legacy backup version metadata.');
@@ -209,7 +239,7 @@ async function validateBackup(request: Request): Promise<void> {
     else if (await exists(join(source, 'agent'))) throw new Error('Unclassified Agent files in backup.');
   });
   // Refuse unknown top-level content instead of silently dropping it on restore.
-  const allowed = new Set(['desktop-backup.json', 'database.dump', 'files', 'blobs', ...(manifest.chatFiles ? ['chat-spaces'] : []), ...(manifest.agentPresent ? ['agent'] : [])]);
+  const allowed = new Set(['desktop-backup.json', 'database.dump', 'files', 'blobs', ...(manifest.recoverySet ? ['recovery-set.json'] : []), ...(manifest.chatFiles ? ['chat-spaces'] : []), ...(manifest.agentPresent ? ['agent'] : [])]);
   if ((await readdir(source)).some(name => !allowed.has(name))) throw new Error('Backup contains unsupported data; nothing was discarded or restored.');
 }
 
@@ -221,6 +251,7 @@ async function restoreBackup(request: Request): Promise<void> {
   const manifest = manifestSchema.parse(await jsonFile(join(source, 'desktop-backup.json')));
   const version = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
   assertBackupCompatibility(manifest, version);
+  if (manifest.recoverySet) await verifyStoppedRecoverySet(source, manifest.recoverySet);
   const bootstrap = validateBootstrapState(manifest.bootstrap);
   const pool = createPool(request.databaseUrl, 1);
   const targetCoreRoot = join(request.dataDir, 'pm-workspaces');

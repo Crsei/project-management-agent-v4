@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { UIMessage } from "ai";
 import type {
   ContextTransfer,
   MergePreview,
@@ -28,6 +29,7 @@ export function forkChatSnapshot(
     generationId: string;
     messageId: string;
     context: string;
+    attachments?: Extract<UIMessage["parts"][number], { type: "file" }>[];
     nativeSession?: NativeSessionRef;
   },
   options: { title?: string; idempotencyKey?: string } = {},
@@ -43,6 +45,7 @@ export function forkChatSnapshot(
           generationId: source.generationId,
           messageId: source.messageId,
           context: source.context,
+          attachments: source.attachments?.length ? source.attachments.map(part => ({ ...part, url: createHash("sha256").update(part.url).digest("hex") })) : undefined,
           nativeSession: source.nativeSession,
           title: options.title,
         }),
@@ -84,7 +87,7 @@ export function forkChatSnapshot(
       };
     }
     copyWorkspace(source.threadId, threadId);
-    forkThreadHistory(source.threadId, threadId, context);
+    forkThreadHistory(source.threadId, threadId, context, source.attachments);
     if (options.title) updateThread(threadId, { title: options.title });
     if (fork.nativeFork) setThreadPendingFork(threadId, fork.nativeFork);
     writeRecord(FORKS, threadId, fork);

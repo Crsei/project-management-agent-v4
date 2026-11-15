@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { Arm, BenchAgentAdapter, BenchEvent, PrepareAdapterInput } from '../schemas/types.ts';
+import type { Arm, BenchAgentAdapter, BenchEvent, FixtureRuntime, GenerationAdmission, PrepareAdapterInput } from '../schemas/types.ts';
 import { makeEvent } from '../runners/telemetry.ts';
 import { parseSse } from './sse.ts';
 
@@ -15,6 +15,46 @@ export class AdapterError extends Error {
   }
 }
 
+/** Publish before submit so native egress can await only this Session's trusted acceptance. */
+export function beginGenerationAdmission(runtime: FixtureRuntime, sessionId: string, signal: AbortSignal, timeoutMs = 45_000): GenerationAdmission {
+  runtime.activeGenerationAdmission?.settle(null);
+  runtime.activeSessionId = sessionId;
+  delete runtime.activeGenerationId;
+  const accepted = Promise.withResolvers<string | null>(), deadline = Date.now() + timeoutMs;
+  let pending = true;
+  const admission: GenerationAdmission = {
+    sessionId, deadline, signal, accepted: accepted.promise,
+    settle(generationId) {
+      if (!pending) return false;
+      const valid = typeof generationId === 'string' && generationId.trim().length > 0 && !signal.aborted && Date.now() < deadline && runtime.activeGenerationAdmission === admission && runtime.activeSessionId === sessionId;
+      pending = false;
+      clearTimeout(timer); signal.removeEventListener('abort', cancelled);
+      if (valid) runtime.activeGenerationId = generationId!;
+      else if (runtime.activeGenerationAdmission === admission) { delete runtime.activeGenerationAdmission; delete runtime.activeGenerationId; }
+      accepted.resolve(valid ? generationId : null);
+      return valid;
+    },
+  };
+  const cancelled = (): void => { admission.settle(null); };
+  const timer = setTimeout(cancelled, Math.max(0, timeoutMs));
+  runtime.activeGenerationAdmission = admission;
+  signal.addEventListener('abort', cancelled, { once: true });
+  if (signal.aborted) cancelled();
+  return admission;
+}
+
+/** Rights and source data are identical. Raw gets no generated index or workflow coaching. */
+export function buildArmSystemPrompt(arm: Arm, input: Pick<PrepareAdapterInput, 'allowedTargets' | 'allowedTools'>): string {
+  return [
+    'Complete the user task using the available tools. The working directory contains the original fictional benchmark source documents, repository and output folder.',
+    `Every PM tool requires an explicit target. Authorized targets: ${JSON.stringify(input.allowedTargets.map(target => ({ key: target.key, target: { workspaceId: target.workspaceId, projectId: target.projectId }, entityId: target.entityId })))}`,
+    `Available benchmark tool policy: ${JSON.stringify(input.allowedTools)}. This policy is enforced by transport; it does not hide these tools in any arm.`,
+    'Write deliverables under artifacts/ and change repository files only when requested. Never treat a successful model generation as PM task completion. Unknown write results must be reconciled using the original operation identity; do not recreate the write with a new identity.',
+    ...(arm === 'raw' ? [] : ['Knowledge workflow: read original source documents, distinguish superseded history from the current decision, and cite exact source paths plus current revisions. Any index you create must derive only from these sources.']),
+    ...(arm === 'dovspace' ? ['Dovspace workflow: verify explicit PM target, current revision and receipt before claiming a mutation. Save your own factual progress and unresolved original operation identities to artifacts/handoff.json before a requested checkpoint. On a new Session, re-read current authority and your saved deliverables; do not infer that interrupted work rolled back.'] : []),
+  ].join('\n');
+}
+
 /** The arms deliberately share the product's real native transport, not model replay. */
 export class AgentChatAdapter implements BenchAgentAdapter {
   private input?: PrepareAdapterInput;
@@ -23,6 +63,8 @@ export class AgentChatAdapter implements BenchAgentAdapter {
   private selection?: { version: 2; agentWorkspaceId: string; agentWorkspaceRevision: number };
   private sessions = new Map<string, Session>();
   private systemPrompt = '';
+  private providerInstanceId = '';
+  private selectedModel = '';
   private readonly arm: Arm;
   private readonly transport: typeof fetch;
   constructor(arm: Arm = 'dovspace', transport: typeof fetch = fetch) { this.arm = arm; this.transport = transport; }
@@ -33,33 +75,33 @@ export class AgentChatAdapter implements BenchAgentAdapter {
     if (!runtime || !runtime.isolationVerified || !input.fixture.isolation?.verified) throw new AdapterError('infrastructure', 'Verified OS-isolated Agent runtime is required.');
     const url = new URL(runtime.agentBaseUrl);
     if (!['http:', 'https:'].includes(url.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || ['3224', '4194', '4325', '55444'].includes(url.port) || url.username || url.password || url.search || url.hash) throw new AdapterError('infrastructure', 'Agent control URL must be an isolated non-production loopback endpoint.');
-    if (input.provider !== 'codex') throw new AdapterError('provider', 'Lite v0.1 requires an explicitly configured native Codex provider.', 'unsupported_provider');
+    if (input.provider !== 'codex' && input.provider !== 'omp') throw new AdapterError('provider', 'Benchmark supports explicit native Codex or OMP only; no provider fallback.', 'unsupported_provider');
     if (!input.model.trim() || !runtime.agentAccessToken || !runtime.pmCookie) throw new AdapterError('infrastructure', 'Isolated Agent credentials and an explicit fixed model are required.', 'provider_prerequisite');
     this.input = input;
     this.baseUrl = url.origin;
     this.headers = new Headers({ 'content-type': 'application/json', authorization: `Bearer ${runtime.agentAccessToken}`, cookie: runtime.pmCookie });
     const provision = runtime.providerConfig;
-    if (!provision || provision.driver !== 'codex' || provision.instanceId !== 'codex') throw new AdapterError('infrastructure', 'Missing isolated native Codex broker configuration.', 'provider_prerequisite');
+    if (!provision || provision.driver !== input.provider || provision.instanceId !== input.provider) throw new AdapterError('infrastructure', 'Native broker configuration does not match the explicitly selected runtime provider.', 'provider_prerequisite');
+    this.providerInstanceId = provision.instanceId;
+    this.selectedModel = input.provider === 'omp' ? input.nativeModel ?? `bench/${input.model}` : input.model;
     const catalog = await this.request('/api/providers');
     const providers = Array.isArray(catalog.providers) ? catalog.providers as Json[] : [];
     const current = providers.find(provider => provider.instanceId === provision.instanceId);
-    if (!current || typeof current.revision !== 'number') throw new AdapterError('provider', 'Native Codex configuration was not initialized by the isolated service.', 'provider_unavailable');
-    await this.request(`/api/providers/${encodeURIComponent(provision.instanceId)}`, { method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled: true, config: provision.config, environment: provision.environment, customModels: [{ id: input.model, label: input.model }] }) }, 'provider');
-    const health = await this.request(`/api/providers/${encodeURIComponent(provision.instanceId)}/test`, { method: 'POST', body: '{}' }, 'provider');
-    if (health.ok !== true || health.nativeSessionReady !== true) throw new AdapterError('infrastructure', `Native Codex prerequisite is not ready; no inference was attempted. ${String(health.error ?? '')}`, 'provider_prerequisite');
+    const configuration = { enabled: true, config: provision.config, environment: provision.environment, customModels: input.provider === 'omp' ? [] : [{ id: input.model, label: input.model }] };
+    if (current && typeof current.revision === 'number') {
+      await this.request(`/api/providers/${encodeURIComponent(provision.instanceId)}`, { method: 'PUT', signal: AbortSignal.timeout(180_000), body: JSON.stringify({ revision: current.revision, ...configuration }) }, 'provider');
+    } else if (input.provider === 'omp') {
+      await this.request('/api/providers', { method: 'POST', signal: AbortSignal.timeout(180_000), body: JSON.stringify({ instanceId: provision.instanceId, driver: 'omp', ...configuration }) }, 'provider');
+    } else throw new AdapterError('provider', 'Native Codex configuration was not initialized by the isolated service.', 'provider_unavailable');
+    const health = await this.request(`/api/providers/${encodeURIComponent(provision.instanceId)}/test`, { method: 'POST', signal: AbortSignal.timeout(180_000), body: '{}' }, 'provider');
+    if (health.ok !== true || health.nativeSessionReady !== true) throw new AdapterError('infrastructure', `Native ${input.provider} prerequisite is not ready; no inference was attempted. ${String(health.error ?? health.message ?? '')}`, 'provider_prerequisite');
+    if (input.provider === 'omp' && (!Array.isArray(health.models) || !health.models.some(model => model && typeof model === 'object' && (model as Json).id === this.selectedModel))) throw new AdapterError('provider', 'The exact broker-backed OMP model was not discovered; no custom catalog or default-model fallback is allowed.', 'model_unavailable');
+    runtime.auditEvents.push(makeEvent(input.runId, 'transport', 'provider_selection', { provider: input.provider, instanceId: this.providerInstanceId, requestedModel: input.model, nativeModel: this.selectedModel, health, inferencePerformed: false }));
     const opened = await this.request('/api/agent-workspaces/open', { method: 'POST', body: JSON.stringify({ path: runtime.workingDirectory, name: `Benchmark ${input.runId}` }) });
     const workspace = opened.workspace as Json | undefined;
     if (!workspace || typeof workspace.id !== 'string' || typeof workspace.revision !== 'number' || workspace.path !== runtime.workingDirectory || workspace.status !== 'available') throw new AdapterError('infrastructure', 'Agent did not attest the isolated workspace directory.');
     this.selection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
-    // Rights and source data are identical. Raw gets no generated index or workflow coaching.
-    this.systemPrompt = [
-      'Complete the user task using the available tools. The working directory contains the original fictional benchmark source documents, repository and output folder.',
-      `Every PM tool requires an explicit target. Authorized targets: ${JSON.stringify(input.allowedTargets.map(target => ({ key: target.key, target: { workspaceId: target.workspaceId, projectId: target.projectId }, entityId: target.entityId })))}`,
-      `Available benchmark tool policy: ${JSON.stringify(input.allowedTools)}. This policy is enforced by transport; it does not hide these tools in any arm.`,
-      'Write deliverables under artifacts/ and change repository files only when requested. Never treat a successful model generation as PM task completion. Unknown write results must be reconciled using the original operation identity; do not recreate the write with a new identity.',
-      ...(this.arm === 'raw' ? [] : ['Knowledge workflow: read original source documents, distinguish superseded history from the current decision, and cite exact source paths plus current revisions. Any index you create must derive only from these sources.']),
-      ...(this.arm === 'dovspace' ? ['Dovspace workflow: verify explicit PM target, current revision and receipt before claiming a mutation. Save your own factual progress and unresolved original operation identities to artifacts/handoff.json before a requested checkpoint. On a new Session, re-read current authority and your saved deliverables; do not infer that interrupted work rolled back.'] : []),
-    ].join('\n');
+    this.systemPrompt = buildArmSystemPrompt(this.arm, input);
   }
 
   async start(input: { instruction: string; taskId: string }): Promise<{ sessionId: string }> {
@@ -72,25 +114,33 @@ export class AgentChatAdapter implements BenchAgentAdapter {
       if (typeof value !== 'string' && typeof value !== 'boolean') throw new AdapterError('provider', `Invalid native model option ${key}.`);
       return { id: key, value };
     });
-    const configured = await this.request(`/api/chat/threads/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ revision: thread.revision, settings: { providerInstanceId: 'codex', model: this.input.model, systemPrompt: this.systemPrompt, temperature: 1, modelOptions, interactionMode: 'default' } }) }, 'provider');
+    const configured = await this.request(`/api/chat/threads/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ revision: thread.revision, settings: { providerInstanceId: this.providerInstanceId, model: this.selectedModel, systemPrompt: this.systemPrompt, temperature: 1, modelOptions, interactionMode: 'default' } }) }, 'provider');
     const settingsRevision = (configured.thread as Json | undefined)?.revision;
-    const controller = new AbortController();
+    if (typeof settingsRevision !== 'number') throw new AdapterError('provider', 'Agent did not persist fixed provider/model settings.');
+    const controller = new AbortController(), messageId = randomUUID();
+    const admission = beginGenerationAdmission(this.input.fixture.runtime!, id, controller.signal);
     const acceptanceTimer = setTimeout(() => controller.abort(new Error('Agent acceptance timed out.')), 45_000);
-    let response: Response;
     try {
-      response = await this.transport(new URL('/api/chat', this.baseUrl), { method: 'POST', headers: this.headers, redirect: 'error', signal: controller.signal, body: JSON.stringify({ id, messages: [{ id: randomUUID(), role: 'user', parts: [{ type: 'text', text: input.instruction }] }], idempotencyKey: randomUUID(), config: { providerInstanceId: 'codex', modelName: this.input.model, modelOptions, threadSettingsRevision: settingsRevision, responseStreamingMode: 'paragraph' } }) });
+      let response: Response;
+      try {
+        response = await this.transport(new URL('/api/chat', this.baseUrl), { method: 'POST', headers: this.headers, redirect: 'error', signal: controller.signal, body: JSON.stringify({ id, messages: [{ id: messageId, role: 'user', parts: [{ type: 'text', text: input.instruction }] }], idempotencyKey: randomUUID(), config: { providerInstanceId: this.providerInstanceId, modelName: this.selectedModel, modelOptions, threadSettingsRevision: settingsRevision, responseStreamingMode: 'paragraph' } }) });
+      } catch (error) {
+        // A lost POST response is unknown acceptance, never retried or recreated.
+        throw new AdapterError('infrastructure', `Agent submit outcome unknown; Session ${id} must be inspected, not resubmitted. ${error instanceof Error ? error.message : String(error)}`, 'unknown_acceptance');
+      }
+      if (!response.ok) await this.failResponse(response, 'provider');
+      const generationId = response.headers.get('x-resumable-stream-id'), acceptedMessageId = response.headers.get('x-accepted-input-message-id');
+      if (!generationId || !response.body || acceptedMessageId !== null && acceptedMessageId !== messageId) throw new AdapterError('infrastructure', 'Accepted Agent response lacks the original persisted generation identity or SSE body.', 'unknown_acceptance');
+      if (!admission.settle(generationId)) throw new AdapterError('infrastructure', 'Agent acceptance was cancelled, expired or superseded; the original Session must not be resubmitted.', 'unknown_acceptance');
+      const session: Session = { id, taskId: input.taskId, generationId, events: [], ended: false, controller, work: Promise.resolve(), observed: false, interrupted: false, interrupting: false };
+      this.sessions.set(id, session);
+      this.push(session, makeEvent(this.input.runId, 'transport', 'session_started', { generationId, taskId: input.taskId, model: this.input.model, arm: this.arm, fresh: true }, { sessionId: id }));
+      session.work = this.consume(session, response.body);
+      return { sessionId: id };
     } catch (error) {
-      // A lost POST response is unknown acceptance, never retried or recreated.
-      throw new AdapterError('infrastructure', `Agent submit outcome unknown; Session ${id} must be inspected, not resubmitted. ${error instanceof Error ? error.message : String(error)}`, 'unknown_acceptance');
+      admission.settle(null); controller.abort();
+      throw error;
     } finally { clearTimeout(acceptanceTimer); }
-    if (!response.ok) await this.failResponse(response, 'provider');
-    const generationId = response.headers.get('x-resumable-stream-id');
-    if (!generationId || !response.body) throw new AdapterError('infrastructure', 'Accepted Agent response lacks persisted generation identity or SSE body.', 'unknown_acceptance');
-    const session: Session = { id, taskId: input.taskId, generationId, events: [], ended: false, controller, work: Promise.resolve(), observed: false, interrupted: false, interrupting: false };
-    this.sessions.set(id, session);
-    this.push(session, makeEvent(this.input.runId, 'transport', 'session_started', { generationId, taskId: input.taskId, model: this.input.model, arm: this.arm, fresh: true }, { sessionId: id }));
-    session.work = this.consume(session, response.body);
-    return { sessionId: id };
   }
 
   sessionIdentity(sessionId: string): { sessionId: string; generationId: string } {
@@ -195,7 +245,7 @@ export class AgentChatAdapter implements BenchAgentAdapter {
         const usage = durable.usage as Json;
         const totals = usage.totals as Json | undefined;
         const reported = usage.reportedTurn as Json | undefined;
-        this.push(session, makeEvent(this.input!.runId, 'provider', 'usage', { generationId: session.generationId, inputTokens: totals ? Number(totals.uncachedInputTokens) + Number(totals.cachedInputTokens) + Number(totals.cacheCreationTokens) : reported?.inputTokens ?? null, outputTokens: totals?.outputTokens ?? reported?.outputTokens ?? null, cacheReadTokens: totals?.cachedInputTokens ?? reported?.cachedInputTokens ?? null, cacheWriteTokens: totals?.cacheCreationTokens ?? reported?.cacheCreationTokens ?? null, costUsd: usage.costUsd ?? null }, { sessionId: session.id }));
+        this.push(session, makeEvent(this.input!.runId, 'provider', 'native_usage_projection', { generationId: session.generationId, authoritativeForBenchmark: false, reason: 'Only correlated terminal broker usage is authoritative; native projections can contain default zero costs or cumulative totals.', totals: totals ?? null, reported: reported ?? null, costUsd: usage.costUsd ?? null }, { sessionId: session.id }));
       }
     } catch (error) {
       if (!session.controller.signal.aborted) this.push(session, makeEvent(this.input!.runId, 'transport', 'adapter_error', { message: error instanceof Error ? error.message : String(error), category: error instanceof AdapterError ? error.category : 'infrastructure' }, { sessionId: session.id }));

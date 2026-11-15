@@ -103,3 +103,14 @@ bookkeeping is saved. The host reuses the existing local
 `packages/pm-core/windows-reparse.ts` and `private-path.ts` helpers; no upstream
 source pin, npm dependency, native Home ownership, or Unified write authority is
 added by this safety adaptation.
+
+## Bundled PM Skill provenance adaptation (same upstream pin)
+
+`src/skills/bundled.ts` is local Dovspace host code, not a translated upstream
+module. It layers catalog-owned bytes and explicit provenance on the existing
+cc-switch managed Skill library, `install.ts` staging/rollback, `hash.ts`
+full-tree comparison, `deploy.ts` verified projections and `backup.ts` backups.
+The private host dispatch and schema-3/source metadata changes are documented in
+`PROVENANCE.md`. No upstream application matrix, native runtime authority,
+permission grant, session reload or network installer is substituted.
+

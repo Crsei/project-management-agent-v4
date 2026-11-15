@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react"
 import { Copy, RefreshCw, UserPlus } from "lucide-react"
 import { Link } from "react-router"
-import { CommandOutcomeUnknown, type Command, type Entity, type MemberDirectoryMember, type MemberRole } from "@contracts"
-import { memberRoleCapabilities } from "../../../../../../packages/domain/src/members.ts"
-import { Avatar } from "@/components/ui/avatar"
+import { CommandOutcomeUnknown, type Command, type Entity, type MemberDirectoryMember } from "@contracts"
+import { MemberAvatar } from "./people-components"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { InvitationStatus } from "@/views/pm/people-views"
 import { useMemberDirectory, useMemberInvitations } from "./pm-member-hooks"
 import { invitationRecord } from "./pm-member-model"
+import { MemberInvitationForm } from "./pm-member-editors"
 import { usePmCommand, usePmService } from "./pm-service"
-import { Choice, CommandNotice, Field, Form, PmCommandRecovery, string, useDraftState, useText } from "./pm-ui"
-import { canManageProjectShare, canReadProjectShare, projectShareCandidates, projectShareConflict, projectShareDraft, projectShareInvitationCommand, projectShareMemberCommand, projectShareScope, projectShareUrl, type ProjectShareScopeDraft } from "./project-share-model"
+import { CommandNotice, Field, Form, PmCommandRecovery, string, useDraftState, useText } from "./pm-ui"
+import { canManageProjectShare, canReadProjectShare, projectShareCandidates, projectShareConflict, projectShareDraft, projectShareMemberCommand, projectShareScope, projectShareUrl, type ProjectShareScopeDraft } from "./project-share-model"
 
 export function ProjectShareDialog({ project, open, onOpenChange }: { project: Entity; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { actor, workspace } = usePmService()
@@ -63,8 +63,9 @@ function AccessPermissions({ capabilities }: { capabilities: readonly string[] }
   </div>
 }
 
-function ShareIdentity({ member }: { member: Pick<MemberDirectoryMember, "name" | "email" | "avatarDataUrl"> }) {
-  return <div className="flex min-w-0 items-center gap-2"><Avatar size={32} name={member.name} src={member.avatarDataUrl ?? undefined} /><div className="min-w-0"><p className="break-words font-medium">{member.name}</p>{member.email && <p className="break-all text-xs text-muted-foreground">{member.email}</p>}</div></div>
+function ShareIdentity({ member }: { member: Pick<MemberDirectoryMember, "userId" | "name" | "email" | "avatarDataUrl"> }) {
+  const { workspace } = usePmService()
+  return <div className="min-w-0 space-y-1"><MemberAvatar member={member} workspaceSlug={workspace!.id} size={32} showName />{member.email && <p className="break-all text-xs text-muted-foreground">{member.email}</p>}</div>
 }
 
 function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNavigate: () => void }) {
@@ -76,15 +77,13 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
   const scope = `project-share:${project.id}`
   const [query, setQuery] = useDraftState(scope, "query", "")
   const [operation, setOperation] = useDraftState<ProjectShareScopeDraft | null>(scope, "operation", null)
-  const [email, setEmail] = useDraftState(scope, "email", "")
-  const [role, setRole] = useDraftState<MemberRole>(scope, "role", "guest")
   const [attempt, setAttempt] = useDraftState<Command | null>(scope, "attempt", null)
   const [notice, setNotice] = useDraftState<string | null>(scope, "notice", null)
   const busy = command.pending || !!command.unknownCommand
-  const canManage = canManageProjectShare(workspace) && directory.data?.capabilities.canManageMembers === true
+  const canManage = canManageProjectShare(workspace) && !directory.error && directory.data?.capabilities.canManageMembers === true
   const readBlocked = !canManage || !directory.data || !!directory.error
   const locked = busy || readBlocked
-  const members = directory.data?.members ?? []
+  const members = !directory.error ? directory.data?.members ?? [] : []
   const current = members.find(member => member.userId === operation?.userId)
   const conflict = !!operation && projectShareConflict(operation, current?.access)
   const currentScope = projectShareScope(current?.access ?? null, project.id)
@@ -93,8 +92,8 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
   const archived = !!project.data.archivedAt || project.data.archived === true
   const smtpEnabled = invitations.data?.enabled === true && !invitations.error
   const invitationBlocked = locked || !invitations.data || !!invitations.error || !smtpEnabled || archived
-  const invitationItems = invitations.data?.items.filter(item => item.workspaceId === project.workspaceId && (item.projectIds === null || item.projectIds.includes(project.id))) ?? []
-  const membersHref = `/pm/${encodeURIComponent(project.workspaceId)}/members?tab=members&view=member3`
+  const invitationItems = !invitations.error ? invitations.data?.items.filter(item => item.workspaceId === project.workspaceId && (item.projectIds === null || item.projectIds.includes(project.id))) ?? [] : []
+  const membersHref = `/pm/${encodeURIComponent(project.workspaceId)}/members?tab=members`
 
   // The workspace recovery bar may reconcile our original request. Consume only
   // its actual receipt, never a refreshed member list or a delivery guess.
@@ -104,13 +103,10 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
       if (attempt.commandType === "SetWorkspaceMember") {
         setOperation(null)
         setNotice(t("项目授权范围已确认保存，其他范围与能力未改动。", "Project scope change confirmed; other scopes and capabilities are unchanged."))
-      } else if (attempt.commandType === "CreateMemberInvitation") {
-        setEmail("")
-        setNotice(t("邀请记录已确认创建；真实邮件状态见下方，不代表已送达。", "Invitation record confirmed; actual email status is shown below, not proof of delivery."))
       }
     }
     setAttempt(null)
-  }, [attempt, command.receipt, setAttempt, setEmail, setNotice, setOperation, t])
+  }, [attempt, command.receipt, setAttempt, setNotice, setOperation, t])
 
   const execute = async (body: Command) => {
     setNotice(null)
@@ -128,7 +124,7 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{t("项目授权与成员", "Project grants and people")}</h3><Button variant="ghost" size="sm" disabled={busy || directory.isFetching || invitations.isFetching} onClick={() => { void directory.refetch(); void invitations.refetch() }}><RefreshCw aria-hidden="true" />{t("刷新权限与邀请", "Refresh access and invitations")}</Button></div>
     {directory.isPending && !directory.data && <p role="status">{t("正在读取真实成员授权…", "Reading actual member grants…")}</p>}
-    {directory.error && <p role="alert" className="break-words text-sm text-destructive">{t("成员读取失败，修改已禁用；如有显示，仅为上次快照：", "Member read failed; changes are disabled. Any displayed grants are the previous snapshot: ")}{directory.error.message}</p>}
+    {directory.error && <p role="alert" className="break-words text-sm text-destructive">{t("成员读取失败，修改已禁用且未显示缓存授权：", "Member read failed; changes are disabled and cached grants are hidden: ")}{directory.error.message}</p>}
     {directory.data && !canManage && <p role="status">{t("当前服务授权不允许管理成员。请重新读取权限。", "Current server permissions do not allow member management. Refresh access before continuing.")}</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     {canManage && <>
@@ -169,15 +165,9 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
       <section className="space-y-3 border-t pt-4" aria-label={t("邀请新成员到此项目", "Invite new members to this project")}>
         <h3 className="font-medium">{t("通过邮箱邀请新成员", "Invite a new member by email")}</h3>
         {invitations.isPending && !invitations.data && <p role="status" className="text-sm">{t("正在读取 SMTP 邀请能力…", "Reading SMTP invitation capability…")}</p>}
-        {invitations.error && <p role="alert" className="break-words text-sm text-destructive">{t("邀请状态读取失败，发送已禁用；如有显示，仅为上次服务快照：", "Invitation status read failed; sending disabled. Any displayed statuses are the previous server snapshot: ")}{invitations.error.message}</p>}
+        {invitations.error && <p role="alert" className="break-words text-sm text-destructive">{t("邀请状态读取失败，发送已禁用且未显示缓存状态：", "Invitation status read failed; sending is disabled and cached statuses are hidden: ")}{invitations.error.message}</p>}
         {invitations.data && !smtpEnabled && <p role="status" className="text-sm">{t("SMTP / 邀请部署未配置或状态不可用：不能发送邮件邀请，不会创建虚假待发送记录。已有成员授权不依赖 SMTP。", "SMTP / invitation deployment is not configured or unavailable: email invitations are disabled, with no fake queued records. Existing-member grants do not require SMTP.")}</p>}
-        <Form label={t("发送当前项目邀请", "Send invitation for this project")} disabled={invitationBlocked} onSubmit={async () => { await execute(projectShareInvitationCommand(workspace, project, email, role, smtpEnabled, crypto.randomUUID())) }}>
-          <Field label={t("受邀邮箱", "Invitation email")} value={email} onChange={setEmail} type="email" required />
-          <Choice label={t("新成员能力模板（不是单项目角色）", "New member capability template (not a per-project role)")} value={role} onChange={value => setRole(value === "member" ? "member" : "guest")} options={[{ value: "guest", label: t("Guest · 只读", "Guest · Read-only") }, { value: "member", label: t("Member · 规划与交付", "Member · Planning and delivery") }]} />
-          <AccessPermissions capabilities={memberRoleCapabilities(role)} />
-          <p className="text-sm">{t("固定范围：", "Fixed scope: ")}{project.id} · {string(project.data.name)}</p>
-          <p className="text-xs text-muted-foreground">{t("邀请不会覆盖已有有效成员授权。SMTP 接受不代表收件箱送达；收件人需接受邀请后才获得权限。", "Invitations cannot overwrite active membership grants. SMTP acceptance is not inbox delivery; recipients gain access only after accepting.")}</p>
-        </Form>
+        <MemberInvitationForm disabled={invitationBlocked} enabled={smtpEnabled} defaultProjectId={project.id} onInvited={async () => { await invitations.refetch() }} />
         <div className="space-y-2 text-sm"><h4 className="font-medium">{t("适用于本项目的邀请记录", "Invitation records applicable to this project")}</h4>
           {invitations.data && !invitations.error && invitationItems.length === 0 && <p>{t("没有邀请记录。", "No invitation records.")}</p>}
           <ul className="space-y-2">{invitationItems.map(invitation => <li key={invitation.id} className="space-y-1 rounded-md border p-3"><p className="break-all font-medium">{invitation.email} · {invitation.role}</p><InvitationStatus invitation={invitationRecord(invitation)} /><p className="text-xs text-muted-foreground">{invitation.projectIds === null ? t("整个工作区（继承）", "Whole workspace (inherited)") : `${t("项目范围：", "Project scope: ")}${invitation.projectIds.join(", ")}`} · {t("有效期至：", "Expires: ")}<time dateTime={invitation.expiresAt}>{invitation.expiresAt}</time></p>{invitation.delivery?.failureCode && <p role="status">{invitation.delivery.failureCode}</p>}</li>)}</ul>

@@ -712,7 +712,7 @@ export class Workspace {
       try {
         this.state.attachMutationProofs(mutationIds);
         if (directory) {
-          this.locations.reserve(pending.id, key, hash, directory, pending.projectDirectory?.check);
+          this.locations.reserve(pending.id, key, hash, pending.projectDirectory?.check ? { ...directory, layout: pending.projectDirectory.check.layout } : directory, pending.projectDirectory?.check);
           this.locations.prepare(pending.id);
         }
         // Leave the transaction present until both the manifest and local registration are durable.
@@ -820,7 +820,7 @@ export class Workspace {
       try {
         // The shared journal reserves ID + original key before the selected directory is touched.
         if (!pending && !previous) this.state.begin({ kind: 'create', id, path: relative, raw, ...(mutationId ? { mutationId } : {}), idempotency: { key, hash, id }, ...(directoryCheck ? { projectDirectory: { workspaceId: directory.workspaceId, hash: locationHash, check: directoryCheck } } : {}) });
-        this.locations.reserve(id, key, locationHash, directory, directoryCheck);
+        this.locations.reserve(id, key, locationHash, directoryCheck ? { ...directory, layout: directoryCheck.layout } : directory, directoryCheck);
         this.locations.prepare(id);
         let current: string | undefined;
         try { current = this.repository.read(relative); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
@@ -983,11 +983,15 @@ export class Workspace {
     });
   }
 
-  migration(action: 'preview' | 'apply' | 'restore' | 'list', input?: unknown): Promise<unknown> {
+  migration(action: 'preview' | 'apply' | 'restore' | 'list' | 'read', input?: unknown): Promise<unknown> {
     return this.serialize(() => {
       this.scan('refresh');
       try {
         if (action === 'list') return this.migrations.list();
+        if (action === 'read') {
+          if (!plainObject(input) || typeof input.id !== 'string') throw new WorkspaceError(400, 'A migration id is required');
+          return this.migrations.read(input.id);
+        }
         this.assertWritable(false);
         if (action === 'preview') return this.migrations.preview(input as MigrationRequest);
         if (action !== 'apply' && action !== 'restore') throw new WorkspaceError(400, 'Unknown migration action');

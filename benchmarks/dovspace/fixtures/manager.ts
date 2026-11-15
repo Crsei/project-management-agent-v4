@@ -9,18 +9,22 @@ import { createPool, migrate } from '../../../packages/infrastructure/src/databa
 import { LocalBlobStore } from '../../../packages/infrastructure/src/blobs.ts';
 import { bindStorage } from '../../../packages/infrastructure/src/blob-storage-maintenance.ts';
 import type { FileRecord } from '../../../packages/pm-schema/index.ts';
+import { accessCommands } from '../../../packages/application/src/access.ts';
+import { runCommand } from '../../../packages/application/src/kernel.ts';
+import { stageProductSource, type SourceStage, type StagedProductSource } from '../isolation/source.ts';
 import { FIXTURE_VERSION, repositoryRoot, type BenchmarkConfig } from '../benchmark.config.ts';
 import { FixtureManifestSchema } from '../schemas/types.ts';
 import type { Budget, FixtureDiff, FixtureEntity, FixtureHandle, FixtureReceipt, FixtureSnapshot, FixtureTarget } from '../schemas/types.ts';
 import { cleanEnvironment, docker, inspectOwned, OWNER_LABEL, ownerIdentity, removeOwnedName } from '../isolation/docker.ts';
-import { startIsolatedRuntime, startProtocolIsolatedRuntime, type OwnedRuntime } from '../isolation/runtime.ts';
+import { startIsolatedRuntime, startProtocolIsolatedRuntime, startOmpControlledRuntime, type OwnedRuntime } from '../isolation/runtime.ts';
 import { PROJECTS, ISSUES } from './dataset.ts';
 import { SYNTHETIC_DOCUMENTS, SYNTHETIC_FACTS, KNOWLEDGE_FIXTURE_FILES, HISTORICAL_SESSION_FILES, L04_CURRENT_DOCUMENT } from './documents.ts';
 import { CODE_FIXTURE_FILES } from '../tasks/code-fixture.ts';
+import { CHANGED_REQUIREMENT, INITIAL_REQUIREMENT, REQUIREMENT_PATH } from '../tasks/guidance.ts';
 import { diffSnapshots, takeSnapshot } from './snapshot.ts';
 import { readRootedFile, writeRootedFile } from '../isolation/filesystem.ts';
 
-type OwnedFixture = { owner: string; pgName: string; pmServiceSecret: string; seedReceipts: FixtureReceipt[]; pool?: Pool; api?: ChildProcess; runtime?: OwnedRuntime; device: number; inode: number; seeded: boolean; destroyed: boolean; closing?: Promise<void> };
+type OwnedFixture = { owner: string; pgName: string; pmServiceSecret: string; source?: StagedProductSource; seedReceipts: FixtureReceipt[]; pool?: Pool; api?: ChildProcess; runtime?: OwnedRuntime; device: number; inode: number; seeded: boolean; destroyed: boolean; closing?: Promise<void> };
 const ownership = new WeakMap<FixtureHandle, OwnedFixture>();
 const forbiddenPorts: Record<string, true> = { '3224': true, '4194': true, '4325': true, '55444': true };
 export type RuntimeStartOptions = { runId: string; taskId?: string; budget: Budget; allowedTools?: string[]; allowedTargets?: FixtureTarget[] };
@@ -32,6 +36,8 @@ export interface FixtureManager {
   destroy(handle: FixtureHandle): Promise<void>;
   startRuntime(handle: FixtureHandle, options: RuntimeStartOptions): Promise<NonNullable<FixtureHandle['runtime']>>;
   startProtocolRuntime(handle: FixtureHandle, options: RuntimeStartOptions & { controlledProviderScript: string }): Promise<NonNullable<FixtureHandle['runtime']>>;
+  startOmpControlledRuntime(handle: FixtureHandle, options: RuntimeStartOptions): Promise<NonNullable<FixtureHandle['runtime']>>;
+  provisionProjectReader(handle: FixtureHandle, options: { projectIds: string[] }): Promise<{ actorId: string; cookie: string }>;
   stopRuntime(handle: FixtureHandle): Promise<void>;
   pauseRuntime(handle: FixtureHandle): Promise<void>;
   resumeRuntime(handle: FixtureHandle): Promise<void>;
@@ -73,8 +79,9 @@ async function stopChild(child: ChildProcess): Promise<void> {
 }
 async function startPm(handle: FixtureHandle, owned: OwnedFixture, databaseUrl: string, secret: string, timeoutMs: number): Promise<void> {
   const readiness = Promise.withResolvers<string>();
-  const child = spawn(process.execPath, ['--conditions=development', 'benchmarks/dovspace/fixtures/pm-service.ts'], {
-    cwd: repositoryRoot, env: cleanEnvironment({ HOME: path.join(handle.root, 'service-home'), DOVSPACE_BENCH_FIXTURE_ID: handle.fixtureId, DOVSPACE_BENCH_ROOT: handle.root, DATABASE_URL: databaseUrl,
+  if (!owned.source) throw new Error('PM service requires the approved immutable product source stage');
+  const child = spawn(process.execPath, ['--conditions=development', path.join(repositoryRoot, 'benchmarks/dovspace/fixtures/pm-service.ts')], {
+    cwd: owned.source.root, env: cleanEnvironment({ HOME: path.join(handle.root, 'service-home'), DOVSPACE_BENCH_FIXTURE_ID: handle.fixtureId, DOVSPACE_BENCH_ROOT: handle.root, DOVSPACE_BENCH_SOURCE_ROOT: owned.source.root, DATABASE_URL: databaseUrl,
       CORE_WORKSPACE_ROOT: handle.authorityRoot, BLOB_ROOT: path.join(handle.root, 'blobs'), PM_CHAT_SPACE_ROOT: path.join(handle.root, 'pm-chat'), PM_AUTOMATION_SERVICE_SECRET: secret,
       CHOKIDAR_USEPOLLING: 'true', PM_DESKTOP_MANAGED: '1' }), stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
@@ -93,7 +100,7 @@ async function startPm(handle: FixtureHandle, owned: OwnedFixture, databaseUrl: 
   const timer = setTimeout(() => readiness.reject(new Error('Isolated PM service startup timed out')), timeoutMs);
   try { handle.pm.baseUrl = await readiness.promise; } finally { clearTimeout(timer); }
 }
-export function createFixtureManager(config: BenchmarkConfig): FixtureManager {
+export function createFixtureManager(config: BenchmarkConfig, stageOptions: { sourceStage?: SourceStage } = {}): FixtureManager {
   function own(handle: FixtureHandle): OwnedFixture {
     const owned = ownership.get(handle);
     if (!owned || owned.destroyed) throw new Error('Fixture is not owned by this live manager');
@@ -180,6 +187,11 @@ export function createFixtureManager(config: BenchmarkConfig): FixtureManager {
     try {
       await writeFile(path.join(root, 'ownership.json'), JSON.stringify({ fixtureId, owner }), { mode: 0o600, flag: 'wx' });
       for (const name of ['public', 'authority', 'agent-private', 'blobs', 'service-home', 'pm-chat']) await mkdir(path.join(root, name), { mode: 0o700 });
+      owned.source = await stageProductSource(path.join(root, 'runtime-source'), stageOptions.sourceStage);
+      for (const file of owned.source.manifest.files) Object.freeze(file);
+      Object.freeze(owned.source.manifest.files);
+      Object.freeze(owned.source.manifest);
+      Object.defineProperty(handle, 'productSource', { value: Object.freeze({ root: owned.source.root, manifest: owned.source.manifest }), enumerable: true });
       const password = randomBytes(32).toString('hex'), database = `dovspace_bench_${fixtureId.replaceAll('-', '')}`;
       const id = await docker(['create', '--pull', 'never', '--name', owned.pgName, '--label', `${OWNER_LABEL}=${owner}`, '--publish', '127.0.0.1::5432', '--tmpfs', '/var/lib/postgresql/data:rw,mode=0700', '--env', 'POSTGRES_USER', '--env', 'POSTGRES_DB', '--env', 'POSTGRES_PASSWORD', config.postgresImage], { POSTGRES_USER: 'dovspace_bench', POSTGRES_DB: database, POSTGRES_PASSWORD: password });
       await docker(['start', id]);
@@ -230,14 +242,33 @@ export function createFixtureManager(config: BenchmarkConfig): FixtureManager {
   async function startRuntime(handle: FixtureHandle, options: RuntimeStartOptions) {
     const owned = own(handle);
     if (owned.runtime) throw new Error('Runtime already allocated for this fixture');
-    owned.runtime = await startIsolatedRuntime(config, handle, owned.owner, options, owned.pmServiceSecret);
+    owned.runtime = await startIsolatedRuntime(config, handle, owned.owner, options, owned.pmServiceSecret, owned.source!);
     return handle.runtime!;
   }
   async function startProtocolRuntime(handle: FixtureHandle, options: RuntimeStartOptions & { controlledProviderScript: string }) {
     const owned = own(handle);
     if (owned.runtime) throw new Error('Runtime already allocated for this fixture');
-    owned.runtime = await startProtocolIsolatedRuntime(config, handle, owned.owner, options, owned.pmServiceSecret, options.controlledProviderScript);
+    owned.runtime = await startProtocolIsolatedRuntime(config, handle, owned.owner, options, owned.pmServiceSecret, options.controlledProviderScript, owned.source!);
     return handle.runtime!;
+  }
+  async function startControlledOmp(handle: FixtureHandle, options: RuntimeStartOptions) {
+    const owned = own(handle);
+    if (owned.runtime) throw new Error('Runtime already allocated for this fixture');
+    owned.runtime = await startOmpControlledRuntime(config, handle, owned.owner, options, owned.pmServiceSecret, owned.source!);
+    return handle.runtime!;
+  }
+  async function provisionProjectReader(handle: FixtureHandle, options: { projectIds: string[] }): Promise<{ actorId: string; cookie: string }> {
+    const owned = own(handle);
+    if (!owned.pool || !options.projectIds.length || options.projectIds.some(id => !Object.values(handle.targets).some(target => target.kind === 'project' && target.entityId === id))) throw new Error('Reader must have explicit owned fixture projects');
+    const password = randomBytes(32).toString('base64url');
+    const reader = await createUser(owned.pool, { name: 'Fictional restricted reader', email: `${randomUUID()}@dovspace-bench.example.test`, password });
+    const receipt = await runCommand(owned.pool, { id: handle.actorId, email: 'operator@dovspace-bench.example.test', name: 'Benchmark fictional operator' }, handle.workspaceId, { commandId: randomUUID(), commandType: 'SetWorkspaceMember', payload: { userId: reader.id, capabilities: ['domain.read'], projectIds: options.projectIds } }, accessCommands);
+    if (receipt.status !== 'committed') throw new Error('Real restricted membership provisioning did not commit');
+    const response = await fetch(handle.pm.baseUrl + '/api/v1/auth/login', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000), headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: reader.email, password }) });
+    const cookie = response.headers.get('set-cookie')?.split(';')[0] ?? '';
+    await response.body?.cancel();
+    if (!response.ok || !cookie) throw new Error('Fictional restricted reader failed authentication');
+    return { actorId: reader.id, cookie };
   }
   async function stopRuntime(handle: FixtureHandle): Promise<void> { const owned = own(handle); await owned.runtime?.close(); }
   async function pauseRuntime(handle: FixtureHandle): Promise<void> { await own(handle).runtime?.pause(); }
@@ -250,10 +281,16 @@ export function createFixtureManager(config: BenchmarkConfig): FixtureManager {
   function armResponseLoss(handle: FixtureHandle, options: { targetId: string }): void { const owned = own(handle); if (!owned.runtime) throw new Error('Response loss requires a running isolated runtime'); owned.runtime.armResponseLoss(options.targetId); }
   async function applyIntervention(handle: FixtureHandle, action: string): Promise<{ path: string; before: string | null; after: string }> {
     const owned = own(handle);
-    if (!['knowledge-update', 'update-knowledge', 'publish-current-decision', 'change-decision-and-new-session'].includes(action)) throw new Error('Unsupported fixture intervention');
+    if (!['knowledge-update', 'update-knowledge', 'publish-current-decision', 'change-decision-and-new-session', 'change-requirement'].includes(action)) throw new Error('Unsupported fixture intervention');
     const wasPaused = owned.runtime?.paused ?? false;
     await owned.runtime?.pause();
     try {
+      if (action === 'change-requirement') {
+        const prior = await readRootedFile(handle.publicRoot, REQUIREMENT_PATH);
+        if (prior !== INITIAL_REQUIREMENT) throw new Error('Intervention refuses a concurrently modified requirement');
+        await writeRootedFile(handle.publicRoot, REQUIREMENT_PATH, CHANGED_REQUIREMENT);
+        return { path: REQUIREMENT_PATH, before: prior, after: CHANGED_REQUIREMENT };
+      }
       const prior = SYNTHETIC_FACTS.find(entry => entry.key === 'incidentEscalationMinutes')!;
       const priorContent = await readRootedFile(handle.publicRoot, prior.currentPath);
       if (priorContent !== SYNTHETIC_DOCUMENTS.find(document => document.path === prior.currentPath)?.content) throw new Error('Intervention refuses a concurrently modified decision');
@@ -262,5 +299,5 @@ export function createFixtureManager(config: BenchmarkConfig): FixtureManager {
       return { path: L04_CURRENT_DOCUMENT.path, before: null, after: L04_CURRENT_DOCUMENT.content };
     } finally { if (!wasPaused) await owned.runtime?.resume(); }
   }
-  return { reset, seed, snapshot, diff: (before: FixtureSnapshot, after: FixtureSnapshot, options: { allowedEntityIds?: string[] } = {}): FixtureDiff => diffSnapshots(before, after, options), destroy, startRuntime, startProtocolRuntime, stopRuntime, pauseRuntime, resumeRuntime, bindActiveSession, armResponseLoss, request, applyIntervention };
+  return { reset, seed, snapshot, diff: (before: FixtureSnapshot, after: FixtureSnapshot, options: { allowedEntityIds?: string[] } = {}): FixtureDiff => diffSnapshots(before, after, options), destroy, startRuntime, startProtocolRuntime, startOmpControlledRuntime: startControlledOmp, provisionProjectReader, stopRuntime, pauseRuntime, resumeRuntime, bindActiveSession, armResponseLoss, request, applyIntervention };
 }

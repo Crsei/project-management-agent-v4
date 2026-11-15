@@ -36,7 +36,7 @@ pnpm install --frozen-lockfile
 | `pnpm check:affected` | 开发者本地变更选择器；`--dry-run` 展示原因/命令，重复 `--file` 显式替代 Git 发现；未知输入保守全量，但无论选择结果都不替代默认 CI |
 | `pnpm check:release` | 记录在案的发行授权门禁；当前仍有 open blocker 时失败，不代表法律审查或分发授权 |
 | `node scripts/release-package.mjs` | `prepare`/`verify` 标签源码与构建证据、校验和及 manifest；需干净精确提交，不是签名、安装器或部署入口 |
-| `pnpm check:turbo` | 显式叶调度，默认六 lint；`--stage lint\|build\|host-build` 或重复 `--task ID`，`--dry` / `--baseline` 互斥；九 build/typecheck 与独立 host 纳入完整公共输入/输出缓存，不缓存真实测试/业务状态。不是完整 CI 或生产配置构建替代入口，见[开发指南](docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)及[完整计划](docs/reference/turbo-rollout-plan.zh.md) |
+| `pnpm check:turbo` | 显式叶调度，默认六 lint；`--stage lint\|build\|host-build` 或重复 `--task ID`，`--dry` / `--baseline` 互斥；九 build/typecheck 与独立 host 纳入完整公共输入/输出缓存，不缓存真实测试/业务状态。不是完整 CI 或生产配置构建替代入口，见[开发指南](docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存) |
 
 Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，或 `pnpm_config_verify_deps_before_run=error pnpm check:turbo ...`。runner 在其 pnpm 调用边界固定依赖状态 `error` 策略，并在 HIT 前新鲜预检；不承诺 pnpm 内部后代环境值永不变化。未带环境变量的外层 pnpm 在 Node 启动前仍遵循自身策略，不能宣称被 runner 拦截。冻结安装是单独前提，不改变 workspace 全局策略。
 
@@ -44,7 +44,7 @@ Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，
 
 聚合入口接受原 `--stage static|build|host|backend|agent|all`，默认 `all`；新增 `--baseline` 或 `--cache-name NAME` 只控制工程缓存，同一完整范围不减。单阶段成功不是完整聚合通过，独立 backend/agent 要先在同一检出完成 build。完整 agent/all 须显式 `PM_OPENHANDS_AUTHORING_SOURCE` 指向仓库外已认证的固定公开 OpenHands checkout；只放行这一路径，原 provenance 用例验真，缺失时失败而非 skip 通过。`host` 保留真实协议与扩展集成；旧 `rust` / `rust-network` 不可用。Actions 只允许默认分支受信 push/manual restore/save，共享缓存对所有 PR 隔离；未触发真实 hosted 作业，不宣称 hosted 成功。真实 Skill 网络和第三方发布履约仍单列，见[测试说明](tests/README.md)。
 
-本轮实际采纳本地全 16 工程叶缓存：每组 n=3 的 baseline/MISS/HIT 中位 178.507/182.319/13.388 秒，恢复产物上完整 Agent 1434/1434、最终行为 76/76，独立 static/build/host 的 MISS/HIT 均真实重跑 fresh gates。默认 `all` 仍在 MinIO Docker FROM 镜像域名 DNS 处失败，backend 0 用例、该轮 Agent 未执行；不能拼接独立阶段宣称完整 CI。实际 Actions 未触发，本机真实 cache transport 后 16/16 HIT 不等于 hosted 成功；[完整证据与限制](docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)保留无效 bypass 轮次、原失败及真实账号/平台/生产/发行许可缺口。
+本轮实际采纳本地全 16 工程叶缓存：每组 n=3 的 baseline/MISS/HIT 中位 178.507/182.319/13.388 秒，恢复产物上完整 Agent 1434/1434、最终行为 76/76，独立 static/build/host 的 MISS/HIT 均真实重跑 fresh gates。默认 `all` 仍在 MinIO Docker FROM 镜像域名 DNS 处失败，backend 0 用例、该轮 Agent 未执行；不能拼接独立阶段宣称完整 CI。实际 Actions 未触发，本机真实 cache transport 后 16/16 HIT 不等于 hosted 成功；无效 bypass 轮次、原失败及真实账号/平台/生产/发行许可缺口保留在内部证据中。
 
 文档变更要更新公开链接与适用性；历史 ADR 保留原决策语义，当前实现另列差异。不依赖开发机已有 dist、外部参考源码目录或被忽略的内部记录。报告运行命令、环境、通过/失败/跳过及未覆盖范围，不沿用修改前的通过结论。
 

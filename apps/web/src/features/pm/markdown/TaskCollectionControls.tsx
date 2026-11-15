@@ -101,7 +101,7 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
         {!graph && sortControl}
         {groupControl}
         {agentEntry}
-        <button type="button" className="primary-button" data-testid="new-task" aria-label={t('New task', '新建任务')} disabled={c.configurationInvalid || c.writesBlocked || !!c.busy || !c.canWrite || (personalScope && !taskContext.actorId)} onClick={() => c.openCreate(workflowFor('work_item', c.configuration)?.initial)}><Plus size={15} aria-hidden="true" />{t('New task', '新建任务')}</button>
+        <button type="button" className="primary-button" data-testid="new-task" aria-label={t('New task', '新建任务')} disabled={c.configurationInvalid || !!c.busy || !c.canWrite || (personalScope && !taskContext.actorId)} onClick={() => c.openCreate(workflowFor('work_item', c.configuration)?.initial)}><Plus size={15} aria-hidden="true" />{t('New task', '新建任务')}</button>
         {graph && <div className="task-graph-toggle-target" ref={onGraphToggleTargetChange} />}
         <DropdownMenu><DropdownMenuTrigger type="button" className="icon-button task-more-trigger" aria-label={t('More task tools', '更多任务工具')} title={t('More task tools', '更多任务工具')}><MoreHorizontal size={18} /></DropdownMenuTrigger><DropdownMenuContent className="task-collection-menu" align="end">
           <DropdownMenuLabel className="task-menu-label">{t('Create', '创建')}</DropdownMenuLabel>

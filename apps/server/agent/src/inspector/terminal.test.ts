@@ -12,9 +12,10 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import WebSocket from 'ws';
 import type { TerminalDescriptor, TerminalServerMessage } from '@agent-workspace/contracts/inspector';
-import type { ExecutionSelection } from '@agent-workspace/contracts/chat';
+import { chatDraftInputSchema, type ChatDraftInput, type ExecutionSelection } from '@agent-workspace/contracts/chat';
 import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import type { GitStatusResponse, InspectorFileResponse, InspectorTreeResponse } from '@agent-workspace/contracts/inspector';
+import { chatContextResolveResponseSchema, type AcceptedChatContext } from '@agent-workspace/contracts/message-context';
 
 const original = { data: process.env.AGENT_WORKSPACE_DATA_DIR, roots: process.env.AGENT_WORKSPACE_ALLOWED_ROOTS, pm: process.env.PM_API_URL, access: process.env.AGENT_WORKSPACE_ACCESS_TOKEN };
 const directory = await mkdtemp(path.join(tmpdir(), 'terminal-manager-v2-'));
@@ -26,11 +27,13 @@ delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
 // directory before loading terminal/runtime modules.
 const { attachTerminalUpgrade, stopTerminals } = await import('./terminal.ts');
 const { inspectorRoutes } = await import('./index.ts');
+const { chatRoutes } = await import('../chat.ts');
 const { ensureThread, getThread, updateThread, freezeThreadExecution } = await import('../durable/threads.ts');
-const { closeStore } = await import('../durable/store.ts');
+const { closeStore, readRecord } = await import('../durable/store.ts');
 const { openAgentWorkspace, resolveAgentWorkspaceExecution, updateAgentWorkspace } = await import('../agent-workspaces.ts');
 const { accessGuard } = await import('../access.ts');
 const { deliveryStore, resolveChatExecutionScope } = await import('../task-delivery/binding.ts');
+const { enqueueMessage, editQueuedMessage, listQueuedMessages, mutateQueue, stashDraft, listStashedDrafts, removeStashedDraft } = await import('../durable/message-queue.ts');
 const exec = promisify(execFile);
 async function git(cwd: string, ...args: string[]) {
   return (await exec('git', args, { cwd, encoding: 'utf8' })).stdout.trim();
@@ -49,7 +52,7 @@ before(async () => {
   const workspace = openAgentWorkspace({ path: root });
   selection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
   ensureThread('session', 'Session', selection, { ...resolveAgentWorkspaceExecution(selection).environment, frozen: true });
-  const app = new Hono().use('/api/*', accessGuard).route('/api', inspectorRoutes);
+  const app = new Hono().use('/api/*', accessGuard).route('/api', inspectorRoutes).route('/api', chatRoutes);
   agent = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 }) as Server;
   if (!agent.listening) { const ready = Promise.withResolvers<void>(); agent.once('listening', ready.resolve); await ready.promise; }
   attachTerminalUpgrade(agent);
@@ -327,7 +330,22 @@ test('controlled worktree Files, Git, Session PTY and frozen execution agree wit
   assert.equal(workspaceResponse.status, 200);
   const workspaceTerminal = (await workspaceResponse.json() as { terminal: TerminalDescriptor }).terminal;
   assert.equal(workspaceTerminal.startCwd, source);
+  const workspaceClient = attach(workspaceTerminal.id, 'workspace-context-observer');
+  await workspaceClient.wait(frame => frame.type === 'ready');
+  workspaceClient.socket.send(JSON.stringify({ type: 'input', seq: 1, data: 'stty -echo; printf "__WORKSPACE_CONTEXT_BODY__\\n"\n' }));
+  await workspaceClient.wait(frame => frame.type === 'output' && workspaceClient.text().includes('__WORKSPACE_CONTEXT_BODY__'));
+  const selected = { contextId: 'workspace-root-snapshot', kind: 'terminal', source: {
+    type: 'terminal', terminalId: workspaceTerminal.id, serviceId: workspaceTerminal.serviceId }, text: '__WORKSPACE_CONTEXT_BODY__' };
+  const resolve = (threadId: string) => fetch(`${origin}/api/chat/threads/${threadId}/context/resolve`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contextItems: [selected] }) });
+  const wrongRoot = await resolve('controlled-session');
+  assert.equal(wrongRoot.status, 403);
+  assert.equal((await wrongRoot.json()).code, 'terminal_scope_mismatch');
+  ensureThread('workspace-context-session', undefined, target, resolveAgentWorkspaceExecution(target).environment);
+  const sameRoot = await resolve('workspace-context-session');
+  assert.equal(sameRoot.status, 200, await sameRoot.clone().text());
   await fetch(`${origin}/api/inspector/terminals/${workspaceTerminal.id}`, { method: 'DELETE' });
+  await detach(workspaceClient.socket);
   assert.equal(pmRequests, 0);
 });
 
@@ -346,4 +364,122 @@ test('metadata revisions preserve existing PTYs while future bindings reject', a
   const future = await post({ ...await creationBody(), agentWorkspaceId: renamed.id, agentWorkspaceRevision: renamed.revision + 1 });
   assert.ok(future.status >= 400);
   await fetch(`${origin}/api/inspector/terminals/${terminal.id}`, { method: 'DELETE' });
+});
+
+test('Session deletion waits for the real PTY exit and rejects late terminal creation after closing', async () => {
+  const terminalRoot = path.join(directory, 'deletion-terminal'); await mkdir(terminalRoot);
+  const workspace = openAgentWorkspace({ path: terminalRoot });
+  const threadId = 'terminal-deletion-session';
+  const chosen: ExecutionSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  ensureThread(threadId, 'Deletion evidence', chosen, resolveAgentWorkspaceExecution(chosen).environment);
+  const body = { ...await creationBody(), scope: 'session', threadId, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  const created = await post(body); assert.equal(created.status, 200, await created.clone().text());
+  const terminal = (await created.json() as { terminal: TerminalDescriptor }).terminal;
+  const client = attach(terminal.id, 'deletion-observer');
+  const release = path.join(terminalRoot, 'release-stop');
+  const controlledShell = path.join(terminalRoot, 'controlled-shell.sh');
+  await writeFile(controlledShell, [
+    'stty -echo',
+    'trap \'printf "__TERMINATING__\\n"; while [ ! -f "$1" ]; do sleep 0.02; done; exit 0\' TERM',
+    'printf "__DELETE_READY__\\n"',
+    'while :; do sleep 0.02; done',
+    '',
+  ].join('\n'), { mode: 0o600 });
+  let deleteFinished = false;
+  let deleting: Promise<Response> | undefined;
+  try {
+    await client.wait(frame => frame.type === 'ready');
+    client.socket.send(JSON.stringify({ type: 'input', seq: 1,
+      // Replace the interactive login shell: readline may defer a trapped TERM until another input line.
+      // exec preserves the owned PTY leader/start identity and makes this actual exit barrier deterministic.
+      data: `exec /bin/sh ${JSON.stringify(controlledShell)} ${JSON.stringify(release)}\n` }));
+    await client.wait(frame => frame.type === 'output' && client.text().includes('__DELETE_READY__'));
+    deleting = fetch(`${origin}/api/chat/threads/${threadId}`, { method: 'DELETE',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'original-terminal-delete' },
+      body: JSON.stringify({ lifecycleRevision: 0, confirm: true, expectedGenerationId: null, stopActive: false }) }).then(response => { deleteFinished = true; return response; });
+    await client.wait(frame => frame.type === 'output' && client.text().includes('__TERMINATING__'));
+    const stoppingReceipt = await fetch(`${origin}/api/chat/threads/${threadId}/lifecycle-operations/original-terminal-delete`);
+    assert.equal((await stoppingReceipt.json()).operation.state, 'stopping');
+    assert.equal(deleteFinished, false, 'Sending SIGTERM must not be reported as observed stop/deletion.');
+    const late = await post({ ...body, requestId: randomUUID() });
+    assert.equal(late.status, 409); assert.equal((await late.json()).code, 'thread_closing');
+    await writeFile(release, 'explicit test release');
+    const deleted = await deleting; assert.equal(deleted.status, 200, await deleted.clone().text());
+    await client.wait(frame => frame.type === 'exit');
+    assert.equal(getThread(threadId), null);
+    assert.equal((await post({ ...body, requestId: randomUUID() })).status, 409);
+  } finally {
+    await writeFile(release, 'cleanup release'); await deleting?.catch(() => undefined); await detach(client.socket);
+  }
+});
+
+test('terminal selected context verifies the real lifetime but remains a user snapshot, never command replay', async () => {
+  const selectedRoot = path.join(directory, 'selected-terminal-context'); await mkdir(selectedRoot);
+  const workspace = openAgentWorkspace({ path: selectedRoot });
+  const chosen: ExecutionSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  const threadId = 'selected-terminal-context';
+  ensureThread(threadId, 'Selected terminal', chosen, resolveAgentWorkspaceExecution(chosen).environment);
+  const created = await post({ ...await creationBody(), scope: 'session', threadId, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision });
+  assert.equal(created.status, 200);
+  const terminal = (await created.json() as { terminal: TerminalDescriptor }).terminal;
+  const client = attach(terminal.id, 'context-observer');
+  try {
+    await client.wait(frame => frame.type === 'ready');
+    client.socket.send(JSON.stringify({ type: 'input', seq: 1, data: "printf '\\nACTUAL_SELECTED_OUTPUT\\n'\n" }));
+    await client.wait(frame => frame.type === 'output' && client.text().includes('ACTUAL_SELECTED_OUTPUT'));
+    const input = { contextId: 'terminal-selection', kind: 'terminal', source: { type: 'terminal', terminalId: terminal.id, serviceId: terminal.serviceId },
+      terminalLabel: 'CALLER_UNTRUSTED_LABEL', selection: { startLine: 1, endLine: 1 }, text: 'ACTUAL_SELECTED_OUTPUT' };
+    const resolve = (context: object) => fetch(`${origin}/api/chat/threads/${threadId}/context/resolve`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contextItems: [context] }) });
+    const response = await resolve(input); assert.equal(response.status, 200, await response.clone().text());
+    const accepted = chatContextResolveResponseSchema.parse(await response.json()).contextItems[0]!;
+    assert.equal(accepted.provenance, 'user-terminal-snapshot');
+    assert.equal(accepted.text, 'ACTUAL_SELECTED_OUTPUT');
+    assert.equal(accepted.terminalLabel, terminal.startCwd);
+    assert.notEqual(accepted.terminalLabel, input.terminalLabel);
+    assert.equal(getThread(threadId)!.executionEnvironment!.frozen, false, 'Resolve is not execution admission.');
+    const wrongLifetime = await resolve({ ...input, source: { ...input.source, serviceId: randomUUID() } });
+    assert.equal(wrongLifetime.status, 409);
+    if (accepted.visibility !== 'available') assert.fail('The real selected terminal must be available.');
+    assert.equal(accepted.input.source.type, 'terminal');
+    if (accepted.input.source.type !== 'terminal') assert.fail('Expected the real terminal source.');
+    assert.match(accepted.input.source.environmentDigest!, /^[a-f0-9]{64}$/);
+    const previewOnlyResponse = await resolve({ ...accepted.input, contextId: 'read-only-terminal-preview' });
+    assert.equal(previewOnlyResponse.status, 200);
+    const previewOnly = chatContextResolveResponseSchema.parse(await previewOnlyResponse.json()).contextItems[0]!;
+    if (previewOnly.visibility !== 'available') assert.fail('The read-only preview must initially resolve.');
+    const draft: ChatDraftInput = { message: { id: 'persisted-terminal-input', role: 'user', parts: [{ type: 'text', text: 'Discuss the selected historical output.' }] }, contextItems: [accepted.input] };
+    assert.equal(chatDraftInputSchema.safeParse({ ...draft, acceptedContextItems: [accepted] }).success, false, 'Clients cannot submit accepted proof.');
+    const headers = new Headers({ host: new URL(origin).host }), settingsRevision = getThread(threadId)!.revision;
+    await enqueueMessage(threadId, 'terminal-queue', draft, settingsRevision, headers);
+    await stashDraft(threadId, 'terminal-stash', draft, headers);
+    const savedTimes = new Set([
+      ...readRecord<{ acceptedContextItems: AcceptedChatContext[] }>('chat:message-queue', JSON.stringify([threadId, 'terminal-queue']))!.acceptedContextItems,
+      ...readRecord<{ acceptedContextItems: AcceptedChatContext[] }>('chat:draft-stash', JSON.stringify([threadId, 'terminal-stash']))!.acceptedContextItems,
+    ].map(item => item.acceptedAt));
+    await stopTerminals();
+    closeStore();
+    assert.equal((await fetch(`${origin}/api/inspector/terminals/${terminal.id}`)).status, 404, 'No PTY is restored.');
+    assert.deepEqual((await listQueuedMessages(threadId, headers))[0]!.draft!.contextItems, draft.contextItems);
+    assert.deepEqual((await listStashedDrafts(threadId, headers))[0]!.draft!.contextItems, draft.contextItems);
+    const historicalResponse = await resolve(accepted.input); assert.equal(historicalResponse.status, 200, await historicalResponse.clone().text());
+    const historical = chatContextResolveResponseSchema.parse(await historicalResponse.json()).contextItems[0]!;
+    assert.equal(historical.text, 'ACTUAL_SELECTED_OUTPUT');
+    assert.equal(historical.provenance, 'user-terminal-snapshot');
+    assert.ok(savedTimes.has(historical.acceptedAt), 'Historical acceptance time is preserved, not fabricated anew.');
+    assert.match(historical.reason!, /PTY is unavailable.*not restored or rerun/);
+    assert.equal((await resolve(previewOnly.input)).status, 404, 'Read-only resolution never creates a persistence proof.');
+    const editedDraft = { ...draft, message: { ...draft.message, id: 'edited-terminal-input' } };
+    await editQueuedMessage(threadId, 'terminal-queue', 0, editedDraft, settingsRevision, headers);
+    await assert.rejects(editQueuedMessage(threadId, 'terminal-queue', 1, {
+      ...editedDraft, message: { ...editedDraft.message, id: 'forged-terminal-input' },
+      contextItems: [{ ...accepted.input, comment: 'Changed immutable snapshot input' }],
+    }, settingsRevision, headers), { code: 'terminal_unavailable' }, 'An expired snapshot cannot authorize changed inputDigest.');
+    await mutateQueue(threadId, 'terminal-queue', 1, 'remove', headers);
+    await removeStashedDraft(threadId, 'terminal-stash', headers);
+    assert.equal((await resolve(accepted.input)).status, 404, 'Removing explicit saved captures also removes their private proof.');
+  } finally {
+    await fetch(`${origin}/api/inspector/terminals/${terminal.id}`, { method: 'DELETE' });
+    await detach(client.socket);
+  }
 });

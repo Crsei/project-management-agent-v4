@@ -11,7 +11,7 @@ import { createTurboDispatcher } from './check-turbo.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const dockerHost = ['--host', 'unix:///var/run/docker.sock'];
 // Public PostgreSQL manifest and source-built MinIO fixture; never developer volumes.
-const postgresImage = 'postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab';
+const postgresImage = process.env.PM_CI_POSTGRES_IMAGE ?? 'postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab';
 let commandRunner;
 let interrupted;
 
@@ -42,6 +42,17 @@ async function main(recorder) {
   }
   recorder.record('run', 'Repository checks', 'scope', { stage, mode: baseline ? 'baseline' : 'turbo', ...(baseline ? {} : { cacheName }) });
   const selected = name => stage === name || stage === 'all';
+  if (selected('backend') && !/^(?:[a-z0-9]+(?:[.-][a-z0-9]+)*\/library\/)?postgres:16\.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab$/.test(postgresImage)) {
+    throw new Error('PM_CI_POSTGRES_IMAGE must name the pinned PostgreSQL version and digest, optionally through an explicit registry mirror.');
+  }
+  const minioGoImage = process.env.PM_CI_MINIO_GO_IMAGE;
+  if (selected('backend') && minioGoImage !== undefined && !/^(?:[a-z0-9]+(?:[.-][a-z0-9]+)*\/library\/)?golang:1\.24\.7-alpine3\.22@sha256:fc2cff6625f3c1c92e6c85938ac5bd09034ad0d4bc2dfb08278020b68540dbb5$/.test(minioGoImage)) {
+    throw new Error('PM_CI_MINIO_GO_IMAGE must name the pinned Go version and digest, optionally through an explicit registry mirror.');
+  }
+  const minioGoProxy = process.env.PM_CI_MINIO_GOPROXY;
+  if (selected('backend') && minioGoProxy !== undefined && !/^https:\/\/[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(minioGoProxy)) {
+    throw new Error('PM_CI_MINIO_GOPROXY must be a single clean HTTPS registry origin; module and checksum verification remain enabled.');
+  }
   if (process.platform !== 'linux') throw new Error('CI isolation requires Linux procfs, util-linux flock, Bubblewrap and local Docker');
   const birth = processBirth(process.pid);
   if (!birth) throw new Error('Cannot establish CI owner process birth identity');
@@ -112,6 +123,8 @@ async function main(recorder) {
     minioBuildStarted = true;
     await docker('Building pinned official MinIO source (public network required)', [
       'build', '--force-rm', '--label', `${ciPostgresLabel}=${owner}`, '--tag', minioImage,
+      ...(minioGoImage === undefined ? [] : ['--build-arg', `GO_IMAGE=${minioGoImage}`]),
+      ...(minioGoProxy === undefined ? [] : ['--build-arg', `GOPROXY=${minioGoProxy}`]),
       '--file', path.join(root, 'scripts/ci-minio.Dockerfile'), minioContext,
     ]);
     const password = randomBytes(32).toString('hex'), database = `pm_ci_${runId.replaceAll('-', '')}`;

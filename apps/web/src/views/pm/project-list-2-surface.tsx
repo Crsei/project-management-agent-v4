@@ -19,7 +19,7 @@ type ProjectBrowseCardProps = {
 /** Browse uses the host's records and selection flow, without introducing a second data source. */
 export function ProjectBrowseCard({ project, locale, selected, onSelect, readModel, renderProjectAction, renderProjectContextMenu }: ProjectBrowseCardProps) {
   const en = locale === "en"
-  const members: NonNullable<ProjectCollectionRecord["members"]> = project.members?.length ? project.members : project.teamSize !== null && project.owner ? [project.owner] : []
+  const members: NonNullable<ProjectCollectionRecord["members"]> = project.members ?? []
   const visibleMembers = members.slice(0, 3)
   const extraMembers = Math.max(0, (project.teamSize ?? members.length) - visibleMembers.length)
   const counts = project.taskCounts
@@ -47,11 +47,11 @@ export function ProjectBrowseCard({ project, locale, selected, onSelect, readMod
     <p className={styles.description} title={project.description ?? undefined}>{project.description ?? "—"}</p>
     <div className={styles.meta}>
       <span className={styles.date}><CalendarDays aria-hidden="true" /><span>{date}</span></span>
-      <span className={styles.team} aria-label={en ? `${project.teamSize ?? "—"} team members` : `${project.teamSize ?? "—"} 位团队成员`}>
+      {project.peopleContent ?? <span className={styles.team} aria-label={en ? `${project.teamSize ?? "—"} participants` : `${project.teamSize ?? "—"} 位参与人`}>
         {visibleMembers.map((member) => <span className={styles.avatar} key={member.id}><Avatar name={member.name} src={member.avatarUrl ?? undefined} size={24} /></span>)}
         {extraMembers > 0 && <span className={`${styles.avatar} ${styles.extraMembers}`}>+{extraMembers}</span>}
         {members.length === 0 && <span>{project.teamSize === null ? "—" : en ? `${project.teamSize} members` : `${project.teamSize} 人`}</span>}
-      </span>
+      </span>}
     </div>
     <div className={styles.progress}>
       <div className={styles.healthSummary}>

@@ -1,11 +1,12 @@
 import path from 'node:path';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { CODE_FIXTURE_FILES } from '../tasks/code-fixture.ts';
 import { publicFile } from './knowledge.ts';
+import { PARTIAL_RETRY_TEST, contentHash } from '../tasks/guidance.ts';
 import { executeCode } from '../runners/code-executor.ts';
-import type { CheckResult } from '../schemas/types.ts';
+import type { CheckResult, FixtureHandle, FixtureSnapshot } from '../schemas/types.ts';
 import type { CodeExecutor, CodeInvocation, GradeInput } from './types.ts';
 import { check, stable } from './types.ts';
+import { checkpointSnapshot } from './guidance.ts';
 
 export interface HiddenProbe { id: string; kind: 'feature' | 'regression'; args: unknown[]; expected: unknown }
 /** Host-only oracle. Candidate subprocesses receive inputs, never this table or expected values. */
@@ -49,20 +50,25 @@ export async function executeHiddenProbes(executor: CodeExecutor, repoDir: strin
   return checks;
 }
 export async function gradeCode(input: GradeInput): Promise<CheckResult[]> {
-  if (input.task.id !== 'D02' && input.task.id !== 'L04') return [];
+  if (!['K04', 'D02', 'D04', 'L03', 'L04'].includes(input.task.id)) return [];
   const executor = input.codeExecutor ?? executeCode;
   const repoDir = path.join(input.fixture.publicRoot, 'repo');
-  const probes = input.task.id === 'D02' ? RETRY_PROBES : RETRY_PROBES.filter((probe) => probe.kind === 'regression');
+  const probes = input.task.id !== 'L04' ? RETRY_PROBES : RETRY_PROBES.filter((probe) => probe.kind === 'regression');
   const checks = await executeHiddenProbes(executor, repoDir, 'src/retry.ts', 'retryDelay', probes);
+  if (input.task.id === 'L03') {
+    const checkpoint = checkpointSnapshot(input);
+    const midpoint = checkpoint ? await verifyInitialRequirement(input.fixture, checkpoint, executor) : null;
+    checks.push(check('code.initial-requirement.independent-execution', midpoint?.passed === true, midpoint?.checks.flatMap(item => item.evidence) ?? ['missing frozen midpoint'], 'Independent re-execution of original replacement behavior and original halfway tests; final revised code alone is insufficient.'));
+  }
   const originalRegressionPresent = publicFile(input.after, 'repo/test/retry.test.ts') !== undefined;
   checks.push(check('code.original-regression-file-present', originalRegressionPresent, ['repo/test/retry.test.ts'], 'The original regression suite cannot be deleted.'));
   if (originalRegressionPresent) {
     const regressionAfter = await executor({ repoDir, modulePath: 'test/retry.test.ts', exportName: '', invocations: [], mode: 'node-test' });
     checks.push(check('code.original-regression.candidate-passes', regressionAfter.isolationVerified && regressionAfter.exitCode === 0, regressionAfter.evidence, 'The actual original public regression command must pass against delivered source.'));
   }
-  const testPath = input.task.id === 'D02' ? 'test/retry-after.test.ts' : 'test/incident.test.ts';
+  const testPath = input.task.id !== 'L04' ? 'test/retry-after.test.ts' : 'test/incident.test.ts';
   const publicTestSource = publicFile(input.after, `repo/${testPath}`);
-  checks.push(check('code.real-feature-test-file', typeof publicTestSource === 'string' && publicTestSource.includes('node:test') && publicTestSource.includes(input.task.id === 'D02' ? 'retryDelay' : 'incidentPolicy') && publicTestSource.includes('assert'), [`repo/${testPath}`], 'A real feature test file must be delivered, not just test-success prose.'));
+  checks.push(check('code.real-feature-test-file', typeof publicTestSource === 'string' && publicTestSource.includes('node:test') && publicTestSource.includes(input.task.id !== 'L04' ? 'retryDelay' : 'incidentPolicy') && publicTestSource.includes('assert'), [`repo/${testPath}`], 'A real feature test file must be delivered, not just test-success prose.'));
   if (publicTestSource) {
     const execution = await executor({ repoDir, modulePath: testPath, exportName: '', invocations: [], mode: 'node-test' });
     checks.push(check('code.delivered-functional-tests', execution.isolationVerified && execution.exitCode === 0, execution.evidence, 'Delivered functional tests must actually execute in isolation.'));
@@ -71,14 +77,23 @@ export async function gradeCode(input: GradeInput): Promise<CheckResult[]> {
     const incident = await executeHiddenProbes(executor, repoDir, 'src/incident.ts', 'incidentPolicy', INCIDENT_PROBES);
     return [...checks, ...incident.map((item) => ({ ...item, id: item.id === 'code.sandbox-execution' ? 'code.incident.sandbox-execution' : item.id }))];
   }
+  for (const extra of input.task.id === 'D04' ? ['test/retry-partial.test.ts'] : input.task.id === 'L03' ? ['test/retry-change.test.ts'] : []) {
+    if (publicFile(input.after, `repo/${extra}`) === undefined) {
+      checks.push(check(`code.extra-tests.${extra}`, false, [`repo/${extra}`], 'Required intermediate test file is missing from the delivered work.'));
+      continue;
+    }
+    const execution = await executor({ repoDir, modulePath: extra, exportName: '', invocations: [], mode: 'node-test' });
+    checks.push(check(`code.extra-tests.${extra}`, execution.isolationVerified && execution.exitCode === 0 && (input.task.id !== 'D04' || publicFile(input.after, `repo/${extra}`) === PARTIAL_RETRY_TEST), execution.evidence, 'Retained or revised intermediate tests must actually pass against final source.'));
+  }
   // Recreate immutable public baseline outside the Agent mount and establish both halves of fail-to-pass.
   const baselineRoot = await mkdtemp(path.join(input.fixture.root, 'grader-baseline-'));
   const baselineRepo = path.join(baselineRoot, 'repo');
   try {
-    for (const [relative, content] of Object.entries(CODE_FIXTURE_FILES)) {
-      const target = path.join(baselineRepo, relative);
+    for (const [relative, encoded] of Object.entries(input.before.publicFiles)) {
+      if (!relative.startsWith('repo/') || relative.startsWith('repo/.git/')) continue;
+      const target = path.join(baselineRepo, relative.slice(5));
       await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
-      await writeFile(target, content, { mode: 0o600 });
+      await writeFile(target, Buffer.from(encoded, 'base64'), { mode: 0o600 });
     }
     const baseline = await executeHiddenProbes(executor, baselineRepo, 'src/retry.ts', 'retryDelay', RETRY_PROBES);
     const executable = baseline.find((item) => item.id === 'code.sandbox-execution')?.passed === true;
@@ -95,4 +110,26 @@ export async function gradeCode(input: GradeInput): Promise<CheckResult[]> {
     await writeFile(path.join(input.outputDir, 'artifacts', 'baseline-code-evidence.json'), JSON.stringify({ kind: 'trusted-baseline-proof', checks: baseline, originalRegressionExecution: regressionBefore }, null, 2) + '\n', { mode: 0o600 });
   } finally { await rm(baselineRoot, { recursive: true, force: true }); }
   return checks;
+}
+/** Run frozen checkpoint bytes, not files that the active Agent could race. Gold stays host-side. */
+export async function verifyInitialRequirement(fixture: FixtureHandle, snapshot: FixtureSnapshot, executor: CodeExecutor) {
+  const requiredFiles = ['repo/package.json', 'repo/src/retry.ts', 'repo/test/retry.test.ts', 'repo/test/retry-change.test.ts'];
+  const missing = requiredFiles.filter(relative => publicFile(snapshot, relative) === undefined);
+  if (missing.length) return { passed: false, sourceHash: null, checks: [check('midpoint.required-files', false, missing, 'The saved midpoint lacks required implementation or test artifacts.')] };
+  const root = await mkdtemp(path.join(fixture.root, 'grader-midpoint-'));
+  try {
+    for (const relative of requiredFiles) {
+      const content = publicFile(snapshot, relative)!;
+      const target = path.join(root, relative.slice(5));
+      await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
+      await writeFile(target, content, { mode: 0o600 });
+    }
+    const initial = RETRY_PROBES.map(probe => ({ ...probe, expected: probe.id === 'server-below-backoff' ? 2000 : probe.id === 'past-http-date' || probe.id === 'zero-server-delay' ? 0 : probe.expected }));
+    const checks = await executeHiddenProbes(executor, root, 'src/retry.ts', 'retryDelay', initial);
+    for (const modulePath of ['test/retry.test.ts', 'test/retry-change.test.ts']) {
+      const execution = await executor({ repoDir: root, modulePath, exportName: '', invocations: [], mode: 'node-test' });
+      checks.push({ id: `midpoint.${modulePath}`, required: true, passed: execution.isolationVerified && execution.exitCode === 0, score: execution.isolationVerified && execution.exitCode === 0 ? 1 : 0, evidence: execution.evidence });
+    }
+    return { passed: checks.every(check => check.passed), sourceHash: contentHash(publicFile(snapshot, 'repo/src/retry.ts')!), checks };
+  } finally { await rm(root, { recursive: true, force: true }); }
 }

@@ -20,7 +20,7 @@ async function fixture(t) {
   await ensurePrivateDirectory(dataDir);
   await ensurePrivateDirectory(join(dataDir, "agent-data"));
   async function put(base, path, value) { await mkdir(dirname(join(base, path)), { recursive: true, mode: 0o700 }); await writeFile(join(base, path), typeof value === "string" ? value : JSON.stringify(value), { mode: 0o600 }); }
-  await put(installRoot, "PM Agent v4.exe", "gui-binary");
+  await put(installRoot, "Dovspace.exe", "gui-binary");
   await put(installRoot, "resources/app.asar", "application");
   await put(installRoot, "resources/desktop-runtime/node/node.exe", "standalone-node");
   await put(installRoot, "resources/desktop-runtime/postgres/bin/postgres.exe", "standalone-pg");
@@ -61,7 +61,7 @@ for (const mode of ["app-only", "app+runtime", "full", "data-only"]) test(`real 
   assert.ok(plan.snapshots.installation.fileCount > 0);
   assert.ok(plan.snapshots.instance.fileCount > 0);
   assert.ok(plan.snapshots.userData.fileCount > 0);
-  const removeInstall = mode === "data-only" ? [] : mode === "app-only" ? ["PM Agent v4.exe", "resources/app.asar"] : before.installation;
+  const removeInstall = mode === "data-only" ? [] : mode === "app-only" ? ["Dovspace.exe", "resources/app.asar"] : before.installation;
   const removeInstance = ["full", "data-only"].includes(mode) ? before.instance.filter(path => !path.startsWith("projects/")) : [];
   const removeUser = ["full", "data-only"].includes(mode) ? ["Partitions/session/IndexedDB/chat", "connection.json"] : [];
   assert.deepEqual(plan.delete.filter(entry => entry.scope === "installation").map(entry => entry.path).sort(), removeInstall.sort());

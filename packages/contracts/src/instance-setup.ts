@@ -10,8 +10,8 @@ export const setupRequestSchema = z.strictObject({
   workspaceName: z.string().trim().min(1).max(200),
 });
 export const instanceSetupStatusSchema = z.strictObject({
-  initialized: z.boolean(), setupAllowed: z.boolean(), registrationMode: z.literal('invite_only'),
-});
+  initialized: z.boolean(), setupAllowed: z.boolean(), registrationMode: z.enum(['invite_only', 'open']),
+}).refine(value => value.registrationMode === (value.initialized ? 'open' : 'invite_only') && (!value.initialized || !value.setupAllowed));
 export const setupResponseSchema = z.strictObject({
   actor: z.strictObject({ id: z.uuid(), email: z.string(), name: z.string() }),
   workspaceId: z.uuid(), expiresAt: z.iso.datetime(),

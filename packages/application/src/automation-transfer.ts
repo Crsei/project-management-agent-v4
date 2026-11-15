@@ -8,6 +8,7 @@ import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { authorizeAutomationProject, automationSnapshot } from './automation-report.ts';
 import { requestHash } from './kernel.ts';
+import type { SqlExecutor } from './ports.ts';
 
 export interface AutomationTransferStudio {
   create(actor: Actor, workspaceId: string, input: { requestId: string; config: StudioConfig }): Promise<StudioDefinition>;
@@ -115,8 +116,8 @@ export function exportAutomationDefinition(definition: StudioDefinition, format:
   if (Buffer.byteLength(JSON.stringify(document, null, 2)) > AUTOMATION_TRANSFER_LIMITS.jsonBytes) invalid('Export exceeds the 3 MiB JSON interchange limit; no incomplete file was produced');
   return { filename: `${config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || definition.id}.${format === 'source' ? 'automation' : 'automation-bundle'}.json`, document, limits: AUTOMATION_TRANSFER_LIMITS };
 }
-export function createAutomationTransferService(options: { database: () => Pool; core: NotificationCorePort; studio: AutomationTransferStudio }) {
-  async function authorize(actor: Actor, workspaceId: string, projectId: string, write: boolean) { await authorizeAutomationProject(options.database(), actor, workspaceId, projectId, await automationSnapshot(options.core, workspaceId), write); }
+export function createAutomationTransferService(options: { database: () => Pool; core: NotificationCorePort; studio: AutomationTransferStudio; checkAuthorization?: (sql: SqlExecutor) => Promise<void> }) {
+  async function authorize(actor: Actor, workspaceId: string, projectId: string, write: boolean) { await options.checkAuthorization?.(options.database()); await authorizeAutomationProject(options.database(), actor, workspaceId, projectId, await automationSnapshot(options.core, workspaceId), write); }
   async function receipt(actor: Actor, workspaceId: string, requestId: string): Promise<AutomationTransferReceipt> {
     const row = (await options.database().query<{ project_id: string; status: AutomationTransferReceipt['status']; result: AutomationTransferReceipt | null }>('SELECT project_id,status,result FROM automation_transfer_imports WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0];
     if (!row) throw new DomainError('not_found_or_forbidden', 'Import receipt is not accessible', 404);
@@ -136,6 +137,14 @@ export function createAutomationTransferService(options: { database: () => Pool;
     }
   }
   return {
+    async inspectReceipt(actor: Actor, workspaceId: string, requestId: string, protocol: 'import' | 'bundle') {
+      const row = protocol === 'import'
+        ? (await options.database().query<{ project_id: string; request_hash: string; status: string }>('SELECT project_id,request_hash,status FROM automation_transfer_imports WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, requestId])).rows[0]
+        : (await options.database().query<{ project_id: string; request_hash: string; status: string }>("SELECT project_id,request_hash,'completed' AS status FROM automation_transfer_bundles WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3", [workspaceId, actor.id, requestId])).rows[0];
+      if (!row) throw new DomainError('not_found_or_forbidden', 'Transfer receipt is not accessible', 404);
+      await authorize(actor, workspaceId, row.project_id, false);
+      return { hash: row.request_hash, projectIds: [row.project_id], status: row.status === 'completed' ? 'succeeded' as const : row.status === 'rejected' ? 'failed' as const : 'unknown' as const };
+    },
     async preview(actor: Actor, workspaceId: string, input: AutomationTransferInput): Promise<AutomationTransferPreview> {
       await authorize(actor, workspaceId, input.projectId, false); const parsed = parseAutomationTransfer(input);
       return { ...parsed, validation: await options.studio.validate(actor, workspaceId, parsed.config) };
@@ -144,6 +153,7 @@ export function createAutomationTransferService(options: { database: () => Pool;
       await authorize(actor, workspaceId, input.projectId, true); const parsed = parseAutomationTransfer(input), hash = requestHash(input);
       const sql = await options.database().connect();
       try { await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); await authorizeAutomationProject(sql, actor, workspaceId, input.projectId, await automationSnapshot(options.core, workspaceId), true);
+        await options.checkAuthorization?.(sql);
         const existing = (await sql.query<{ request_hash: string; result: AutomationTransferReceipt | null }>('SELECT request_hash,result FROM automation_transfer_imports WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, input.requestId])).rows[0];
         if (existing && existing.request_hash !== hash) throw new DomainError('idempotency_conflict', 'Import request ID already represents different content', 409);
         if (!existing) await sql.query('INSERT INTO automation_transfer_imports(workspace_id,actor_id,request_id,project_id,request_hash,config) VALUES($1,$2,$3,$4,$5,$6::jsonb)', [workspaceId, actor.id, input.requestId, input.projectId, hash, JSON.stringify(parsed.config)]);
@@ -169,6 +179,7 @@ export function createAutomationTransferService(options: { database: () => Pool;
       const files = decodeAutomationTar(input.archiveBase64), hash = requestHash(input), sha256 = createHash('sha256').update(Buffer.from(input.archiveBase64, 'base64')).digest('hex');
       const sql = await options.database().connect();
       try { await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); await authorizeAutomationProject(sql, actor, workspaceId, input.projectId, await automationSnapshot(options.core, workspaceId), true);
+        await options.checkAuthorization?.(sql);
         const prior = (await sql.query<{ id: string; request_hash: string; sha256: string; files: AutomationBundleFile[] }>('SELECT * FROM automation_transfer_bundles WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, input.requestId])).rows[0];
         if (prior && prior.request_hash !== hash) throw new DomainError('idempotency_conflict', 'Upload request ID already represents different content', 409);
         const id = prior?.id ?? randomUUID();

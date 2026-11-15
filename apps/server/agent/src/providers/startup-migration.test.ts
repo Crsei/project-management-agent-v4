@@ -18,6 +18,7 @@ import {
 } from "./instances.ts";
 import { PM_CONTINUATIONS, continuationKey, readPmContinuation, savePmContinuation } from "./t3code/continuation.ts";
 import type { PmProviderLease } from "./t3code/contract.ts";
+import type { StoredPmToolCall } from "../pm-tools.ts";
 
 async function isolated(use: (root: string) => Promise<void>) {
   const previous = { ...process.env };
@@ -107,9 +108,20 @@ test("startup Registry metadata cutover retains revisions, exact executable, pri
     const key = continuationKey(historical.lease, historical.ref.sessionId);
     const sidecar = readRecord(PM_CONTINUATIONS, key);
     const history = { id: "original-chat-thread", nativeSession: historical.ref, messages: [{ id: "original-message", text: "preserved history" }] };
-    const receipt = { operationId: "original-operation", status: "unknown", approvalId: "original-approval" };
+    const operationId = "00000000-0000-4000-8000-000000000001";
+    const callTarget = { workspaceId: "00000000-0000-4000-8000-000000000002", projectId: "PRJ-001" };
+    const receipt: StoredPmToolCall = {
+      record: { operationId, name: "pm_create_task", status: "unknown", result: null,
+        error: { code: "outcome_unknown", message: "Original command outcome has not been reconciled." },
+        threadId: history.id, messageId: "original-message", generationId: "original-generation", workspaceId: callTarget.workspaceId,
+        target: callTarget, createdAt: new Date().toISOString(), finishedAt: null, certainty: { dispatch: "possibly_sent", evidence: "unresolved" } },
+      request: { operationId, name: "pm_create_task", target: callTarget,
+        arguments: { projectId: callTarget.projectId, title: "Preserved original command", description: "", assigneeId: null,
+          priority: null, startDate: null, dueDate: null, labels: null },
+        threadId: history.id, messageId: "original-message", generationId: "original-generation" },
+    };
     writeRecord("chat:threads", history.id, history);
-    writeRecord("fixture:pm-receipts", receipt.operationId, receipt);
+    writeRecord("pm-tool-calls", operationId, receipt);
     closeStore();
     let notifications = 0;
     const unsubscribe = subscribeProviderSettingsChanges(() => { notifications++; });
@@ -131,7 +143,7 @@ test("startup Registry metadata cutover retains revisions, exact executable, pri
       assert.deepEqual(convertedRow, { ...raw, config: { ...raw.config, commandPath: fixture.commandPath, distribution: "binary" } });
       assert.deepEqual(readRecord(PM_CONTINUATIONS, key), sidecar);
       assert.deepEqual(readRecord("chat:threads", history.id), history);
-      assert.deepEqual(readRecord("fixture:pm-receipts", receipt.operationId), receipt);
+      assert.deepEqual(readRecord("pm-tool-calls", operationId), receipt);
       const retainedLease = { ...historical.lease, revision: converted.revision, nativeHome: converted.homeDirectory };
       assert.equal(readPmContinuation(retainedLease, historical.ref, historical.protocol, history.id)?.thread.nativeThreadRef?.nativeId, historical.ref.sessionId);
       const digest = createHash("sha256").update(originalText).digest("hex");

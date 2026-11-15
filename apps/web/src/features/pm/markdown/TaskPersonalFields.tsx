@@ -31,7 +31,7 @@ function writeProblem(file: FileRecord, c: WorkspaceController, en: boolean, cha
   if (!changes?.status && !c.canWrite) return en ? 'Read-only: task editing is not permitted.' : '只读：当前权限不允许编辑任务。';
   if (file.entity.archived) return en ? 'Archived tasks cannot be edited.' : '已归档任务不可编辑。';
   if (file.stale || file.error || file.diagnostics?.some(issue => issue.severity === 'error') || c.configurationInvalid) return en ? 'Repair the source or workflow diagnostics before editing.' : '请先修复源文件或工作流诊断。';
-  if (c.draftIds.has(file.id) || c.session.drafts.getSnapshot()[file.id]) return en ? 'Save or discard this task’s native draft before editing saved fields.' : '请先保存或放弃此任务的原生草稿，再编辑已保存属性。';
+  if (c.draftIds.has(file.id) || c.session.drafts.getSnapshot()[file.id]) return en ? 'Wait for this task’s native draft to save, or discard it, before editing saved fields.' : '请等待此任务的原生草稿自动保存完成，或先放弃草稿，再编辑已保存属性。';
   if (c.conflict?.id === file.id) return en ? 'Resolve this task’s native revision conflict before editing.' : '请先解决此任务的原生版本冲突。';
   if (c.writesBlocked || c.busy) return en ? 'Another write is pending or unconfirmed. Reconcile its original result first.' : '其他写入正在处理或结果待核对，请先核对原请求。';
   if (!c.canEdit(file.id, changes)) return en ? 'Editing is locked by the current permissions or native write state.' : '当前权限或原生写入状态已锁定编辑。';

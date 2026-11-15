@@ -18,7 +18,7 @@ test("packaged main update IPC preserves draft/stop guards and serializes deskto
   const installer = join(root, release.artifact.path);
   await writeFile(installer, release.payload);
   const windows = [], handlers = new Map(), sessions = new Map(), servers = [], errors = [];
-  const paths = { appData: root, exe: join(root, "PM Agent v4.exe") };
+  const paths = { appData: root, exe: join(root, "Dovspace.exe") };
   const available = Promise.withResolvers();
   let installResponse = 1, stopResponse = 1, draftResponse = 0, installs = 0, quits = 0, focused;
   const app = Object.assign(new EventEmitter(), {
@@ -100,9 +100,10 @@ test("packaged main update IPC preserves draft/stop guards and serializes deskto
   t.mock.method(LocalServer.prototype, "start", async function () {
     Object.defineProperties(this, { running: { get: () => this.testRunning }, processCount: { get: () => this.testRunning ? 4 : 0 } });
     this.testRunning = true; this.stopCalls = 0; servers.push(this);
+    this.ready = true;
     return { phase: "ready", origin: "http://127.0.0.1:58764", instanceId: "update-test-instance", token: "private-test-token", runtime: "fixture" };
   });
-  t.mock.method(LocalServer.prototype, "stop", async function () { this.stopCalls++; if (this.stopFailure) throw new Error("PostgreSQL checkpoint shutdown timed out."); this.testRunning = false; });
+  t.mock.method(LocalServer.prototype, "stop", async function () { this.stopCalls++; this.stopping = true; this.invalidateReadiness(); if (this.stopFailure) throw new Error("PostgreSQL checkpoint shutdown timed out."); this.testRunning = false; this.stopping = false; });
   try {
     await import("./main.mjs");
     const connection = await available.promise;

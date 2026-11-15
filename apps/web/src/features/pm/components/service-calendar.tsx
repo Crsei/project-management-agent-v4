@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, isNativeContextTarget, useContextMenu } from "@/components/ui/context-menu"
 import { useI18n } from "@/lib/i18n-provider"
-import { addDays, dateOnly, itemDates, itemRange, itemTitle, ScheduleEditor, type ScheduleItem, type ScheduleProps } from "./service-collection-shared"
+import { addDays, dateOnly, itemDates, itemRange, itemText, itemTitle, ScheduleEditor, type ScheduleItem, type ScheduleProps } from "./service-collection-shared"
 import styles from "./service-collections.module.css"
 import shell from "./calendar-shell.module.css"
 import "./calendar-scope.css"
@@ -111,6 +111,7 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
         initialDate={today}
         eventInteractive
         datesSet={(info) => setTitle(info.view.title)}
+        eventContent={({ event }) => { const item = byId.get(event.id); return <span className="flex min-w-0 flex-col"><span>{event.title}</span>{item && itemText(item, "assigneeId") && <small>{itemText(item, "assigneeName") || (en ? "Identity unavailable" : "身份不可用")}</small>}</span> }}
         eventClick={({ event }) => { const item = byId.get(event.id); if (item) { selectItem(item.id); onOpen(item) } }}
         eventClassNames={({ event }) => event.id === selectedId ? [styles.selectedEvent] : []}
         eventDidMount={({ el, event }) => { el.dataset.calendarEvent = event.id }}
@@ -129,7 +130,7 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
         }}
       />
     </div>
-    {selected && <div ref={editor}><ScheduleEditor key={`${selected.id}:${selection?.start ?? ""}:${selection?.due ?? ""}`} item={selected} onSchedule={onSchedule} pending={pending} initialDates={selection} /></div>}
+    {selected && <div ref={editor}>{itemText(selected, "assigneeHref") && <a className="text-sm text-primary hover:underline" href={itemText(selected, "assigneeHref")}>{en ? "Assignee: " : "负责人："}{itemText(selected, "assigneeName") || (en ? "Identity unavailable" : "身份不可用")}</a>}<ScheduleEditor key={`${selected.id}:${selection?.start ?? ""}:${selection?.due ?? ""}`} item={selected} onSchedule={onSchedule} pending={pending} initialDates={selection} /></div>}
     <ContextMenuPopup menu={contextMenu} aria-label={en ? "Calendar actions" : "日历操作"}>
       {contextMenu.target?.type === "event" && <>
         <ContextMenuLabel>{itemTitle(contextMenu.target.item)}</ContextMenuLabel>

@@ -30,6 +30,8 @@ export const nativeInteractionRequestSchema = z.object({
   options: z.array(z.object({ id, label: z.string(), description: z.string().optional() })).optional(),
   questions: z.array(nativeQuestionSchema).optional(),
   respondable: z.boolean(),
+  /** Server/provider decision metadata, never inferred from the display text. */
+  resolution: z.enum(["auto_approved", "approved", "denied", "cancelled", "closed"]).optional(),
   unavailableReason: z.string().optional(),
 });
 export type NativeInteractionRequest = z.infer<typeof nativeInteractionRequestSchema>;

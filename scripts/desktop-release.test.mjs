@@ -22,7 +22,7 @@ const ciRun = value => ({ id: Number(value.ciRunId), head_sha: value.sha, event:
 async function candidate(t, identity = request()) {
   const directory = await mkdtemp(path.join(tmpdir(), 'desktop-release-contract-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const installer = `PM-Agent-v4-${identity.version}-win-x64-${identity.distribution}.exe`;
+  const installer = `Dovspace-${identity.version}-win-x64-${identity.distribution}.exe`;
   const contents = new Map([
     [installer, Buffer.from(`native installer ${identity.version}`)],
     [identity.channel === 'preview' ? 'preview.yml' : 'latest.yml', Buffer.from(`version: ${identity.version}\npath: ${installer}\n`)],
@@ -138,7 +138,7 @@ test('public asset naming preserves installers/feed/stamp and qualifies collidin
 
 test('macOS canonical feed contains both ZIP architectures with coherent x64 legacy metadata', () => {
   const fragments = ['x64', 'arm64'].map((arch, index) => {
-    const name = `PM-Agent-v4-0.1.1-preview.1-mac-${arch}-signed.zip`;
+    const name = `Dovspace-0.1.1-preview.1-mac-${arch}-signed.zip`;
     const hash = createHash('sha512').update(arch).digest('base64');
     return { version: '0.1.1-preview.1', files: [{ url: name, sha512: hash, size: 100 + index }],
       path: name, sha512: hash, releaseDate: `2026-11-12T00:00:0${index}.000Z` };

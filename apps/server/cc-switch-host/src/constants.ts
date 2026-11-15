@@ -1,6 +1,6 @@
 /** Translated constants from vendor/cc-switch/src-tauri/src/services/skill.rs. */
 
-export const HOST_SCHEMA_VERSION = 2;
+export const HOST_SCHEMA_VERSION = 3;
 export const BACKUP_RETAIN_COUNT = 20;
 export const MAX_ARCHIVE_ENTRIES = 30_000;
 export const MAX_ARCHIVE_TOTAL_BYTES = 512 * 1024 * 1024;

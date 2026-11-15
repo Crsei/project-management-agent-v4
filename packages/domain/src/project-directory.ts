@@ -18,7 +18,11 @@ export type ProjectDirectoryVersion = { id: string; version: number };
 export type ProjectTeamFragment = { id: string; name: string; members: ProjectIdentity[] };
 export type ProjectDirectoryProject = {
   projectId: string;
+  /** Display identities derived from core owners/assignees and associated teams; not the full access list or participant roster. */
   identities: ProjectIdentity[];
+  /** Explicit participation, intersected with current project-readable membership. */
+  participants: ProjectIdentity[];
+  participation: ProjectDirectoryVersion | null;
   teams: ProjectTeamFragment[];
   assignment: ProjectDirectoryVersion | null;
 };

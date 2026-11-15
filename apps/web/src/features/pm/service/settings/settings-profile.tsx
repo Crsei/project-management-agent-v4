@@ -146,7 +146,7 @@ function ProfileFields({ values, email, errors, disabled, onChange, onAvatarBusy
   }
 }) {
   const t = useText()
-  return <div className="space-y-6">
+  return <div className="max-w-2xl space-y-6">
     <ProfileAvatar values={values} disabled={disabled} error={errors.avatarDataUrl} onChange={avatarDataUrl => onChange({ avatarDataUrl })} onBusyChange={onAvatarBusyChange} />
     <Field label={t("姓名", "Name")} required description={t("用于你的账号和项目协作中的显示名称。", "The display name used for your account and project collaboration.")} error={errors.name === "required" ? t("请输入姓名。", "Enter your name.") : errors.name === "length" ? t("姓名不能超过 200 个字符。", "Your name must be 200 characters or fewer.") : undefined}>
       {control => <Input {...control} autoComplete="name" value={values.name} disabled={disabled} onChange={event => onChange({ name: event.target.value })} />}

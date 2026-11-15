@@ -1,0 +1,373 @@
+---
+import ProductImage from "./ProductImage.astro";
+
+interface Props {
+  id?: string;
+  initialTab?: "project-board" | "agent-chat-draft" | "task-readback";
+}
+
+const { id = "product", initialTab = "agent-chat-draft" } = Astro.props;
+const views = [
+  {
+    family: "project-board",
+    label: "项目管理",
+    hint: "组织项目与任务",
+    title: "先把要做的事，放进项目。",
+    summary: "按真实 PM 状态组织任务，在同一份项目数据中查看目标、正文与进度。",
+    badge: "真实界面 · 合成数据",
+    href: "/get-started/#scope",
+    linkLabel: "了解项目与任务上下文",
+  },
+  {
+    family: "agent-chat-draft",
+    label: "Agent Chat",
+    hint: "带着明确引用对话",
+    title: "让一次对话，有具体的任务目标。",
+    summary: "在 Composer 中选择 PM 任务引用、编辑消息，再由你决定是否发送。",
+    badge: "未发送草稿 · 未执行模型",
+    href: "/get-started/#first-run",
+    linkLabel: "了解 Provider 配置与首次对话",
+  },
+  {
+    family: "task-readback",
+    label: "结果核对",
+    hint: "回到真实记录确认",
+    title: "保存之后，再核对一次真实记录。",
+    summary: "重新读取任务正文、核对清单与业务状态，不把对话回复当作完成凭证。",
+    badge: "人工保存并刷新 · 仍为待办",
+    href: "/security/#execution",
+    linkLabel: "了解执行与结果核对边界",
+  },
+] as const;
+---
+
+<section id={id} class="section surface-soft product-showcase" aria-labelledby={`${id}-title`} data-product-showcase data-initial-tab={initialTab}>
+  <div class="container">
+    <div class="section-head product-showcase-head">
+      <p class="eyebrow">ONE PROJECT. THREE PERSPECTIVES.</p>
+      <h2 id={`${id}-title`}>项目、对话、记录。<br />工作有上下文，结果可核对。</h2>
+      <p>从项目看板到 Agent Chat，再回到任务详情。看清每一步的目标，也分清界面展示与实际执行。</p>
+    </div>
+
+    <nav class="product-tabs" aria-label="产品界面" data-product-tablist>
+      {views.map((view, index) => (
+        <a
+          id={`${id}-tab-${view.family}`}
+          href={`#${id}-panel-${view.family}`}
+          class="product-tab"
+          data-product-tab={view.family}
+        >
+          <span class="product-tab-number" aria-hidden="true">0{index + 1}</span>
+          <span class="product-tab-copy"><strong>{view.label}</strong><span>{view.hint}</span></span>
+        </a>
+      ))}
+    </nav>
+
+    <div class="product-panels">
+      {views.map((view) => (
+        <section
+          id={`${id}-panel-${view.family}`}
+          class="product-panel"
+          aria-labelledby={`${id}-heading-${view.family}`}
+          data-product-panel={view.family}
+        >
+          <div class="product-panel-head">
+            <div>
+              <h3 id={`${id}-heading-${view.family}`}>{view.title}</h3>
+              <p>{view.summary}</p>
+              <a class="text-link" href={view.href}>{view.linkLabel} <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="pill product-capture-badge">{view.badge}</span>
+          </div>
+          <ProductImage family={view.family} />
+        </section>
+      ))}
+    </div>
+
+    <details class="product-provenance">
+      <summary>截图来源与采集说明</summary>
+      <div class="product-provenance-content">
+        <p>三组界面于 2026-11-14 在隔离实例中实际采集，使用同一组 Nova 合成演示数据，不含客户资料。桌面与手机分别实拍，图片保持完整比例，可打开原图查看细节。</p>
+        <p>采集未调用模型，也不是 Provider 验收。Agent Chat 展示未发送草稿；结果核对展示人工保存与刷新读回。实际 Chat 执行需要操作者自行配置 Provider，Run 成功不等于任务完成。</p>
+        <p>截图使用当时含未提交修改的实际产物，并非正式发行版或干净 HEAD 的对应源码证明。会话与持久化统一设计尚未收口；PM 身份与 Agent 操作者身份独立，目录不是沙箱。</p>
+        <div class="product-provenance-links">
+          <a class="text-link" href="/screenshots/SOURCE.json">截图来源清单 <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="/screenshots/PM-SOURCE.json">PM 源码摘要 <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="/screenshots/RUNTIME.json">采集运行记录 <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<script>
+  for (const showcase of document.querySelectorAll<HTMLElement>("[data-product-showcase]")) {
+    const tablist = showcase.querySelector<HTMLElement>("[data-product-tablist]");
+    const tabs = Array.from(showcase.querySelectorAll<HTMLAnchorElement>("[data-product-tab]"));
+    const panels = Array.from(showcase.querySelectorAll<HTMLElement>("[data-product-panel]"));
+    if (!tablist) continue;
+
+    const activate = (selectedIndex: number) => {
+      tabs.forEach((tab, index) => {
+        const selected = index === selectedIndex;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      panels.forEach((panel, index) => {
+        panel.hidden = index !== selectedIndex;
+      });
+    };
+
+    tablist.setAttribute("role", "tablist");
+    tablist.setAttribute("aria-orientation", "horizontal");
+    tabs.forEach((tab, index) => {
+      const panel = panels[index];
+      if (!panel) return;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panel.id);
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", tab.id);
+      panel.tabIndex = 0;
+
+      tab.addEventListener("click", (event) => {
+        event.preventDefault();
+        activate(index);
+      });
+      tab.addEventListener("keydown", (event) => {
+        let nextIndex: number;
+        switch (event.key) {
+          case "ArrowRight":
+            nextIndex = (index + 1) % tabs.length;
+            break;
+          case "ArrowLeft":
+            nextIndex = (index - 1 + tabs.length) % tabs.length;
+            break;
+          case "Home":
+            nextIndex = 0;
+            break;
+          case "End":
+            nextIndex = tabs.length - 1;
+            break;
+          case " ":
+            event.preventDefault();
+            activate(index);
+            return;
+          default:
+            return;
+        }
+        event.preventDefault();
+        activate(nextIndex);
+        tabs[nextIndex]?.focus();
+      });
+    });
+
+    const linkedIndex = panels.findIndex((panel) => `#${panel.id}` === window.location.hash);
+    const initialIndex = tabs.findIndex((tab) => tab.dataset.productTab === showcase.dataset.initialTab);
+    activate(linkedIndex >= 0 ? linkedIndex : Math.max(initialIndex, 0));
+    showcase.dataset.enhanced = "true";
+  }
+</script>
+
+<style>
+  .product-showcase-head {
+    max-width: 840px;
+  }
+
+  .product-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .product-tab {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    min-height: 86px;
+    padding: 18px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--card);
+    color: var(--muted);
+  }
+
+  .product-tab:hover {
+    border-color: var(--strong);
+    color: var(--fg);
+  }
+
+  .product-tab[aria-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .product-tab-number {
+    flex-shrink: 0;
+    color: var(--dim);
+    font: 12px/1.6 var(--mono);
+  }
+
+  .product-tab[aria-selected="true"] .product-tab-number {
+    color: var(--accent);
+  }
+
+  .product-tab-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .product-tab-copy strong {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .product-tab-copy > span {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .product-panels {
+    display: grid;
+    gap: 48px;
+    min-width: 0;
+  }
+
+  .product-panel {
+    min-width: 0;
+  }
+
+  .product-panel[hidden] {
+    display: none;
+  }
+
+  .product-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px 28px;
+    margin-bottom: 24px;
+  }
+
+  .product-panel-head > div {
+    max-width: 760px;
+  }
+
+  .product-panel-head h3 {
+    margin: 0 0 8px;
+    color: var(--fg);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .product-panel-head p {
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  .product-panel-head .text-link {
+    margin-top: 10px;
+  }
+
+  .product-capture-badge {
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.7;
+  }
+
+  .product-provenance {
+    margin-top: 28px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.85;
+  }
+
+  .product-provenance summary {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 44px;
+    padding-block: 10px;
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  .product-provenance-content {
+    max-width: 900px;
+    padding-block: 8px 24px;
+  }
+
+  .product-provenance-content p + p {
+    margin-top: 12px;
+  }
+
+  .product-provenance-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 24px;
+    margin-top: 12px;
+  }
+
+  .product-provenance-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+  }
+
+  @media (max-width: 900px) {
+    .product-panel-head {
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .product-tab {
+      gap: 12px;
+      padding: 16px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .product-tabs {
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .product-tab {
+      justify-content: center;
+      padding: 14px 8px;
+      text-align: center;
+    }
+
+    .product-tab-number {
+      display: none;
+    }
+
+    .product-tab-copy strong {
+      font-size: 14px;
+    }
+
+    .product-tab-copy > span {
+      font-size: 11px;
+    }
+
+    .product-panel-head h3 {
+      font-size: 21px;
+    }
+
+    .product-panel-head p {
+      font-size: 14px;
+    }
+  }
+</style>

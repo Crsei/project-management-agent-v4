@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n-provider";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { MultiFileDiff } from "@pierre/diffs/react";
 import {
   Bell, Brain, Circle, CircleAlert, CircleCheck, CircleDot, CircleX,
   Copy, FileCode, GitBranch, Globe, ListTodo, MessageSquare, RefreshCw,
@@ -10,18 +10,25 @@ import {
 import "@xterm/xterm/css/xterm.css";
 import { Button } from "@agent/components/ui/button";
 import { Markdown } from "./markdown";
-import type { AgentOutputSnapshot, GenerationOutputStatus, NativeInteractionResponse, NativeOutputItem } from "@agent-workspace/contracts/output";
-import { WorkspaceClientError } from "@agent-workspace/client-runtime";
+import type { AgentOutputSnapshot, GenerationOutputStatus, NativeOutputItem } from "@agent-workspace/contracts/output";
 import { appendTerminalOutput, EMPTY_TERMINAL_OUTPUT, terminalOutputPlainText } from "@agent-workspace/contracts/terminal-output";
-import { workspaceClient } from "../network";
 import { subscribeCommand, useGenerationOutput } from "./output-stream";
 import { PmToolCard, type PmToolRecord } from "./pm-tool-card";
 import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
 import { McpAppFrame } from "./mcp-app-frame";
 import { CodeBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
-import { assistantMessageKind, canRespondToInteraction, createOutputDisclosureStore, generationIndicator, isGenerationActive, isItemActive, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, type OutputPresentationRow } from "./output-presenter";
+import { assistantMessageKind, canRespondToInteraction, commandText, createOutputDisclosureStore, generationIndicator, isCompletedAutoApproval, isGenerationActive, isItemActive, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, semanticToolSummary, type OutputPresentationRow, type ToolSummary } from "./output-presenter";
+import { NativeInteraction } from "./native-interaction";
+import { useComposerRequestPanelMounted } from "./composer-pending-requests";
+import { ChangedFilesSummary, FileChanges } from "./native-file-changes";
+import { NativePlanCard } from "./native-plan-card";
+import { NativeSubagentLink } from "./native-subagent-link";
 import "./output-timeline.css";
+import { useAuiState } from "@assistant-ui/react";
+import { useMessageContextDraft } from "./message-context";
+import { NativeOutputContext, NativeOutputContextAction, useNativeOutputContextSource } from "./native-output-context";
+import { nativeContextSourceAnchor } from "./context-source-navigation";
 
 const labels = (t: AgentText): Record<NativeOutputItem["type"], string> => ({
   assistant_message: t("回复", "Reply"), reasoning: t("思考", "Thinking"), command_execution: t("命令", "Command"), file_change: t("文件变更", "File change"), file_search: t("文件搜索", "File search"), web_search: t("网页搜索", "Web search"), dynamic_tool: t("工具", "Tool"), todo_list: t("待办", "To-do"), proposed_plan: t("计划", "Plan"), subagent: t("子代理", "Subagent"), approval_request: t("审批", "Approval"), user_input_request: t("需要回答", "Input needed"), notification: t("通知", "Notification"), error: t("错误", "Error"), compaction: t("上下文压缩", "Compaction"),
@@ -98,85 +105,16 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
     {copyError && <span role="alert">{t("复制失败：", "Copy failed: ")}{copyError}</span>}
   </div>;
 }
-function Interaction({ generationId, item, generationStatus }: { generationId: string; item: NativeOutputItem; generationStatus: GenerationOutputStatus }) {
-  const t = useAgentText();
-  const request = item.request;
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
-  const [freeText, setFreeText] = useState<Record<string, string>>({});
-  const [pending, setPending] = useState(false);
-  const [submitted, setSubmitted] = useState<"answer" | "cancel">();
-  const [closed, setClosed] = useState(false);
-  const [error, setError] = useState<string>();
-  const active = isItemActive(item) && isGenerationActive(generationStatus);
-  useEffect(() => {
-    if (!request?.respondable || !active) {
-      setAnswers({});
-      setFreeText({});
-    }
-  }, [request?.respondable, request?.id, active]);
-  if (!request) return <p>{t("请求详情不可用，无法响应。", "Request details unavailable; cannot respond.")}</p>;
-  const enabled = canRespondToInteraction(item, generationStatus) && !submitted && !closed;
-  const submit = async (response: NativeInteractionResponse) => {
-    if (!enabled || pending) return;
-    setPending(true); setError(undefined);
-    try {
-      await workspaceClient.json(`/api/chat/generations/${encodeURIComponent(generationId)}/requests/${encodeURIComponent(request.id)}/respond`, { method: "POST", body: JSON.stringify(response) });
-      setAnswers({}); setFreeText({});
-      setSubmitted(response.cancelled ? "cancel" : "answer");
-    } catch (cause) {
-      if (cause instanceof WorkspaceClientError && cause.code === "native_interaction_closed") {
-        setAnswers({}); setFreeText({}); setClosed(true);
-      }
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-    finally { setPending(false); }
-  };
-  return <div className="native-interaction">
-    {request.detail && <p>{request.detail}</p>}
-    {!enabled && <p role="status">{submitted === "cancel" ? t("已取消回答，等待运行继续。", "Response cancelled; waiting for the run to continue.") : submitted === "answer" ? t("响应已提交，等待运行继续。", "Response submitted; waiting for the run to continue.") : request.unavailableReason || (closed || request.respondable ? t("请求已结束或过期，无法响应。", "This request has ended or expired and cannot be answered.") : t("当前请求不可响应。", "This request cannot be answered."))}</p>}
-    {request.kind === "approval" && <div className="native-buttons">{request.options?.map((option) => <button key={option.id} type="button" disabled={!enabled || pending} title={option.description} onClick={() => void submit({ optionId: option.id })}>{option.label}</button>)}</div>}
-    {request.kind === "user_input" && <form onSubmit={(event) => { event.preventDefault(); const combined = { ...answers }; for (const question of request.questions ?? []) { const text = freeText[question.id]?.trim(); if (text) combined[question.id] = question.multiple ? [...(Array.isArray(combined[question.id]) ? combined[question.id] as string[] : []), text] : text; } void submit({ answers: combined }); }}>
-      {request.questions?.map((question) => <fieldset key={question.id} disabled={!enabled || pending}><legend>{question.title || question.prompt}</legend>{question.title && <p>{question.prompt}</p>}
-        {question.options?.map((option) => <label key={option.id} className="native-option"><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.id} checked={question.multiple ? Array.isArray(answers[question.id]) && (answers[question.id] as string[]).includes(option.id) : answers[question.id] === option.id} onChange={(event) => { if (!question.multiple) setFreeText((previous) => ({ ...previous, [question.id]: "" })); setAnswers((previous) => ({ ...previous, [question.id]: question.multiple ? event.target.checked ? [...(Array.isArray(previous[question.id]) ? previous[question.id] as string[] : []), option.id] : (Array.isArray(previous[question.id]) ? previous[question.id] as string[] : []).filter((id) => id !== option.id) : option.id })); }} /> <span>{option.label}{option.description && <small>{option.description}</small>}</span></label>)}
-        {(question.allowText || !question.options?.length) && <input className="native-text-input" type={question.secret ? "password" : "text"} aria-label={question.prompt} placeholder={t("输入回答", "Type your answer")} value={freeText[question.id] ?? ""} onChange={(event) => { const value = event.target.value; setFreeText((previous) => ({ ...previous, [question.id]: value })); if (!question.multiple && value) setAnswers((previous) => ({ ...previous, [question.id]: "" })); }} />}
-      </fieldset>)}
-      <button type="submit" disabled={!enabled || pending || !request.questions?.length || request.questions.some((question) => !freeText[question.id]?.trim() && (!answers[question.id] || (Array.isArray(answers[question.id]) && !(answers[question.id] as string[]).length)))}>{pending ? t("提交中…", "Submitting…") : t("提交回答", "Submit answer")}</button>
-      <button type="button" disabled={!enabled || pending} onClick={() => void submit({ cancelled: true })}>{t("取消回答", "Cancel answer")}</button>
-    </form>}
-    {error && <p role="alert">{t("响应未提交：", "Response not submitted: ")}{error}</p>}
-  </div>;
-}
-function FileChanges({ item }: { item: NativeOutputItem }) {
-  const t = useAgentText();
-  const changes: NonNullable<NativeOutputItem["changes"]> = item.changes?.length ? item.changes : [{ path: item.fileName || item.title || t("文件", "File"), operation: "", diff: item.diff }];
-  return <div data-native-context-menu className="native-changes">
-    {changes.map((change, index) => <div key={`${change.path}:${index}`} className="native-change">
-      <div className="native-change-path"><strong>{change.oldPath ? `${change.oldPath} → ` : ""}{change.path}</strong>{change.operation && <span>{change.operation}</span>}</div>
-      {change.diff ? <Diff text={change.diff} /> : index === 0 && item.oldText !== undefined && item.newText !== undefined ? <MultiFileDiff oldFile={{ name: change.oldPath || change.path, contents: item.oldText }} newFile={{ name: change.path, contents: item.newText }} disableWorkerPool options={{ themeType: "system", diffStyle: "unified", overflow: "scroll" }} /> : index === 0 && (item.oldText !== undefined || item.newText !== undefined) ? <div className="native-before-after">{item.oldText !== undefined && <div><b>{t("原内容", "Original")}</b><CodeBlock code={item.oldText} lineNumbers /></div>}{item.newText !== undefined && <div><b>{t("新内容", "New")}</b><CodeBlock code={item.newText} lineNumbers /></div>}</div> : <p>{t("未提供差异内容。", "No diff content provided.")}</p>}
-    </div>)}
-  </div>;
-}
-function Diff({ text }: { text: string }) {
-  const rows = text.split("\n")
-    .filter(line => !line.startsWith("--- ") && !line.startsWith("+++ "))
-    .map(line => ({ text: line, kind: line.startsWith("+") ? "added" as const : line.startsWith("-") ? "removed" as const : "context" as const }));
-  return <CodeBlock rows={rows} lineNumbers />;
-}
 // assistant-ui replaces live output with authoritative history at finish.
 const disclosures = createOutputDisclosureStore();
 function useOutputDisclosure(generationId: string, items: NativeOutputItem[], defaultOpen: boolean, group = false) {
   const rowKeys = items.map(item => JSON.stringify([generationId, item.id]));
   const keys = group ? rowKeys.map(key => `group:${key}`) : rowKeys;
-  const [localOpen, setOpen] = useState(defaultOpen);
-  const open = disclosures.read(keys, group ? disclosures.read(rowKeys, localOpen) : localOpen);
+  const [localOpen, setOpen] = useState<boolean | undefined>(undefined);
+  const fallback = localOpen ?? defaultOpen;
+  const open = disclosures.read(keys, group ? disclosures.read(rowKeys, fallback) : fallback);
   const change = (next: boolean) => { disclosures.set(keys, next); setOpen(next); };
   return [open, change] as const;
-}
-function commandText(item: NativeOutputItem) {
-  const input = item.input;
-  if (typeof input === "string") return input;
-  if (input && typeof input === "object" && "command" in input && typeof input.command === "string") return input.command;
-  return undefined;
 }
 function traceStatusFor(status: NativeOutputItem["status"]): "running" | "error" | "pending" | undefined {
   if (status === "failed" || status === "interrupted") return "error";
@@ -203,53 +141,81 @@ function outputIcon(type: NativeOutputItem["type"]) {
     case "compaction": return <RefreshCw aria-hidden="true" />;
   }
 }
+function toolActionLabels(t: AgentText): Record<ToolSummary["action"], string> {
+  return { read: t("读取", "Read"), edit: t("编辑", "Edit"), search: t("搜索", "Search"), web: t("网页搜索", "Web search"), command: t("执行命令", "Command"), tool: t("工具调用", "Tool"), subagent: t("子代理", "Subagent"), approval: t("已自动批准", "Auto-approved") };
+}
+function toolTitle(item: NativeOutputItem, t: AgentText) {
+  const summary = semanticToolSummary(item);
+  return <span className="native-tool-summary"><span className="native-tool-action">{toolActionLabels(t)[summary.action]}</span>{summary.target && <span className="native-tool-target" title={summary.target}>{summary.target}</span>}</span>;
+}
+function toolGroupTitle(items: NativeOutputItem[], t: AgentText) {
+  const counts = new Map<ToolSummary["action"], number>();
+  for (const item of items) { const action = semanticToolSummary(item).action; counts.set(action, (counts.get(action) ?? 0) + 1); }
+  const names = toolActionLabels(t);
+  return [...counts].map(([action, count]) => `${names[action]} ${count}`).join(" · ");
+}
+function OutputInteraction({ generationId, item, generationStatus }: { generationId: string; item: NativeOutputItem; generationStatus: GenerationOutputStatus }) {
+  const t = useAgentText();
+  const composerMounted = useComposerRequestPanelMounted(generationId);
+  return canRespondToInteraction(item, generationStatus) && composerMounted
+    ? <a className="native-request-location" href={`#native-requests-${generationId}`}>{t("等待你的响应 — 在输入框上方回答", "Awaiting your response — answer above the composer")}</a>
+    : <NativeInteraction key={item.request?.id ?? item.id} generationId={generationId} item={item} generationStatus={generationStatus} />;
+}
 const OutputRow = memo(function OutputRow({ item, generationId, generationStatus }: { item: NativeOutputItem; generationId: string; generationStatus: GenerationOutputStatus }) {
   const t = useAgentText();
-  const visible = requiresVisibleDetails(item);
+  const { locale } = useI18n();
+  const markdownLocale = locale === "en" ? "en" : "zh-CN";
+  const visible = requiresVisibleDetails(item) || item.type === "proposed_plan";
   const [open, change] = useOutputDisclosure(generationId, [item], visible || (isGenerationActive(generationStatus) && isItemActive(item)));
+  useNativeOutputContextSource(generationId, [item.id], change);
+  const sourceId = nativeContextSourceAnchor(generationId, item.id);
   if (item.visibility === "redacted" || item.visibility === "unavailable") {
-    return <div className="native-output-card" data-visibility={item.visibility} role="status">
+    return <div id={sourceId} className="native-output-card" data-visibility={item.visibility} role="status">
       {item.visibility === "redacted" ? t("内容已不可访问。", "This content is no longer accessible.") : t("暂时无法核验内容访问权限。", "Content access cannot be verified right now.")}
     </div>;
   }
   if (item.type === "assistant_message") {
     const kind = assistantMessageKind(item);
-    return <div className={`native-answer${kind === "progress" ? " native-progress" : ""}`} data-phase={item.phase ?? "unknown"}>
+    return <div id={sourceId} className={`native-answer${kind === "progress" ? " native-progress" : ""}`} data-phase={item.phase ?? "unknown"}>
       {kind === "progress" && <span className="native-progress-label">{t("进度更新", "Progress update")}</span>}
-      <Markdown content={item.text ?? ""} locale="zh-CN" streaming={item.streaming === true && isGenerationActive(generationStatus)} />
+      <Markdown content={item.text ?? ""} locale={markdownLocale} streaming={item.streaming === true && isGenerationActive(generationStatus)} />
+      <NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} />
       {item.error && <p role="alert" className="native-error">{item.error}</p>}
     </div>;
   }
-  const title = (item.type === "command_execution" ? commandText(item) : undefined) || item.title || item.request?.title || item.toolName || labels(t)[item.type];
+  const semantic = ["command_execution", "file_change", "file_search", "web_search", "dynamic_tool", "subagent"].includes(item.type) || isCompletedAutoApproval(item);
+  const title = semantic ? toolTitle(item, t) : item.title || item.request?.title || item.toolName || labels(t)[item.type];
   const ended = !isGenerationActive(generationStatus) && isItemActive(item);
   const status = ended ? undefined : traceStatusFor(item.status);
   const tone = ended ? "neutral" : item.status === "completed" ? "success" : item.status === "failed" || item.status === "interrupted" ? "error" : item.status === "running" ? "running" : item.status === "waiting" || item.status === "unknown" ? "warning" : item.status === "pending" ? "pending" : "neutral";
   const meta = <>
     <Duration item={item} generationStatus={generationStatus} />
     {item.exitCode !== undefined && <span> · exit {item.exitCode}</span>}
-    {item.type === "file_change" && (item.additions !== undefined || item.deletions !== undefined) && <span> · +{item.additions ?? 0} −{item.deletions ?? 0}</span>}
+    {item.type === "file_change" && (item.additions !== undefined || item.deletions !== undefined) && <span>{item.additions !== undefined && ` · +${item.additions}`}{item.deletions !== undefined && ` · −${item.deletions}`}</span>}
   </>;
   const body = <>
+    <NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} />
     {item.status === "unknown" && <p role="status">{t("业务结果尚未确认；只能核对原操作，不能重复执行。", "The business outcome is unconfirmed. Reconcile the original operation; do not execute it again.")}</p>}
-    {item.type === "reasoning" && <div className="native-prose"><Markdown content={item.text ?? ""} locale="zh-CN" streaming={item.streaming === true} /></div>}
-    {item.type === "command_execution" && (open || visible) && <CommandOutput generationId={generationId} item={item} />}
+    {item.type === "reasoning" && <div className="native-prose"><Markdown content={item.text ?? ""} locale={markdownLocale} streaming={item.streaming === true && isGenerationActive(generationStatus)} /></div>}
+    {item.type === "command_execution" && (open || visible) && <>{commandText(item) && <div className="native-command-input"><CodeBlock code={commandText(item)} wrap /></div>}<CommandOutput generationId={generationId} item={item} /></>}
     {item.type === "file_change" && <FileChanges item={item} />}
     {(item.type === "file_search" || item.type === "web_search") && <>{item.text && <p>{item.text}</p>}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}{item.output && <CodeBlock code={item.output} wrap />}<ul>{item.results?.map((result, index) => { const url = safeUrl(result.url); return <li key={index}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.title || url}</a> : <strong>{result.title || result.path || result.url || t("结果", "Result")}</strong>}{result.path && <span> {result.path}{result.line !== undefined ? `:${result.line}` : ""}</span>}{result.text && <p>{result.text}</p>}</li>; })}</ul></>}
     {item.type === "dynamic_tool" && <>{item.input !== undefined && <><b>{t("输入", "Input")}</b><CodeBlock code={printable(item.input)} wrap /></>}{item.output !== undefined && <><b>{t("输出", "Output")}</b><CodeBlock code={item.output} wrap /></>}{item.text && <p>{item.text}</p>}</>}
-    {(item.type === "todo_list" || item.type === "proposed_plan") && <>{item.text && <Markdown content={item.text} locale="zh-CN" />}{item.steps && <Trace nested>{item.steps.map(step => <TraceLine key={step.id} icon={step.status === "completed" ? <CircleCheck aria-hidden="true" /> : step.status === "running" ? <CircleDot aria-hidden="true" /> : step.status === "cancelled" ? <CircleX aria-hidden="true" /> : <Circle aria-hidden="true" />} title={step.text} status={step.status === "completed" ? undefined : step.status === "running" ? "running" : "pending"} />)}</Trace>}</>}
-    {item.type === "subagent" && <>{item.model || item.childSessionId ? <Trace nested>{item.model && <TraceLine icon={<Wrench aria-hidden="true" />} title={t("模型", "Model")} description={item.model} />}{item.childSessionId && <TraceLine icon={<GitBranch aria-hidden="true" />} title={t("子会话", "Child session")} description={item.childSessionId} />}</Trace> : null}{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}</>}
-    {(item.type === "approval_request" || item.type === "user_input_request") && <Interaction key={item.request?.id ?? item.id} generationId={generationId} item={item} generationStatus={generationStatus} />}
+    {item.type === "todo_list" && <>{item.text && <Markdown content={item.text} locale={markdownLocale} />}{item.steps && <Trace nested>{item.steps.map(step => <TraceLine key={step.id} icon={step.status === "completed" ? <CircleCheck aria-hidden="true" /> : step.status === "running" ? <CircleDot aria-hidden="true" /> : step.status === "cancelled" ? <CircleX aria-hidden="true" /> : <Circle aria-hidden="true" />} title={step.text} status={step.status === "completed" ? undefined : step.status === "running" ? "running" : "pending"} />)}</Trace>}</>}
+    {item.type === "proposed_plan" && <NativePlanCard key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />}
+    {item.type === "subagent" && <>{item.model || item.childSessionId ? <Trace nested>{item.model && <TraceLine icon={<Wrench aria-hidden="true" />} title={t("模型", "Model")} description={item.model} />}{item.childSessionId && <TraceLine icon={<GitBranch aria-hidden="true" />} title={t("子会话", "Child session")} description={item.childSessionId} />}</Trace> : null}<NativeSubagentLink generationId={generationId} item={item} />{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}</>}
+    {(item.type === "approval_request" || item.type === "user_input_request") && <OutputInteraction generationId={generationId} item={item} generationStatus={generationStatus} />}
     {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}</>}
     {item.error && <p role="alert" className="native-error">{item.error}</p>}
   </>;
   const badge = <TraceStatusBadge status={status} tone={tone}>{ended ? t("运行已结束", "Run ended") : statuses(t)[item.status]}</TraceStatusBadge>;
-  if (visible) return <section className={`native-visible-details native-${item.type}`}>
+  if (visible) return <section id={sourceId} className={`native-visible-details native-${item.type}`}>
     <TraceLine icon={outputIcon(item.type)} title={title} description={meta} status={status} trailing={badge} />
     {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
     <div className="native-card-body">{body}</div>
   </section>;
-  return <TraceRow
-    className={`native-${item.type}`}
+  return <div id={sourceId}><TraceRow
+    className={`native-${item.type}${isGenerationActive(generationStatus) && isItemActive(item) ? " native-active-tool" : ""}`}
     icon={outputIcon(item.type)}
     title={title}
     description={meta}
@@ -260,11 +226,13 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
   >
     {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
     <div className="native-card-body">{body}</div>
-  </TraceRow>;
+  </TraceRow></div>;
 });
 function OutputGroup({ row, generationId, generationStatus }: { row: Extract<OutputPresentationRow, { kind: "reasoning" | "tools" }>; generationId: string; generationStatus: GenerationOutputStatus }) {
   const t = useAgentText();
+  const { locale } = useI18n();
   const [open, change] = useOutputDisclosure(generationId, row.items, false, true);
+  useNativeOutputContextSource(generationId, row.items.map(item => item.id), change, row.kind === "reasoning");
   const active = isGenerationActive(generationStatus) && row.items.some(isItemActive);
   if (row.kind === "tools" && row.items.length === 1) return <OutputRow item={row.items[0]!} generationId={generationId} generationStatus={generationStatus} />;
   const counts = {
@@ -275,12 +243,12 @@ function OutputGroup({ row, generationId, generationStatus }: { row: Extract<Out
   };
   const title = row.kind === "reasoning"
     ? <span className="native-reasoning-summary"><span className="native-activity-label">{t("思考记录", "Reasoning")}</span><span className="native-reasoning-preview">{reasoningPreview(row.items)}</span></span>
-    : t(`${row.items.length} 项操作`, `${row.items.length} actions`);
+    : toolGroupTitle(row.items, t);
   const summary = row.kind === "tools"
     ? [counts.running && t(`${counts.running} 进行中`, `${counts.running} running`), counts.pending && t(`${counts.pending} 待处理`, `${counts.pending} pending`), counts.completed && t(`${counts.completed} 已完成`, `${counts.completed} completed`), counts.cancelled && t(`${counts.cancelled} 已取消`, `${counts.cancelled} cancelled`)].filter(Boolean).join(" · ")
     : active ? t("进行中", "Running") : undefined;
   return <TraceRow className={`native-activity-group native-${row.kind}-group`} icon={row.kind === "reasoning" ? <Brain aria-hidden="true" /> : <Wrench aria-hidden="true" />} title={title} trailing={summary && <span className="native-group-counts">{summary}</span>} status={active ? "running" : undefined} open={open} onOpenChange={change}>
-    {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale="zh-CN" streaming={item.streaming === true && isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />)}</Trace>}
+    {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} id={nativeContextSourceAnchor(generationId, item.id)} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale={locale === "en" ? "en" : "zh-CN"} streaming={item.streaming === true && isGenerationActive(generationStatus)} /><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />)}</Trace>}
   </TraceRow>;
 }
 
@@ -304,16 +272,19 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
       return row.kind === "item" ? <OutputRow key={row.key} item={row.item} generationId={snapshot.generationId} generationStatus={snapshot.status} /> : <OutputGroup key={row.key} row={row} generationId={snapshot.generationId} generationStatus={snapshot.status} />;
     })}
     {calls.filter(call => !rendered.has(call.operationId)).map(call => <PmToolCard key={`pm:${call.operationId}`} record={call} onUpdate={onUpdateCall} />)}
+    {snapshot && <ChangedFilesSummary items={snapshot.items} />}
     {indicator && <div className="native-generation-status" role={indicator === "failed" ? "alert" : "status"}>{indicatorText}</div>}
   </div>;
 }
 
 export function OutputTimeline({ generationId }: { generationId: string }) {
   const { snapshot, error } = useGenerationOutput(generationId);
+  const draft = useMessageContextDraft();
+  const messageId = useAuiState(state => state.optional.message?.id);
   const toolCalls = usePmToolCalls();
   const calls = useMemo(() => toolCalls?.items.filter(call => call.generationId === generationId) ?? [], [toolCalls?.items, generationId]);
   const refreshCalls = toolCalls?.refresh;
   const pmOutputVersion = JSON.stringify(snapshot?.items.filter(item => item.id.startsWith("pm-tool:")).map(item => [item.id, item.status, item.output]) ?? []);
   useEffect(() => { if (pmOutputVersion !== "[]") refreshCalls?.(); }, [refreshCalls, pmOutputVersion]);
-  return <OutputTimelineView snapshot={snapshot} error={error} calls={calls} callsError={toolCalls?.error} onUpdateCall={record => toolCalls?.update(record)} />;
+  return <NativeOutputContext.Provider value={snapshot && messageId ? { draft, threadId: snapshot.threadId, messageId } : null}><OutputTimelineView snapshot={snapshot} error={error} calls={calls} callsError={toolCalls?.error} onUpdateCall={record => toolCalls?.update(record)} /></NativeOutputContext.Provider>;
 }

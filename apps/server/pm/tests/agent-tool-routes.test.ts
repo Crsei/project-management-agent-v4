@@ -9,7 +9,11 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError, type Capability } from '../../../../packages/domain/src/core.ts';
 import { Workspace, WorkspaceError } from '../../../../packages/pm-core/index.ts';
-import type { PmToolTarget } from '../../../../packages/agent-contracts/src/pm-tools.ts';
+import type { PmToolTarget, PmToolApprovalAuthority } from '../../../../packages/agent-contracts/src/pm-tools.ts';
+import { pmToolRequestHash } from '../../../../packages/infrastructure/src/pm-tool-service-auth.ts';
+import type { MigrationPlan } from '../../../../packages/pm-core/migrations.ts';
+import { requestHash } from '../../../../packages/application/src/kernel.ts';
+import { workflowFor } from '../../../../packages/pm-schema/index.ts';
 import { createMcpServiceBearer, type McpInvocationIdentity } from '../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import { createAgentChatTools } from '../src/agent-chat-tools.ts';
 import type { CoreWorkspacePool } from '../src/core-routes.ts';
@@ -18,6 +22,7 @@ import { registerAgentToolRoutes } from '../src/agent-tool-routes.ts';
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const otherWorkspaceId = '0196c319-8b1d-7000-8000-000000000002';
 const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Fixture' };
+const PM_TOOL_APPROVAL_AUTHORITY_HEADER = 'x-pm-approval-authority';
 type Operation = {
   operation_id: string; workspace_id: string; actor_id: string; request_hash: string; name: string;
   thread_id: string; message_id: string; generation_id: string; status: string;
@@ -91,7 +96,7 @@ async function fixture() {
   const request = (name: string, args: unknown, selected = target(), operationId = randomUUID()) => ({
     name, arguments: args, target: selected, operationId, threadId: 'independent-code-session', messageId: 'message', generationId: 'generation',
   });
-  const call = (input: unknown, action = 'call') => app.inject({ method: 'POST', url: `/api/v1/workspaces/${workspaceId}/agent-tools/${action}`, headers: { 'content-type': 'application/json' }, payload: JSON.stringify(input) });
+  const call = (input: unknown, action = 'call', extraHeaders: Record<string, string> = {}) => app.inject({ method: 'POST', url: `/api/v1/workspaces/${workspaceId}/agent-tools/${action}`, headers: { 'content-type': 'application/json', ...extraHeaders }, payload: JSON.stringify(input) });
   return { app, workspace, project, other, task, otherTask, tools, target, request, call, operations,
     allow: (projects: string[] | null, caps: Capability[] = capabilities) => { projectIds = projects; capabilities = caps; },
     authenticate: (value: boolean) => { authenticated = value; },
@@ -251,4 +256,170 @@ test('delegated catalogs and calls apply the live explicit target ceiling on eve
     if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret;
     if (oldUrl === undefined) delete process.env.PM_MCP_AGENT_URL; else process.env.PM_MCP_AGENT_URL = oldUrl;
   }
+});
+
+test('invalid query pagination never executes and corrected new reads paginate the real authorized collection', async () => {
+  const f = await fixture();
+  let executions = 0;
+  const execute = f.tools.execute;
+  f.tools.execute = async (...args) => { executions++; return execute(...args); };
+  try {
+    for (let index = 0; index < 20; index++) {
+      await f.workspace.createEntity({ entity: 'work_item', project: f.project.id, title: `Page task ${index}` }, `page-task-${index}`);
+    }
+    const args = { entity: 'work_item', projectId: null, query: null, after: null, limit: 100 };
+    const invalid = f.request('pm_query', args);
+    const rejected = await f.call(invalid);
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(rejected.json().error.code, 'agent_tool_invalid_input');
+    assert.match(rejected.json().error.message, /limit: must be at most 20/);
+    assert.equal(executions, 0);
+    assert.equal(f.operations.has(invalid.operationId), false, 'frontloaded validation never reserves an executing PM operation');
+    const first = f.request('pm_query', { ...args, limit: 20 });
+    const response = await f.call(first);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().status, 'succeeded');
+    const page = response.json().result;
+    assert.equal(page.items.length, 20);
+    assert.equal(page.truncated, true);
+    assert.equal(page.nextCursor, page.items.at(-1).id);
+    const continued = await f.call(f.request('pm_query', { ...args, limit: 20, after: page.nextCursor }));
+    assert.equal(continued.json().status, 'succeeded');
+    assert.equal(continued.json().result.items.length, 1);
+    assert.equal(continued.json().result.nextCursor, null);
+    const ids = [...page.items, ...continued.json().result.items].map((item: { id: string }) => item.id);
+    assert.equal(new Set(ids).size, 21);
+    assert.equal(executions, 2);
+    const forged = await f.call({ ...first, arguments: { ...args, limit: 20, after: page.nextCursor } }, 'result');
+    assert.equal(forged.statusCode, 409);
+    assert.equal(forged.json().error.code, 'agent_tool_identity_conflict');
+    assert.equal(executions, 2);
+  } finally { await f.close(); }
+});
+
+test('exact approval authority is read-only and uses current from/to workflow categories and source revisions', async () => {
+  const f = await fixture();
+  try {
+    f.allow([f.project.id], ['domain.read', 'planning.edit', 'workitem.complete', 'workitem.cancel_reopen']);
+    const input = f.request('pm_transition_task', { id: f.task.id, revision: f.task.revision, status: 'done' });
+    const first = await f.call(input, 'approval-authority');
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.headers['cache-control'], 'private, no-store');
+    const original = first.json<PmToolApprovalAuthority>();
+    assert.deepEqual(original.capabilities, ['domain.read', 'workitem.complete']);
+    assert.equal(original.requestHash, pmToolRequestHash(input, actor.id));
+    assert.equal(original.entity?.revision, f.task.revision);
+    assert.equal(original.configuration?.revision, 'absent');
+    const workflow = await f.tools.execute('pm_read_workflow', { projectId: f.project.id }, {
+      actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: randomUUID(), scope: { kind: 'projects', projectIds: [f.project.id] },
+    });
+    assert.equal(workflow.kind, 'workflow');
+    if (workflow.kind === 'workflow') assert.equal(original.configuration?.workflowRevision, workflow.workflow.configuration.workflowRevision);
+    assert.equal(f.operations.size, 0, 'Authority reads never reserve an operation or issue a command');
+    assert.equal(f.workspace.get(f.task.id).revision, f.task.revision);
+    f.allow([f.project.id], ['domain.read', 'planning.edit', 'workitem.cancel_reopen']);
+    assert.equal((await f.call(input, 'approval-authority')).statusCode, 403, 'Effective workitem.complete is checked, not just static domain.read');
+
+    const configuration = f.workspace.configuration(), states = configuration.config.workflows.work_item!;
+    states.states.find(state => state.id === 'done')!.category = 'started';
+    delete states.default_targets;
+    await f.workspace.saveConfiguration(configuration.config, configuration.revision);
+    assert.equal(f.workspace.get(f.task.id).revision, f.task.revision, 'Workflow changes do not have to change the task revision');
+    const changed = (await f.call(input, 'approval-authority')).json<PmToolApprovalAuthority>();
+    assert.deepEqual(changed.capabilities, ['domain.read', 'planning.edit']);
+    assert.notEqual(changed.fingerprint, original.fingerprint);
+    assert.notEqual(changed.configuration?.workflowRevision, original.configuration?.workflowRevision);
+    assert.notEqual(changed.configuration?.revision, original.configuration?.revision);
+
+    const from = f.workspace.configuration();
+    from.config.workflows.work_item!.states.find(state => state.id === 'todo')!.category = 'completed';
+    await f.workspace.saveConfiguration(from.config, from.revision);
+    const reopened = (await f.call(input, 'approval-authority')).json<PmToolApprovalAuthority>();
+    assert.deepEqual(reopened.capabilities, ['domain.read', 'workitem.cancel_reopen'], 'The current from-category matters even when the requested target is merely started');
+    assert.notEqual(reopened.fingerprint, changed.fingerprint);
+    assert.equal(f.operations.size, 0);
+    assert.equal(f.workspace.get(f.task.id).raw, f.task.raw);
+    const forged = await f.call({ ...input, arguments: { ...input.arguments as object, extra: 'unvalidated' } }, 'approval-authority');
+    assert.equal(forged.statusCode, 400);
+  } finally { await f.close(); }
+});
+
+test('exact approval authority preserves workspace-admin migration scope and native lifecycle permission', async () => {
+  const f = await fixture();
+  try {
+    const plan = await f.workspace.migration('preview', { kind: 'transform', changes: [{ id: f.task.id, set: { status: 'in_progress' } }] }) as MigrationPlan;
+    assert.deepEqual(plan.diagnostics, [], 'The original preview must be a valid native migration, not a rejected derived-title edit');
+    const args = { id: plan.id, revision: plan.revision, after: null, limit: 20 };
+    f.allow(null, ['domain.read', 'planning.lifecycle']);
+    for (const name of ['pm_apply_migration', 'pm_restore_migration']) {
+      const input = f.request(name, args, f.target(null));
+      const response = await f.call(input, 'approval-authority');
+      assert.equal(response.statusCode, 200);
+      const authority = response.json<PmToolApprovalAuthority>();
+      assert.deepEqual(authority.capabilities, ['domain.read', 'planning.lifecycle']);
+      assert.deepEqual(authority.migration, { id: plan.id, revision: plan.revision });
+      assert.equal(authority.entity, null);
+      assert.equal((await f.call({ ...input, target: f.target() }, 'approval-authority')).statusCode, 403);
+      const result = await f.call(input, 'call', { [PM_TOOL_APPROVAL_AUTHORITY_HEADER]: authority.fingerprint });
+      assert.equal(result.json().status, 'succeeded', `${name}: ${JSON.stringify(result.json().error ?? null)}`);
+      assert.equal(result.json().result.migration.status, name === 'pm_apply_migration' ? 'applied' : 'restored');
+      assert.equal(f.workspace.get(f.task.id).entity.status, name === 'pm_apply_migration' ? 'in_progress' : 'todo');
+    }
+    assert.equal(f.workspace.get(f.task.id).raw, f.task.raw, 'Only the exact original apply/restore pair runs');
+    f.allow(null, ['domain.read']);
+    assert.equal((await f.call(f.request('pm_apply_migration', args, f.target(null)), 'approval-authority')).statusCode, 403);
+    f.allow([f.project.id], ['domain.read', 'planning.lifecycle']);
+    assert.equal((await f.call(f.request('pm_apply_migration', args, f.target(null)), 'approval-authority')).statusCode, 404);
+  } finally { await f.close(); }
+});
+
+test('exact approval authority blocks a workflow mutation race after the final transaction authorization read', async () => {
+  const f = await fixture();
+  try {
+    // Holding both old and new effective permissions proves the fingerprint is restrictive,
+    // rather than accidentally relying on native permission denial after the semantic change.
+    f.allow([f.project.id], ['domain.read', 'planning.edit', 'workitem.complete']);
+    const input = f.request('pm_transition_task', { id: f.task.id, revision: f.task.revision, status: 'done' });
+    // This header is deliberately untrusted restrictive input, derived from real native sources.
+    // Keeping the race entry independent of the new query also reproduces the old mutation bug.
+    const configuration = f.workspace.configuration();
+    const facts = { capabilities: ['domain.read', 'workitem.complete'],
+      entity: { id: f.task.id, kind: f.task.entity.entity, revision: f.task.revision, status: f.task.entity.status ?? null, archived: f.task.entity.archived ?? false },
+      configuration: { schema: configuration.config.schema, revision: configuration.revision,
+        workflowRevision: requestHash({ entity: 'work_item', workflow: workflowFor('work_item', configuration.config) ?? null }) },
+      migration: null };
+    const fingerprint = requestHash({ name: input.name, arguments: input.arguments, actorId: actor.id, workspaceId,
+      scope: { kind: 'projects', projectIds: [f.project.id] }, ...facts });
+    const patch = f.workspace.patch.bind(f.workspace);
+    let raced = false;
+    f.workspace.patch = async (...args: Parameters<Workspace['patch']>) => {
+      raced = true;
+      const configuration = f.workspace.configuration(), workflow = configuration.config.workflows.work_item!;
+      workflow.states.find(state => state.id === 'done')!.category = 'started';
+      delete workflow.default_targets;
+      await f.workspace.saveConfiguration(configuration.config, configuration.revision);
+      return patch(...args);
+    };
+    const result = await f.call(input, 'call', { [PM_TOOL_APPROVAL_AUTHORITY_HEADER]: fingerprint });
+    assert.equal(raced, true, 'Change lands after route/transaction reads but before the native serialized patch');
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.json().status, 'failed');
+    assert.equal(f.workspace.get(f.task.id).raw, f.task.raw);
+    assert.equal(f.workspace.get(f.task.id).revision, f.task.revision);
+    assert.equal(f.workspace.get(f.task.id).entity.status, 'todo');
+  } finally { await f.close(); }
+});
+
+test('exact approval precondition cannot grant a revoked effective capability', async () => {
+  const f = await fixture();
+  try {
+    f.allow([f.project.id], ['domain.read', 'workitem.complete']);
+    const input = f.request('pm_transition_task', { id: f.task.id, revision: f.task.revision, status: 'done' });
+    const authority = (await f.call(input, 'approval-authority')).json<PmToolApprovalAuthority>();
+    f.allow([f.project.id], ['domain.read']);
+    const result = await f.call(input, 'call', { [PM_TOOL_APPROVAL_AUTHORITY_HEADER]: authority.fingerprint });
+    assert.equal(result.json().status, 'failed');
+    assert.equal(f.workspace.get(f.task.id).revision, f.task.revision);
+    assert.equal(f.workspace.get(f.task.id).raw, f.task.raw);
+  } finally { await f.close(); }
 });

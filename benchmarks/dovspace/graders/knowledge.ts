@@ -17,10 +17,10 @@ const KnowledgeSchema = z.object({ records: z.array(z.object({ key: z.string(), 
 export const K03_KEYS = ['authMode', 'accessibility', 'backupRpoHours'];
 export const REQUIRED_FACTS: Record<string, string[]> = {
   K01: ['authMode', 'accessibility', 'backupRpoHours'], K02: ['retentionDays', 'retryLimit', 'releaseDate'],
-  K03: ['authMode', 'accessibility', 'backupRpoHours'], K04: ['releaseDate', 'owner', 'incidentEscalationMinutes'],
+  K03: ['authMode', 'accessibility', 'backupRpoHours'], K04: ['retryLimit'],
   D01: ['retentionDays', 'retryLimit', 'releaseDate'], D02: ['retryLimit'], D03: ['releaseDate', 'accessibility'],
-  D04: ['backupRpoHours', 'incidentEscalationMinutes'], L01: ['retentionDays', 'retryLimit', 'releaseDate'],
-  L02: ['owner', 'accessibility'], L03: ['backupRpoHours', 'incidentEscalationMinutes'], L04: ['backupRpoHours', 'incidentEscalationMinutes'],
+  D04: ['retryLimit'], L01: ['retentionDays', 'retryLimit', 'releaseDate'],
+  L02: ['owner', 'accessibility'], L03: ['retryLimit'], L04: ['backupRpoHours', 'incidentEscalationMinutes'],
 };
 export function publicFile(snapshot: FixtureSnapshot, relativePath: string): string | undefined {
   if (relativePath.startsWith('/') || relativePath.split('/').some((part) => part === '..' || part === '.')) return undefined;

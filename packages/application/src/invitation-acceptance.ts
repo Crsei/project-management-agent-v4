@@ -10,6 +10,7 @@ import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { requireCapability } from './access.ts';
 import { invitationTokenHash } from './invitations.ts';
 import type { InvitationProjectValidator, InvitationRow } from './invitations.ts';
+import { joinInvitationTeams, readInvitationTeams } from './invitation-teams.ts';
 
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const inspectInvitationPayload = z.strictObject({ token: tokenSchema });
@@ -77,9 +78,11 @@ export async function inspectMemberInvitation(pool: Pool, input: unknown, option
     if (row.status !== 'pending') throw new DomainError('invitation_already_accepted', 'This invitation has already been accepted', 409);
     await currentInviter(sql, row, options);
     const user = await invitedAccount(sql, row.email);
+    const teams = await readInvitationTeams(sql, row.workspace_id, row.team_ids);
     const workspace = await sql.query<{ name: string }>('SELECT name FROM workspaces WHERE id=$1', [row.workspace_id]);
     return { workspaceId: row.workspace_id, workspaceName: workspace.rows[0]!.name, email: row.email,
-      role: row.role, projectIds: row.project_ids, expiresAt: row.expires_at.toISOString(), accountExists: Boolean(user) };
+      role: row.role, projectIds: row.project_ids, teamIds: row.team_ids, teams: teams.map(team => ({ id: team.id, name: team.data.name })),
+      expiresAt: row.expires_at.toISOString(), accountExists: Boolean(user) };
   });
 }
 
@@ -113,6 +116,7 @@ export async function acceptMemberInvitation(pool: Pool, input: unknown, options
     }
     if (row.status !== 'pending') throw new DomainError('invitation_already_accepted', 'This invitation was already accepted', 409);
     await currentInviter(sql, row, options);
+    const teams = await readInvitationTeams(sql, row.workspace_id, row.team_ids);
     if (!user) {
       if (!payload.name || payload.password.length < 12) throw new DomainError('validation_failed', 'New accounts require a name and a password of at least 12 characters', 400);
       const passwordHash = await hashPassword(payload.password);
@@ -126,6 +130,7 @@ export async function acceptMemberInvitation(pool: Pool, input: unknown, options
       revoked_at=NULL,version=memberships.version+1,updated_at=now() WHERE memberships.revoked_at IS NOT NULL RETURNING version`,
     [row.workspace_id, user.id, memberRoleCapabilities(row.role), row.project_ids]);
     if (!membership.rows[0]) throw new DomainError('member_already_exists', 'This account is already an active workspace member', 409);
+    await joinInvitationTeams(sql, row.workspace_id, teams, user.id, payload.commandId);
     const accepted = await sql.query<InvitationRow>(`UPDATE member_invitations SET status='accepted',accepted_by=$2,accepted_at=clock_timestamp(),version=version+1,updated_at=now()
       WHERE id=$1 AND status='pending' AND expires_at>clock_timestamp() RETURNING *`, [row.id, user.id]);
     if (!accepted.rows[0]) throw new DomainError('invitation_expired', 'Invitation has expired', 410);

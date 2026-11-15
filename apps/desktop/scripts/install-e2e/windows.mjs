@@ -169,7 +169,7 @@ export async function runWindowsInstallE2E(options) {
   };
   const paths = () => ({
     installation: activeCase.installRoot,
-    app: join(activeCase.installRoot, "PM Agent v4.exe"), runtime: join(activeCase.installRoot, "resources", "desktop-runtime"),
+    app: join(activeCase.installRoot, "Dovspace.exe"), runtime: join(activeCase.installRoot, "resources", "desktop-runtime"),
     workspaceRuntime: join(activeCase.installRoot, "resources", "workspace-runtime"), data: activeCase.dataDir, userData: activeCase.userDataDir,
     managedPostgres: join(activeCase.dataDir, "postgres"), agentData: join(activeCase.dataDir, "agent-data"), managedMarkdown: join(activeCase.dataDir, "pm-workspaces"),
     connection: join(activeCase.userDataDir, "connection.json"), projects: join(activeCase.dataDir, "projects"),
@@ -225,7 +225,7 @@ export async function runWindowsInstallE2E(options) {
     catch (error) { await preserveNativeFailure(files); throw error; }
   };
   const controller = async (operation, delivery, extra = {}) => {
-    const app = join(activeCase.installRoot, "PM Agent v4.exe");
+    const app = join(activeCase.installRoot, "Dovspace.exe");
     if (await sha256File(join(activeCase.installRoot, "resources", "app.asar")) !== delivery.appAsarSha256) throw new Error("Installed controller app.asar does not match exact installer payload.");
     const files = await request(operation, delivery, extra);
     const handle = await startCommand(app, ["--desktop-lifecycle", operation, "--request-file", files.requestFile, "--response-file", files.responseFile], "installed-controller");
@@ -264,7 +264,7 @@ export async function runWindowsInstallE2E(options) {
   const preservation = async (before, after) => { const a = JSON.parse(await readFile(join(diagnostics, before), "utf8")), b = JSON.parse(await readFile(join(diagnostics, after), "utf8")); assertDataPreserved(a, b); add(before); add(after); return { before, after }; };
   const install = async (delivery, { interrupt = false } = {}) => {
     const previous = activeCase.installedDelivery;
-    const handoff = previous && await exists(join(activeCase.installRoot, "PM Agent v4.exe")) ? await request("preinstall", previous) : null;
+    const handoff = previous && await exists(join(activeCase.installRoot, "Dovspace.exe")) ? await request("preinstall", previous) : null;
     const handle = await startCommand(delivery.path, ["/S", "/currentuser", ...(handoff ? [`/DOVSPACE_REQUEST=${handoff.requestFile}`, `/DOVSPACE_RESPONSE=${handoff.responseFile}`] : []), `/D=${activeCase.installRoot}`], "installer", { interrupted: interrupt });
     handle.command.artifact = delivery.artifact;
     receipt.installationExecuted = true;
@@ -491,7 +491,7 @@ export async function runWindowsInstallE2E(options) {
         const roots = new Map(observed.paths.map((entry) => [entry.label, entry]));
         const remaining = {
           installationRoot: await exists(activeCase.installRoot),
-          app: await exists(join(activeCase.installRoot, "PM Agent v4.exe")),
+          app: await exists(join(activeCase.installRoot, "Dovspace.exe")),
           runtime: await exists(join(activeCase.installRoot, "resources", "desktop-runtime")) && await exists(join(activeCase.installRoot, "resources", "workspace-runtime")),
           dataRoot: await exists(activeCase.dataDir), userDataRoot: await exists(activeCase.userDataDir),
           ownedData: ["managedPostgres", "agentData", "managedMarkdown"].some((label) => roots.get(label)?.files > 0),

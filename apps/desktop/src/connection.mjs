@@ -8,10 +8,12 @@ const fields = Object.fromEntries(["projectRoot", "dataDir", "nodePath"].map(nam
 const maintenanceSecrets = [...document.querySelectorAll("#backup-password, #backup-password-confirm, #restore-password")];
 const legacyRestore = document.querySelector("#restore-legacy");
 const trustedRestoreSource = document.querySelector("#restore-trusted-source");
+const stoppedBackupWriters = document.querySelector("#backup-stopped-writers");
 function clearMaintenanceSecrets() {
   for (const input of maintenanceSecrets) input.value = "";
   legacyRestore.checked = false;
   trustedRestoreSource.checked = false;
+  stoppedBackupWriters.checked = false;
 }
 const dirty = new Set();
 let current;
@@ -86,6 +88,7 @@ function maintenanceStatus() {
 }
 function renderUpdate() {
   const update = current?.update;
+  document.body.dataset.updateBusy = String(Boolean(update?.busy));
   const statuses = {
     unavailable: "此安装不支持应用内自动更新。", idle: "可以检查同一发布通道的更新。",
     checking: "正在检查 GitHub Releases 并核对候选安装元数据…", current: "当前已是此通道的最新版本。",
@@ -124,6 +127,7 @@ function render() {
   const recovery = Boolean(current?.localRunning && !connected);
   document.body.dataset.view = view;
   document.body.dataset.step = step;
+  document.body.dataset.connectionBusy = String(working() || (bridgeAvailable && !current && !localError));
   document.querySelector("#onboarding-view").hidden = view !== "onboarding";
   document.querySelector("#maintenance-view").hidden = view !== "maintenance";
   document.querySelector("#step-mode").hidden = step !== "mode";
@@ -345,6 +349,11 @@ for (const action of ["backup", "restore"]) document.querySelector(`#${action}`)
   const password = input.value;
   const allowLegacyUnencrypted = action === "restore" && legacyRestore.checked;
   const trustedSourceAcknowledged = action === "restore" && trustedRestoreSource.checked;
+  const stoppedWritersAcknowledged = action === "backup" && stoppedBackupWriters.checked;
+  if (action === "backup" && !stoppedWritersAcknowledged) {
+    localError = "请实际停止纳入目录的外部 Markdown 编辑器、原生 CLI 与其他写者，并确认在整个备份期间保持停写。此勾选不检测或停止外部进程。";
+    render(); stoppedBackupWriters.focus(); return;
+  }
   if (action === "restore" && !trustedSourceAcknowledged) {
     localError = "请先确认备份来源可信。恢复会以本机账号权限执行备份中的数据库 SQL；加密与口令不能证明作者可信。";
     render(); trustedRestoreSource.focus(); return;
@@ -356,12 +365,13 @@ for (const action of ["backup", "restore"]) document.querySelector(`#${action}`)
   if (action === "backup" && password !== document.querySelector("#backup-password-confirm").value) {
     localError = "两次输入的备份口令不一致。"; render(); document.querySelector("#backup-password-confirm").focus(); return;
   }
-  const options = { password, ...(action === "restore" ? { allowLegacyUnencrypted, trustedSourceAcknowledged } : {}) };
+  const options = { password, ...(action === "restore" ? { allowLegacyUnencrypted, trustedSourceAcknowledged } : { stoppedWritersAcknowledged }) };
   clearMaintenanceSecrets();
   try { await invoke(action, options); }
   finally {
     options.password = "";
     if (action === "restore") { options.trustedSourceAcknowledged = false; options.allowLegacyUnencrypted = false; }
+    if (action === "backup") options.stoppedWritersAcknowledged = false;
     clearMaintenanceSecrets();
   }
 });

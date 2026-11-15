@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { Host } from "../src/host.ts";
+import type { InstalledSkill } from "../src/types.ts";
+import { updateManagedSkillFiles } from "../src/skills/install.ts";
+
+function bundle(id: string, revision = 1) {
+  const content = `---\nname: ${id}\ndescription: Bundled test skill\n---\nRevision ${revision}\n`;
+  return { id, name: id, description: "Bundled test skill", sourcePath: `.agents/skills/${id}/SKILL.md`, content, sha256: createHash("sha256").update(content).digest("hex") };
+}
+
+test("real managed bundled install/update preserves provenance, assignments, native edits and backups", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-bundled-skills-"));
+  const dataDir = path.join(root, "data"), homeDir = path.join(root, "home");
+  const appDirs = { codex: path.join(root, "codex"), pi: path.join(root, "pi"), omp: path.join(root, "pi") };
+  for (const dir of [homeDir, ...Object.values(appDirs)]) await mkdir(dir, { recursive: true });
+  const host = await Host.initialize({ dataDir, homeDir, appDirs, secretKey: randomBytes(32).toString("base64") }, () => undefined);
+  const call = <T = unknown>(command: string, args: Record<string, unknown> = {}) => host.invoke({ id: command, command, args }) as Promise<T>;
+  const skill = bundle("pm-plan-draft"), updated = bundle(skill.id, 2);
+  const native = (app: keyof typeof appDirs, id = skill.id) => path.join(appDirs[app], "skills", id);
+  const inspect = (item = skill, app = "codex") => call<Array<{ status: string }>>("inspect_bundled_skills", { skills: [item], app });
+  const install = (item = skill, app = "codex") => call<Array<{ status: string }>>("install_bundled_skills", { skills: [item], app });
+  try {
+    await call("save_settings", { settings: { skillSyncMethod: "copy" } });
+    assert.equal((await inspect())[0]!.status, "not-installed");
+    assert.equal((await readdir(dataDir)).includes("skills"), false, "inventory does not create SSOT");
+    assert.equal((await install())[0]!.status, "installed");
+    assert.equal(await readFile(path.join(native("codex"), "SKILL.md"), "utf8"), skill.content);
+    const installed = (await call<InstalledSkill[]>("get_installed_skills"))[0]!;
+    assert.deepEqual({ label: installed.source?.sourceLabel, sourcePath: installed.source?.sourcePath, sha: installed.source?.sha256 }, { label: "Dovspace", sourcePath: skill.sourcePath, sha: skill.sha256 });
+    assert.equal(installed.repoOwner, undefined);
+    assert.equal((await inspect())[0]!.status, "installed", "read reconciles a lost successful response");
+    assert.equal((await install())[0]!.status, "unchanged");
+    await assert.rejects(call("update_skill", { id: installed.id }), /shipped catalog/);
+    assert.equal((await install(skill, "pi"))[0]!.status, "installed");
+    assert.equal((await install(skill, "omp"))[0]!.status, "unchanged", "Pi/OMP share actual observed native content, not a persisted flag");
+    assert.equal((await inspect(updated))[0]!.status, "update-available");
+    await writeFile(path.join(native("pi"), ".user-note"), "preserve me");
+    assert.equal((await install(updated))[0]!.status, "conflict");
+    assert.equal(await readFile(path.join(native("codex"), "SKILL.md"), "utf8"), skill.content);
+    await assert.rejects(call("uninstall_skill_unified", { id: installed.id }));
+    assert.equal(await readFile(path.join(native("pi"), ".user-note"), "utf8"), "preserve me");
+    await rm(path.join(native("pi"), ".user-note"));
+    assert.equal((await install(updated))[0]!.status, "updated");
+    for (const app of ["codex", "pi", "omp"] as const) assert.equal(await readFile(path.join(native(app), "SKILL.md"), "utf8"), updated.content);
+    const after = (await call<InstalledSkill[]>("get_installed_skills"))[0]!;
+    assert.equal(after.apps.codex, true); assert.equal(after.apps.pi, true); assert.equal(after.apps.omp, true);
+    assert.equal(after.source?.sha256, updated.sha256);
+    await writeFile(path.join(dataDir, "skills", skill.id, ".unexpected"), "do not erase");
+    assert.equal((await inspect(updated))[0]!.status, "conflict");
+    assert.equal((await install(bundle(skill.id, 3)))[0]!.status, "conflict");
+    await assert.rejects(call("toggle_skill_app", { id: after.id, app: "codex", enabled: false }));
+    await rm(path.join(dataDir, "skills", skill.id, ".unexpected"));
+    const foreign = bundle("pm-evidence-review");
+    await mkdir(native("codex", foreign.id), { recursive: true });
+    await writeFile(path.join(native("codex", foreign.id), "SKILL.md"), foreign.content);
+    assert.equal((await install(foreign))[0]!.status, "conflict", "even identical unmanaged content is not adopted as builtin");
+    assert.equal((await call<InstalledSkill[]>("get_installed_skills")).some(entry => entry.directory === foreign.id), false);
+    await assert.rejects(call("install_bundled_skills", { skills: [{ ...skill, sha256: "0".repeat(64) }], app: "codex" }));
+    await assert.rejects(call("install_bundled_skills", { skills: [skill], app: "claude" }), /unbound_target/);
+    const source = path.join(root, "new-source");
+    await mkdir(source); await writeFile(path.join(source, "SKILL.md"), "candidate");
+    assert.throws(() => updateManagedSkillFiles(source, path.join(dataDir, "skills", skill.id), skill.id, [], [], () => { throw new Error("metadata failure"); }), /metadata failure/);
+    assert.equal(await readFile(path.join(dataDir, "skills", skill.id, "SKILL.md"), "utf8"), updated.content, "failed commit restores old SSOT");
+    await call("uninstall_skill_unified", { id: after.id });
+    const backups = await call<Array<{ backupId: string; skill: InstalledSkill }>>("get_skill_backups");
+    const backup = backups.find(entry => entry.skill.source?.sha256 === updated.sha256)!;
+    assert.ok(backup);
+    await call("restore_skill_backup", { backupId: backup.backupId, currentApp: "codex" });
+    const restored = (await call<InstalledSkill[]>("get_installed_skills"))[0]!;
+    assert.equal(restored.source?.sha256, updated.sha256);
+    assert.equal((await inspect(updated))[0]!.status, "installed");
+    const originalSkills = path.join(appDirs.codex, "original-skills");
+    await rename(path.join(appDirs.codex, "skills"), originalSkills);
+    const external = path.join(root, "external");
+    await mkdir(external);
+    await symlink(external, path.join(appDirs.codex, "skills"), process.platform === "win32" ? "junction" : "dir");
+    assert.equal((await install(bundle("pm-project-digest")))[0]!.status, "conflict", "a retargeted native skills parent cannot escape authority");
+    assert.deepEqual(await readdir(external), []);
+    await rm(path.join(appDirs.codex, "skills"));
+    await rename(originalSkills, path.join(appDirs.codex, "skills"));
+  } finally { host.close(); await rm(root, { recursive: true, force: true }); }
+});

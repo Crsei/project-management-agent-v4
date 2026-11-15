@@ -36,3 +36,35 @@
 .native-text-input { width: 100%; border: 1px solid var(--color-border, #aaa); border-radius: .3rem; padding: .4rem; }
 .native-generation-status { color: var(--color-muted-foreground, #69717c); font-size: .72rem; }
 @media (max-width: 420px) { .native-output-card { padding: .5rem; } .native-output-card header { flex-wrap: wrap; } }
+.native-tool-summary { display: flex; min-width: 0; align-items: baseline; gap: .45rem; overflow: hidden; }
+.native-tool-action { flex-shrink: 0; color: var(--muted-foreground); }
+.native-tool-target { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.native-active-tool { border-inline-start: 2px solid var(--info); padding-inline-start: .35rem; }
+.native-command-input { margin: .2rem 0 .4rem; }
+.native-command-output > div:not(.native-command-copy) { height: 180px; }
+.native-file-actions, .native-plan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.native-file-actions button { border: 1px solid var(--border); border-radius: var(--radius-agent-control, .35rem); padding: .2rem .5rem; font-size: .72rem; cursor: pointer; }
+.native-file-actions button:hover { background: var(--surface-hover); }
+.native-file-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.native-changed-files-summary { margin-block: .35rem; border: 1px solid var(--border); border-radius: var(--radius-agent-control, .35rem); padding: .2rem .4rem; min-width: 0; }
+.native-summary-note { color: var(--muted-foreground); font-size: .72rem; line-height: 1.5; margin: .35rem 0; }
+.native-changed-file-list { display: grid; gap: .7rem; list-style: none; margin: 0; padding: 0; min-width: 0; }
+.native-changed-file-heading { display: flex; align-items: baseline; gap: .5rem; min-width: 0; font-size: .75rem; margin-bottom: .25rem; }
+.native-changed-file-heading strong { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-ibm-plex-mono); font-weight: 500; }
+.native-diff-counts { display: inline-flex; flex-shrink: 0; gap: .35rem; font-family: var(--font-ibm-plex-mono); color: var(--muted-foreground); }
+.native-recorded-diff { margin-top: .3rem; font-size: .75rem; }
+.native-recorded-diff > summary { cursor: pointer; color: var(--muted-foreground); }
+.native-plan-card { border: 1px solid var(--border); background: var(--card); border-radius: .8rem; padding: .85rem; min-width: 0; }
+.native-plan-content { min-width: 0; }
+.native-plan-content[data-collapsed] { max-height: 22rem; overflow: hidden; mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent); }
+.native-plan-actions { margin-top: .65rem; }
+.native-plan-steps { list-style: none; padding: 0 !important; }
+.native-plan-steps li { margin-block: .3rem; }
+.native-plan-steps li[data-status="running"] { color: var(--info); }
+.native-plan-steps li[data-status="cancelled"] { color: var(--muted-foreground); }
+.native-subagent-navigation { margin-block: .4rem; }
+.native-composer-requests { display: grid; gap: .5rem; width: 100%; max-height: min(45vh, 26rem); overflow: auto; border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border)); border-radius: .7rem; padding: .65rem; background: var(--card); font-size: .8rem; }
+.native-composer-request h3 { font-size: .85rem; font-weight: 600; margin: 0 0 .35rem; }
+.native-composer-request + .native-composer-request { padding-top: .55rem; border-top: 1px solid var(--border); }
+.native-request-location { display: inline-block; margin-block: .25rem; font-size: .8rem; }
+@media (max-width: 767px) { .native-plan-card { padding: .65rem; } .native-plan-actions > button { font-size: .72rem; } .native-composer-requests { max-height: 42vh; } }

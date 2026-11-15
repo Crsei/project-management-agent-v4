@@ -15,7 +15,7 @@ export function installStamp(version = "0.1.1-preview.1", overrides = {}) {
 export function updateRelease({ version = "0.1.1-preview.2", current = installStamp(), targetArch = current.arch } = {}) {
   const payload = Buffer.from("Inert desktop updater network fixture; this is not an executable installer.\n".repeat(128));
   const stamp = installStamp(version, { ...structuredClone(current), version, arch: targetArch, commit: "d".repeat(40) });
-  const asset = `PM-Agent-v4-${version}-${stamp.platform === "darwin" ? "mac" : "win"}-${stamp.arch}-${stamp.signing}.${stamp.platform === "darwin" ? "zip" : "exe"}`;
+  const asset = `Dovspace-${version}-${stamp.platform === "darwin" ? "mac" : "win"}-${stamp.arch}-${stamp.signing}.${stamp.platform === "darwin" ? "zip" : "exe"}`;
   const artifact = { path: asset, bytes: payload.length, sha256: createHash("sha256").update(payload).digest("hex") };
   const info = { version, tag: `v${version}`, files: [{ url: asset, size: payload.length, sha512: createHash("sha512").update(payload).digest("base64") }], path: asset, sha512: createHash("sha512").update(payload).digest("base64") };
   const stampName = `desktop-install-stamp-${stamp.platform}-${stamp.arch}.json`;

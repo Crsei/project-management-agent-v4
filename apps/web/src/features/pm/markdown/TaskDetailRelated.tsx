@@ -10,9 +10,11 @@ import { DeliveryWorkflow } from '../service/pm-delivery';
 import { TaskComments } from '../service/TaskComments';
 import { downloadProjectAttachment } from '../service/service-project-detail-panels';
 import { usePersonalDashboard, usePmEntities, usePmEntity, usePmService, useProjectAudit } from '../service/pm-service';
-import { allowed, CommandNotice, string, strings, useAction } from '../service/pm-ui';
+import { allowed, string, strings, useAction } from '../service/pm-ui';
 import type { WorkspaceController } from './controller';
+import { taskStateLabel } from './task-status-label';
 import './task-detail-related.css';
+import { HumanIdentity } from '../service/human-identity';
 
 type DetailProps = { controller: WorkspaceController; en: boolean };
 type ReadState = { data: unknown; isPending: boolean; isFetching: boolean; error: Error | null; refetch: () => unknown };
@@ -110,18 +112,30 @@ function TaskWatchAction({ controller: c, en }: DetailProps) {
   </span>;
 }
 
-export function TaskDetailRelated({ controller: c, en }: DetailProps) {
-  if (!c.entity || c.entity.entity !== 'work_item' || !c.selected || c.unsupported || c.accessError) return null;
-  return <div className="task-detail-related">
-    <TaskChildren controller={c} en={en} />
-    <CommandNotice />
-    {c.draft && <p className="td-related-note" role="status">{en ? 'Related service records below use the saved task. Your source draft does not change saved children, attachments or audit history; PM service writes are locked until it is saved or discarded.' : '以下关联服务记录基于已保存任务。源码草稿不会改变已保存的子任务、附件或审计历史；保存或放弃草稿前，PM 服务写入被锁定。'}</p>}
-    <TaskServiceSections key={`${c.session.namespace}:${c.selected.id}`} controller={c} en={en} />
-    {c.selected.entity.project && <TaskComments key={`${c.selected.id}:${c.selected.entity.project}`} taskId={c.selected.id} projectId={c.selected.entity.project} writable={!sourceWriteProblem(c, en)} />}
-  </div>;
+export function TaskResourcesSection({ controller: c, en }: DetailProps) {
+  const service = usePmService();
+  const task = c.selected;
+  if (!service.actor || !service.workspace || service.error || !task || !task.entity.project || !allowed(service.workspace, 'domain.read', task.entity.project)) return null;
+  return <TaskAttachments controller={c} en={en} projectId={task.entity.project} />;
 }
 
-function TaskChildren({ controller: c, en }: DetailProps) {
+export function TaskDiscussionSection({ controller: c, en }: DetailProps) {
+  const service = usePmService();
+  const task = c.selected;
+  if (!service.workspace || !task || !task.entity.project || !allowed(service.workspace, 'domain.read', task.entity.project)) return null;
+  const projectId = task.entity.project;
+  const auditAllowed = allowed(service.workspace, 'audit.read', projectId);
+  const t = (english: string, zh: string) => en ? english : zh;
+  return <section id={`task-discussion-${task.id}`} className="issue-discussion" aria-label={t('Discussion and activity', '讨论与活动')}>
+    <TaskComments key={`${task.id}:${projectId}`} taskId={task.id} projectId={projectId} writable={!sourceWriteProblem(c, en)} />
+    {auditAllowed && <section className="issue-activity-section" aria-labelledby={`task-activity-${task.id}`}>
+      <h2 id={`task-activity-${task.id}`} className="issue-section-title">{t('Activity', '活动记录')}</h2>
+      <TaskAudit taskId={task.id} projectId={projectId} en={en} />
+    </section>}
+  </section>;
+}
+
+export function TaskChildren({ controller: c, en }: DetailProps) {
   const uid = useId();
   const display = useDisplayDateTime();
   const task = c.selected!;
@@ -130,53 +144,55 @@ function TaskChildren({ controller: c, en }: DetailProps) {
   const complete = children.filter(file => statusCategory(file.entity, c.configuration) === 'completed').length;
   const knownProgress = !c.query.error && !c.configurationInvalid && children.every(file => !file.stale && !file.error && !file.diagnostics?.some(issue => issue.severity === 'error') && !!statusCategory(file.entity, c.configuration));
   const createProblem = sourceWriteProblem(c, en);
+  const createDisabled = !!createProblem || !task.entity.project;
+  function openChildCreate() {
+    if (createDisabled) return;
+    c.openCreate(workflow?.initial, { layout: 'table', entity: 'work_item', project: task.entity.project }, { parent: task.id, workKind: 'subtask' });
+  }
   return <section className="td-related-section" aria-labelledby={`${uid}-title`}>
-    <header className="td-related-heading"><h3 id={`${uid}-title`}>{en ? 'Subtasks' : '子任务'}</h3><span className="td-related-badge">{knownProgress ? `${complete}/${children.length}` : en ? 'Progress unavailable' : '进度不可用'}</span>{knownProgress && children.length > 0 && <progress max={children.length} value={complete} aria-label={en ? `${complete} of ${children.length} child tasks completed` : `${children.length} 个子任务中已完成 ${complete} 个`} />}</header>
+    <header className="td-related-heading"><h2 id={`${uid}-title`} className="issue-section-title">{en ? 'Subtasks' : '子任务'}</h2><span className="td-related-badge">{knownProgress ? `${complete}/${children.length}` : en ? 'Progress unavailable' : '进度不可用'}</span>{knownProgress && children.length > 0 && <progress max={children.length} value={complete} aria-label={en ? `${complete} of ${children.length} child tasks completed` : `${children.length} 个子任务中已完成 ${complete} 个`} />}</header>
     {c.query.error && <p className="td-related-alert" role="alert">{en ? 'The source snapshot could not be refreshed. Child relations below may be stale.' : '源码快照刷新失败，以下子任务关系可能已过期。'}</p>}
-    {children.length > 0 ? <ul className="td-child-list">{children.map(file => <li key={file.id}>
+    {children.length > 0 && <ul className="td-child-list">{children.map(file => <li key={file.id}>
       <StatusIcon category={statusCategory(file.entity, c.configuration)} />
-      <button type="button" className="td-child-link" onClick={() => c.select(file.id)}><strong>{file.entity.title}</strong><small><code>{file.id}</code> · {workflow?.states.find(state => state.id === file.entity.status)?.label || file.entity.status || (en ? 'Status unavailable' : '状态不可用')}{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small>{c.draftIds.has(file.id) && <small>{en ? 'Local source draft · showing saved status' : '存在本地源码草稿 · 显示已保存状态'}</small>}{(file.stale || file.error) && <small className="td-related-error">{en ? 'Source diagnostics · progress may be stale' : '源码存在诊断 · 进度可能过期'}</small>}</button>
+      <button type="button" className="td-child-link" onClick={() => c.select(file.id)}><strong>{file.entity.title}</strong><small><code>{file.id}</code> · {(() => { const state = workflow?.states.find(state => state.id === file.entity.status); return state ? taskStateLabel(state, en) : file.entity.status || (en ? 'Status unavailable' : '状态不可用'); })()}{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small>{c.draftIds.has(file.id) && <small>{en ? 'Local source draft · showing saved status' : '存在本地源码草稿 · 显示已保存状态'}</small>}{(file.stale || file.error) && <small className="td-related-error">{en ? 'Source diagnostics · progress may be stale' : '源码存在诊断 · 进度可能过期'}</small>}</button>
       {file.entity.due && <time className="td-child-due" dateTime={file.entity.due}>{display.date(file.entity.due)}</time>}
-    </li>)}</ul> : <p className="td-related-note">{en ? 'No visible saved tasks reference this task as their parent.' : '当前没有可见的已保存任务将此任务设为父项。'}</p>}
-    <p className="td-related-note">{en ? 'Progress uses saved child workflow states, not Markdown checkboxes. Canceled tasks do not count as completed.' : '进度来自已保存子任务的工作流状态，不是 Markdown 检查项；已取消不计入完成。'}</p>
-    {c.canWrite && <div className="td-child-create"><button type="button" className="td-related-button" disabled={!!createProblem || !task.entity.project} title={createProblem || undefined} aria-describedby={`${uid}-create-hint`} onClick={() => { if (!sourceWriteProblem(c, en)) c.openCreate(workflow?.initial, { layout: 'table', entity: 'work_item', project: task.entity.project }); }}><Plus size={14} aria-hidden="true" />{en ? 'Create task' : '创建任务'}</button><small id={`${uid}-create-hint`} className="td-related-note">{en ? `To create a child, choose kind “subtask” and Parent ${task.id} in the shared form’s advanced properties. Nothing is linked automatically.` : `创建子任务时，请在共享表单的高级属性中将类型设为“subtask”，父项设为 ${task.id}；不会自动建立关联。`}</small></div>}
+    </li>)}</ul>}
+    {children.length === 0 && <p className="issue-empty">{en ? 'No subtasks' : '暂无子任务'}</p>}
+    {c.canWrite && <div className="td-child-create">
+      <button type="button" className="issue-text-action" disabled={createDisabled} title={createProblem || undefined} onClick={openChildCreate}><Plus size={14} aria-hidden="true" />{en ? 'Add subtask' : '添加子任务'}</button>
+    </div>}
   </section>;
 }
 
-function TaskServiceSections({ controller: c, en }: DetailProps) {
-  const service = usePmService();
-  const task = c.selected!;
-  const projectId = task.entity.project;
-  if (!service.actor || !service.workspace || service.error || !allowed(service.workspace, 'domain.read', projectId)) return <section className="td-related-section"><h3>{en ? 'Attachments and activity' : '附件与活动'}</h3><p className="td-related-note" role="status">{en ? 'PM service records are unavailable with the current session or project permissions. Source content remains in this shared detail.' : '当前会话或项目权限无法读取 PM 服务记录，源码内容仍保留在此共享详情中。'}</p></section>;
-  if (!projectId) return <section className="td-related-section"><h3>{en ? 'Attachments and activity' : '附件与活动'}</h3><p className="td-related-note">{en ? 'Set and save an authorized project to use project-scoped artifacts, comments and business audit.' : '请先设置并保存有权访问的项目，再使用项目范围的成果、评论与业务审计。'}</p></section>;
-  return <>
-    <TaskAttachments controller={c} en={en} projectId={projectId} />
-    <section className="td-related-section"><header className="td-related-heading"><h3>{en ? 'Activity · business audit' : '活动 · 业务审计'}</h3></header>{allowed(service.workspace, 'audit.read', projectId) ? <TaskAudit key={projectId} taskId={task.id} projectId={projectId} en={en} /> : <p className="td-related-note">{en ? 'Project audit.read permission is required. File watcher updates are not task history.' : '读取此项目的活动需要 audit.read 权限；文件监听更新不能代替任务历史。'}</p>}</section>
-  </>;
+export function useTaskArtifacts(taskId: string, projectId: string | undefined, enabled = true) {
+  const versions = usePmEntities('artifact_version', projectId, 'all', enabled);
+  const evidence = usePmEntities('evidence', projectId, 'visible', enabled);
+  const submissions = usePmEntities('submission', projectId, 'visible', enabled);
+  const referenced = new Map<string, { evidence: string[]; submissions: string[] }>();
+  const include = (id: string, kind: 'evidence' | 'submissions', sourceId: string) => {
+    const row = referenced.get(id) ?? { evidence: [], submissions: [] };
+    row[kind].push(sourceId);
+    referenced.set(id, row);
+  };
+  evidence.data?.filter(row => strings(row.data.subjectRefs).includes(taskId)).forEach(row => strings(row.data.artifactVersionRefs).forEach(id => include(id, 'evidence', row.id)));
+  submissions.data?.filter(row => row.data.workItemId === taskId).forEach(row => strings(row.data.artifactVersionIds).forEach(id => include(id, 'submissions', row.id)));
+  return {
+    versions, evidence, submissions, referenced,
+    readableVersions: new Map(versions.data?.map(version => [version.id, version])),
+    completeRead: !!versions.data && !!evidence.data && !!submissions.data && !versions.error && !evidence.error && !submissions.error,
+  };
 }
 
 function TaskAttachments({ controller: c, en, projectId }: DetailProps & { projectId: string }) {
   const service = usePmService();
   const uid = useId();
   const task = c.selected!;
-  const versions = usePmEntities('artifact_version', projectId, 'all');
-  const evidence = usePmEntities('evidence', projectId);
-  const submissions = usePmEntities('submission', projectId);
+  const { versions, evidence, submissions, referenced, readableVersions, completeRead } = useTaskArtifacts(task.id, projectId);
   const recordQuery = usePmEntity(task.id);
   const [manageOpen, setManageOpen] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const downloadBusy = useRef(false);
-  const referenced = new Map<string, { evidence: string[]; submissions: string[] }>();
-  function include(id: string, kind: 'evidence' | 'submissions', sourceId: string) {
-    const row = referenced.get(id) ?? { evidence: [], submissions: [] };
-    row[kind].push(sourceId);
-    referenced.set(id, row);
-  }
-  evidence.data?.filter(row => strings(row.data.subjectRefs).includes(task.id)).forEach(row => strings(row.data.artifactVersionRefs).forEach(id => include(id, 'evidence', row.id)));
-  submissions.data?.filter(row => row.data.workItemId === task.id).forEach(row => strings(row.data.artifactVersionIds).forEach(id => include(id, 'submissions', row.id)));
-  const readableVersions = new Map(versions.data?.map(version => [version.id, version]));
-  const completeRead = !!versions.data && !!evidence.data && !!submissions.data && !versions.error && !evidence.error && !submissions.error;
   const record = recordQuery.data?.id === task.id && recordQuery.data.kind === 'work_item' && recordQuery.data.workspaceId === service.workspace?.id && recordQuery.data.projectId === projectId ? recordQuery.data : undefined;
   const sourceProblem = sourceWriteProblem(c, en);
   const storageProblem = service.capabilities?.business.enabled !== true || !service.capabilities.storage.enabled;
@@ -190,17 +206,16 @@ function TaskAttachments({ controller: c, en, projectId }: DetailProps & { proje
     catch (error) { setDownloadError(error instanceof Error ? error.message : String(error)); }
     finally { downloadBusy.current = false; setDownloading(null); }
   }
-  return <section className="td-related-section" aria-labelledby={`${uid}-title`}>
-    <header className="td-related-heading"><h3 id={`${uid}-title`}>{en ? 'Attachments / evidence' : '附件 / 证据'}</h3>{completeRead && <span className="td-related-badge">{referenced.size}</span>}</header>
-    <p className="td-related-note">{en ? 'Only immutable artifact versions referenced by this task’s evidence or submissions are shown. Project uploads alone are not task attachments.' : '仅显示此任务的证据或提交实际引用的不可变成果版本；仅上传到项目的文件不会被当作任务附件。'}</p>
+  return <section id={`task-resources-${task.id}`} className="td-related-section" aria-labelledby={`${uid}-title`}>
+    <header className="td-related-heading"><h2 id={`${uid}-title`} className="issue-section-title">{en ? 'Resources & evidence' : '关联资料与证据'}</h2>{completeRead && <span className="td-related-badge">{referenced.size}</span>}</header>
     <ReadNotice query={versions} en={en} label={en ? 'artifact versions' : '成果版本'} /><ReadNotice query={evidence} en={en} label={en ? 'task evidence' : '任务证据'} /><ReadNotice query={submissions} en={en} label={en ? 'task submissions' : '任务提交'} />
     {referenced.size > 0 && <ul className="td-attachment-list">{Array.from(referenced, ([id, sources]) => {
       const version = readableVersions.get(id);
       return <li key={id}><FileText size={17} aria-hidden="true" /><div className="td-attachment-info"><strong>{version ? string(version.data.fileName) || id : id}</strong><small>{version ? typeof version.data.size === 'number' ? `${version.data.size.toLocaleString()} ${en ? 'bytes' : '字节'}` : en ? 'Size unavailable' : '大小不可用' : en ? 'Version missing or inaccessible; no file contents were loaded.' : '版本缺失或不可访问，未读取文件内容。'}</small><details><summary>{en ? 'Provenance' : '引用来源'}</summary><code>{id}</code>{sources.evidence.length > 0 && <p>{en ? 'Evidence' : '证据'}: {sources.evidence.join(', ')}</p>}{sources.submissions.length > 0 && <p>{en ? 'Submissions' : '提交'}: {sources.submissions.join(', ')}</p>}{version && <p>SHA-256: {string(version.data.sha256) || '—'}</p>}</details></div>{version && <button type="button" className="td-related-button" disabled={!!downloading || !!versions.error} aria-label={`${en ? 'Download' : '下载'} ${string(version.data.fileName) || id}`} onClick={() => { void download(version); }}><Download size={14} aria-hidden="true" /><span className="sr-only">{en ? 'Download' : '下载'}</span></button>}</li>;
     })}</ul>}
-    {completeRead && referenced.size === 0 && <p className="td-related-note">{en ? 'No artifact versions are linked to this task through evidence or submissions.' : '此任务尚未通过证据或提交关联成果版本。'}</p>}
+    {completeRead && referenced.size === 0 && <p className="issue-empty">{en ? 'No linked resources' : '暂无关联资料'}</p>}
     {downloading && <p className="td-related-note" role="status">{en ? 'Downloading…' : '正在下载…'}</p>}{downloadError && <p className="td-related-error" role="alert">{downloadError}</p>}
-    <details className="td-related-management" onToggle={event => setManageOpen(event.currentTarget.open)}><summary>{en ? 'Delivery / evidence · manage uploads and artifacts' : '交付 / 证据 · 管理上传与成果'}</summary><p className="td-related-note">{en ? 'Uses the existing delivery workflow: staging, artifact registration and linking via evidence or a submission are distinct explicit operations. Uploading does not automatically attach a file to this task. Markdown fields and the explicit shared draft Save remain task authority; PM commands retain their own receipts.' : '复用既有交付流程：暂存、成果登记、通过证据或提交建立关联是不同的显式操作。上传不会自动附加到此任务；Markdown 字段与共享草稿的显式保存仍是任务权威，PM 命令使用各自独立的收据。'}</p>{manageOpen && <>
+    <details className="td-related-management" onToggle={event => setManageOpen(event.currentTarget.open)}><summary>{en ? 'Delivery / evidence · manage uploads and artifacts' : '交付 / 证据 · 管理上传与成果'}</summary>{manageOpen && <>
       <ReadNotice query={recordQuery} en={en} label={en ? 'saved PM task' : '已保存 PM 任务'} />
       {managementProblem && <p className="td-related-note" role="status">{managementProblem}</p>}
       {record && <fieldset disabled={!!managementProblem} className="td-delivery-controls"><legend className="sr-only">{en ? 'Existing delivery workflow' : '既有交付流程'}</legend><DeliveryWorkflow key={`${task.id}:${record.version}`} item={record} /></fieldset>}
@@ -213,10 +228,9 @@ function TaskAudit({ taskId, projectId, en }: { taskId: string; projectId: strin
   const display = useDisplayDateTime();
   const entries = query.data?.pages.flatMap(page => page.entries).filter(entry => entry.targetKind === 'work_item' && entry.targetId === taskId) ?? [];
   return <div className="td-task-audit">
-    <p className="td-related-note">{en ? 'Actual controlled-write audit for this task, including native core requests when recorded. It is not a complete Markdown edit history; external edits and old actions are not reconstructed.' : '显示此任务真实的受控写入审计（包含已记录的原生核心请求），不是完整 Markdown 编辑历史；不会补造外部编辑或旧操作。'}</p>
     <ReadNotice query={query} en={en} label={en ? 'task business audit' : '任务业务审计'} />
-    {query.data && entries.length === 0 && <p className="td-related-note">{query.hasNextPage ? en ? 'No task entries in the loaded project audit pages. Earlier project pages may contain more.' : '已加载的项目审计页中没有此任务的记录，较早页面可能仍有记录。' : en ? 'No visible recorded audit entries for this task.' : '此任务暂无可见的已记录审计。'}</p>}
-    {entries.length > 0 && <ol className="td-audit-list">{entries.map(entry => <li key={entry.id}><div className="td-audit-line"><strong>{entry.action}</strong><time dateTime={entry.occurredAt}>{display.dateTime(entry.occurredAt)}</time></div><p className="td-related-note">{en ? 'Actor' : '操作者'}: <code>{entry.actorId}</code> · {entry.source === 'core_http' ? en ? 'Native core API' : '原生核心 API' : en ? 'PM command' : 'PM 命令'}</p><details><summary>{en ? 'Recorded change details' : '已记录的变更详情'}</summary><p>{en ? 'Version' : '版本'}: <code>{entry.beforeVersion ?? '∅'}</code> → <code>{entry.afterVersion ?? '∅'}</code></p>{entry.changes.length > 0 ? <dl>{entry.changes.map(change => <div key={change.field}><dt>{change.field}</dt><dd>{change.before === null ? '∅' : String(change.before)} → {change.after === null ? '∅' : String(change.after)}</dd></div>)}</dl> : <p className="td-related-note">{en ? 'No public allowlisted field diff was recorded. Content is not included.' : '此次没有可公开的白名单字段差异，内容未记录。'}</p>}<p>{entry.source === 'core_http' ? en ? 'Native request' : '原生请求' : en ? 'PM command' : 'PM 命令'}: <code>{entry.commandId}</code></p></details></li>)}</ol>}
+    {query.data && entries.length === 0 && <p className="issue-empty">{en ? 'No activity yet' : '暂无活动记录'}</p>}
+    {entries.length > 0 && <ol className="td-audit-list">{entries.map(entry => <li key={entry.id}><div className="td-audit-line"><strong>{entry.action}</strong><time dateTime={entry.occurredAt}>{display.dateTime(entry.occurredAt)}</time></div><p className="td-related-note">{en ? 'Actor' : '操作者'}: <HumanIdentity userId={entry.actorId} projectId={projectId} size={20} /> · {entry.source === 'core_http' ? en ? 'Native core API' : '原生核心 API' : en ? 'PM command' : 'PM 命令'}</p><details><summary>{en ? 'Recorded change details' : '已记录的变更详情'}</summary><p>{en ? 'Version' : '版本'}: <code>{entry.beforeVersion ?? '∅'}</code> → <code>{entry.afterVersion ?? '∅'}</code></p>{entry.changes.length > 0 ? <dl>{entry.changes.map(change => <div key={change.field}><dt>{change.field}</dt><dd>{change.before === null ? '∅' : String(change.before)} → {change.after === null ? '∅' : String(change.after)}</dd></div>)}</dl> : <p className="td-related-note">{en ? 'No public allowlisted field diff was recorded. Content is not included.' : '此次没有可公开的白名单字段差异，内容未记录。'}</p>}<p>{entry.source === 'core_http' ? en ? 'Native request' : '原生请求' : en ? 'PM command' : 'PM 命令'}: <code>{entry.commandId}</code></p></details></li>)}</ol>}
     <div className="td-audit-actions"><button type="button" className="td-related-button" disabled={query.isFetching} onClick={() => { void query.refetch(); }}>{en ? 'Refresh activity' : '刷新活动'}</button>{query.hasNextPage && <button type="button" className="td-related-button" disabled={query.isFetching} onClick={() => { void query.fetchNextPage(); }}>{query.isFetchingNextPage ? en ? 'Loading earlier project audit…' : '正在读取较早项目审计…' : en ? 'Load earlier project audit' : '加载较早项目审计'}</button>}</div>
   </div>;
 }

@@ -4,7 +4,7 @@ import { I18nProvider } from "@/lib/i18n-provider"
 import "./preferences.css"
 
 export function Preferences({ children }: { children: ReactNode }) {
-  const { locale, theme, accent, sidebarDensity, taskDensity, motion, setLocale } = useWorkspaceStore(state => state)
+  const { locale, theme, font, accent, sidebarDensity, taskDensity, motion, setLocale } = useWorkspaceStore(state => state)
   useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
@@ -25,9 +25,10 @@ export function Preferences({ children }: { children: ReactNode }) {
   }, [theme, motion])
   useEffect(() => {
     const root = document.documentElement
+    root.dataset.pmFont = font
     root.dataset.pmAccent = accent
     root.dataset.pmSidebarDensity = sidebarDensity
     root.dataset.pmTaskDensity = taskDensity
-  }, [accent, sidebarDensity, taskDensity])
+  }, [font, accent, sidebarDensity, taskDensity])
   return <I18nProvider locale={locale} onLocaleChange={setLocale}>{children}</I18nProvider>
 }

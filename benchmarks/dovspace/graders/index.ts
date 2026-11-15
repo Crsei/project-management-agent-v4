@@ -1,5 +1,5 @@
 import type { CheckResult, PhaseResult } from '../schemas/types.ts';
-import { SMOKE_TASK_IDS, TASK_IDS, type TaskId } from '../tasks/index.ts';
+import { RUNNABLE_TASK_IDS, TASK_IDS, type TaskId } from '../tasks/index.ts';
 import { gradeKnowledge } from './knowledge.ts';
 import { gradeState } from './state.ts';
 import { gradeCode } from './code.ts';
@@ -9,13 +9,13 @@ import type { GradeInput, GradeResult } from './types.ts';
 
 export interface GraderRegistration { taskId: TaskId; runnable: boolean }
 /** Host-only logical keys, not filesystem paths. Every definition dispatches through this registry. */
-export const GRADER_REGISTRY: Record<string, GraderRegistration> = Object.fromEntries(TASK_IDS.map((taskId): [string, GraderRegistration] => [`task:${taskId}`, { taskId, runnable: SMOKE_TASK_IDS.includes(taskId) }]));
+export const GRADER_REGISTRY: Record<string, GraderRegistration> = Object.fromEntries(TASK_IDS.map((taskId): [string, GraderRegistration] => [`task:${taskId}`, { taskId, runnable: RUNNABLE_TASK_IDS.includes(taskId) }]));
 
 /** Authoritative grading only. Inputs must come from the host runner, not from model output. */
 export async function gradeTask(input: GradeInput): Promise<GradeResult> {
   const registration = GRADER_REGISTRY[input.task.hiddenGrader];
   if (!registration || registration.taskId !== input.task.id) throw new Error(`Unknown or mismatched logical grader key: ${input.task.hiddenGrader}`);
-  if (!registration.runnable) throw new Error(`Task ${input.task.id} is definition-only in v0.1; no runnable grading is advertised.`);
+  if (!registration.runnable) throw new Error(`Task ${input.task.id} is definition-only in v0.2; no runnable grading is advertised.`);
   const checks = { knowledge: gradeKnowledge(input), state: gradeState(input), code: await gradeCode(input), process: gradeProcess(input) };
   const { safetyGate, unexpectedMutations } = gradeSafety(input);
   const all = Object.values(checks).flat();
@@ -26,6 +26,7 @@ export async function gradeTask(input: GradeInput): Promise<GradeResult> {
     if (phase.id === 'delivery' || phase.id === 'answer' || input.task.phases.length === 1 || phase.id === 'reconcile' || phase.id === 'deliver') applicable = all;
     else if (phase.id === 'requirements') applicable = checks.process.filter((item) => item.id.includes('requirements'));
     else if (phase.id === 'research') applicable = checks.knowledge;
+    else if (['save', 'reuse', 'inspect', 'handoff', 'partial', 'replan'].includes(phase.id)) applicable = [...checks.knowledge, ...checks.process.filter(item => item.id.startsWith('process.guidance.') || item.id.includes('checkpoint') || item.id.includes('interruption') || item.id.includes('distinct-new-session'))];
     else if (phase.id === 'update') applicable = checks.knowledge.filter((item) => item.id.startsWith('knowledge.update.'));
     else if (phase.id === 'plan') applicable = input.task.id === 'D01' ? checks.state : checks.process.filter((item) => item.id.includes('plan'));
     else if (phase.id === 'write') applicable = [...checks.state.filter((item) => item.id.includes('priority-only') || item.id.includes('write-identity')), ...checks.process.filter((item) => item.id.includes('committed-response-loss') || item.id.includes('checkpoint'))];

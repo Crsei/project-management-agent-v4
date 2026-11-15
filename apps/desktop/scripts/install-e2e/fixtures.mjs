@@ -35,8 +35,8 @@ export async function createReceiptFixture(directory) {
     root: "C:\\dovspace-e2e-test\\work", installRoot, userDataDir, accountSid, administrator: false,
     registry: flags.registry ? [{ key: "HKEY_CURRENT_USER\\Uninstall\\Dovspace", version: manifest.version, installLocation: installRoot }] : [],
     runtimeRegistry: name === "uninstall-app-only" ? [{ installLocation: installRoot, sourceSha256: source.sha256 }] : [],
-    shortcuts: flags.shortcuts ? [{ path: "C:\\Users\\dov-e2e-12345678\\Desktop\\PM Agent v4.lnk", target: `${installRoot}\\PM Agent v4.exe` }] : [],
-    processes: healthy ? [{ pid: 88, parentPid: 77, creationTime, executable: `${installRoot}\\PM Agent v4.exe`, ownerSid: accountSid }] : [],
+    shortcuts: flags.shortcuts ? [{ path: "C:\\Users\\dov-e2e-12345678\\Desktop\\Dovspace.lnk", target: `${installRoot}\\Dovspace.exe` }] : [],
+    processes: healthy ? [{ pid: 88, parentPid: 77, creationTime, executable: `${installRoot}\\Dovspace.exe`, ownerSid: accountSid }] : [],
     paths: Object.entries({ installation: flags.installationRoot ?? true, app: flags.app, runtime: flags.runtime, workspaceRuntime: flags.runtime, data: flags.dataRoot, userData: flags.userDataRoot, managedPostgres: flags.ownedData, agentData: flags.ownedData, managedMarkdown: flags.ownedData, connection: flags.ownedUserState, projects: flags.projects, userOwnedFile: flags.userOwnedFile, external: flags.external }).map(([label, present]) => ({
       label, path: label === "installation" ? installRoot : label === "userData" ? userDataDir : label === "data" ? userDataDir + fixtureDataPath : `${installRoot}\\${label}`, exists: present, reparse: false, aclVerified: true, files: present ? 1 : 0, bytes: present ? 10 : 0, aclScope: "root", acl: present ? [{ sddl: "synthetic ACL contract only" }] : [],
     })),
@@ -51,7 +51,7 @@ export async function createReceiptFixture(directory) {
       const stdout = `evidence/${id}.stdout.log`, stderr = `evidence/${id}.stderr.log`;
       logs.set(stdout, "synthetic contract fixture; no native process was executed\n"); logs.set(stderr, "");
       const path = document(`evidence/${id}-command.json`, "command", {
-        executableScope: scope, executable: scope === "installer" ? `C:\\input\\${expectedArtifact.path}` : `${installRoot}\\${scope === "installed-uninstaller" ? "Uninstall PM Agent v4.exe" : "PM Agent v4.exe"}`,
+        executableScope: scope, executable: scope === "installer" ? `C:\\input\\${expectedArtifact.path}` : `${installRoot}\\${scope === "installed-uninstaller" ? "Uninstall Dovspace.exe" : "Dovspace.exe"}`,
         installRoot, controllerAsarSha256: ["baseline-install", "interrupted-upgrade-recovery"].includes(name) ? baselineAsar : appAsarSha256,
         ...(scope === "installer" ? { artifact: structuredClone(expectedArtifact) } : {}),
         pid: 123, creationTime, arguments: [], startedAt: "2026-11-09T00:00:00.000Z", finishedAt: "2026-11-09T00:00:01.000Z", exitCode: interrupted ? 197 : 0, signal: null, timedOut: false, interrupted, stdout, stderr,
@@ -70,7 +70,7 @@ export async function createReceiptFixture(directory) {
       installStamp: { ...structuredClone(manifest.installStamp), version: expected.version, commit: expected.source.commit, source: { sha256: expected.source.sha256, dirty: expected.source.dirty } },
       result: { ready: true, database: true, storage: true, worker: true, core: true, pmPasswordLogin: true, agentAuthenticated: true, anonymousAgentDenied: true,
         origin: "http://127.0.0.1:49152", instanceId: "12345678-1234-4234-8234-123456789abc",
-        processes: [{ pid: 88, creationTime, executable: `${installRoot}\\PM Agent v4.exe` }], snapshot: structuredClone(documents.get(snapshot)) },
+        processes: [{ pid: 88, creationTime, executable: `${installRoot}\\Dovspace.exe` }], snapshot: structuredClone(documents.get(snapshot)) },
     };
     if (!["silent-install", "installed-start-health", "stop-owned-processes"].includes(name))
       materialPaths.push(document(`evidence/${name}-health-controller.json`, "installed-controller", healthReply));
@@ -99,10 +99,10 @@ export async function createReceiptFixture(directory) {
       const destructive = ["full", "data-only"].includes(mode);
       const record = (scope, path) => ({ scope, path, bytes: 10, sha256: hash(path) });
       const ownedData = [record("instance", "postgres/base/record"), record("instance", "agent-data/chat.sqlite"), record("instance", "pm-workspaces/workspace.md"), record("instance", "blobs/blob"), record("instance", "chat-spaces/chat"), record("userData", "connection.json"), record("userData", "Network/Cookies")];
-      const removed = [...(mode === "data-only" ? [] : [record("installation", "PM Agent v4.exe")]), ...(destructive ? ownedData : [])];
+      const removed = [...(mode === "data-only" ? [] : [record("installation", "Dovspace.exe")]), ...(destructive ? ownedData : [])];
       const removedDirectories = [...(mode === "data-only" ? [] : [{ scope: "installation", path: "locales" }]), ...(destructive ? [{ scope: "instance", path: "postgres/base" }, { scope: "userData", path: "Network" }] : [])];
       const preserved = [record("instance", "projects/project/.pm/core/PROJECT.md"), record("userData", "user-owned-must-survive.txt"), ...(destructive ? [] : ownedData),
-        ...(mode === "data-only" ? [record("installation", "PM Agent v4.exe")] : []),
+        ...(mode === "data-only" ? [record("installation", "Dovspace.exe")] : []),
         ...(mode === "app-only" ? [{ scope: "installation", path: "resources/desktop-install-files.json", transition: "retained-runtime-ownership-manifest" }] : [])];
       const roots = { installation: installRoot, instance: userDataDir + fixtureDataPath, userData: userDataDir };
       const selected = { mode, status: "prepared", deletionExecuted: false, stopped: { stopped: true, remainingProcesses: 0 }, stamp: structuredClone(manifest.installStamp), roots, delete: removed, deleteDirectories: removedDirectories, preserve: preserved };

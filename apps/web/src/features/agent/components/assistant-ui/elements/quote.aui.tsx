@@ -1,10 +1,13 @@
 "use client";
 
-import { memo, type ComponentProps, type FC } from "react";
+import { memo, useState, type ComponentProps, type FC } from "react";
 import type { QuoteMessagePartComponent } from "@assistant-ui/react";
-import { ComposerPrimitive, SelectionToolbarPrimitive } from "@assistant-ui/react";
+import { ComposerPrimitive, SelectionToolbarPrimitive, useAuiState } from "@assistant-ui/react";
 import { QuoteIcon, XIcon } from "lucide-react";
 import { cn } from "@agent/lib/utils";
+import { ResponseContextCard } from "@agent/src/chat/context-presentation";
+import { requestContextSource } from "@agent/src/chat/context-source-navigation";
+import { bindClipboardContext } from "@agent/src/chat/message-context-clipboard";
 
 function QuoteBlockRoot({ className, ...props }: ComponentProps<"div">) {
   return (
@@ -48,13 +51,14 @@ function QuoteBlockText({ className, ...props }: ComponentProps<"p">) {
  * </MessagePrimitive.Quote>
  * ```
  */
-const QuoteBlockImpl: QuoteMessagePartComponent = ({ text }) => {
-  return (
-    <QuoteBlockRoot>
-      <QuoteBlockIcon />
-      <QuoteBlockText>{text}</QuoteBlockText>
-    </QuoteBlockRoot>
-  );
+const QuoteBlockImpl: QuoteMessagePartComponent = ({ text, messageId }) => {
+  const threadId = useAuiState(state => state.threadListItem.remoteId);
+  const [missing, setMissing] = useState(false);
+  const [contextId] = useState(() => crypto.randomUUID());
+  return <span data-message-context-record={threadId && messageId ? "" : undefined} ref={element => { if (threadId && messageId) bindClipboardContext(element, () => ({ type: "native", item: { input: { contextId, kind: "response", source: { type: "response", threadId, messageId }, selectedText: text } } })); }}><ResponseContextCard text={text} label="Go to quoted response" onOpen={() => {
+    if (!threadId || !messageId) { setMissing(true); return; }
+    requestContextSource(threadId, messageId);
+  }} />{missing && <p role="status">The saved quote has no available source identity. Its text is unchanged.</p>}</span>;
 };
 
 const QuoteBlock = memo(QuoteBlockImpl) as unknown as QuoteMessagePartComponent & {

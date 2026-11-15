@@ -2,13 +2,15 @@ import { CODE_FIXTURE_FILES } from './code-fixture.ts';
 import { TaskDefinitionSchema, TASK_IDS, type FixtureTarget, type ResolvedTaskDefinition, type TaskDefinition, type TaskId } from '../schemas/types.ts';
 import { FIXTURE_VERSION } from '../benchmark.config.ts';
 import { TASK_CRITERIA } from './criteria.ts';
+import { HANDOFF_FORMAT, MEMORY_FORMAT, REPLAN_FORMAT, RETRY_REQUIREMENT, REUSE_FORMAT } from './guidance.ts';
 
 export { TASK_IDS };
 export type { TaskDefinition, TaskId };
 export const SMOKE_TASK_IDS: readonly TaskId[] = ['K02', 'K03', 'D01', 'D02', 'L02', 'L04'];
+export const RUNNABLE_TASK_IDS: readonly TaskId[] = ['K02', 'K03', 'K04', 'D01', 'D02', 'D04', 'L02', 'L03', 'L04'];
 export const ANSWER_PATH = 'artifacts/answer.json';
 export const HANDOFF_PATH = 'artifacts/handoff.json';
-export const TASK_VERSION = '0.1.0';
+export const TASK_VERSION = '0.2.0';
 
 
 const answerFormat = `Write artifacts/answer.json as JSON: {"facts":[{"key":"exampleFact","value":"currentValue","citations":[{"path":"docs/relative-file.md","quote":"exact supporting text"}],"history":[{"value":"oldValue","citations":[{"path":"docs/old-file.md","quote":"exact old text"}]}]}],"summary":"brief explanation"}. Replace examples with researched facts; use numbers for numeric facts and strings otherwise. Citations must name actual provided docs and exact supporting quotations, not generated files. Include history only when asked. This answer is evidence to evaluate, not permission to modify PM.`;
@@ -36,7 +38,7 @@ const specs: Record<TaskId, TaskSpec> = {
   },
   K04: {
     title: 'Cross-session knowledge reuse', category: 'knowledge', targetKeys: ['atlas-code'],
-    instruction: `Session 1 researches and saves technical constraints, accepted decisions and failed approaches from historical sessions into knowledge/session-memory.json with citations. A NEW Session receives a related retry development requirement. Retrieve key history, avoid the documented uncapped-delay failed approach, apply retained constraints and finish functional/regression tests. Deliver artifacts/reuse.json mapping each retained constraint and avoided failure to actual code/test evidence. Compare verified quality and measured calls/cost with vs without memory; unknown usage stays unknown. ${safety}`,
+    instruction: `Session 1 researches and saves technical constraints, accepted decisions and failed approaches from historical sessions. ${MEMORY_FORMAT} A NEW Session receives a related retry development requirement only after memory is verified. It must retrieve history, avoid uncapped-delay, apply retained constraints and finish real functional/regression tests. ${REUSE_FORMAT} ${answerFormat} Quality/calls/cost comparisons are computed by independent matched reports, not invented by the Agent; unknown usage stays unknown. ${safety}`,
     budget: { maxDurationMinutes: 18, maxModelCalls: 36, maxToolCalls: 85 },
     phases: [phase('save', 'Persist constraints, decisions and failed attempts.', ['session-memory.json']), phase('reuse', 'Retrieve and apply history in a distinct Session.', ['new session', 'reuse.json']), phase('deliver', 'Complete related feature within retained constraints.', ['functional/regression tests', 'measured usage'])],
     interventions: [{ afterPhase: 'save', action: 'new-session', trigger: 'trusted memory artifact verified' }],
@@ -61,7 +63,7 @@ const specs: Record<TaskId, TaskSpec> = {
   },
   D04: {
     title: 'Cross-agent development handoff', category: 'delivery', targetKeys: ['atlas-code'],
-    instruction: `Continue the supplied half-finished feature with correct existing code/tests and a documented invalid approach. Inventory completed work, original decisions and remaining work in artifacts/handoff.json. The runner stops the ACTIVE Agent and creates a new Session or explicitly selected Provider. The successor must retain correct work, avoid repeating invalid approaches, complete remaining development and functional/regression tests, and preserve full handoff/receipt evidence. Never replay completed PM mutations or infer business completion. ${safety}`,
+    instruction: `Continue the supplied half-finished retry feature in repo/src/retry.ts and repo/test/retry-partial.test.ts. Inventory correct completed work and remaining defects from the sources; the runner stops the ACTIVE Agent and hands off to a distinct real Session using the SAME fixed Provider/model (not a claimed different model). ${HANDOFF_FORMAT} Successor requirement: ${RETRY_REQUIREMENT} Preserve the exact cappedBackoff helper and partial test. Deliver artifacts/delivery.md with current behavior, target, original operation identity and original source citations; never replay completed PM writes or infer completion. ${answerFormat} ${safety}`,
     budget: { maxDurationMinutes: 22, maxModelCalls: 44, maxToolCalls: 100 },
     phases: [phase('inspect', 'Identify completed correct work and remaining defects.', ['partial work inventory']), phase('handoff', 'Persist decisions, failures and operation identities.', ['handoff.json']), phase('deliver', 'Finish in a distinct Session without repeating invalid work.', ['real interruption', 'new session', 'functional/regression tests'])],
     interventions: [{ afterPhase: 'handoff', action: 'interrupt-and-new-session', trigger: 'trusted partial-work handoff while active' }],
@@ -81,7 +83,7 @@ const specs: Record<TaskId, TaskSpec> = {
   },
   L03: {
     title: 'Mid-task requirement change', category: 'long-horizon', targetKeys: ['atlas-code'],
-    instruction: `Begin the supplied feature under its initial accepted constraint; persist plan and partial source/tests. At the independently verified halfway checkpoint the runner changes a key requirement. Re-read the new objective, replan, stop applying the revoked constraint, reuse still-valid work and retain unaffected code/docs. Complete functional/regression tests and current docs/PM synchronization. Write rework.json tying discarded/reused work to actual before/after source snapshots; report measured rework, never invented percentages. Preserve identities/receipts and status in_progress. ${safety}`,
+    instruction: `Begin the retry feature under docs/atlas/retry-active-requirement.md, the initial accepted constraint. At a trusted source/test halfway checkpoint the runner changes that authority; re-read the NEW objective, replan, stop the revoked behavior, reuse still-valid work and preserve unrelated code/docs. ${REPLAN_FORMAT} ${answerFormat} ${safety}`,
     budget: { maxDurationMinutes: 25, maxModelCalls: 50, maxToolCalls: 110 },
     phases: [phase('partial', 'Produce verifiable half-completed source/tests.', ['partial source fingerprint', 'plan']), phase('replan', 'Apply changed requirement and preserve valid work.', ['new plan', 'rework diff']), phase('deliver', 'Meet new objective without revoked behavior.', ['functional/regression execution', 'current docs', 'PM receipt', 'rework.json'])],
     interventions: [{ afterPhase: 'partial', action: 'change-requirement', trigger: 'trusted partial-code checkpoint' }],
@@ -112,7 +114,7 @@ export function getTaskDefinition(id: string): TaskDefinition {
   const taskId = id as TaskId;
   const spec = specs[taskId];
   return TaskDefinitionSchema.parse({ ...spec, ...TASK_CRITERIA[taskId], id: taskId, taskVersion: TASK_VERSION, fixtureVersion: FIXTURE_VERSION,
-    instruction: spec.instruction + (['D02', 'L04'].includes(taskId) ? '\nSubmission module contract: src/retry.ts and src/incident.ts must be pure synchronous self-contained ESM TypeScript modules: no imports (static or dynamic), process/fs/network/IO, or async results. Exports must return JSON-data values. Hidden evaluation strips TypeScript and runs bounded module evaluation/invocations (1000ms each) inside the OS sandbox. Public node:test files may import Node test/assert and the submitted modules; only the feature source modules have the no-import restriction.' : ''),
+    instruction: spec.instruction + (['K04', 'D02', 'D04', 'L03', 'L04'].includes(taskId) ? '\nSubmission module contract: src/retry.ts and src/incident.ts must be pure synchronous self-contained ESM TypeScript modules: no imports (static or dynamic), process/fs/network/IO, or async results. Exports must return JSON-data values. Hidden evaluation strips TypeScript and runs bounded module evaluation/invocations (1000ms each) inside the OS sandbox. Public node:test files may import Node test/assert and the submitted modules; only the feature source modules have the no-import restriction.' : ''),
     budget: { ...spec.budget, maxCostUsd: null },
     allowedTools: ['read', 'search', 'write_artifact', 'pm_read', ...(spec.category === 'knowledge' ? taskId === 'K04' ? ['shell'] : [] : ['pm_update', 'pm_receipt', ...(['D01', 'L04'].includes(taskId) ? ['pm_create'] : []), ...(['D02', 'D03', 'D04', 'L01', 'L03', 'L04'].includes(taskId) ? ['shell'] : [])])],
     // hiddenGrader is a logical host-only GRADER_REGISTRY key, never a file path exposed to the Agent.

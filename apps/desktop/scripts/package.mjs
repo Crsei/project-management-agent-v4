@@ -125,7 +125,7 @@ try {
   }));
   const resources = process.platform === "win32"
     ? join(builderOutput, "win-unpacked", "resources")
-    : join(builderOutput, process.arch === "arm64" ? "mac-arm64" : "mac", "PM Agent v4.app", "Contents", "Resources");
+    : join(builderOutput, process.arch === "arm64" ? "mac-arm64" : "mac", "Dovspace.app", "Contents", "Resources");
   await observePackagingPhase("inspectDeployment", () => inspectDeployment(join(resources, "workspace-runtime")));
   await observePackagingPhase("inspectPackagedApplication", () => inspectPackagedApplication(resources, manifest.version, { signedMachO: process.platform === "darwin", target, signing: mode, signer, source: sourceIdentity, installStamp }));
   const records = [];

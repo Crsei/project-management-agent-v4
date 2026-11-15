@@ -2,21 +2,28 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { parseBenchmarkConfig, type BenchmarkConfig } from '../benchmark.config.ts';
+import { performance } from 'node:perf_hooks';
+import { ompModelSelector, parseBenchmarkConfig, type BenchmarkConfig } from '../benchmark.config.ts';
 import { AdapterError, createAdapter } from '../adapters/index.ts';
 import { createFixtureManager } from '../fixtures/manager.ts';
 import { gradeTask } from '../graders/index.ts';
 import { writeRunReport } from '../reports/index.ts';
-import { ArmSchema, RunResultSchema, type Arm, type BenchEvent, type Budget, type FixtureDiff, type FixtureHandle, type FixtureSnapshot, type RunResult } from '../schemas/types.ts';
-import { getTaskDefinition, resolveTaskDefinition, SMOKE_TASK_IDS } from '../tasks/index.ts';
+import { ArmSchema, RunResultSchema, type Arm, type BenchEvent, type Budget, type FixtureDiff, type FixtureHandle, type FixtureSnapshot, type RunResult, type SourceManifest, type StudyRunEvidence } from '../schemas/types.ts';
+import { getTaskDefinition, resolveTaskDefinition, RUNNABLE_TASK_IDS } from '../tasks/index.ts';
 import { collectArtifacts, repositoryDiff, writeAuthorityArtifacts } from './artifacts.ts';
 import { inspectCheckpoint, type CheckpointEvidence } from './checkpoints.ts';
 import { createCodeExecutor } from './code-executor.ts';
-import { materializeKnowledge, materializeResumeContext } from './context.ts';
-import { emptyUsage, hashValue, makeEvent, TraceRedactor, TraceWriter, usageFromEvents } from './telemetry.ts';
+import { materializeKnowledge, materializeResumeContext, materializeStageBrief } from './context.ts';
+import { emptyUsage, hashValue, makeEvent, observationsFromEvents, TraceRedactor, TraceWriter, usageFromEvents } from './telemetry.ts';
 import { reworkFromEvents } from './rework.ts';
+import { prepareGuidanceScenario } from './guidance-scenarios.ts';
+import { verifyInitialRequirement } from '../graders/code.ts';
+import { changedLines, RETRY_REQUIREMENT, REUSE_FORMAT, REVISED_REQUIREMENT_FORMAT } from '../tasks/guidance.ts';
+import { collectStudyHarnessHash } from './tools-study-source.ts';
+import { summarizeCliObservations } from './cli-observations.ts';
+import { renderCliObservationReport } from '../reports/cli-observations.ts';
 
-export interface RunTaskOptions { taskId: string; arm: Arm; runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal }
+export interface RunTaskOptions { taskId: string; arm: Arm; runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal; sourceStage?: { root: string; manifest: SourceManifest }; study?: Pick<StudyRunEvidence, 'version' | 'studyId' | 'manifestHash' | 'variant' | 'blockId' | 'repeat' | 'order'>; requiredTools?: string[] }
 export interface RunSuiteOptions { taskIds: string[]; arms?: Arm[]; repetitions?: number; outputRoot?: string; config?: Partial<BenchmarkConfig>; suiteId?: string; signal?: AbortSignal }
 
 export function boundedBudget(task: { maxDurationMinutes: number; maxModelCalls: number; maxToolCalls: number; maxCostUsd?: number | null }, cap: Budget): Budget {
@@ -25,7 +32,7 @@ export function boundedBudget(task: { maxDurationMinutes: number; maxModelCalls:
 }
 
 export function nativeToolPolicy(taskId: string, generic: readonly string[]): string[] {
-  const names = new Set(['pm_list_workspaces', 'pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations']);
+  const names = new Set(['pm_list_workspaces', 'pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations', 'pm_task_brief', 'pm_search_knowledge']);
   if (generic.includes('pm_update')) for (const name of ['pm_update_task', 'pm_transition_task', 'pm_add_relation', 'pm_remove_relation']) names.add(name);
   if (generic.includes('pm_create') || taskId === 'D01' || taskId === 'L04') names.add('pm_create_task');
   for (const name of generic) if (name.startsWith('pm_') && !['pm_update', 'pm_receipt', 'pm_create'].includes(name)) names.add(name);
@@ -34,10 +41,10 @@ export function nativeToolPolicy(taskId: string, generic: readonly string[]): st
 
 const eventAliases: Record<string, string> = { 'provider.request': 'provider_request', 'provider.usage': 'provider_usage', 'provider.response': 'provider_response', 'provider.error': 'provider_error', 'pm.tool.request': 'pm_request', 'pm.tool.result': 'pm_response', 'pm.reconcile.request': 'receipt_lookup', 'pm.reconcile.result': 'receipt_reconciled', 'pm.response.dropped': 'response_lost', 'budget.exhausted': 'budget_exceeded', 'safety.violation': 'safety_violation', 'transport.error': 'transport_error' };
 
-/** Only six smoke scenarios have executable v0.1 graders; all twelve definitions remain discoverable. */
+/** Only independently implemented scenarios are admitted; smoke remains the original six-case subset. */
 export async function runTask(options: RunTaskOptions): Promise<RunResult> {
   const definition = getTaskDefinition(options.taskId);
-  if (!SMOKE_TASK_IDS.includes(options.taskId as typeof SMOKE_TASK_IDS[number])) throw new Error(`Task ${options.taskId} has a complete definition but is not executable in Lite v0.1.`);
+  if (!RUNNABLE_TASK_IDS.includes(definition.id)) throw new Error(`Task ${options.taskId} has a complete definition but is not executable in Lite v0.2.`);
   const arm = ArmSchema.parse(options.arm);
   const config = parseBenchmarkConfig({ ...options.config, ...(options.outputRoot ? { outputsRoot: options.outputRoot } : {}) });
   const runId = options.runId ?? `${options.taskId}-${arm}-${randomUUID()}`;
@@ -54,7 +61,7 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
   }
   await mkdir(runDirectory, { mode: 0o700 }); // Refuse collisions; never overwrite a previous attempt.
   await mkdir(path.join(runDirectory, 'artifacts'), { mode: 0o700 });
-  const started = Date.now();
+  const started = performance.now();
   const redactor = new TraceRedactor(config.providerApiKey ? [config.providerApiKey] : []);
   const trace = new TraceWriter(path.join(runDirectory, 'trace.jsonl'), redactor);
   await trace.initialize();
@@ -62,22 +69,26 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
   const signal = options.signal ? AbortSignal.any([options.signal, cancellation.signal]) : cancellation.signal;
   const interrupt = () => cancellation.abort(new AdapterError('interrupted', 'Operator signal interrupted the benchmark; owned resources are being stopped.'));
   process.on('SIGINT', interrupt); process.on('SIGTERM', interrupt);
-  const manager = createFixtureManager(config);
-  const adapter = createAdapter(arm);
+  const manager = createFixtureManager(config, options.sourceStage ? { sourceStage: options.sourceStage } : {});
+  const adapter = createAdapter(arm, config.controlTransport);
   let fixture: FixtureHandle | undefined, before: FixtureSnapshot | undefined, after: FixtureSnapshot | undefined;
   let diff: FixtureDiff | undefined, currentSessionId: string | undefined, observer: Promise<void> | undefined;
   let auditCursor = 0;
   const nativeCalls = new Set<string>();
   let failure: RunResult['failure'] = null;
   let result: RunResult = {
-    runId, taskId: definition.id, taskVersion: definition.taskVersion, fixtureVersion: definition.fixtureVersion, arm, agent: 'Dovspace Agent Chat / native Codex', model: config.model || 'unavailable', success: false,
+    runId, taskId: definition.id, taskVersion: definition.taskVersion, fixtureVersion: definition.fixtureVersion, arm, agent: `Dovspace Agent Chat / native ${config.provider}`, model: config.model || 'unavailable', success: false,
     safetyGate: { passed: false, checks: [{ id: 'execution-isolated', passed: false, required: true, score: 0, evidence: [], reason: 'Isolated execution has not been established.' }], violations: [] }, checkpointScore: 0,
     phaseResults: definition.phases.map(phase => ({ id: phase.id, passed: false, checks: [{ id: 'independent-evidence', passed: false, required: true, score: 0, evidence: [], reason: 'No independent task evidence available.' }], evidence: [] })), usage: emptyUsage(), timeMs: 0, unexpectedMutations: [],
     artifacts: { result: path.join(runDirectory, 'result.json'), trace: trace.file, report: path.join(runDirectory, 'report.md'), pmDiff: path.join(runDirectory, 'pm-diff.json'), gitDiff: path.join(runDirectory, 'git.diff'), directory: path.join(runDirectory, 'artifacts'), configuration: path.join(runDirectory, 'artifacts', 'run-config.json') },
-    reproducibility: { fixtureId: 'unavailable', fixtureSemanticHash: 'unavailable', environmentHash: 'unavailable', effectiveModelSettingsHash: null, modelConfigHash: hashValue({ provider: config.provider, model: config.model, modelOptions: config.modelOptions, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, temperature: 1, prices: config.prices ?? null }), budgetHash: hashValue(budget), permissionsHash: hashValue({ task: definition.id, tools: nativeToolPolicy(definition.id, definition.allowedTools), targets: definition.targetKeys, filesystem: 'same-original-public-fixture', network: 'none+fixed-provider-and-owned-pm-broker' }) }, failure: null,
+    reproducibility: { controlTransport: config.controlTransport, providerAuthentication: config.hostAuthBoundary ? 'explicit-host-sdk-account' : 'explicit-api-key', ...(config.hostAuthBoundary ? { hostAuthBoundaryHash: hashValue(config.hostAuthBoundary) } : {}), fixtureId: 'unavailable', fixtureSemanticHash: 'unavailable', environmentHash: 'unavailable', effectiveModelSettingsHash: null, modelConfigHash: hashValue({ provider: config.provider, model: config.model, modelOptions: config.modelOptions, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, providerApi: config.providerApi, ompModel: config.ompModel ?? null, ...(config.hostAuthBoundary ? { hostAuthBoundary: config.hostAuthBoundary } : {}), temperature: 1, prices: config.prices ?? null }), budgetHash: hashValue(budget), permissionsHash: hashValue({ task: definition.id, tools: nativeToolPolicy(definition.id, definition.allowedTools), targets: definition.targetKeys, filesystem: 'same-original-public-fixture', network: 'none+fixed-provider-and-owned-pm-broker' }) }, failure: null,
     humanInterventions: { count: 0, definition: 'Additional corrective human input beyond the fixed scenario interventions; this unattended runner supplies none.', reason: null },
     rework: { count: null, denominator: null, proportion: null, definition: 'Repeated failed revision-bound PM mutations with identical normalized arguments and independently observed unchanged authority, divided by attributable PM mutation attempts; excludes receipt lookup and injected loss, not general semantic/code rework.', reason: 'No complete attributable PM trace is available yet.' },
   };
+  if (options.study) {
+    if (!options.sourceStage) throw new Error('Study execution requires an independently verified source stage.');
+    result.study = { ...options.study, harnessHash: await collectStudyHarnessHash(), admittedAt: new Date().toISOString(), sourceManifest: options.sourceStage.manifest, environmentEvidence: null, sessions: [], generations: [], operationIds: [] };
+  }
 
   async function append(event: BenchEvent): Promise<void> {
     const normalized: BenchEvent = { ...event, type: eventAliases[event.type] ?? event.type, taskId: definition.id, scenarioId: definition.id, provider: config.provider, model: config.model || 'unavailable', ...(event.sessionId ? { threadId: event.sessionId } : {}), ...(typeof event.data.generationId === 'string' ? { generationId: event.data.generationId } : {}) };
@@ -106,14 +117,15 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     return failure;
   }
   try {
-    await append(makeEvent(runId, 'runner', 'run_admitted', { taskId: definition.id, arm, budget, modelOptions: config.modelOptions, modelConfigHash: result.reproducibility.modelConfigHash, calibration: false }));
-    await writeFile(result.artifacts.configuration!, JSON.stringify(redactor.value({ provider: config.provider, model: config.model, modelOptions: config.modelOptions, budget, prices: config.prices ?? null, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, agentImage: config.agentImage, postgresImage: config.postgresImage, codeImage: config.codeImage }), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    await append(makeEvent(runId, 'runner', 'run_admitted', { taskId: definition.id, arm, controlTransport: config.controlTransport, budget, modelOptions: config.modelOptions, modelConfigHash: result.reproducibility.modelConfigHash, calibration: false }));
+    await writeFile(result.artifacts.configuration!, JSON.stringify(redactor.value({ controlTransport: config.controlTransport, provider: config.provider, providerApi: config.providerApi, ...(config.hostAuthBoundary ? { hostAuthBoundary: config.hostAuthBoundary } : {}), ompModel: config.ompModel ?? null, model: config.model, modelOptions: config.modelOptions, budget, prices: config.prices ?? null, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, agentImage: config.agentImage, postgresImage: config.postgresImage, codeImage: config.codeImage }), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     if (signal.aborted) throw new AdapterError('interrupted', redactor.text(String(signal.reason ?? 'Execution cancelled.')));
-    if (!config.model || !config.providerEndpoint || !config.providerApiKey || !config.prices || budget.maxCostUsd === null) throw new AdapterError('infrastructure', 'Provider prerequisite unavailable: explicitly supply fixed model, HTTPS endpoint, API key, conservative pricing, bounded output tokens and a positive dollar cap. No model request was made.', 'provider_prerequisite');
+    if (!config.model || !(config.hostAuthBoundary ? config.hostAuthAccess : config.providerEndpoint && config.providerApiKey) || !config.prices || budget.maxCostUsd === null) throw new AdapterError('infrastructure', 'Provider prerequisite unavailable: explicitly select model, native host account/SDK or HTTPS endpoint/API key, versioned conservative pricing/output reservation and a positive dollar cap. No model request was made.', 'provider_prerequisite');
     fixture = await manager.reset({ runId });
     if (signal.aborted) throw new AdapterError('interrupted', redactor.text(String(signal.reason ?? 'Execution cancelled.')));
     redactor.addSecrets([fixture.pm.token]);
     const task = resolveTaskDefinition(definition.id, fixture);
+    await prepareGuidanceScenario(definition.id, fixture);
     task.budget = budget;
     before = await manager.snapshot(fixture);
     result.fixtureVersion = fixture.fixtureVersion;
@@ -121,17 +133,20 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     result.reproducibility.fixtureSemanticHash = before.semanticHash;
     await append(makeEvent(runId, 'runner', 'fixture_reset', { fixtureId: fixture.fixtureId, semanticHash: before.semanticHash, rawSourceEqualAcrossArms: true }));
     for (const event of await materializeKnowledge(fixture, runId, arm)) await append(event);
+    for (const event of await materializeStageBrief(fixture, runId, arm, task, definition.id === 'K04' ? 'analysis' : 'development', before)) await append(event);
     await manager.startRuntime(fixture, { runId, taskId: definition.id, budget, allowedTools: nativeToolPolicy(definition.id, definition.allowedTools), allowedTargets: task.allowedTargets });
     redactor.addSecrets([fixture.runtime!.agentAccessToken, fixture.runtime!.pmCookie, ...fixture.runtime!.providerConfig.environment.map(entry => entry.value)]);
     result.reproducibility.environmentHash = fixture.runtime!.environmentHash;
+    if (result.study) result.study.environmentEvidence = fixture.runtime!.environmentEvidence;
     result.artifacts.environment = path.join(runDirectory, 'artifacts', 'runtime-environment.json');
     await writeFile(result.artifacts.environment, JSON.stringify(redactor.value({ environmentHash: fixture.runtime!.environmentHash, ...fixture.runtime!.environmentEvidence }), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     await append(makeEvent(runId, 'isolation', 'runtime_environment_verified', { environmentHash: fixture.runtime!.environmentHash, ...fixture.runtime!.environmentEvidence }));
     if (signal.aborted) throw new AdapterError('interrupted', redactor.text(String(signal.reason ?? 'Execution cancelled.')));
     await append(makeEvent(runId, 'isolation', 'isolation_verified', { ...fixture.isolation }));
-    await adapter.prepare({ runId, fixtureId: fixture.fixtureId, arm, fixture, model: config.model, provider: config.provider, modelOptions: config.modelOptions, allowedTools: nativeToolPolicy(definition.id, definition.allowedTools), allowedTargets: task.allowedTargets, budget });
+    await adapter.prepare({ runId, fixtureId: fixture.fixtureId, arm, fixture, model: config.model, ...(config.provider === 'omp' ? { nativeModel: ompModelSelector(config) } : {}), provider: config.provider, modelOptions: config.modelOptions, allowedTools: nativeToolPolicy(definition.id, definition.allowedTools), allowedTargets: task.allowedTargets, budget });
     if (definition.id === 'L02') manager.armResponseLoss(fixture, { targetId: fixture.targets['beacon-receipt']!.entityId });
-    const contextInstruction = arm === 'raw' ? '' : '\nStructured source index is .dovspace/knowledge-index.json; real retrieval: node .dovspace/search.mjs <query>. It contains only original passages, not authoritative answers. Verify original sources.';
+    if (definition.id === 'D04') manager.armResponseLoss(fixture, { targetId: fixture.targets['atlas-code']!.entityId });
+    const contextInstruction = arm === 'raw' ? '' : '\nStructured source index is .dovspace/knowledge-index.json; real retrieval: node .dovspace/search.mjs <query>. It contains original passages and source versions, not authoritative answers. Verify original sources.' + (arm === 'dovspace' ? ' The source-derived, versioned stage brief is .dovspace/stage-brief.json; missing/unknown observations are not execution permission.' : '');
     currentSessionId = (await adapter.start({ taskId: definition.id, instruction: task.instruction + contextInstruction })).sessionId;
     manager.bindActiveSession(fixture, adapter.sessionIdentity(currentSessionId));
     const deadline = Date.now() + budget.maxDurationMinutes * 60_000;
@@ -160,7 +175,6 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
         await delay(50);
       }
       if (checkpoint) {
-        await append(makeEvent(runId, 'runner', 'phase_checkpoint', checkpoint, { sessionId, phaseId: checkpoint.phaseId, operationId: checkpoint.operationId }));
         await adapter.interrupt(sessionId, `Trusted ${definition.id} checkpoint`);
         await observer;
         await drainAudit();
@@ -174,17 +188,26 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
           const stableCheckpoint = inspectCheckpoint(definition.id, checkpoint.phaseId, fixture, before, after, trace.events);
           if (!stableCheckpoint) throw new AdapterError('safety', 'Checkpoint artifacts changed before quiescence; trusted host writes were refused.');
           checkpoint = stableCheckpoint;
+          await append(makeEvent(runId, 'runner', 'phase_checkpoint', checkpoint, { sessionId, phaseId: checkpoint.phaseId, operationId: checkpoint.operationId }));
+          if (definition.id === 'L03') {
+            const midpoint = await verifyInitialRequirement(fixture, after, createCodeExecutor({ ...config, codeImage: fixture.imageIds?.code ?? config.codeImage }));
+            await append(makeEvent(runId, 'grader', 'midpoint_code_verified', midpoint, { sessionId, phaseId: checkpoint.phaseId }));
+            if (!midpoint.passed) throw new AdapterError('model', 'Halfway code/tests did not satisfy the original requirement; no requirement change was applied.');
+          }
           let interventionData: Record<string, unknown> = { action, originalOperationId: checkpoint.operationId, targetId: checkpoint.targetId };
-          if (action === 'change-decision-and-new-session') {
+          if (action === 'change-decision-and-new-session' || action === 'change-requirement') {
             const changed = await manager.applyIntervention(fixture, action);
-            interventionData = { ...interventionData, decisionPath: changed.path, newValue: 10, sourceBeforeHash: hashValue(changed.before), sourceAfterHash: hashValue(changed.after) };
+            interventionData = { ...interventionData, decisionPath: changed.path, ...(action === 'change-decision-and-new-session' ? { newValue: 10 } : { originalRequirementRevision: 'retry-v1', currentRequirementRevision: 'retry-v2' }), sourceBeforeHash: hashValue(changed.before), sourceAfterHash: hashValue(changed.after) };
             for (const event of await materializeKnowledge(fixture, runId, arm)) await append(event);
           }
           await append(makeEvent(runId, 'runner', 'intervention_applied', interventionData, { sessionId, phaseId: checkpoint.phaseId, operationId: checkpoint.operationId }));
           for (const event of await materializeResumeContext(fixture, runId, arm, sessionId, checkpoint, after)) await append(event);
+          for (const event of await materializeStageBrief(fixture, runId, arm, task, 'recovery', await manager.snapshot(fixture))) await append(event);
           if (definition.id === 'L02') await append(makeEvent(runId, 'runner', 'context_compressed', { priorSessionId: sessionId, handoffPath: 'artifacts/handoff.json', originalOperationId: checkpoint.operationId, source: 'handoff-only', droppedConversation: true }, { sessionId }));
         } finally { await manager.resumeRuntime(fixture); }
-        const resumeInstruction = `${task.instruction}\nThe scheduled interruption is now acknowledged. This is a fresh Session, not a native continuation. Use only your original saved artifacts and CURRENT source/PM authority. ${definition.id === 'L02' ? `The original mutation operationId is ${checkpoint.operationId}; query its ORIGINAL receipt using the run-scoped READ-ONLY capability http://127.0.0.1:3901/bench/receipts/${checkpoint.operationId} (GET via node fetch, no credentials needed in this isolated runtime). This forwards the existing authenticated product receipt reconciliation endpoint, not a new write. The new generation CLI result command is thread-bound and cannot query an older Session. Never redispatch the original operation. Continue later dependency work only after the actual original receipt is reconciled.` : 'The accepted source decision changed; re-read it rather than copying an old value.'}${contextInstruction}${arm === 'dovspace' ? '\nYour own prior phase plan/handoff and authorized original receipts were preserved in .dovspace/resume-context.json. Reuse them after current-authority validation.' : ''}`;
+        const continuation = definition.id === 'K04' ? `The research/save phase is complete. Now in this NEW Session read saved knowledge/session-memory.json and implement the RELATED requirement: ${RETRY_REQUIREMENT} ${REUSE_FORMAT}` : definition.id === 'D04' ? 'You are the successor. Do NOT repeat the predecessor partial write or the wait-for-handoff phase. Complete the remaining feature/test/docs/PM work, preserving correct partial code and original identities.' : definition.id === 'L03' ? `The halfway phase is complete. Do NOT restart retry-v1 or wait for another intervention. The active requirement changed: re-read it, replan and finish revised delivery. ${REVISED_REQUIREMENT_FORMAT}` : 'The accepted source decision changed; re-read it rather than copying an old value.';
+        const receiptInstruction = ['L02', 'D04'].includes(definition.id) ? `The original mutation operationId is ${checkpoint.operationId}; query its ORIGINAL receipt using the run-scoped READ-ONLY capability http://127.0.0.1:3901/bench/receipts/${checkpoint.operationId} (GET via node fetch, no credentials needed in this isolated runtime). This forwards the authenticated product receipt reconciliation endpoint, not a write. The new generation CLI result command is thread-bound and cannot query an older Session. Never redispatch the original operation. Continue further writes ONLY after the original receipt is reconciled.` : '';
+        const resumeInstruction = `${task.instruction}\nThe scheduled interruption is acknowledged. This is a fresh Session, not a native continuation. Use only this run's saved artifacts and CURRENT source/PM authority. ${continuation} ${receiptInstruction}${contextInstruction}${arm === 'dovspace' ? '\nYour prior artifacts and authorized original receipts were preserved in .dovspace/resume-context.json. Treat them as past observations, not current authority; revalidate before continuing.' : ''}`;
         currentSessionId = (await adapter.resume({ priorSessionId: sessionId, instruction: resumeInstruction })).sessionId;
         manager.bindActiveSession(fixture, adapter.sessionIdentity(currentSessionId));
       } else {
@@ -205,6 +228,7 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     if (currentSessionId) {
       try { await adapter.stop(currentSessionId); } catch (error) { establishFailure(error); }
     }
+    try { await adapter.dispose?.(); } catch (error) { establishFailure(error); }
     if (fixture) {
       try { await manager.stopRuntime(fixture); } catch (error) { establishFailure(error); }
       if (observer) await observer.catch(error => establishFailure(error));
@@ -218,10 +242,12 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
           result.unexpectedMutations = diff.unexpectedMutations;
           Object.assign(result.artifacts, await writeAuthorityArtifacts(before, after, path.join(runDirectory, 'artifacts'), redactor));
           try {
+            const validationStarted = performance.now();
             const graded = await gradeTask({ task: resolveTaskDefinition(definition.id, fixture), fixture, before, after, events: trace.events, outputDir: runDirectory, diff, codeExecutor: createCodeExecutor({ ...config, codeImage: fixture.imageIds?.code ?? config.codeImage }) });
             result = { ...result, success: graded.success && !failure, safetyGate: graded.safetyGate, checkpointScore: graded.checkpointScore, phaseResults: graded.phaseResults, unexpectedMutations: graded.unexpectedMutations };
             failure ??= graded.failure;
             await append(makeEvent(runId, 'grader', 'independent_grade', { success: graded.success, safetyGate: graded.safetyGate, checks: graded.checks }));
+            await append(makeEvent(runId, 'grader', 'validation_interval', { intervalKind: 'validation', clockId: `runner:${runId}`, startedMonotonicMs: validationStarted, endedMonotonicMs: performance.now() }));
           } catch (error) { establishFailure(error, 'grader'); await append(makeEvent(runId, 'grader', 'grader_failed', { message: redactor.text(error instanceof Error ? error.message : String(error)) })); }
         }
         const collected = await collectArtifacts(fixture.publicRoot, path.join(runDirectory, 'artifacts', 'agent'), redactor);
@@ -235,16 +261,36 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
       catch (error) { establishFailure(error); result.safetyGate.passed = false; result.safetyGate.violations.push('Owned runtime cleanup incomplete.'); }
     }
     result.usage = usageFromEvents(trace.events);
+    result.observations = observationsFromEvents(trace.events, options.requiredTools ?? []);
+    if (result.study) {
+      result.study.sessions = [...new Set(trace.events.filter(event => event.source !== 'agent').map(event => event.sessionId).filter((value): value is string => typeof value === 'string'))];
+      result.study.generations = [...new Set(trace.events.filter(event => event.source !== 'agent').map(event => event.generationId).filter((value): value is string => typeof value === 'string'))];
+      result.study.operationIds = [...new Set(trace.events.filter(event => event.source === 'transport' && event.type === 'pm_request').map(event => event.operationId).filter((value): value is string => typeof value === 'string'))];
+    }
     result.reproducibility.effectiveModelSettingsHash = fixture?.runtime?.effectiveModelSettingsHash ?? null;
     result.rework = reworkFromEvents(trace.events, fixture?.runtime?.isolationVerified === true && trace.events.some(event => event.type === 'cleanup_completed') && !trace.events.some(event => event.type === 'transport_error'));
+    const generated = trace.events.filter(event => event.source === 'runner' && event.type === 'generated_artifact');
+    const initialCode = trace.events.find(event => event.source === 'runner' && event.type === 'phase_checkpoint')?.data.publicFiles;
+    const encodedInitial = initialCode && typeof initialCode === 'object' && 'repo/src/retry.ts' in initialCode ? initialCode['repo/src/retry.ts'] : null;
+    const encodedFinal = after?.publicFiles['repo/src/retry.ts'];
+    result.guidance = { contextVersion: 2, generatedArtifacts: fixture ? generated.length : null, generatedBytes: fixture ? generated.reduce((sum, event) => sum + (typeof event.data.bytes === 'number' ? event.data.bytes : 0), 0) : null, sessions: fixture ? new Set(trace.events.filter(event => event.type === 'session_started').map(event => event.sessionId)).size : null, requirementChanges: fixture ? trace.events.filter(event => event.source === 'runner' && event.type === 'intervention_applied' && ['change-requirement', 'change-decision-and-new-session'].includes(String(event.data.action))).length : null, codeChangedLines: definition.id === 'L03' && typeof encodedInitial === 'string' && encodedFinal !== undefined ? changedLines(Buffer.from(encodedInitial, 'base64').toString('utf8'), Buffer.from(encodedFinal, 'base64').toString('utf8')) : null };
     result.failure = failure;
     result.success = result.success && failure === null && result.safetyGate.passed && result.safetyGate.violations.length === 0 && result.unexpectedMutations.length === 0 && result.phaseResults.length > 0 && result.phaseResults.every(phase => phase.passed && phase.checks.every(check => !check.required || check.passed));
-    result.timeMs = Date.now() - started;
+    result.timeMs = performance.now() - started;
+    await append(makeEvent(runId, 'runner', 'run_interval', { intervalKind: 'end-to-end', clockId: `runner:${runId}`, startedMonotonicMs: started, endedMonotonicMs: performance.now() }));
+    result.observations = observationsFromEvents(trace.events, options.requiredTools ?? []);
     try {
       await writeFile(result.artifacts.pmDiff!, JSON.stringify(redactor.value(diff ?? { unavailable: true, reason: 'No complete before/after authority snapshots.', mutations: null, unexpectedMutations: null }), null, 2) + '\n', { mode: 0o600 });
       await writeFile(result.artifacts.gitDiff!, before && after ? redactor.text(repositoryDiff(before, after)) : '# Git diff unavailable: no complete before/after snapshots.\n', { mode: 0o600 });
       await append(makeEvent(runId, 'runner', 'run_finished', { success: result.success, failure: result.failure, usage: result.usage, timeMs: result.timeMs }));
       await trace.flush();
+      if (config.controlTransport === 'cli') {
+        const summary = summarizeCliObservations(trace.events);
+        result.artifacts.cliObservations = path.join(runDirectory, 'artifacts', 'cli-observations.json');
+        result.artifacts.cliObservationReport = path.join(runDirectory, 'artifacts', 'cli-observations.md');
+        await writeFile(result.artifacts.cliObservations, JSON.stringify(redactor.value(summary), null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+        await writeFile(result.artifacts.cliObservationReport, redactor.text(renderCliObservationReport(summary)), { mode: 0o600, flag: 'wx' });
+      }
       result = RunResultSchema.parse(redactor.value(result));
       await writeFile(result.artifacts.result!, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
       await writeRunReport(result, runDirectory);
@@ -257,7 +303,7 @@ export async function runSuite(options: RunSuiteOptions): Promise<RunResult[]> {
   const repetitions = options.repetitions ?? 1, arms = options.arms ?? ['raw', 'dovspace'];
   if (!Number.isInteger(repetitions) || repetitions < 1 || repetitions > 100) throw new Error('Suite repetitions must be 1–100.');
   if (!options.taskIds.length || !arms.length || new Set(arms).size !== arms.length) throw new Error('Suite task IDs and unique arms are required.');
-  for (const taskId of options.taskIds) { getTaskDefinition(taskId); if (!SMOKE_TASK_IDS.includes(taskId as typeof SMOKE_TASK_IDS[number])) throw new Error(`Task ${taskId} is not executable in Lite v0.1.`); }
+  for (const taskId of options.taskIds) { const definition = getTaskDefinition(taskId); if (!RUNNABLE_TASK_IDS.includes(definition.id)) throw new Error(`Task ${taskId} is not executable in Lite v0.2.`); }
   for (const arm of arms) ArmSchema.parse(arm);
   const results: RunResult[] = [];
   suite: for (let repetition = 0; repetition < repetitions; repetition++) for (const taskId of options.taskIds) for (const arm of arms) {

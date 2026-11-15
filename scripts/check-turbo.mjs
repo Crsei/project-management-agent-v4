@@ -10,6 +10,7 @@ import { CHECK_STAGES, CHECK_TASKS } from './check-task-graph.mjs';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const usage = 'Usage: node scripts/check-turbo.mjs [--stage lint|build|host-build | --task ID (repeatable)] [--dry | --baseline] [--cache-name NAME]';
 const privatePaths = ['HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME'];
+const internalDocumentDirectories = new Set(['docs/agent-source', 'docs/implementation', 'docs/reference']);
 const validCacheName = name => typeof name === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name);
 const own = (object, key) => Object.hasOwn(object, key);
 
@@ -303,9 +304,9 @@ async function cacheIdentity(root, tasks, packages, config, git) {
           const relative = path.relative(excludedBase, filename);
           return path.matchesGlob(relative, pattern) || (stat.isDirectory() && path.matchesGlob(`${relative}/__check_input__`, pattern));
         })) {
-          // This one documented historical directory is not public input.
-          // Do not descend into its ignore files or other private history.
-          if (stat.isDirectory() && filename === path.join(root, 'docs/implementation')) return;
+          // Documented internal directories are not public input. Do not
+          // descend into their ignore files or other private history.
+          if (stat.isDirectory() && internalDocumentDirectories.has(path.relative(root, filename).split(path.sep).join('/'))) return;
           if (name === 'node_modules' && (!oxlint || gitIgnoredDirectory(filename))) return;
           if (stat.isDirectory() && !['.local', '.tmp'].includes(name) && gitIgnoredDirectory(filename)) return;
           if (codeFile(name) || stat.isDirectory()) throw new Error('private-task-inputs');

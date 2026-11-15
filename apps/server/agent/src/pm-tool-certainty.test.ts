@@ -12,6 +12,9 @@ import { endNativeOutput, getNativeOutput, initializeNativeOutput, updatePmNativ
 import { pmOutcomeFromToolOutput } from "./pm-outcomes.ts";
 import { verifyPmToolReconcileBearer } from "../../../../packages/infrastructure/src/pm-tool-service-auth.ts";
 
+const queryArguments = { entity: null, projectId: null, query: null, after: null, limit: 20 };
+const taskArguments = { projectId: "PRJ-001", title: "once", description: "", assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null };
+
 // Real local HTTP transport, private disposable Agent store, no PM business data or provider account.
 test("post-send HTTP errors, invalid replies and restart remain unknown; only original proof settles once", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "pm-certainty-"));
@@ -53,7 +56,7 @@ test("post-send HTTP errors, invalid replies and restart remain unknown; only or
   try {
     for (const status of [401, 403, 404, 409, 429, 500]) {
       denial = status;
-      const record = await callPmTool(context, { operationId: randomUUID(), name: "pm_create_task", target, arguments: { title: "once" } });
+      const record = await callPmTool(context, { operationId: randomUUID(), name: "pm_create_task", target, arguments: taskArguments });
       assert.equal(record.status, "unknown"); assert.deepEqual(record.certainty, { dispatch: "possibly_sent", evidence: "unresolved" });
       assert.doesNotMatch(JSON.stringify(record), /sensitive post-send denial/);
       const native = getNativeOutput(generationId)!.items.find(item => item.id === `pm-tool:${record.operationId}`)!;
@@ -62,10 +65,10 @@ test("post-send HTTP errors, invalid replies and restart remain unknown; only or
     denial = 0;
     for (const mode of ["malformed", "mismatch"] as const) {
       malformed = mode === "malformed"; mismatch = mode === "mismatch";
-      assert.equal((await callPmTool(context, { operationId: randomUUID(), name: "pm_query", target, arguments: {} })).status, "unknown");
+      assert.equal((await callPmTool(context, { operationId: randomUUID(), name: "pm_query", target, arguments: queryArguments })).status, "unknown");
     }
     malformed = false; mismatch = false; denial = 403;
-    const input = { operationId: randomUUID(), name: "pm_create_task", target, arguments: { title: "original" } };
+    const input = { operationId: randomUUID(), name: "pm_create_task", target, arguments: { ...taskArguments, title: "original" } };
     const unknown = await callPmTool(context, input); const writes = calls;
     assert.equal(unknown.status, "unknown");
     assert.equal((await callPmTool(context, input)).status, "unknown"); assert.equal(calls, writes, "same-key read must not redispatch");
@@ -141,7 +144,7 @@ test("definitive local denial after admission is not sent and legacy unproven fa
   const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
   const address = server.address(); assert.ok(address && typeof address !== "string"); process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
   try {
-    const input = { operationId: randomUUID(), name: "pm_query", target, arguments: {} };
+    const input = { operationId: randomUUID(), name: "pm_query", target, arguments: queryArguments };
     const record = await callPmTool({ threadId: "denial", generationId: randomUUID(), messageId: "assistant", authorizeExecution: async () => {} }, input);
     assert.equal(record.status, "failed"); assert.deepEqual(record.certainty, { dispatch: "not_sent", evidence: "local_rejection" }); assert.equal(dispatches, 0);
     const stored = readRecord<StoredPmToolCall>("pm-tool-calls", input.operationId)!;
@@ -170,7 +173,8 @@ test("new full audit-only linkage stays observable and nonblocking without a ser
     const body = JSON.parse(text) as Record<string, unknown>;
     res.setHeader("content-type", "application/json");
     if (req.url === "/api/v1/agent-contexts/authorize") { res.end(JSON.stringify({ actorId, scope: body })); return; }
-    dispatches++;
+    if (req.url?.endsWith("/call")) dispatches++;
+    else assert.ok(req.url?.endsWith("/result"));
     assert.equal(req.headers["x-pm-tool-linkage"], undefined);
     assert.equal(body.linkage, undefined, "the PM request hash describes the actual unsigned request, not an untrusted hint");
     res.end(JSON.stringify({ ...body, workspaceId, actorId, status: "succeeded", result: { kind: "query", items: [], nextCursor: null, truncated: false, sources: [] },
@@ -181,7 +185,7 @@ test("new full audit-only linkage stays observable and nonblocking without a ser
   try {
     const context = { threadId: "audit-only", generationId: randomUUID(), messageId: "assistant", inputMessageId: "user",
       traceId: randomUUID(), executionGrantId: randomUUID(), authorizeExecution: async () => {} };
-    const input = { operationId: randomUUID(), name: "pm_query", target, arguments: {} };
+    const input = { operationId: randomUUID(), name: "pm_query", target, arguments: queryArguments };
     const result = await callPmTool(context, input);
     assert.equal(result.status, "succeeded"); assert.equal(dispatches, 1);
     assert.equal(result.linkage?.policy, "full"); assert.equal(result.linkage?.enforcement, "audit-only");

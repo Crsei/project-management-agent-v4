@@ -15,6 +15,7 @@ RUN node -e "const fs=require('node:fs');if(['.env','.env.agent','.local','.git'
     && pnpm install --frozen-lockfile \
     && PM_ENABLE_LAB=false pnpm build:v4 \
     && node --input-type=module -e "import {collectNotices} from './apps/desktop/scripts/license-notices.mjs'; await collectNotices(['/app/apps/web'],'/app/apps/web/dist/licenses/dependencies')"
+RUN node packages/skill-resources/stage.mjs /app /bundled-pm-resources
 
 FROM build AS agent-deps
 RUN pnpm --filter @agent-workspace/server --config.hoist-workspace-packages=false deploy --prod --legacy /agent-runtime \
@@ -49,6 +50,7 @@ COPY --chown=node:node --from=build /app/vendor/openhands-automations/LICENSE.ag
 COPY --chown=node:node --from=agent-deps /agent-runtime ./apps/server/agent
 COPY --chown=node:node --from=build /app/packages/pm-cli/agent-tools.mjs ./packages/pm-cli/agent-tools.mjs
 COPY --chown=node:node --from=build /app/packages/pm-cli/pi-tools.ts ./packages/pm-cli/pi-tools.ts
+COPY --chown=node:node --from=build /bundled-pm-resources/ ./
 RUN mkdir -p /var/lib/agent /var/lib/pm/projects && chown -R node:node /var/lib/agent /var/lib/pm/projects
 USER node
 EXPOSE 4325

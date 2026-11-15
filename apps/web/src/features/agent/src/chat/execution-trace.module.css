@@ -22,7 +22,7 @@
 .traceTrigger {
   display: block;
   width: 100%;
-  min-height: 30px;
+  height: 34px;
   padding: 5px 4px;
   border-radius: var(--radius-agent-control);
   text-align: left;
@@ -36,6 +36,44 @@
 .traceTrigger:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
+}
+
+/* Disclosure labels remain one bounded row, including long shell commands on
+   phones. Full selectable inputs live in the expanded body, never in the label. */
+.traceTrigger .traceLine {
+  height: 24px;
+  flex-wrap: nowrap;
+}
+
+.traceTrigger .traceTitle {
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.traceTrigger .traceDescription {
+  max-width: 7rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.traceTrigger .traceTrailing {
+  flex-wrap: nowrap;
+  max-width: min(55%, 14rem);
+  overflow: hidden;
+}
+
+.traceTrigger .traceTrailing > :not(.chevron) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceTrigger .chevron {
+  flex-shrink: 0;
 }
 
 .traceLine {

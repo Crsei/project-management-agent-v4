@@ -8,5 +8,12 @@ export function productRoadmapPaths() {
   return { '/api/v1/workspaces/{workspaceId}/projects/{projectId}/product-roadmap': {
     get: { ...common, operationId: 'readProductRoadmap' },
     post: { ...common, operationId: 'changeProductRoadmap', description: 'Save with project CAS; publish immutable reviewed plan; materialize one node through native audited creation. Does not execute, merge or complete tasks. Reconcile with a read before another attempt.', requestBody: { required: true, content: content(z.toJSONSchema(roadmapActionSchema)) } },
+  }, '/api/v1/workspaces/{workspaceId}/projects/{projectId}/product-roadmap/inspect': {
+    post: {
+      ...common, operationId: 'inspectProductRoadmapOperation',
+      description: 'Read-only inspection of the exact original save, publish or materialize action under current project authorization. Uses original command/release/node keys and immutable publication input. Never creates tasks, repairs audit, replays mutations, or treats an absent/incomplete receipt as failure proof.',
+      requestBody: { required: true, content: content(z.toJSONSchema(roadmapActionSchema)) },
+      responses: { ...common.responses, 200: { description: 'Confirmed original native journal and audit, or unknown when proof is absent/incomplete. roadmap is the current authorized projection, not an overwrite of the original result.', content: content({ type: 'object', additionalProperties: false, required: ['status', 'roadmap'], properties: { status: { type: 'string', enum: ['confirmed', 'unknown'] }, roadmap: { anyOf: [response, { type: 'null' }] } } }) } },
+    },
   } };
 }

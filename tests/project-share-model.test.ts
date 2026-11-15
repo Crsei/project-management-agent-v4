@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Entity, MemberDirectoryAccess, MemberDirectoryMember, Workspace } from '../packages/contracts/src/client.ts';
-import { canManageProjectShare, canReadProjectShare, projectShareCandidates, projectShareConflict, projectShareDraft, projectShareInvitationCommand, projectShareMemberCommand, projectShareScope, projectShareUrl } from '../apps/web/src/features/pm/service/project-share-model.ts';
+import { canManageProjectShare, canReadProjectShare, projectShareCandidates, projectShareConflict, projectShareDraft, projectShareMemberCommand, projectShareScope, projectShareUrl } from '../apps/web/src/features/pm/service/project-share-model.ts';
 
 const workspace: Workspace = {
   id: 'f795dd3c-df42-4aa2-aaca-4eb546166d83', name: 'Real workspace', icon: 'building', color: '#3B82C4', identityVersion: 1,
@@ -36,7 +36,6 @@ test('management requires unrestricted access.manage; read-only viewers retain o
   const draft = projectShareDraft(person, 'add');
   assert.throws(() => projectShareMemberCommand(reader, project, draft, person.access, commandId), /unrestricted/);
   assert.throws(() => projectShareMemberCommand({ ...workspace, projectIds: ['PRJ-1'] }, project, draft, person.access, commandId), /unrestricted/);
-  assert.throws(() => projectShareInvitationCommand(reader, project, 'new@example.invalid', 'guest', true, commandId), /unrestricted/);
 });
 
 test('adding one project preserves every capability and other project scope without applying role templates', () => {
@@ -125,23 +124,11 @@ test('selection freezes the original arrays and never silently adds domain.read 
   assert.throws(() => projectShareMemberCommand(workspace, project, projectShareDraft(member(), 'remove'), member().access, commandId), /no longer applicable/);
 });
 
-test('disabled SMTP cannot create an invitation, and enabled invitations are fixed to the current project', () => {
-  assert.throws(() => projectShareInvitationCommand(workspace, project, 'new@example.invalid', 'guest', false, commandId), /SMTP/);
-  const body = projectShareInvitationCommand(workspace, project, ' NEW@example.invalid ', 'guest', true, commandId);
-  assert.equal(body.commandType, 'CreateMemberInvitation');
-  assert.equal(body.commandId, commandId);
-  assert.equal(body.projectId, undefined);
-  assert.equal(body.targetId, undefined);
-  assert.deepEqual(body.payload, { email: 'new@example.invalid', role: 'guest', projectIds: ['PRJ-1'] });
-  assert.throws(() => projectShareInvitationCommand(workspace, project, 'new@example.invalid', 'admin', true, commandId), /Guest or Member/);
-  assert.throws(() => projectShareInvitationCommand(workspace, project, 'not-an-email', 'guest', true, commandId));
-});
 
-test('archived projects reject new scopes and invitations but permit narrowing their existing scope', () => {
+test('archived projects reject new scopes but permit narrowing their existing scope', () => {
   const archived = { ...project, data: { ...project.data, archivedAt: '2026-10-26T00:00:00.000Z' } };
   const person = member();
   assert.throws(() => projectShareMemberCommand(workspace, archived, projectShareDraft(person, 'add'), person.access, commandId), /unarchived/);
-  assert.throws(() => projectShareInvitationCommand(workspace, archived, 'new@example.invalid', 'guest', true, commandId), /unarchived/);
   const granted = member({ projectIds: ['PRJ-1', 'PRJ-2'] });
   const body = projectShareMemberCommand(workspace, archived, projectShareDraft(granted, 'remove'), granted.access, commandId);
   assert.equal(body.commandType, 'SetWorkspaceMember');

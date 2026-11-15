@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { entityKinds, workflowFor, type EntityKind, type FileRecord, type ProtocolConfiguration } from '@pm-schema';
 import { useI18n } from '@/lib/i18n-provider';
+import { DovspaceLoading } from '@/components/dovspace-brand';
 import { useWorkspaceStore } from '@/providers/app-providers';
 import { usePersonalDashboard, usePmService } from '@/features/pm/service/pm-service';
 import { usePmDisplaySetting } from '@/features/pm/service/pm-display-settings';
@@ -51,7 +52,7 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
   const personal = usePersonalDashboard();
   const today = useTaskScopeClock(personal.error ? undefined : personal.data?.profile.timeZone, personal.dataUpdatedAt);
   const watched = useMemo(() => personal.data && !personal.error ? new Set(personal.data.watches.map(watch => watch.data.taskId)) : null, [personal.data, personal.error]);
-  if (loading) return <p role="status" className="p-6">{en ? 'Loading workspace…' : '正在加载工作区…'}</p>;
+  if (loading) return <DovspaceLoading className="p-6" message={en ? 'Loading workspace…' : '正在加载工作区…'} />;
   if (!workspace || !actor) return error ? <p role="alert" className="p-6">{error.message}</p> : <p role="alert" className="p-6">{en ? 'Sign in and select an accessible workspace first.' : '请先登录并选择有权访问的工作区。'}</p>;
   if (!workspace.capabilities.includes('domain.read')) return <p role="alert" className="p-6">{en ? 'You no longer have access to workspace sources.' : '当前无权读取工作区源码。'}</p>;
   const root = `/pm/${encodeURIComponent(workspaceSlug || workspace.id)}`;
@@ -145,7 +146,7 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
           const back = `${location.pathname}${backParams.size ? `?${backParams}` : ''}${location.hash}`;
           const next = new URLSearchParams({ returnTo: back });
           if (scope === 'mine') next.set('assignee', actor.id);
-          for (const field of ['project', 'status', 'due', 'priority', 'assignee'] as const) if (initial[field] !== undefined && initial[field] !== '') next.set(field, initial[field]);
+          for (const field of ['project', 'status', 'due', 'priority', 'assignee', 'title', 'parent', 'workKind'] as const) if (initial[field] !== undefined && initial[field] !== '') next.set(field, String(initial[field]));
           if (initial.watch) next.set('watch', '1');
           navigate(`${projectRoot}/issues/new?${next}`);
         }}
@@ -193,14 +194,16 @@ export function ServiceTaskCreationPage() {
   const creationProject = projectId || params.get('project') || undefined;
   const scope = projectId ? 'all' : taskScope(params.get('scope'));
   const back = safeWorkspaceReturn(params.get('returnTo'), projectRoot, scope === 'mine' ? `${projectRoot}/issues?scope=mine` : undefined);
-  if (service.loading) return <p role="status" className="p-6">{en ? 'Loading workspace…' : '正在加载工作区…'}</p>;
+  if (service.loading) return <DovspaceLoading className="p-6" message={en ? 'Loading workspace…' : '正在加载工作区…'} />;
   if (!service.workspace || !service.actor || !service.workspace.capabilities.includes('domain.read')) return <p role="alert" className="p-6">{service.error?.message || (en ? 'This workspace is unavailable or not authorized.' : '工作区不可用或没有读取权限。')}</p>;
   const returnUrl = new URL(back, window.location.origin);
   const fromMine = !projectId && taskScope(params.get('scope') ?? (returnUrl.pathname === `${root}/issues` ? returnUrl.searchParams.get('scope') : null)) === 'mine';
   const assignee = params.has('assignee') ? params.get('assignee') || undefined : fromMine ? service.actor.id : undefined;
+  const workKind = params.get('workKind');
+  const initialWorkKind = workKind === 'epic' || workKind === 'task' || workKind === 'bug' || workKind === 'subtask' ? workKind : undefined;
   return <div className="markdown-workbench task-create-page" data-pm-route-page>
     <CoreSessionProvider key={`${service.workspace.id}:${service.actor.id}:${service.workspace.version}:${service.actorEpoch}`} hostNamespace={window.location.origin} workspaceId={service.workspace.id} actorId={service.actor.id} membershipVersion={service.workspace.version} actorEpoch={service.actorEpoch} onAccessFailure={service.refresh}>
-      <TaskCreationSurface key={`${creationProject || ''}:${params.get('draft') || ''}`} mode="page" projectId={projectId} draftId={params.get('draft') || undefined} initial={{ ...(creationProject ? { project: creationProject } : {}), ...(params.get('due') ? { due: params.get('due')! } : {}), ...(params.get('status') ? { status: params.get('status')! } : {}), ...(params.get('priority') ? { priority: params.get('priority')! } : {}), ...(assignee ? { assignee } : {}), watch: params.get('watch') === '1' }} onClose={() => navigate(back)} onCreated={file => navigate(`${projectRoot}/entities/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo: back })}`, { replace: true, state: { returnTo: back } })} />
+      <TaskCreationSurface key={`${creationProject || ''}:${params.get('draft') || ''}`} mode="page" projectId={projectId} draftId={params.get('draft') || undefined} initial={{ ...(creationProject ? { project: creationProject } : {}), ...(params.get('due') ? { due: params.get('due')! } : {}), ...(params.get('status') ? { status: params.get('status')! } : {}), ...(params.get('priority') ? { priority: params.get('priority')! } : {}), ...(assignee ? { assignee } : {}), ...(params.get('title') ? { title: params.get('title')! } : {}), ...(params.get('parent') ? { parent: params.get('parent')! } : {}), ...(initialWorkKind ? { workKind: initialWorkKind } : {}), watch: params.get('watch') === '1' }} onClose={() => navigate(back)} onCreated={file => navigate(`${projectRoot}/entities/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo: back })}`, { replace: true, state: { returnTo: back } })} />
     </CoreSessionProvider>
   </div>;
 }

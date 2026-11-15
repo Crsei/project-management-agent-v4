@@ -47,6 +47,14 @@ export interface SkillRepo {
   enabled: boolean;
 }
 
+/** Local Dovspace adaptation: explicit shipped provenance, not inferred from names. */
+export interface BundledSkillSource {
+  sourceLabel: "Dovspace";
+  sourcePath: string;
+  sha256: string;
+  treeHash: string;
+}
+
 export interface InstalledSkill {
   id: string;
   name: string;
@@ -60,6 +68,7 @@ export interface InstalledSkill {
   installedAt: number;
   contentHash?: string;
   updatedAt: number;
+  source?: BundledSkillSource;
 }
 
 export interface DiscoverableSkill {

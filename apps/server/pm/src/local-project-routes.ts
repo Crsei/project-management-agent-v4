@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError, type Actor, type Command } from '../../../../packages/domain/src/core.ts';
 import type { FileRecord } from '../../../../packages/pm-schema/index.ts';
 import type { Workspace } from '../../../../packages/pm-core/index.ts';
-import { localDirectorySchema, localProjectInitializationSchema, localProjectMoveSchema, localProjectRelocationSchema, localProjectPreviewSchema, localProjectSettingsUpdateSchema, type LocalDirectory, type LocalProjectAttempt, type LocalProjectLocation } from '../../../../packages/contracts/src/local-projects.ts';
-import { assertLocalProjectTargetAvailable, beginLocalProjectOperation, listLocalDirectories, localProjectSettings, previewLocalProject, readLocalProjectOperation, requireLocalManagement, requireLocalProjects, resolveLocalDirectory, resolveLocalRecoveryDirectory, saveLocalProjectSettings, type LocalProjectConfiguration, type LocalProjectOperation } from '../../../../packages/application/src/local-projects.ts';
+import { localDirectorySchema, localProjectInitializationSchema, localProjectMoveSchema, localProjectProbeSchema, localProjectRelocationSchema, localProjectPreviewSchema, localProjectSettingsUpdateSchema, type LocalDirectory, type LocalProjectAttempt, type LocalProjectLocation } from '../../../../packages/contracts/src/local-projects.ts';
+import { assertLocalProjectTargetAvailable, beginLocalProjectOperation, listLocalDirectories, localProjectSettings, previewLocalProject, probeLocalProject, readLocalProjectOperation, requireLocalManagement, requireLocalProjects, resolveLocalDirectory, resolveLocalInitializationDirectory, resolveLocalRecoveryDirectory, saveLocalProjectSettings, toLocalDirectory, type LocalProjectConfiguration, type LocalProjectOperation } from '../../../../packages/application/src/local-projects.ts';
 import { getMembership } from '../../../../packages/application/src/access.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
+import { requestHash } from '../../../../packages/pm-core/state.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import type { CoreCreationAttempt } from '../../../../packages/contracts/src/core-creation.ts';
 import { previewProjectDirectory } from '../../../../packages/pm-core/project-locations.ts';
@@ -25,6 +27,15 @@ type RouteContext = { database: () => Pool; actor: (request: FastifyRequest) => 
 const parameters = z.object({ workspaceId: z.uuid().toLowerCase(), projectId: z.string().regex(/^PRJ-\d+$/).optional(), key: z.string().min(1).max(512).optional() });
 const prefix = '/api/v1/workspaces/:workspaceId/local-projects';
 const keyFor = (request: FastifyRequest) => z.string().min(1).max(512).refine(key => !!key.trim()).parse(request.headers['idempotency-key']);
+
+/** Rows written before the resolved-root/directory split stored `{root, layout}`. Convert
+ * them to the durable contract before recovery; never persist that internal shape again. */
+function storedDirectory(value: unknown): LocalDirectory {
+  const legacy = value && typeof value === 'object' ? value as { mode?: unknown; root?: unknown } : null;
+  if (legacy && (legacy.mode === 'existing' || legacy.mode === 'new') && typeof legacy.root === 'string')
+    return legacy.mode === 'existing' ? { mode: 'existing', path: legacy.root } : { mode: 'new', parentPath: path.dirname(legacy.root), folderName: path.basename(legacy.root) };
+  return localDirectorySchema.parse(value);
+}
 
 export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteContext): void {
   async function management(request: FastifyRequest, write = false) {
@@ -64,8 +75,16 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
     if (current.status !== 'available') return { status: 'pending', key, operation: saved.operation, reason: 'storage_pending', projectId: saved.project_id };
     return { status: 'ready', key, operation: saved.operation, record: workspace.get(saved.project_id), location: current };
   }
+  async function normalizeLegacyOperation(saved: LocalProjectOperation): Promise<LocalProjectOperation> {
+    const raw = saved.request.directory as { root?: unknown } | null;
+    if (!raw || typeof raw !== 'object' || typeof raw.root !== 'string') return saved;
+    const directory = storedDirectory(raw), request = { ...saved.request, directory };
+    const hash = requestHash({ operation: saved.operation, transport: saved.transport, request, projectId: saved.project_id ?? null });
+    await options.database().query('UPDATE local_project_operations SET request=$4::jsonb,request_hash=$5,updated_at=clock_timestamp() WHERE workspace_id=$1 AND actor_id=$2 AND request_key=$3', [saved.workspace_id, saved.actor_id, saved.request_key, JSON.stringify(request), hash]);
+    return { ...saved, request, request_hash: hash };
+  }
   async function move(saved: LocalProjectOperation, actor: Actor, recovering: boolean): Promise<void> {
-    const directory = localDirectorySchema.parse(saved.request.directory);
+    const directory = storedDirectory(saved.request.directory);
     const selected = recovering ? resolveLocalRecoveryDirectory(options.config, directory) : resolveLocalDirectory(options.config, directory);
     const workspace = await options.workspace(saved.workspace_id), sql = await options.database().connect();
     try {
@@ -83,7 +102,8 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
     } catch (error) { await sql.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { sql.release(); }
   }
-  async function execute(request: FastifyRequest, saved: LocalProjectOperation, actor: Actor, recovering: boolean): Promise<void> {
+  async function execute(request: FastifyRequest, original: LocalProjectOperation, actor: Actor, recovering: boolean): Promise<void> {
+    const saved = await normalizeLegacyOperation(original);
     if (saved.status === 'ready' || saved.status === 'rejected') return;
     if (saved.operation !== 'initialize') return move(saved, actor, recovering);
     if (saved.transport === 'command') return options.recoverCommand(request, saved.workspace_id, saved.request.command as Command);
@@ -91,7 +111,7 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
       await options.database().query("UPDATE local_project_operations SET status='rejected',error_code='core_creation_rejected',updated_at=clock_timestamp() WHERE workspace_id=$1 AND actor_id=$2 AND request_key=$3", [saved.workspace_id, actor.id, saved.request_key]);
       return;
     }
-    const input = saved.request.input as Record<string, unknown>, directory = localDirectorySchema.parse(saved.request.directory);
+    const input = saved.request.input as Record<string, unknown>, directory = storedDirectory(saved.request.directory);
     const record = await options.create(request, saved.workspace_id, input, directory, saved.request_key, recovering);
     await options.database().query("UPDATE local_project_operations SET project_id=$4,status='ready',error_code=NULL,updated_at=clock_timestamp() WHERE workspace_id=$1 AND actor_id=$2 AND request_key=$3", [saved.workspace_id, actor.id, saved.request_key, record.id]);
   }
@@ -117,6 +137,21 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
     const { path } = z.strictObject({ path: z.string().min(1).max(4096).optional() }).parse(request.query);
     return listLocalDirectories(options.config, path);
   });
+  app.post(prefix + '/probe', async request => {
+    const { workspaceId } = await management(request);
+    const { path } = localProjectProbeSchema.parse(request.body), workspace = await options.workspace(workspaceId);
+    const result = probeLocalProject(options.config, path);
+    if (!result.marker) return result;
+    if (result.marker.workspaceId !== workspaceId) return { ...result, project: null, problem: 'foreign_workspace' as const };
+    const project = workspace.items({ entity: 'project', archived: 'include' }).find(item => item.id === result.marker!.projectId);
+    if (!project) return { ...result, project: null, problem: 'unknown_project' as const };
+    let locationStatus: 'available' | 'unavailable' = 'unavailable';
+    try {
+      const mount = workspace.projectLocation(project.id);
+      if (mount) { await options.checkMount(mount); locationStatus = 'available'; }
+    } catch { /* The registered location is missing or its identity cannot be confirmed. */ }
+    return { ...result, project: { projectId: project.id, title: String(project.entity.title ?? project.id), locationStatus }, problem: null };
+  });
   app.post(prefix + '/preview', async request => {
     const { workspaceId } = await management(request);
     const result = previewLocalProject(options.config, localProjectPreviewSchema.parse(request.body).directory);
@@ -128,8 +163,10 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
   app.post(prefix + '/initializations', async request => {
     const { workspaceId, actor } = await management(request, true), key = keyFor(request);
     const body = localProjectInitializationSchema.parse(request.body);
+    const previous = await readLocalProjectOperation(options.database(), actor, workspaceId, key);
+    const resolved = { ...body, directory: toLocalDirectory(resolveLocalInitializationDirectory(options.config, body.directory, previous)) };
     await options.workspace(workspaceId);
-    const saved = await beginLocalProjectOperation(options.database(), actor, workspaceId, key, 'initialize', 'native', body);
+    const saved = await beginLocalProjectOperation(options.database(), actor, workspaceId, key, 'initialize', 'native', resolved);
     await execute(request, saved, actor, false);
     return attempt(request, workspaceId, actor, key);
   });
@@ -156,7 +193,9 @@ export function registerLocalProjectRoutes(app: FastifyInstance, options: RouteC
   for (const operation of ['migrate', 'relocate'] as const) app.post(prefix + '/projects/:projectId/' + operation, async request => {
     const { workspaceId, actor } = await management(request, true), { projectId } = parameters.parse(request.params), key = keyFor(request);
     const body = operation === 'relocate' ? localProjectRelocationSchema.parse(request.body) : localProjectMoveSchema.parse(request.body);
-    const saved = await beginLocalProjectOperation(options.database(), actor, workspaceId, key, operation, 'native', body, projectId);
+    const directory = toLocalDirectory(resolveLocalDirectory(options.config, body.directory));
+    if (operation === 'relocate' && 'mode' in body && body.mode === 'rebind' && directory.mode !== 'existing') throw new DomainError('local_directory_invalid', 'Rebinding requires an existing moved directory', 400);
+    const saved = await beginLocalProjectOperation(options.database(), actor, workspaceId, key, operation, 'native', { ...body, directory }, projectId);
     await execute(request, saved, actor, false);
     return attempt(request, workspaceId, actor, key);
   });

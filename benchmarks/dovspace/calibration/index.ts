@@ -7,14 +7,15 @@ import { createCodeExecutor } from '../runners/code-executor.ts';
 import { prepareReportDirectory } from '../reports/files.ts';
 import { gradeTask } from '../graders/index.ts';
 import type { CodeExecutionResult, CodeExecutor, GradeResult } from '../graders/types.ts';
-import { SMOKE_TASK_IDS } from '../tasks/index.ts';
-import { calibrationMutations } from './cases.ts';
+import { RUNNABLE_TASK_IDS } from '../tasks/index.ts';
+import { calibrationMutations, GUIDANCE_EXPECTED_FAILURES } from './cases.ts';
 import { materializeReference, referenceCase, REFERENCE_SCOPE } from './reference.ts';
 
 export interface CalibrationOptions { outputDir: string; runCodeTests?: boolean; config?: BenchmarkConfig; codeExecutor?: CodeExecutor }
 export interface CalibrationCaseResult {
   taskId: string; name: string; expectedPass: boolean; actualPass: boolean; passed: boolean; exercised: boolean;
   safetyGatePassed: boolean | null; failedChecks: string[]; resultPath: string; referencePath: string; error: string | null;
+  expectedFailedCheck: string | null; intendedFailureObserved: boolean;
 }
 export interface CalibrationResult {
   kind: 'grader-calibration'; agent: null; model: null; success: boolean; scope: string; createdAt: string;
@@ -50,7 +51,7 @@ export async function calibrate(options: CalibrationOptions): Promise<Calibratio
     await mkdir(config.runtimeRoot, { recursive: true, mode: 0o700 });
     if ((await lstat(config.runtimeRoot)).isSymbolicLink() || await realpath(config.runtimeRoot) !== path.resolve(config.runtimeRoot)) throw new Error('Calibration runtime root must be a real canonical directory.');
     runtimeRoot = await mkdtemp(path.join(config.runtimeRoot, 'calibration-'));
-    for (const taskId of SMOKE_TASK_IDS) {
+    for (const taskId of RUNNABLE_TASK_IDS) {
       const scenarios = [{ name: 'correct-reference', mutate: null }, ...calibrationMutations(taskId)];
       for (const scenario of scenarios) {
         scenarioIsolationFailures = [];
@@ -71,7 +72,10 @@ export async function calibrate(options: CalibrationOptions): Promise<Calibratio
         const expectedPass = scenario.mutate === null;
         const exercised = error === null && scenarioIsolationFailures.length === 0;
         const actualPass = grade?.success === true;
-        const entry: CalibrationCaseResult = { taskId, name: scenario.name, expectedPass, actualPass, passed: exercised && actualPass === expectedPass, exercised, safetyGatePassed: grade?.safetyGate.passed ?? null, failedChecks: grade ? [...Object.values(grade.checks).flat(), ...grade.safetyGate.checks].filter((item) => item.required && !item.passed).map((item) => item.id) : [], resultPath, referencePath, error };
+        const failedChecks = grade ? [...Object.values(grade.checks).flat(), ...grade.safetyGate.checks].filter(item => item.required && !item.passed).map(item => item.id) : [];
+        const expectedFailedCheck = GUIDANCE_EXPECTED_FAILURES[taskId]?.[scenario.name] ?? null;
+        const intendedFailureObserved = expectedFailedCheck === null || failedChecks.includes(expectedFailedCheck);
+        const entry: CalibrationCaseResult = { taskId, name: scenario.name, expectedPass, actualPass, passed: exercised && actualPass === expectedPass && intendedFailureObserved, exercised, safetyGatePassed: grade?.safetyGate.passed ?? null, failedChecks, expectedFailedCheck, intendedFailureObserved, resultPath, referencePath, error };
         result.cases.push(entry);
         for (const failure of scenarioIsolationFailures) if (!result.infrastructureErrors.includes(failure)) result.infrastructureErrors.push(failure);
         if (error) result.infrastructureErrors.push(`${taskId}/${scenario.name}: ${error}`);

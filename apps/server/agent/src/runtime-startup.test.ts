@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import test from "node:test";
 
-const startupStages = ["migration", "providers", "chat", "connector-recovery", "execution", "automation", "studio", "workflows", "mcp"] as const;
+const startupStages = ["migration", "providers", "chat", "collaboration", "connector-recovery", "execution", "automation", "studio", "workflows", "mcp"] as const;
 
 function runRuntimeScenario(scenario: string): void {
   // An isolated process enables Node's module seam without changing the suite's loader.
@@ -38,6 +38,10 @@ function runRuntimeScenario(scenario: string): void {
     };
     const replace = (file, namedExports) => mock.module(new URL(file, root).href, { namedExports });
     replace("durable/chat-runtime.ts", { startChatRuntime: () => start("chat"), stopChatRuntime: () => stop("chat") });
+    replace("collaboration/runs.ts", {
+      startCollaborationRuntime: () => start("collaboration"),
+      stopCollaborationRuntime: () => { fenced = true; return stop("collaboration"); },
+    });
     replace("durable/engine.ts", { startExecution: () => start("execution"), stopExecution: () => stop("execution") });
     replace("automation/index.ts", { startAutomation: () => start("automation"), stopAutomation: () => stop("automation") });
     replace("automation-execution/connectors.ts", { recoverAutomationGenerationConnectors: () => start("connector-recovery") });
@@ -58,11 +62,12 @@ function runRuntimeScenario(scenario: string): void {
       assert.ok(events.indexOf(earlier) < events.indexOf(later), earlier + " must precede " + later);
     };
     const assertDrained = () => {
-      const components = ["maintenance", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"];
+      const components = ["maintenance", "collaboration", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"];
       assert.deepEqual(events.filter(event => event.startsWith("stop:")).map(event => event.slice(5)).sort(), [...components].sort());
       assertBefore("stop:maintenance", "stop:workflows");
       for (const name of ["automation", "studio", "execution", "chat"]) assertBefore("stopped:workflows", "stop:" + name);
       for (const name of ["execution", "chat"]) assertBefore("stopped:studio", "stop:" + name);
+      assertBefore("stopped:collaboration", "stop:chat");
       for (const name of components.filter(name => name !== "providers")) assertBefore("stopped:" + name, "stop:providers");
       assertBefore("stopped:providers", "close:store");
       assert.equal(events.filter(event => event === "close:store").length, 1);
@@ -85,7 +90,7 @@ for (const held of startupStages.filter(stage => stage !== "workflows" && stage 
       await startup.entered.promise;
       const stopping = stopRuntime();
       assert.equal(fenced, true);
-      assert.ok(events.every(event => /^(stop|stopped):(maintenance|mcp)$/.test(event)), "workers must not drain before startup settles");
+      assert.ok(events.every(event => /^(stop|stopped):(maintenance|collaboration|mcp)$/.test(event)), "only admission fences and protocol drains may start before startup settles");
       startup.release.resolve();
       await Promise.all([starting, stopping]);
       assert.deepEqual(starts, startupStages.slice(0, startupStages.indexOf(held) + 1));
@@ -99,9 +104,10 @@ test("combined runtime drains workflow and automation producers before workers, 
   runRuntimeScenario(`
     await startRuntime();
     assert.deepEqual(starts, startupStages);
-    for (const name of ["maintenance", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"]) stopBarriers.set(name, barrier());
+    for (const name of ["maintenance", "collaboration", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"]) stopBarriers.set(name, barrier());
     const stopping = stopRuntime();
     assert.equal(fenced, true);
+    assert.ok(events.includes("stop:collaboration"), "business admissions must be fenced before shutdown returns");
     assert.equal(stopRuntime(), stopping, "concurrent shutdown shares the drain");
     await stopBarriers.get("workflows").entered.promise;
     assert.equal(events.includes("stop:automation"), false);
@@ -113,6 +119,9 @@ test("combined runtime drains workflow and automation producers before workers, 
     assert.equal(events.includes("stop:execution"), false);
     assert.equal(events.includes("stop:chat"), false);
     stopBarriers.get("studio").release.resolve();
+    await nextTurn();
+    assert.equal(events.includes("stop:chat"), false, "Chat stays available until admitted business Runs drain");
+    stopBarriers.get("collaboration").release.resolve();
     await Promise.all(["execution", "chat"].map(name => stopBarriers.get(name).entered.promise));
     stopBarriers.get("execution").release.resolve();
     await nextTurn();
@@ -133,14 +142,14 @@ test("combined runtime drains workflow and automation producers before workers, 
   `);
 });
 
-for (const failedStartup of [null, "connector-recovery", "studio", "workflows"] as const) {
+for (const failedStartup of [null, "collaboration", "connector-recovery", "studio", "workflows"] as const) {
   test(`${failedStartup ? `${failedStartup} startup failure` : "runtime shutdown"} aggregates failures without skipping cleanup`, () => {
     runRuntimeScenario(`
       const failedStartup = ${JSON.stringify(failedStartup)};
       const startupFailure = new Error("startup failed");
       const cleanupOrder = failedStartup
-        ? ["workflows", "studio", "automation", "execution", "chat", "maintenance", "providers"]
-        : ["workflows", "automation", "studio", "execution", "chat", "maintenance", "providers"];
+        ? ["workflows", "studio", "collaboration", "automation", "execution", "chat", "maintenance", "providers"]
+        : ["workflows", "automation", "studio", "collaboration", "execution", "chat", "maintenance", "providers"];
       for (const name of cleanupOrder) stopFailures.set(name, new Error(name + " cleanup failed"));
       if (failedStartup) startFailures.set(failedStartup, startupFailure);
       else await startRuntime();

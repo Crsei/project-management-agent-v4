@@ -30,7 +30,8 @@ if (group === 'mcp') {
         result = { tools: registry.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };
       } else if (msg.method === 'tools/call') {
         const record = await request('mcp-call', { transportId, requestId: msg.id, name: msg.params.name, arguments: msg.params.arguments || {} });
-        result = { content: [{ type: 'text', text: JSON.stringify(record) }], isError: record.status !== 'succeeded', structuredContent: record };
+        const acceptedDelegation = record.kind === 'collaboration_delegation' && record.accepted === true && typeof record.delegationId === 'string' && typeof record.childRunId === 'string' && record.asynchronous === true;
+        result = { content: [{ type: 'text', text: JSON.stringify(record) }], isError: !acceptedDelegation && record.status !== 'succeeded', structuredContent: record };
       } else throw new Error('Method not found');
       console.log(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
     } catch (error) { if (msg && Object.hasOwn(msg, 'id')) console.log(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: error.message } })); else console.error(error.message); }

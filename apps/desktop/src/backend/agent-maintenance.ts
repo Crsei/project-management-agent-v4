@@ -1,4 +1,4 @@
-import { createAgentBackup, restoreAgentBackup } from '../../../server/agent/src/maintenance/agent-backup.ts';
+import { captureAgentStoppedState, createAgentBackup, restoreAgentBackup } from '../../../server/agent/src/maintenance/agent-backup.ts';
 
 // Executed with the bundled Node runtime, never inside Electron or an HTTP route.
 async function main(): Promise<void> {
@@ -8,7 +8,12 @@ async function main(): Promise<void> {
     if (Buffer.byteLength(input) > 64 * 1024) throw new Error('Maintenance request is too large.');
   }
   const request = JSON.parse(input) as { operation?: string; source?: string; destination?: string };
-  if (typeof request.source !== 'string' || typeof request.destination !== 'string') throw new Error('Maintenance paths are required.');
+  if (typeof request.source !== 'string') throw new Error('Maintenance source is required.');
+  if (request.operation === 'source-state') {
+    console.log(JSON.stringify(captureAgentStoppedState(request.source, true)));
+    return;
+  }
+  if (typeof request.destination !== 'string') throw new Error('Maintenance destination is required.');
   if (request.operation === 'backup') {
     const result = await createAgentBackup({ source: request.source, bundle: request.destination, secrets: 'include', stopped: true });
     console.log(JSON.stringify({ coverage: result.coverage }));

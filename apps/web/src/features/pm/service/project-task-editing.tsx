@@ -6,19 +6,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/lib/i18n-provider"
 import type { WorkItemsBoardMove } from "@/components/blocks/work-items-views"
-import type { ControlledIssueCatalog, ControlledIssuePatch, ControlledIssueRecord } from "@/views/pm/controlled-contracts"
+import type { ControlledIssuePatch, ControlledIssueRecord } from "@/views/pm/controlled-contracts"
 import { ApiError as CoreApiError } from "../markdown/api"
 import { useCoreSession, useCreationDrafts, useSessionDrafts, type Draft } from "../markdown/session"
 import { ServiceGantt } from "../components/service-gantt"
 import { ServiceCalendar } from "../components/service-calendar"
 import type { ScheduleItem } from "../components/service-collection-shared"
-import { usePlanningDashboard, usePmCommand, usePmService } from "./pm-service"
+import { usePlanningDashboard, usePmCommand, usePmService, useProjectDirectory } from "./pm-service"
 import { allowed, useText } from "./pm-ui"
 import { adoptProjectTaskDraft, hasUncertainProjectTaskDraft, observeProjectTaskDraft, prepareProjectTaskPatch, projectTaskChangesSchema, projectTaskDraftValue, projectTaskWriteProblem, readProjectTaskDraft, type ProjectTaskChanges, type ProjectTaskDraft, type ProjectTaskField, type ProjectTaskWriteContext } from "./project-task-editing-model"
 import { hasUncertainCreationDrafts } from "../markdown/creation-model"
 import { createCoreTimelineMetadata } from "./pm-core-schedule"
 import { RadixSelect } from "@/components/ui/radix-select"
 import { MilestoneReschedule } from "./dashboard-planning"
+import { MemberPicker } from "./people-components"
 
 export type { ProjectTaskChanges, ProjectTaskDraft, ProjectTaskField } from "./project-task-editing-model"
 export interface ProjectTaskEditing {
@@ -284,7 +285,7 @@ export function ProjectTaskEditingNotice({ editing, onOpen }: { editing: Project
   </div>
 }
 
-export function ProjectTaskInlineField({ editing, item, field, catalog }: { editing: ProjectTaskEditing; item: Pick<ControlledIssueRecord, "id" | "identifier">; field: Exclude<ProjectTaskField, "x-pm-estimate">; catalog: ControlledIssueCatalog }) {
+export function ProjectTaskInlineField({ editing, item, field }: { editing: ProjectTaskEditing; item: Pick<ControlledIssueRecord, "id" | "identifier">; field: Exclude<ProjectTaskField, "x-pm-estimate"> }) {
   const t = useText()
   const file = editing.files.find(candidate => candidate.id === item.id)
   if (!file) return <span>—</span>
@@ -300,7 +301,7 @@ export function ProjectTaskInlineField({ editing, item, field, catalog }: { edit
       {!value && <option value="">—</option>}{options.map(option => <option key={option.id} value={option.id} disabled={field === "status" && option.id !== file.entity.status && !workflow?.transitions.some(transition => transition.from === file.entity.status && transition.to === option.id)}>{option.label}</option>)}
     </RadixSelect>
   }
-  if (field === "assignee") return <span className="inline-grid gap-1"><Input list={`project-task-assignees-${item.id}`} aria-label={`${label} ${item.identifier}`} title={title} value={typeof value === "string" ? value : ""} disabled={disabled} placeholder={t("未分配", "Unassigned")} onChange={event => editing.change(item.id, { assignee: event.target.value || null })} /><datalist id={`project-task-assignees-${item.id}`}>{catalog.assignees.map(person => <option key={person.id} value={person.id}>{person.label}</option>)}</datalist></span>
+  if (field === "assignee") return <MemberPicker purpose="assignee" projectId={editing.projectId} label={`${label} ${item.identifier}`} value={typeof value === "string" ? value : null} disabled={disabled} onChange={assignee => editing.change(item.id, { assignee })} />
   return <Input type={field === "title" ? "text" : "date"} aria-label={`${label} ${item.identifier}`} title={title} value={typeof value === "string" ? value : ""} disabled={disabled} onChange={event => editing.change(item.id, field === "title" ? { title: event.target.value } : field === "due" ? { due: event.target.value || null } : { "x-pm-start": event.target.value || null })} />
 }
 
@@ -313,15 +314,16 @@ export function ProjectTaskInlineActions({ editing, item }: { editing: ProjectTa
 
 export function ProjectTimeline({ projectId, items, onOpen, editing }: ProjectTimelineProps) {
   const { locale } = useI18n()
-  const { actor } = usePmService()
+  const { actor, workspace } = usePmService()
+  const directory = useProjectDirectory()
   const planning = usePlanningDashboard()
   const [milestoneDateId, setMilestoneDateId] = useState("")
   const matching = editing?.projectId === projectId ? editing : undefined
   const visibleIds = new Set(items.map(item => item.id))
   const timelineFiles = matching?.files.filter(file => visibleIds.has(file.id)) ?? []
-  const timeline = matching ? createCoreTimelineMetadata({ files: timelineFiles, contextFiles: matching.contextFiles, configuration: matching.configuration ?? undefined, projectId, en: locale === "en", actor }) : undefined
+  const timeline = matching ? createCoreTimelineMetadata({ files: timelineFiles, contextFiles: matching.contextFiles, configuration: matching.configuration ?? undefined, projectId, en: locale === "en", actor, people: !directory.error ? directory.data?.projects : undefined, workspaceId: workspace?.id }) : undefined
   const timelineItems: ProjectTimelineItem[] = matching && timeline ? timelineFiles.map(file => ({ id: file.id, version: file.revision, source: file, scheduleFields: { start: true, due: true }, scheduleReadOnly: !matching.canEdit(file.id) || !!matching.drafts[file.id], data: { ...timeline.forFile(file), startDate: file.entity["x-pm-start"], dueDate: file.entity.due } })) : []
-  if (!matching) return <ServiceGantt items={items.map(item => ({ id: item.id, version: item.version, scheduleReadOnly: true, data: { title: item.title, status: item.stateId, projectId, assigneeId: item.assigneeIds[0], assigneeName: item.assigneeIds[0] === actor?.id ? actor.name : undefined, startDate: item.startDate, dueDate: item.dueDate } }))} onOpen={onOpen} defaultGroupBy="status" />
+  if (!matching) return <ServiceGantt items={items.map(item => ({ id: item.id, version: item.version, scheduleReadOnly: true, data: { title: item.title, status: item.stateId, projectId, assigneeId: item.assigneeIds[0], assigneeName: item.assigneeIds[0] === actor?.id ? actor.name : !directory.error ? directory.data?.projects.find(project => project.projectId === projectId)?.identities.find(person => person.id === item.assigneeIds[0])?.name : undefined, assigneeHref: workspace && item.assigneeIds[0] ? `/pm/${encodeURIComponent(workspace.id)}/members?person=${encodeURIComponent(item.assigneeIds[0])}` : undefined, startDate: item.startDate, dueDate: item.dueDate } }))} onOpen={onOpen} defaultGroupBy="status" />
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-timeline>
     <ProjectTaskEditingNotice editing={matching} onOpen={onOpen} />
     <ServiceGantt<ProjectTimelineItem> items={timelineItems} onOpen={onOpen} onSchedule={(item, start, due) => { void matching.schedule(item, start, due).catch(() => {}) }} pending={matching.pending} defaultGroupBy="status" milestones={timeline?.milestones} onOpenMilestone={id => onOpen({ id })} onEditMilestoneDates={setMilestoneDateId} canEditMilestoneDates={id => !matching.locked && planning.data?.milestones.some(milestone => milestone.id === id && milestone.editable) === true} />
@@ -337,10 +339,14 @@ export interface ProjectCalendarProps extends ProjectTimelineProps {
 /** Calendar dates use the same core revision and schedule write path as the gantt view. */
 export function ProjectCalendar({ projectId, items, onOpen, editing, visibleIds, today }: ProjectCalendarProps) {
   const t = useText()
+  const { locale } = useI18n()
+  const { actor, workspace } = usePmService()
+  const directory = useProjectDirectory()
   const matching = editing?.projectId === projectId ? editing : undefined
+  const metadata = matching ? createCoreTimelineMetadata({ files: matching.files, contextFiles: matching.contextFiles, configuration: matching.configuration ?? undefined, projectId, en: locale === "en", actor, people: !directory.error ? directory.data?.projects : undefined, workspaceId: workspace?.id }) : undefined
   const calendarItems: (ScheduleItem & { source?: FileRecord })[] = matching
-    ? matching.files.filter(file => !visibleIds || visibleIds.has(file.id)).map(file => ({ id: file.id, version: file.revision, source: file, scheduleFields: { start: true, due: true }, scheduleReadOnly: !matching.canEdit(file.id) || !!matching.drafts[file.id], data: { title: file.entity.title, status: file.entity.status, startDate: file.entity["x-pm-start"], dueDate: file.entity.due } }))
-    : items.map(item => ({ id: item.id, version: item.version, scheduleFields: { start: true, due: true }, scheduleReadOnly: true, data: { title: item.title, status: item.stateId, startDate: item.startDate, dueDate: item.dueDate } }))
+    ? matching.files.filter(file => !visibleIds || visibleIds.has(file.id)).map(file => ({ id: file.id, version: file.revision, source: file, scheduleFields: { start: true, due: true }, scheduleReadOnly: !matching.canEdit(file.id) || !!matching.drafts[file.id], data: { ...metadata!.forFile(file), startDate: file.entity["x-pm-start"], dueDate: file.entity.due } }))
+    : items.map(item => ({ id: item.id, version: item.version, scheduleFields: { start: true, due: true }, scheduleReadOnly: true, data: { title: item.title, status: item.stateId, assigneeId: item.assigneeIds[0], assigneeName: item.assigneeIds[0] === actor?.id ? actor.name : !directory.error ? directory.data?.projects.find(project => project.projectId === projectId)?.identities.find(person => person.id === item.assigneeIds[0])?.name : undefined, assigneeHref: workspace && item.assigneeIds[0] ? `/pm/${encodeURIComponent(workspace.id)}/members?person=${encodeURIComponent(item.assigneeIds[0])}` : undefined, startDate: item.startDate, dueDate: item.dueDate } }))
   return <div className="min-w-0 space-y-3" data-pm-project-calendar>
     {matching && <ProjectTaskEditingNotice editing={matching} onOpen={onOpen} />}
     <p className="text-sm text-muted-foreground">{t("日历日期直接写入同一 Markdown 核心任务；已有字段草稿请先保存或放弃。冲突和未知结果不会自动重试。", "Calendar dates write to the same Markdown task. Save or discard an existing field draft first; conflicts and uncertain results are never retried automatically.")}</p>

@@ -1,3 +1,6 @@
+import { acquireChatDirectoryWriter, assertCollaborationThreadLifecycleMutation } from "../collaboration/coordinator.ts";
+import { assertCollaborationChatAdmission, assertCollaborationModelInput, assertCollaborationThreadExecution, getCollaborationGenerationContext, recordCollaborationOutput } from "../collaboration/runs.ts";
+import { getStoreIdentity, inventoryPersistence } from "./persistence-schema.ts";
 import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -46,13 +49,14 @@ import { queuePmAgentTerminal, startPmAgentSignals, stopPmAgentSignals } from ".
 import { resolvePmAnalysisChatSnapshot } from "../automation-execution/native-templates/pm-analysis-chat.ts";
 import { boundedContext } from "./context.ts";
 import { forkChatSnapshot } from "./forks.ts";
-import { listRecords, readRecord, transaction, writeRecord } from "./store.ts";
+import { getDatabase, listRecords, readRecord, transaction, writeRecord } from "./store.ts";
 import {
   closeNativeInteractions,
   emitNativeOutput,
   endNativeOutput,
   getNativeOutput,
   initializeNativeOutput,
+  normalizeToolValue,
   requestNativeInteraction,
   setNativeOutputStatus,
 } from "./native-output.ts";
@@ -77,15 +81,49 @@ import {
   updateThread,
   freezeThreadExecution,
   type StoredMessage,
+  assertThreadWritable,
 } from "./threads.ts";
 import {
   pmContextPromptLine,
   resolvePmReferenceOperations,
 } from "./pm-context.ts";
+import { chatContextResolveRequestSchema, type AcceptedChatContext, type ChatContextInput } from "@agent-workspace/contracts/message-context";
+import { contextDigest, contextPromptText, projectContextMessage, resolveChatContextItems, resolveContextAttachmentParts, validateContextAttachmentBindings } from "./message-context.ts";
+import { validateChatAttachments } from "../providers/chat-attachments.ts";
 
 const GENERATIONS = "chat:generations";
 const EVENTS = "chat:events";
 const REQUESTS = "chat:requests";
+type ChatSubmissionRecord = {
+  version?: 1; id?: string; fingerprint: string; threadId?: string; submissionId?: string;
+  inputMessageId?: string; state?: "resolving" | "accepted" | "rejected" | "unknown";
+  storeId?: string; restoreEpoch?: number; reason?: string; updatedAt?: string;
+};
+export function lookupChatAcceptance(threadId: string, submissionId: string): ChatGeneration | null {
+  const identity = chatRequestIdentity({ id: threadId, idempotencyKey: submissionId, messages: [] });
+  const record = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
+  if (!record?.id) return null;
+  const generation = getChatGeneration(record.id);
+  if (generation?.threadId !== threadId) return null;
+  if (record.version === 1) return record.state === "accepted" && record.threadId === threadId &&
+    record.submissionId === submissionId && typeof record.inputMessageId === "string" &&
+    record.inputMessageId === generation.inputMessageId ? generation : null;
+  return generation.request.idempotencyKey === submissionId ? generation : null;
+}
+export function lookupChatSubmission(threadId: string, submissionId: string): {
+  status: "accepted" | "not_accepted" | "unknown"; generationId?: string; reason?: string; storeId: string; restoreEpoch: number;
+} {
+  const store = getStoreIdentity(getDatabase());
+  const identity = chatRequestIdentity({ id: threadId, idempotencyKey: submissionId, messages: [] });
+  const record = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
+  const generation = lookupChatAcceptance(threadId, submissionId);
+  if (generation && (!record?.inputMessageId || record.inputMessageId === generation.inputMessageId))
+    return { status: "accepted", generationId: generation.id, storeId: store.storeId, restoreEpoch: store.restoreEpoch };
+  if (record?.state === "rejected" && record.storeId === store.storeId && record.restoreEpoch === store.restoreEpoch)
+    return { status: "not_accepted", reason: record.reason, storeId: store.storeId, restoreEpoch: store.restoreEpoch };
+  return { status: "unknown", reason: record?.reason ?? "No complete original acceptance proof is available.", storeId: store.storeId, restoreEpoch: store.restoreEpoch };
+}
+export const assertChatLifecycleMutationAllowed = assertCollaborationThreadLifecycleMutation;
 export type ChatRequest = {
   id: string;
   messages: UIMessage[];
@@ -99,6 +137,7 @@ export type ChatRequest = {
   idempotencyKey?: string;
   /** Pinned PM references resolved before the turn is accepted; never bodies. */
   pmReferences?: PmReferenceInput[];
+  contextItems?: ChatContextInput[];
 };
 export type ChatGeneration = {
   id: string;
@@ -148,12 +187,13 @@ type ChatRuntimeState = {
   controllers: Map<string, AbortController>;
   workers: Map<string, Promise<void>>;
   subscribers: Map<string, Set<() => void>>;
+  admissions?: Set<Promise<void>>;
   started: boolean;
   stopping: boolean;
 };
 const stateKey = Symbol.for("agent-workspace.chat-runtime");
 const globals = globalThis as typeof globalThis & { [stateKey]?: ChatRuntimeState };
-const state = (globals[stateKey] ??= {
+const state: ChatRuntimeState = (globals[stateKey] ??= {
   controllers: new Map(),
   workers: new Map(),
   subscribers: new Map(),
@@ -163,6 +203,13 @@ const state = (globals[stateKey] ??= {
 const compactionTimers = new Map<string, NodeJS.Timeout>();
 const compactionTasks = new Set<Promise<void>>();
 const { controllers, workers, subscribers } = state;
+const admissions = (state.admissions ??= new Set<Promise<void>>());
+function beginChatAdmission(): () => void {
+  if (state.stopping) throw new DurableError(503, "chat_runtime_stopping", "Chat execution is stopping; no new admission or history mutation is allowed.");
+  const barrier = Promise.withResolvers<void>();
+  admissions.add(barrier.promise);
+  return () => { if (admissions.delete(barrier.promise)) barrier.resolve(); };
+}
 export const isChatActive = (generation: ChatGeneration) =>
   generation.status === "queued" || generation.status === "running";
 export function getChatGeneration(id: string): ChatGeneration | null {
@@ -258,6 +305,27 @@ export function subscribeChat(id: string, signal?: AbortSignal): ReadableStream<
     }, // Unsubscribe only: the worker has its own AbortController.
   });
 }
+/** Observation never resubmits and aborting this wait does not stop the generation. */
+export async function waitForChatTerminal(id: string, signal?: AbortSignal): Promise<ChatGeneration> {
+  signal?.throwIfAborted();
+  const original = getChatGeneration(id);
+  if (!original) throw new DurableError(404, "generation_not_found", "Original generation is unavailable.");
+  if (!isChatActive(original)) return original;
+  const { promise, resolve, reject } = Promise.withResolvers<ChatGeneration>();
+  const listeners = subscribers.get(id) ?? new Set<() => void>();
+  subscribers.set(id, listeners);
+  const cleanup = () => { listeners.delete(check); if (!listeners.size) subscribers.delete(id); signal?.removeEventListener("abort", abort); };
+  const abort = () => { cleanup(); reject(signal?.reason ?? new Error("Terminal observation cancelled.")); };
+  const check = () => {
+    const generation = getChatGeneration(id);
+    if (!generation) { cleanup(); reject(new DurableError(409, "generation_unresolved", "Original generation disappeared before a terminal state was observed.")); }
+    else if (!isChatActive(generation)) { cleanup(); resolve(generation); }
+  };
+  listeners.add(check);
+  signal?.addEventListener("abort", abort, { once: true });
+  check();
+  return promise;
+}
 const toUIMessage = (entry: StoredMessage): UIMessage =>
   ({ id: entry.id, ...entry.content, ...(entry.turnContext ? {
     metadata: { ...(entry.content.metadata as Record<string, unknown> | undefined), turnContext: entry.turnContext },
@@ -275,6 +343,7 @@ export const defaultChatExecutionPolicy: ExecutionPolicy = {
 const inputDigest = (message: UIMessage, originalQuote?: unknown) => createHash("sha256").update(JSON.stringify({
   role: message.role, parts: message.parts,
   quote: (message.metadata as { custom?: { quote?: unknown } } | undefined)?.custom?.quote ?? originalQuote,
+  contextAttachments: (message.metadata as { custom?: { contextAttachments?: unknown } } | undefined)?.custom?.contextAttachments,
 })).digest("hex");
 function inputMessage(request: ChatRequest): UIMessage {
   const message = request.messages.findLast(message => message.role === "user");
@@ -301,11 +370,30 @@ function validateInputBinding(request: ChatRequest): TurnContext | undefined {
     }))
       throw new ThreadConflictError("已受理消息的 PM 上下文不可修改；请发送新消息。", "turn_context_conflict");
   }
+  if (context && request.contextItems !== undefined) {
+    const frozen = (context.contextItems ?? []).flatMap(item => item.input ? [item.input] : []);
+    const supplied = request.contextItems.map((input, index) => {
+      const original = frozen[index];
+      if (input.source.type === "environment" && original?.source.type === "environment")
+        return { ...input, source: { ...input.source, environmentDigest: input.source.environmentDigest ?? original.source.environmentDigest } };
+      if (input.source.type === "terminal" && original?.source.type === "terminal")
+        return { ...input, source: { ...input.source, environmentDigest: input.source.environmentDigest ?? original.source.environmentDigest } };
+      if (input.source.type === "response" && original?.source.type === "response")
+        return { ...input, source: { ...input.source, generationId: input.source.generationId ?? original.source.generationId,
+          contentDigest: input.source.contentDigest ?? original.source.contentDigest } };
+      if (input.source.type === "thread" && original?.source.type === "thread" ||
+          input.source.type === "native-output" && original?.source.type === "native-output")
+        return { ...input, source: { ...input.source, contentDigest: input.source.contentDigest ?? original.source.contentDigest } };
+      return input;
+    });
+    if (contextDigest(chatContextResolveRequestSchema.parse({ contextItems: supplied }).contextItems) !== contextDigest(frozen))
+      throw new ThreadConflictError("已受理消息的上下文不可修改；请使用新输入消息 ID。", "turn_context_conflict");
+  }
   return context;
 }
 /** Audit metadata only: it never authorizes, expires or gates an operation. No credentials are stored. */
 function bindExecutionInput(request: ChatRequest, generationId: string, references: PmReferenceResolution[],
-  operations: NonNullable<ChatGeneration["pmOperations"]>, requestHeaders?: Headers) {
+  operations: NonNullable<ChatGeneration["pmOperations"]>, requestHeaders?: Headers, contextItems?: AcceptedChatContext[]) {
   const input = inputMessage(request);
   const existing = validateInputBinding(request);
   const executionGrantId = crypto.randomUUID();
@@ -313,12 +401,13 @@ function bindExecutionInput(request: ChatRequest, generationId: string, referenc
   const context: TurnContext = existing ?? {
     version: 1, threadId: request.id, messageId: input.id,
     acceptedAt: new Date().toISOString(), pmReferences: references, executionGrantId,
+    ...(contextItems?.length ? { contextItems } : {}),
   };
   bindMessageTurnContext(request.id, context);
   const identity = requestHeaders ? mcpIdentityFromHeaders(requestHeaders) : null;
   writeRecord("chat:execution-grants", executionGrantId, {
     id: executionGrantId, threadId: request.id, inputMessageId: input.id, generationId, traceId,
-    inputDigest: inputDigest(input),
+    inputDigest: contextDigest({ message: inputDigest(input), contextItems: context.contextItems?.map(item => item.input) }),
     issuedAt: new Date().toISOString(), policy: defaultChatExecutionPolicy,
     authorizationEvidence: operations,
     ...(identity ? { sourceGrantId: identity.grantId, actorId: identity.actorId } : { source: "local" }),
@@ -386,14 +475,14 @@ export function chatRequestIdentity(request: ChatRequest): string {
 }
 function chatRequestFingerprint(request: ChatRequest): string {
   const last = request.messages.at(-1);
-  const metadata = last?.metadata as { custom?: { quote?: unknown } } | undefined;
+  const metadata = last?.metadata as { custom?: { quote?: unknown; contextAttachments?: unknown } } | undefined;
   return createHash("sha256")
     .update(
       JSON.stringify({
         trigger: request.trigger ?? "submit-message",
         messageId: request.messageId,
         tail: last
-          ? { id: last.id, role: last.role, parts: last.parts, quote: metadata?.custom?.quote }
+          ? { id: last.id, role: last.role, parts: last.parts, quote: metadata?.custom?.quote, contextAttachments: metadata?.custom?.contextAttachments }
           : null,
         system: request.system,
         providerInstanceId: request.config?.providerInstanceId,
@@ -404,18 +493,25 @@ function chatRequestFingerprint(request: ChatRequest): string {
         responseStreamingMode: request.config?.responseStreamingMode,
         tools: request.tools,
         pmReferences: request.pmReferences,
+        contextItems: request.contextItems,
       }),
     )
     .digest("hex");
 }
 function findSubmittedChat(identity: string, fingerprint: string): ChatGeneration | null {
-  const existing = readRecord<{ id: string; fingerprint: string }>(REQUESTS, identity);
+  const existing = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
   if (!existing) return null;
   if (existing.fingerprint !== fingerprint)
     throw new ThreadConflictError("相同提交身份对应了不同聊天请求。", "idempotency_conflict");
-  return getChatGeneration(existing.id);
+  if (existing.id) {
+    const generation = getChatGeneration(existing.id);
+    if (!generation) throw new ThreadConflictError("原受理记录缺少生成证据；不能重新派发。", "submission_unknown");
+    return generation;
+  }
+  return null;
 }
 function requireRunnableThread(threadId: string, expectedRevision?: number) {
+  assertThreadWritable(threadId);
   const thread = getThread(threadId);
   if (!thread) throw new ThreadConflictError("该会话已删除。", "thread_deleted");
   if (!thread.executionSelection)
@@ -499,17 +595,36 @@ function scheduleIdleCompaction(generation: ChatGeneration, headers?: Headers): 
   compactionTimers.set(generation.threadId, timer);
 }
 
+/** Server-only synchronous hooks commit provenance/bindings with acceptance, before any native launch. */
+export type ChatAdmissionHooks = { onAccepted: (generation: ChatGeneration) => void };
 export async function submitChat(
   request: ChatRequest,
   runtime?: ProviderRuntime,
   requestHeaders?: Headers,
   idle?: { expectedId: string; mode: "onReturn" | "beforeCacheExpires" },
+  admissionHooks?: ChatAdmissionHooks,
 ): Promise<ChatGeneration> {
   await startChatRuntime();
+  const releaseAdmission = beginChatAdmission();
+  try {
   const identity = chatRequestIdentity(request);
   const fingerprint = chatRequestFingerprint(request);
   const existing = findSubmittedChat(identity, fingerprint);
   if (existing) { await resolveChatExecutionScope(requireRunnableThread(existing.threadId), requestHeaders); return existing; }
+  const reservationStore = getStoreIdentity(getDatabase());
+  transaction(() => {
+    const previous = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
+    if (previous?.fingerprint !== undefined && previous.fingerprint !== fingerprint)
+      throw new ThreadConflictError("相同提交身份对应了不同聊天请求。", "idempotency_conflict");
+    if (previous && previous.state !== "rejected")
+      throw new ThreadConflictError("原提交仍在受理或待核对；只查询原键，不能重新派发。", "submission_unknown");
+    writeRecord<ChatSubmissionRecord>(REQUESTS, identity, {
+      version: 1, fingerprint, threadId: request.id, submissionId: request.idempotencyKey,
+      inputMessageId: request.messages.at(-1)?.id, state: "resolving",
+      storeId: reservationStore.storeId, restoreEpoch: reservationStore.restoreEpoch, updatedAt: new Date().toISOString(),
+    });
+  });
+  try {
   if (!idle) {
     const active = getActiveChat(request.id);
     if (active?.idleCompaction) {
@@ -532,6 +647,16 @@ export async function submitChat(
   }
   ensureThread(request.id);
   const thread = requireRunnableThread(request.id, request.config?.threadSettingsRevision);
+  const acceptDuplicateInput = (generation: ChatGeneration): ChatGeneration => {
+    requireRunnableThread(request.id, thread.revision);
+    if (state.stopping) throw new DurableError(503, "chat_runtime_stopping", "Runtime stopped during asynchronous admission.");
+    const reservation = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
+    if (reservation?.state !== "resolving" || reservation.fingerprint !== fingerprint)
+      throw new ThreadConflictError("原提交受理身份已变化；请核对原结果。", "submission_unknown");
+    writeRecord<ChatSubmissionRecord>(REQUESTS, identity, { ...reservation, id: generation.id,
+      inputMessageId: generation.inputMessageId, state: "accepted", updatedAt: new Date().toISOString() });
+    return generation;
+  };
   const submittedInput = inputMessage(request);
   const savedInput = getThreadHistory(request.id).messages.find(message => message.id === submittedInput.id);
   const savedQuote = (savedInput?.content.metadata as { custom?: { quote?: unknown } } | undefined)?.custom?.quote;
@@ -547,7 +672,7 @@ export async function submitChat(
   if (boundContext && request.trigger !== "regenerate-message" && request.messages.at(-1)?.role === "user") {
     const original = listChatGenerations(request.id).find(generation => generation.inputMessageId === boundContext.messageId &&
       generation.request.trigger !== "regenerate-message" && !generation.continuationOf);
-    if (original) { await resolveChatExecutionScope(thread, requestHeaders); return original; }
+    if (original) { await resolveChatExecutionScope(thread, requestHeaders); return transaction(() => acceptDuplicateInput(original)); }
   }
   // A frozen context is metadata evidence, not a historic-body read. Recheck live
   // authority against the same entity, retaining the ORIGINAL accepted metadata.
@@ -558,6 +683,13 @@ export async function submitChat(
     ? await resolvePmReferenceOperations(referencesToAuthorize, requestHeaders)
     : undefined;
   const pmReferences = boundContext?.pmReferences ?? referenceEvidence?.references;
+  const contextItems = boundContext?.contextItems ?? await resolveChatContextItems(request.id, request.contextItems ?? [], requestHeaders ?? new Headers());
+  if (boundContext?.contextItems?.length) {
+    const projector = await createPmVisibilityProjector(request.id, requestHeaders ?? new Headers());
+    const saved = getThreadHistory(request.id).messages.find(message => message.id === boundContext.messageId)!;
+    if (projector.history([saved])[0]?.turnContext?.contextItems?.some(item => item.visibility !== "available"))
+      throw new DurableError(403, "context_forbidden", "Accepted source context is no longer readable; remove the reference in a new message.");
+  }
   if (
     (request.config?.providerInstanceId !== undefined &&
       request.config.providerInstanceId !== thread.settings.providerInstanceId) ||
@@ -573,6 +705,7 @@ export async function submitChat(
       modelName: thread.settings.model,
     }));
   const modelOptions = validatedModelOptions(resolved.providerInstanceId, thread.settings.model, thread.settings.modelOptions);
+  validateContextAttachmentBindings(inputMessage(request), request.contextItems ?? boundContext?.contextItems?.flatMap(item => item.input ? [item.input] : []));
   const analysisSnapshot = await resolvePmAnalysisChatSnapshot(request.id, request.idempotencyKey);
   const executionSnapshot = analysisSnapshot ?? await resolveChatExecutionScope(thread, requestHeaders);
   if (!thread.executionSelection) throw new DurableError(412, "session_cutover_required", "旧会话不能执行；请新建 Session。");
@@ -592,6 +725,10 @@ export async function submitChat(
         request = { ...request, messages: [...newBranch.map(toUIMessage), last] };
     }
   }
+  await preflightNativeAttachments({
+    threadId: request.id, executionSnapshot,
+    request: { ...request, system: request.system ?? thread.settings.systemPrompt, transferContext: undefined },
+  }, resolved, requestHeaders ?? new Headers(), boundContext ? undefined : { messageId: submittedInput.id, items: contextItems });
   const generation = transaction(() => {
     const duplicate = findSubmittedChat(identity, fingerprint);
     if (duplicate) return duplicate;
@@ -599,10 +736,12 @@ export async function submitChat(
     if (acceptedContext && request.trigger !== "regenerate-message" && request.messages.at(-1)?.role === "user") {
       const original = listChatGenerations(request.id).find(generation => generation.inputMessageId === acceptedContext.messageId &&
         generation.request.trigger !== "regenerate-message" && !generation.continuationOf);
-      if (original) return original;
+      if (original) return acceptDuplicateInput(original);
     }
     // Provider/PM resolution yields; archiving, deletion, settings or binding edits may have won meanwhile.
     requireRunnableThread(request.id, thread.revision);
+    if (state.stopping) throw new DurableError(503, "chat_runtime_stopping", "Runtime stopped during asynchronous admission.");
+    assertCollaborationChatAdmission(request.id, submittedInput.id, request.idempotencyKey);
     if (JSON.stringify(getThread(request.id)?.executionSelection) !== JSON.stringify(thread.executionSelection))
       throw new ThreadConflictError("Execution selection changed during admission.", "execution_selection_conflict");
     if (idle) {
@@ -655,14 +794,19 @@ export async function submitChat(
       ...(idle ? { idleCompaction: idle.mode } : {}),
       threadSettingsSnapshot: { ...thread.settings },
       executionSnapshot,
-      ...bindExecutionInput({ ...request, messages: accepted }, id, pmReferences ?? [], referenceEvidence?.operations ?? [], requestHeaders),
+      ...bindExecutionInput({ ...request, messages: accepted }, id, pmReferences ?? [], referenceEvidence?.operations ?? [], requestHeaders, contextItems),
       ...(pmReferences ? { pmReferences } : {}),
       ...(referenceEvidence?.operations.length ? { pmOperations: referenceEvidence.operations } : {}),
     };
     saveGeneration(next);
     freezeThreadExecution(request.id, executionSnapshot.environment!, executionSnapshot.path);
     initializeNativeOutput(id, request.id);
-    writeRecord(REQUESTS, identity, { id, fingerprint });
+    writeRecord<ChatSubmissionRecord>(REQUESTS, identity, {
+      version: 1, id, fingerprint, threadId: request.id, submissionId: request.idempotencyKey,
+      inputMessageId: next.inputMessageId, state: "accepted", storeId: reservationStore.storeId,
+      restoreEpoch: reservationStore.restoreEpoch, updatedAt: new Date().toISOString(),
+    });
+    admissionHooks?.onAccepted(next);
     updateThread(request.id, {});
     if (cancelled) settleChat(next.id, "cancelled");
     return getChatGeneration(next.id)!;
@@ -673,122 +817,95 @@ export async function submitChat(
     launchChat(generation, resolved, requestHeaders);
   }
   return generation;
+  } catch (error) {
+    transaction(() => {
+      const current = readRecord<ChatSubmissionRecord>(REQUESTS, identity);
+      if (current?.state === "resolving" && !current.id) writeRecord<ChatSubmissionRecord>(REQUESTS, identity, {
+        ...current, state: "rejected", reason: error instanceof DurableError || error instanceof ThreadConflictError ? error.code : "admission_rejected",
+        updatedAt: new Date().toISOString(),
+      });
+    });
+    throw error;
+  }
+  } finally { releaseAdmission(); }
 }
-function nativePlan(
-  generation: ChatGeneration,
-  runtime: ProviderRuntime,
-  forcePortable = false,
-): {
-  session?: CliSessionOptions;
-  prompt: string;
+type NativeHandoffInput = Pick<ChatGeneration, "threadId" | "request" | "executionSnapshot" | "continuationOf" | "nativeSession">;
+type NativeHandoff = {
+  session?: CliSessionOptions; messages: UIMessage[]; includeSystem: boolean;
   handoff: NonNullable<ChatGeneration["handoff"]>;
-} {
-  const thread = getThread(generation.threadId)!;
+};
+/** One source of truth for both before-accept byte validation and native dispatch. */
+function nativeHandoff(generation: NativeHandoffInput, runtime: ProviderRuntime, forcePortable = false): NativeHandoff {
+  const thread = getThread(generation.threadId);
+  if (!thread) throw new ThreadConflictError("该会话已删除。", "thread_deleted");
   const fork = thread.pendingFork;
   const forkOrigin = fork ? getChatGeneration(getThreadFork(generation.threadId)?.sourceRunId ?? "") : null;
   const snapshot = generation.executionSnapshot;
-  const system = [
-    generation.request.system,
-    snapshot && agentExecutionIdentity(snapshot),
-    snapshot && `本次执行工作目录：${JSON.stringify(snapshot.path)}。目录位置不是隔离沙箱或额外授权。`,
-  ].filter(Boolean).join("\n\n");
-  // Per-message evidence must reach resume, not only the first native system prompt.
-  const turnEvidence = pmContextPromptLine(generation.pmReferences);
-  const compatibleDirectory = (ref: NativeSessionRef | undefined) =>
-    Boolean(snapshot && ref?.cwd === snapshot.path);
-  if (
-    !forcePortable &&
-    fork &&
-    !generation.continuationOf &&
-    sameExecutionIdentity(thread.pendingForkEnvironment, snapshot?.environment) &&
-    compatibleDirectory(fork.source) &&
-    forkOrigin && forkOrigin.request.system === generation.request.system &&
-    fork.source.providerInstanceId === runtime.providerInstanceId &&
-    fork.source.instanceRevision === runtime.instanceRevision &&
-    runtime.capabilities.nativeFork &&
-    (fork.source.modelId === runtime.modelId ||
-      runtime.capabilities.modelTransition === "native") &&
-    (!fork.boundary || runtime.capabilities.boundedFork)
-  ) {
-    return {
-      session: { fork },
-      prompt: buildChatPrompt(
-        generation.request.messages.slice(-1),
-        [system, turnEvidence].filter(Boolean).join("\n\n"),
-        generation.request.transferContext,
-      ),
-      handoff: { mode: "native-fork", reason: "从已保存的原生边界建立分支。" },
-    };
-  }
+  const compatibleDirectory = (ref: NativeSessionRef | undefined) => Boolean(snapshot && ref?.cwd === snapshot.path);
+  if (!forcePortable && fork && !generation.continuationOf &&
+      sameExecutionIdentity(thread.pendingForkEnvironment, snapshot?.environment) && compatibleDirectory(fork.source) &&
+      forkOrigin && forkOrigin.request.system === generation.request.system &&
+      fork.source.providerInstanceId === runtime.providerInstanceId && fork.source.instanceRevision === runtime.instanceRevision &&
+      runtime.capabilities.nativeFork && (fork.source.modelId === runtime.modelId || runtime.capabilities.modelTransition === "native") &&
+      (!fork.boundary || runtime.capabilities.boundedFork))
+    return { session: { fork }, messages: generation.request.messages.slice(-1), includeSystem: true,
+      handoff: { mode: "native-fork", reason: "从已保存的原生边界建立分支。" } };
   const ref = thread.nativeSession;
-  const index =
-    ref && thread.nativeMessageId
-      ? generation.request.messages.findIndex((message) => message.id === thread.nativeMessageId)
-      : -1;
-  const modelCompatible =
-    ref?.modelId === runtime.modelId || runtime.capabilities.modelTransition === "native";
-  if (
-    !forcePortable &&
-    ref?.providerInstanceId === runtime.providerInstanceId &&
-    ref.instanceRevision === runtime.instanceRevision &&
-    sameExecutionIdentity(thread.nativeEnvironment, snapshot?.environment) &&
-    compatibleDirectory(ref) &&
-    runtime.capabilities.nativeResume &&
-    index >= 0 &&
-    modelCompatible &&
-    thread.nativeSystemPrompt === generation.request.system &&
-    !generation.continuationOf
-  ) {
-    return {
-      session: { resume: ref },
-      prompt: buildChatPrompt(
-        generation.request.messages.slice(index + 1),
-        turnEvidence,
-        generation.request.transferContext,
-      ),
-      handoff: { mode: "native", reason: "同账号原生会话续接；只发送新的回合。" },
-    };
-  }
+  const index = ref && thread.nativeMessageId ? generation.request.messages.findIndex(message => message.id === thread.nativeMessageId) : -1;
+  const modelCompatible = ref?.modelId === runtime.modelId || runtime.capabilities.modelTransition === "native";
+  if (!forcePortable && ref?.providerInstanceId === runtime.providerInstanceId && ref.instanceRevision === runtime.instanceRevision &&
+      sameExecutionIdentity(thread.nativeEnvironment, snapshot?.environment) && compatibleDirectory(ref) &&
+      runtime.capabilities.nativeResume && index >= 0 && modelCompatible &&
+      thread.nativeSystemPrompt === generation.request.system && !generation.continuationOf)
+    return { session: { resume: ref }, messages: generation.request.messages.slice(index + 1), includeSystem: false,
+      handoff: { mode: "native", reason: "同账号原生会话续接；只发送新的回合。" } };
   const previous = generation.continuationOf ? getChatGeneration(generation.continuationOf) : null;
-  if (
-    !forcePortable &&
-    generation.continuationOf &&
-    generation.nativeSession?.providerInstanceId === runtime.providerInstanceId &&
-    generation.nativeSession.instanceRevision === runtime.instanceRevision &&
-    compatibleDirectory(generation.nativeSession) &&
-    sameExecutionIdentity(previous?.executionSnapshot?.environment, snapshot?.environment) &&
-    previous?.executionSnapshot?.path === snapshot?.path &&
-    runtime.capabilities.nativeResume &&
-    generation.request.system === previous?.request.system &&
-    ((generation.nativeSession.modelId ?? previous?.modelId) ===
-      runtime.modelId ||
-      runtime.capabilities.modelTransition === "native")
-  ) {
-    return {
-      session: { resume: generation.nativeSession },
-      prompt: buildChatPrompt(
-        generation.request.messages.slice(-1),
-        turnEvidence,
-        generation.request.transferContext,
-      ),
-      handoff: { mode: "native", reason: "用户确认后的原生恢复；先核对已有进度，不重放原始任务。" },
-    };
+  if (!forcePortable && generation.continuationOf && generation.nativeSession?.providerInstanceId === runtime.providerInstanceId &&
+      generation.nativeSession.instanceRevision === runtime.instanceRevision && compatibleDirectory(generation.nativeSession) &&
+      sameExecutionIdentity(previous?.executionSnapshot?.environment, snapshot?.environment) &&
+      previous?.executionSnapshot?.path === snapshot?.path && runtime.capabilities.nativeResume &&
+      generation.request.system === previous?.request.system &&
+      ((generation.nativeSession.modelId ?? previous?.modelId) === runtime.modelId || runtime.capabilities.modelTransition === "native"))
+    return { session: { resume: generation.nativeSession }, messages: generation.request.messages.slice(-1), includeSystem: false,
+      handoff: { mode: "native", reason: "用户确认后的原生恢复；先核对已有进度，不重放原始任务。" } };
+  return { messages: generation.request.messages, includeSystem: true, handoff: { mode: "portable",
+    reason: forcePortable ? "历史 PM 内容当前不可读或来源无法证明，使用过滤后的历史重建上下文；不重放业务工具。"
+      : ref || fork || previous ? "实例、模型、系统指令、作用域目录或分支边界变化，使用已保存上下文移交。" : "首次使用当前实例。" } };
+}
+/** Both fresh admission and explicit recovery validate the same projected byte set as dispatch. */
+async function preflightNativeAttachments(
+  generation: NativeHandoffInput, runtime: ProviderRuntime, headers: Headers,
+  current?: { messageId: string; items: AcceptedChatContext[] },
+): Promise<void> {
+  const projector = await createPmVisibilityProjector(generation.threadId, headers);
+  const byId = new Map(getThreadHistory(generation.threadId).messages.map(message => [message.id, message]));
+  const history = projector.history(generation.request.messages.map((message, index) =>
+    byId.get(message.id) ?? toStoredMessage(message, generation.request.messages[index - 1]?.id ?? null)));
+  const lineage = new Set<string>();
+  let ancestor = generation.continuationOf;
+  while (ancestor && !lineage.has(ancestor)) { lineage.add(ancestor); ancestor = getChatGeneration(ancestor)?.continuationOf; }
+  const transfers = listRecords<ContextTransfer>(TRANSFERS).filter(value => value.parentThreadId === generation.threadId &&
+    (!generation.continuationOf && !value.consumedAt || Boolean(value.consumedByRunId && lineage.has(value.consumedByRunId))));
+  let forcePortable = projector.nativeContextContaminated || Boolean(generation.request.transferContext?.trim() && !transfers.length);
+  for (const transfer of transfers) {
+    if (!getThread(transfer.sourceThreadId)) forcePortable = true;
+    else forcePortable ||= (await createPmVisibilityProjector(transfer.sourceThreadId, headers)).nativeContextContaminated;
   }
-  return {
-    prompt: buildChatPrompt(
-      generation.request.messages,
-      [system, turnEvidence].filter(Boolean).join("\n\n"),
-      generation.request.transferContext,
-    ),
-    handoff: {
-      mode: "portable",
-      reason: forcePortable
-        ? "历史 PM 内容当前不可读或来源无法证明，使用过滤后的历史重建上下文；不重放业务工具。"
-        : ref || fork || previous
-          ? "实例、模型、系统指令、作用域目录或分支边界变化，使用已保存上下文移交。"
-          : "首次使用当前实例。",
-    },
-  };
+  const handoff = nativeHandoff({ ...generation, request: { ...generation.request, messages: history.map(toUIMessage) } }, runtime, forcePortable);
+  const selected = new Set(handoff.messages.map(message => message.id));
+  const parts: UIMessage["parts"] = [];
+  for (const entry of history) if (selected.has(entry.id)) {
+    parts.push(...toUIMessage(entry).parts);
+    parts.push(...await resolveContextAttachmentParts(current && entry.id === current.messageId ? current.items : entry.turnContext?.contextItems, headers));
+  }
+  validateChatAttachments(parts, runtime.driver);
+}
+function nativePlan(generation: ChatGeneration, runtime: ProviderRuntime, forcePortable = false) {
+  const plan = nativeHandoff(generation, runtime, forcePortable), snapshot = generation.executionSnapshot;
+  const system = plan.includeSystem ? [generation.request.system, snapshot && agentExecutionIdentity(snapshot),
+    snapshot && `本次执行工作目录：${JSON.stringify(snapshot.path)}。目录位置不是隔离沙箱或额外授权。`].filter(Boolean).join("\n\n") : undefined;
+  return { ...plan, prompt: buildChatPrompt(plan.messages, [system, pmContextPromptLine(generation.pmReferences)].filter(Boolean).join("\n\n"),
+    generation.request.transferContext, generation.inputMessageId) };
 }
 function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, requestHeaders?: Headers): void {
   const threadSnapshot = getThread(generation.threadId);
@@ -804,6 +921,10 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       const snapshot = generation.executionSnapshot;
       if (!snapshot?.environment)
         throw new DurableError(412, "execution_environment_required", "This execution has no versioned authorized environment; create a new Session.");
+      const collaborationOwned = getCollaborationGenerationContext(generation.id) !== null;
+      const releaseWriter = await acquireChatDirectoryWriter(generation.threadId, generation.id, snapshot.path, controller.signal);
+      try {
+      let admittedModelContexts: { messageId: string; contextId: string; inputDigest: string }[] = [];
       const assertLiveAuthorization = () => {
         const current = getChatGeneration(generation.id);
         if (state.stopping || controller.signal.aborted || controllers.get(generation.id) !== controller ||
@@ -842,10 +963,18 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         try {
           const analysis = await resolvePmAnalysisChatSnapshot(generation.threadId, generation.request.idempotencyKey, controller.signal);
           const resolved = analysis ?? await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders, "execute", controller.signal);
+          if (analysis) await assertCollaborationThreadExecution(generation.threadId, requestHeaders, controller.signal, generation.id);
           assertLiveAuthorization();
           if (resolved.path !== snapshot.path || !sameExecutionIdentity(resolved.environment, snapshot.environment))
             throw new DurableError(409, "execution_environment_changed", "Current execution directory differs from the accepted versioned environment.");
           if (!analysis) await assertNativeTemplateChatSnapshot(generation, resolved);
+          if (admittedModelContexts.length) {
+            const projection = await createPmVisibilityProjector(generation.threadId, requestHeaders ?? new Headers());
+            const current = projection.history(getThreadHistory(generation.threadId).messages);
+            for (const selected of admittedModelContexts) if (!current.find(message => message.id === selected.messageId)?.turnContext?.contextItems?.some(item =>
+              item.visibility === "available" && item.contextId === selected.contextId && item.inputDigest === selected.inputDigest))
+              throw new DurableError(403, "context_authorization_changed", "Selected source context is no longer readable; no further native dispatch is authorized.");
+          }
           assertLiveAuthorization();
           await assertExternalGrant();
         } catch (error) {
@@ -918,13 +1047,23 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         const byId = new Map(stored.map(message => [message.id, message]));
         const projectedHistory = projector.history(generation.request.messages.map((message, index) =>
           byId.get(message.id) ?? toStoredMessage(message, generation.request.messages[index - 1]?.id ?? null)));
+        if (generation.turnContext?.contextItems?.length) {
+          const current = projectedHistory.find(message => message.id === generation.inputMessageId)?.turnContext?.contextItems;
+          if (!current || current.length !== generation.turnContext.contextItems.length || current.some(item => item.visibility !== "available"))
+            throw new DurableError(403, "context_forbidden", "The accepted selected context became unavailable before native dispatch; no Provider turn was sent.");
+        }
         const visibleReferences = (entry: StoredMessage | undefined) => (entry?.turnContext?.pmReferences ?? [])
           .flatMap(reference => { const parsed = pmReferenceResolutionSchema.safeParse(reference); return parsed.success ? [parsed.data] : []; });
-        const modelMessages = projectedHistory.map(entry => {
-          const message = toUIMessage(entry);
+        const modelMessages = await Promise.all(projectedHistory.map(async entry => {
+          const message = projectContextMessage(toUIMessage(entry), entry.turnContext?.contextItems,
+            await resolveContextAttachmentParts(entry.turnContext?.contextItems, requestHeaders ?? new Headers()));
           const line = entry.id !== generation.inputMessageId ? pmContextPromptLine(visibleReferences(entry)) : undefined;
           return line ? { ...message, parts: [{ type: "text" as const, text: line }, ...message.parts] } : message;
-        });
+        }));
+        admittedModelContexts = projectedHistory.flatMap(message => (message.turnContext?.contextItems ?? [])
+          .filter(item => item.visibility === "available" && (item.dependencies?.some(source => source.threadId !== generation.threadId) ||
+            item.pmProvenance?.targets.length || item.pmProvenance?.operationIds.length || item.pmProvenance?.authorities?.length))
+          .map(item => ({ messageId: message.id, contextId: item.contextId, inputDigest: item.inputDigest })));
         const dependencies = projector.visibleProvenance(modelMessages.map(message => message.id));
         const lineage = new Set([generation.id]);
         let ancestor = generation.continuationOf;
@@ -937,6 +1076,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         const transferTargets: PmToolTarget[] = [];
         const transferOperationIds: string[] = [];
         const transferAuthorities: NonNullable<ChatGeneration["pmOperations"]> = [];
+        const transferContextSources: { threadId: string; messageIds: string[] }[] = [];
         let transferContaminated = Boolean(generation.request.transferContext?.trim() && !transfers.length);
         for (const transfer of transfers) {
           if (!getThread(transfer.sourceThreadId)) { transferContaminated = true; continue; }
@@ -945,11 +1085,13 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           transferTargets.push(...sourceProjection.provenance.targets);
           transferOperationIds.push(...sourceProjection.provenance.operationIds);
           transferAuthorities.push(...(sourceProjection.provenance.authorities ?? []));
+          transferContextSources.push({ threadId: transfer.sourceThreadId, messageIds: [] }, ...(sourceProjection.provenance.contextSources ?? []));
         }
         const contaminated = projector.nativeContextContaminated || transferContaminated;
         recordPmContentProvenance({
           threadId: generation.threadId, generationId: generation.id, messageIds: [generation.messageId],
           operationIds: [...dependencies.operationIds, ...(!transferContaminated ? transferOperationIds : [])],
+          contextSources: [...(dependencies.contextSources ?? []), ...(!transferContaminated ? transferContextSources : [])],
           targets: [...dependencies.targets, ...pmPayloadTargets(projectedHistory), ...(!transferContaminated ? transferTargets : [])],
           authorities: [...(dependencies.authorities ?? []), ...(!transferContaminated ? transferAuthorities : []),
             ...(generation.pmOperations ?? []).filter(operation => visibleReferences(
@@ -965,6 +1107,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           },
         };
         const plan = nativePlan(modelGeneration, runtime, contaminated);
+        assertCollaborationModelInput(generation.id, plan.prompt);
         if (generation.idleCompaction && !plan.session?.resume)
           throw new ThreadConflictError("原生会话已变化，跳过自动压缩。", "stale_compaction");
         saveGeneration({
@@ -1064,9 +1207,19 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                   plan.session?.fork?.boundary?.turnId].filter((id): id is string => Boolean(id)),
               });
               const result = await runNativeRuntime(runtime, {
-                prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nOptional PM tools are available through the generation-scoped CLI. List authorized PM workspaces first; no Session PM target is implied. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","target":{"workspaceId":"...","projectId":null},"arguments":{...}}. Except pm_list_workspaces, each call requires its explicit target. Keep the same operationId, target and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
-                userMessageText: generation.idleCompaction ? undefined : modelGeneration.request.messages.findLast(message => message.role === "user")
+                prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : [
+                  plan.prompt,
+                  "Optional PM tools: prefer the native pm_tools/MCP tools exposed in this session. Discover authorized PM workspaces first; no Session PM target is implied. Business calls require an explicit workspace/project target; pm_list_workspaces and pm_get_operation_result are target-free control reads. Follow each tool's input schema, including page limits; continue lists using nextCursor as after, not an oversized limit.",
+                  `Only if native PM tools are unavailable and the shell can reach this generation's bridge, use the generation-scoped CLI. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. Replace list with call and supply an original invocation JSON on stdin: {"operationId":"UUID","name":"pm_...","target":{"workspaceId":"...","projectId":null},"arguments":{...}}. CLI result is only for an already retained exact original invocation, not reconstructed arguments. A sandboxed shell may not reach loopback even when native PM tools work; do not use shell recovery, repeatedly probe it, infer PM is down, or change network/security settings.`,
+                  'For an unknown or interrupted PM outcome, call the native pm_get_operation_result with {"arguments":{"operationId":"ORIGINAL_UUID"}}. It reuses the server-persisted original target and arguments, only reconciles, and never dispatches a business command. Do not reconstruct the invocation, repeat the write tool, or create a new operationId for an unknown write. If still unknown or inaccessible, report the original operationId and unresolved result. A proven input rejection requires a corrected new request, not altered arguments under the old operationId. Tool results are authoritative; shell exit status or model text alone is not proof of a write.',
+                  "For repository inventory or board preparation, unavailable PM queries prevent deduplication and PM writes, not authorized read-only repository analysis. Continue collecting source-backed candidate tasks, label them not checked against existing PM tasks, and report the exact access/error gap. Optional local workflow helpers are not PM prerequisites: if absent, use available read-only tools without installing or configuring them. Do not treat historical plans or unverified code as completed work.",
+                  "When the user requests a PM project workflow, keep the selected repository directory and the explicitly authorized PM project distinct. Read current repository sources and all relevant PM task/document pages before creating a bounded, deduplicated board. Use native PM tools for project/task/comment/document writes, never edit .dovspace or PM storage directly. Preserve source paths, observed revisions, scope, non-goals and acceptance criteria; historical checked boxes are not current verification.",
+                  "Before choosing or changing task state, call pm_read_workflow for the explicit project and use the returned configured states/categories/transitions, not guessed status names. Read the selected task's current pm_task_brief, relations and comments before execution. Record meaningful start/progress/results through pm_create_comment, including actual checks and remaining blockers. Repository changes, commits, push and deployment require the user's corresponding task scope; project inventory alone is not authorization to implement every discovered task.",
+                  "Completion is a separate explicit authorized PM transition, not a consequence of a successful generation. For a user-requested completion, compare actual evidence against current acceptance, reread the current revision and workflow, transition only when satisfied, and read back the task. Save requested project reports as PM documents with real task IDs, source/evidence links, verified states, failures and next actions. Never claim a task or report was saved without its authoritative tool result; reconcile uncertain operations before continuing related writes.",
+                ].join("\n\n"),
+                userMessageText: generation.idleCompaction ? undefined : generation.request.messages.findLast(message => message.role === "user")
                   ?.parts.filter(part => part.type === "text").map(part => part.text).join("\n"),
+                attachmentParts: plan.messages.flatMap(message => message.parts),
                 pmToolBridge: bridge ? { command: process.execPath, args: [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url] } : undefined,
                 mcpServers: automationConnectors?.mcpServers,
                 execution: { threadId: generation.threadId, generationId: generation.id,
@@ -1106,11 +1259,16 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 onText: (delta) => {
                   if (hasAssistantItem) return;
                   legacyText += delta;
+                  if (collaborationOwned) recordCollaborationOutput(generation.id, legacyText, "assistant-legacy");
                   const ready = filter.update("legacy", legacyText);
                   if (ready !== null) publish("legacy", ready);
                   schedule();
                 },
                 onEvent: (event) => {
+                  if (collaborationOwned) {
+                    if (event.type === "item.upsert") recordCollaborationOutput(generation.id, JSON.stringify(normalizeToolValue(event.item)), `native:${event.item.id}`);
+                    else recordCollaborationOutput(generation.id, event.chunk, `native:${event.itemId}`, true);
+                  }
                   if (event.type !== "item.upsert" || event.item.type !== "assistant_message") {
                     emitNativeOutput(generation.id, event);
                     return;
@@ -1215,6 +1373,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         try { await automationConnectors?.close(); }
         finally { await bridge?.close(); }
       }
+      } finally { releaseWriter?.(); }
     },
     controller.signal,
   )
@@ -1357,6 +1516,8 @@ export async function continueChat(
   resolvedRuntime?: ProviderRuntime,
   requestHeaders?: Headers,
 ): Promise<ChatGeneration> {
+  const releaseAdmission = beginChatAdmission();
+  try {
   const previous = getChatGeneration(id);
   if (!previous) throw new ThreadConflictError("找不到该回复。", "not_found");
   if (previous.continuationId) { await resolveChatExecutionScope(requireRunnableThread(previous.threadId), requestHeaders); return getChatGeneration(previous.continuationId)!; }
@@ -1387,17 +1548,32 @@ export async function continueChat(
     ? await resolvePmReferenceOperations(frozenReferences.map(({ workspaceId, projectId, kind, id }) =>
       ({ workspaceId, projectId, kind, id, revision: null })), requestHeaders)
     : undefined;
+  const originalInput = getThreadHistory(previous.threadId).messages.find(message => message.id === previous.inputMessageId);
+  let contextItems: AcceptedChatContext[] | undefined;
+  if (previous.turnContext?.contextItems?.length) {
+    if (!originalInput) throw new DurableError(409, "context_unavailable", "The original accepted context binding is missing.");
+    const projector = await createPmVisibilityProjector(previous.threadId, requestHeaders ?? new Headers());
+    contextItems = projector.history([originalInput])[0]?.turnContext?.contextItems;
+    if (!contextItems || contextItems.some(item => item.visibility !== "available"))
+      throw new DurableError(403, "context_forbidden", "The original selected source context is no longer readable; send a new message with currently available references.");
+  }
+  const originalUi = originalInput ? toUIMessage(originalInput) : undefined;
+  const originalMetadata = originalUi?.metadata;
+  const originalCustom = originalMetadata !== null && typeof originalMetadata === "object" && "custom" in originalMetadata ? originalMetadata.custom : undefined;
+  const contextAttachments = originalCustom !== null && typeof originalCustom === "object" && "contextAttachments" in originalCustom ? originalCustom.contextAttachments : undefined;
   const recovery: UIMessage = {
     id: crypto.randomUUID(),
     role: "user",
     parts: [
+      ...(originalUi?.parts.map(part => part.type === "text" ? { type: "text" as const, text: "" } : part) ?? []),
       {
         type: "text",
         text: "用户已明确授权从刚才保存的中断状态继续。先核对已有输出和工作目录中的实际进度，仅完成尚未完成的部分；不要重新执行已完成的步骤或盲目重复外部写入。若无法判断副作用是否已发生，请先询问用户。",
       },
     ],
-    metadata: { custom: { continuationOf: id, sideEffectsConfirmed: confirmSideEffects } },
+    metadata: { custom: { continuationOf: id, sideEffectsConfirmed: confirmSideEffects, ...(contextAttachments ? { contextAttachments } : {}) } },
   };
+  validateContextAttachmentBindings(recovery, contextItems?.flatMap(item => item.input ? [item.input] : []));
   const oldSystem = previous.threadSettingsSnapshot?.systemPrompt;
   const system =
     oldSystem !== undefined &&
@@ -1419,14 +1595,20 @@ export async function continueChat(
     config: previous.request.config,
     trigger: "submit-message",
     pmReferences: frozenReferences.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision })),
+    contextItems: contextItems?.flatMap(item => item.input ? [item.input] : []),
     idempotencyKey,
   };
+  await preflightNativeAttachments({ threadId: previous.threadId, executionSnapshot, request,
+    continuationOf: id, nativeSession: previous.nativeSession }, runtime, requestHeaders ?? new Headers(),
+    { messageId: recovery.id, items: contextItems ?? [] });
   // All identity checks and the lineage link commit before scheduling the provider.
   const identity = chatRequestIdentity(request);
   const generation = transaction(() => {
     const latest = getChatGeneration(id)!;
     if (latest.continuationId) return getChatGeneration(latest.continuationId)!;
     requireRunnableThread(previous.threadId, thread.revision);
+    if (state.stopping) throw new DurableError(503, "chat_runtime_stopping", "Runtime stopped during continuation preflight.");
+    assertCollaborationChatAdmission(previous.threadId, recovery.id, idempotencyKey);
     if (getActiveChat(previous.threadId))
       throw new ThreadConflictError("当前会话已有运行中的回复。");
     freezeThreadExecution(previous.threadId, executionSnapshot.environment!, executionSnapshot.path);
@@ -1450,7 +1632,7 @@ export async function continueChat(
       interactionMode: thread.settings.interactionMode ?? "default",
       threadSettingsSnapshot: { ...thread.settings },
       executionSnapshot,
-      ...bindExecutionInput({ ...request, messages }, generationId, frozenReferences, referenceEvidence?.operations ?? [], requestHeaders),
+      ...bindExecutionInput({ ...request, messages }, generationId, frozenReferences, referenceEvidence?.operations ?? [], requestHeaders, contextItems),
       continuationOf: id,
       nativeSession: previous.nativeSession,
       ...(frozenReferences.length ? { pmReferences: frozenReferences } : {}),
@@ -1468,12 +1650,32 @@ export async function continueChat(
   });
   if (!workers.has(generation.id) && isChatActive(generation)) launchChat(generation, runtime, requestHeaders);
   return generation;
+  } finally { releaseAdmission(); }
 }
 export async function startChatRuntime(): Promise<void> {
   if (state.started) return;
   state.started = true;
   state.stopping = false;
   interruptPmToolCalls();
+  const database = getDatabase();
+  const resolving = database.prepare("SELECT key FROM records WHERE namespace=?").all(REQUESTS).flatMap(value => {
+    const key = String(value.key), record = readRecord<ChatSubmissionRecord>(REQUESTS, key);
+    return record?.state === "resolving" ? [{ key, record }] : [];
+  });
+  const inventory = resolving.length ? inventoryPersistence(database, { omitCredentialValues: true }) : null;
+  const store = resolving.length ? getStoreIdentity(database) : null;
+  const generations = resolving.length ? listRecords<ChatGeneration>(GENERATIONS) : [];
+  for (const { key, record } of resolving) {
+    const identity = record.threadId && record.submissionId ? chatRequestIdentity({ id: record.threadId, idempotencyKey: record.submissionId, messages: [] }) : null;
+    const related = generations.some(generation => generation.threadId === record.threadId &&
+      (generation.request?.idempotencyKey === record.submissionId || generation.inputMessageId === record.inputMessageId));
+    const neverAccepted = inventory !== null && inventory.blockers.length === 0 && store !== null &&
+      inventory.store !== null && inventory.store.storeId === store.storeId && inventory.store.restoreEpoch === store.restoreEpoch &&
+      record.version === 1 && !record.id && typeof record.inputMessageId === "string" && record.inputMessageId.length > 0 &&
+      /^[a-f0-9]{64}$/.test(record.fingerprint) && identity === key && record.storeId === store.storeId && record.restoreEpoch === store.restoreEpoch && !related;
+    writeRecord(REQUESTS, key, { ...record, state: neverAccepted ? "rejected" : "unknown",
+      reason: neverAccepted ? "admission_interrupted" : "original_admission_unresolved", updatedAt: new Date().toISOString() });
+  }
   for (const generation of listRecords<ChatGeneration>(GENERATIONS)) {
     if (!isChatActive(generation)) continue;
     const previous = generation.request.messages.at(-1);
@@ -1507,6 +1709,7 @@ export async function stopChatRuntime(): Promise<void> {
     if (isChatActive(generation)) closeNativeInteractions(generation.id);
   for (const generation of listRecords<ChatGeneration>(GENERATIONS))
     if (generation.status === "queued") settleChat(generation.id, "interrupted");
+  await Promise.all(admissions);
   await Promise.all(workers.values());
   await Promise.all(compactionTasks);
   for (const generation of listRecords<ChatGeneration>(GENERATIONS))
@@ -1517,6 +1720,7 @@ export async function stopChatRuntime(): Promise<void> {
 export function getChatRecoveryCandidate(id: string): ChatRecoveryCandidate | null {
   const generation = getChatGeneration(id);
   if (!generation || !generation.executionSnapshot?.environment || !getThread(generation.threadId)?.executionSelection) return null;
+  try { assertThreadWritable(generation.threadId); } catch { return null; }
   return {
     id,
     threadId: generation.threadId,
@@ -1550,8 +1754,11 @@ export async function continueChatRecovery(
   options: { idempotencyKey: string },
   requestHeaders?: Headers,
 ): Promise<{ id: string; status: ChatGeneration["status"] }> {
+  const releaseAdmission = beginChatAdmission();
+  try {
   const previous = getChatGeneration(id);
   if (!previous) throw new ThreadConflictError("找不到额度恢复的回复。", "not_found");
+  requireRunnableThread(previous.threadId);
   if (previous.continuationId && previous.continuationIdempotencyKey !== options.idempotencyKey)
     throw new ThreadConflictError("该回复已有用户创建的后续执行。");
   if (previous.continuationId) {
@@ -1575,6 +1782,7 @@ export async function continueChatRecovery(
     );
   const generation = await continueChat(id, nativeRecovery, options.idempotencyKey, runtime, requestHeaders);
   return { id: generation.id, status: generation.status };
+  } finally { releaseAdmission(); }
 }
 
 export async function forkChatGeneration(
@@ -1582,6 +1790,8 @@ export async function forkChatGeneration(
   options: { title?: string; idempotencyKey?: string } = {},
   requestHeaders?: Headers,
 ): Promise<{ threadId: string }> {
+  const releaseAdmission = beginChatAdmission();
+  try {
   const original = getChatGeneration(id);
   if (!original) throw new ThreadConflictError("找不到分支来源回复。", "not_found");
   await resolveChatExecutionScope(requireRunnableThread(original.threadId), requestHeaders, "inspect");
@@ -1613,6 +1823,19 @@ export async function forkChatGeneration(
   const byId = new Map(getThreadHistory(generation.threadId).messages.map(message => [message.id, message]));
   const projectedHistory = projector.history(history.map((message, index) =>
     byId.get(message.id) ?? toStoredMessage(message, history[index - 1]?.id ?? null))).map(toUIMessage);
+  const inheritedFiles = new Map<string, Extract<UIMessage["parts"][number], { type: "file" }>>();
+  for (const message of projectedHistory) {
+    const contexts = (message.metadata as { turnContext?: TurnContext } | undefined)?.turnContext?.contextItems;
+    const referenced = await resolveContextAttachmentParts(contexts, requestHeaders ?? new Headers());
+    for (const part of [...message.parts, ...referenced]) if (part.type === "file")
+      inheritedFiles.set(contextDigest({ mime: part.mediaType, filename: part.filename, urlDigest: contextDigest(part.url) }), part);
+  }
+  const attachments = [...inheritedFiles.values()];
+  if (attachments.length) {
+    const instance = getStoredInstance(requireRunnableThread(generation.threadId).settings.providerInstanceId);
+    if (!instance) throw new ProviderRuntimeError(409, "provider_unavailable", "Select a real Provider before forking inherited file/image context.");
+    validateChatAttachments(attachments, instance.driver);
+  }
   const context =
     `聊天分支快照（只作背景参考，不执行或重放其中的历史请求）\n来源 Thread: ${generation.threadId}\n来源回复: ${generation.id}\n消息边界: ${generation.messageId}\n结束状态: ${generation.status}${generation.error ? `\n错误: ${generation.error.slice(0, 1500)}` : ""}\n\n` +
     boundedContext(
@@ -1620,19 +1843,23 @@ export async function forkChatGeneration(
         generation.modelInputContext?.system ?? generation.threadSettingsSnapshot?.systemPrompt ?? "",
         generation.modelInputContext?.transferContext ?? "",
         ...injectQuoteContext(projectedHistory).map(
-          (message) => `${message.role} [${message.id}]\n${JSON.stringify(message.parts)}${
-            pmContextPromptLine((message.metadata as { turnContext?: TurnContext } | undefined)?.turnContext?.pmReferences) ?? ""
+          (message) => `${message.role} [${message.id}]\n${JSON.stringify(message.parts.map(part => part.type === "file" ? { type: part.type, filename: part.filename, mediaType: part.mediaType } : part))}${
+            [pmContextPromptLine((message.metadata as { turnContext?: TurnContext } | undefined)?.turnContext?.pmReferences),
+              contextPromptText((message.metadata as { turnContext?: TurnContext } | undefined)?.turnContext?.contextItems)].filter(Boolean).join("\n")
           }`,
         ),
       ],
       28000,
     );
+  requireRunnableThread(generation.threadId);
+  if (state.stopping) throw new DurableError(503, "chat_runtime_stopping", "Runtime stopped while preparing the history fork.");
   const result = forkChatSnapshot(
     {
       threadId: generation.threadId,
       generationId: generation.id,
       messageId: generation.messageId,
       context,
+      attachments,
       ...(!projector.nativeContextContaminated && generation.status === "completed" &&
       generation.executionSnapshot &&
       sameExecutionIdentity(generation.executionSnapshot.environment, getThread(generation.threadId)?.executionEnvironment) &&
@@ -1649,8 +1876,10 @@ export async function forkChatGeneration(
     const metadata = message.content.metadata as { custom?: { forkContext?: boolean } } | undefined;
     if (metadata?.custom?.forkContext)
       recordPmContentProvenance({ threadId: result.threadId, generationId: `fork:${message.id}`,
-        messageIds: [message.id], operationIds: dependencies.operationIds,
+        messageIds: [message.id], operationIds: dependencies.operationIds, contextSources: [
+          { threadId: generation.threadId, messageIds: projectedHistory.map(message => message.id) }, ...(dependencies.contextSources ?? [])],
         targets: [...dependencies.targets, ...pmPayloadTargets(projectedHistory)], authorities: dependencies.authorities ?? [] });
   }
   return result;
+  } finally { releaseAdmission(); }
 }

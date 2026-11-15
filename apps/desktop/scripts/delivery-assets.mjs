@@ -17,7 +17,7 @@ export function configuredArtifactNames({ version, target, signing }) {
   if (!["win32-x64", "darwin-x64", "darwin-arm64"].includes(target)) throw new Error("Unsupported desktop delivery target.");
   const [platform, arch] = target.split("-");
   const policy = desktopUpdatePolicy({ version, platform, signing });
-  const prefix = `PM-Agent-v4-${version}-${platform === "win32" ? "win" : "mac"}-${arch}-${signing}`;
+  const prefix = `Dovspace-${version}-${platform === "win32" ? "win" : "mac"}-${arch}-${signing}`;
   const native = (platform === "win32" ? ["exe"] : ["dmg", "zip"]).map((extension) => `${prefix}.${extension}`);
   const artifactName = `${prefix}.${platform === "win32" ? "exe" : "zip"}`;
   // Per-architecture Mac fragments cannot overwrite each other. The release

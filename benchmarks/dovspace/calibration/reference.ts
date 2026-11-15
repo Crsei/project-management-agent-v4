@@ -7,7 +7,8 @@ import { D01_PLAN } from '../tasks/policies.ts';
 import type { BenchEvent, FixtureEntity, FixtureHandle, FixtureReceipt, FixtureSnapshot } from '../schemas/types.ts';
 import { check, type GradeInput } from '../graders/types.ts';
 import { REQUIRED_FACTS } from '../graders/knowledge.ts';
-import { REFERENCE_RETRY_SOURCE, REFERENCE_RETRY_TEST, REFERENCE_INCIDENT_SOURCE, REFERENCE_INCIDENT_TEST } from './reference-source.ts';
+import { REFERENCE_RETRY_SOURCE, REFERENCE_RETRY_TEST, REFERENCE_INCIDENT_SOURCE, REFERENCE_INCIDENT_TEST, REFERENCE_GUIDANCE_RETRY_SOURCE, REFERENCE_INITIAL_RETRY_SOURCE, REFERENCE_CHANGE_TEST } from './reference-source.ts';
+import { CHANGED_REQUIREMENT, GUIDANCE_CONSTRAINTS, GUIDANCE_DOCUMENT, GUIDANCE_SOURCE_PATH, PARTIAL_RETRY_SOURCE, PARTIAL_RETRY_TEST, REQUIREMENT_PATH, RETAINED_BACKOFF, changedLines, contentHash } from '../tasks/guidance.ts';
 
 export const REFERENCE_SCOPE = 'Grader calibration only: synthetic trusted authority/transport evidence and real isolated candidate code execution; NOT a model run or live PM/Agent recovery experiment.';
 export function putPublic(snapshot: FixtureSnapshot, filename: string, content: string | unknown): void {
@@ -28,6 +29,10 @@ export function referenceCase(taskId: TaskId, root: string): GradeInput {
   for (const doc of SYNTHETIC_DOCUMENTS) putPublic(before, doc.path, doc.content);
   for (const [filename, content] of Object.entries({ ...KNOWLEDGE_FIXTURE_FILES, ...HISTORICAL_SESSION_FILES })) putPublic(before, filename, content);
   for (const [filename, content] of Object.entries(CODE_FIXTURE_FILES)) putPublic(before, `repo/${filename}`, content);
+  if (taskId === 'D04') {
+    putPublic(before, 'repo/src/retry.ts', PARTIAL_RETRY_SOURCE);
+    putPublic(before, 'repo/test/retry-partial.test.ts', PARTIAL_RETRY_TEST);
+  }
   putPublic(before, 'pm-targets.json', { workspaceId: fixture.workspaceId, targets: fixture.targets });
   const after = structuredClone(before);
   after.semanticHash = 'calibration-after';
@@ -50,7 +55,7 @@ export function referenceCase(taskId: TaskId, root: string): GradeInput {
   function target(key: string): FixtureEntity { const entity = after.entities.find((item) => item.key === key); if (!entity) throw new Error(`Reference lacks ${key}`); return entity; }
   function resume(handoff: Record<string, unknown>, operationId: string, action: string): void {
     putPublic(after, 'artifacts/handoff.json', handoff);
-    event('phase_checkpoint', { authorityVerified: true, handoffVerified: true, phaseId: taskId === 'L02' ? 'write' : 'checkpoint' }, undefined, 'reference-session-1', 'runner');
+    event('phase_checkpoint', { authorityVerified: true, handoffVerified: true, phaseId: taskId === 'L02' ? 'write' : taskId === 'K04' ? 'save' : taskId === 'D04' ? 'handoff' : taskId === 'L03' ? 'partial' : 'checkpoint', publicFiles: Object.fromEntries(Object.entries(after.publicFiles).filter(([name]) => ['knowledge/session-memory.json', 'repo/src/retry.ts', 'repo/test/retry-change.test.ts', 'repo/test/retry-partial.test.ts', 'artifacts/plan.json', 'artifacts/handoff.json'].includes(name))) }, undefined, 'reference-session-1', 'runner');
     event('interrupt_acknowledged', { wasActive: true, status: 'interrupted', reason: action });
     event('context_compressed', { droppedConversation: true, handoffPath: 'artifacts/handoff.json', originalOperationId: operationId }, undefined, 'reference-session-1', 'runner');
     event('session_started', { generationId: 'reference-generation-2', fresh: true }, undefined, 'reference-session-2');
@@ -86,6 +91,61 @@ export function referenceCase(taskId: TaskId, root: string): GradeInput {
   if (taskId === 'D02') {
     putPublic(after, 'repo/src/retry.ts', REFERENCE_RETRY_SOURCE); putPublic(after, 'repo/test/retry-after.test.ts', REFERENCE_RETRY_TEST);
     const entity = target('atlas-code'); updateEntity(entity, { body: `${String(entity.entity.body)}\nretryLimit=4; Retry-After support implemented with capped minimum delay.` }, 'reference-code-sync');
+  }
+  if (['K04', 'D04', 'L03'].includes(taskId)) {
+    const entity = target('atlas-code');
+    let originalOperationId = '';
+    if (taskId === 'K04') {
+      const decision = SYNTHETIC_FACTS.find(fact => fact.key === 'retryLimit')!;
+      putPublic(after, 'knowledge/session-memory.json', {
+        records: GUIDANCE_CONSTRAINTS.map(item => ({ key: item.key, status: 'active', sourceHash: contentHash(GUIDANCE_DOCUMENT), citations: [{ path: GUIDANCE_SOURCE_PATH, quote: item.quote }] })),
+        decisions: [{ key: 'retryLimit', value: decision.current, status: 'active', citations: [{ path: decision.currentPath, quote: decision.currentQuote }] }],
+        failedAttempts: [{ id: 'uncapped-delay', path: 'history/fictional-session-a.json', quote: 'Uncapped retries overload the API and must not be repeated.' }],
+      });
+      resume({ targetId: entity.id, revision: entity.revision }, '', 'new-session');
+    } else if (taskId === 'D04') {
+      const observedRevision = entity.revision;
+      originalOperationId = 'reference-partial-write';
+      const receipt = updateEntity(entity, { body: `${String(entity.entity.body)}\ndovspace:D04:partial` }, originalOperationId);
+      // The in-process trusted reference constructed this exact result above.
+      const nativeResult = receipt.result as { receipt: Record<string, unknown> };
+      const originalReceipt = nativeResult.receipt;
+      event('response_lost', { committed: true, targetId: entity.id, revision: receipt.revision, receiptIdentity: originalReceipt.commandId }, originalOperationId);
+      resume({ workspaceId: fixture.workspaceId, projectId: entity.projectId, targetId: entity.id, observedRevision, revision: receipt.revision, operationId: originalOperationId, receipt: originalReceipt, completed: ['cappedBackoff', 'decimal-seconds', 'original-regressions'], remainingWork: ['http-date', 'invalid-header', 'tests', 'docs', 'pm-sync'], failedAttempts: ['uncapped-delay'], sourceHash: contentHash(PARTIAL_RETRY_SOURCE), testHash: contentHash(PARTIAL_RETRY_TEST) }, originalOperationId, 'interrupt-and-new-session');
+      event('receipt_reconciled', { targetId: entity.id, revision: receipt.revision, receiptIdentity: originalReceipt.commandId, originalSessionId: 'reference-session-1', requesterSessionId: 'reference-session-2', requesterGenerationId: 'reference-generation-2', status: 'succeeded' }, originalOperationId, 'reference-session-2');
+    } else {
+      putPublic(after, 'repo/src/retry.ts', REFERENCE_INITIAL_RETRY_SOURCE);
+      putPublic(after, 'repo/test/retry-change.test.ts', REFERENCE_CHANGE_TEST);
+      putPublic(after, 'artifacts/plan.json', { requirementRevision: 'retry-v1', requirements: ['server-replacement', 'decimal-seconds', 'http-date', 'capped-delay'], remainingWork: ['docs', 'pm-sync'] });
+      resume({ workspaceId: fixture.workspaceId, projectId: entity.projectId, targetId: entity.id, revision: entity.revision, operationId: null, remainingWork: ['await-requirement-change'] }, '', 'change-requirement');
+      event('midpoint_code_verified', { passed: true, sourceHash: contentHash(REFERENCE_INITIAL_RETRY_SOURCE) }, undefined, 'reference-session-1', 'grader');
+      putPublic(after, REQUIREMENT_PATH, CHANGED_REQUIREMENT);
+      event('intervention_applied', { action: 'change-requirement', decisionPath: REQUIREMENT_PATH, originalRequirementRevision: 'retry-v1', currentRequirementRevision: 'retry-v2' }, undefined, 'reference-session-1', 'runner');
+    }
+    putPublic(after, 'repo/src/retry.ts', REFERENCE_GUIDANCE_RETRY_SOURCE);
+    putPublic(after, 'repo/test/retry-after.test.ts', REFERENCE_RETRY_TEST);
+    if (taskId === 'K04') {
+      putPublic(after, 'repo/README.md', `${CODE_FIXTURE_FILES['README.md']}\nOriginal operation identity and current authority remain required policy-only constraints; do not infer PM completion.\n`);
+      const memory = Buffer.from(after.publicFiles['knowledge/session-memory.json']!, 'base64').toString('utf8');
+      putPublic(after, 'artifacts/reuse.json', {
+        memoryHash: contentHash(memory),
+        constraints: GUIDANCE_CONSTRAINTS.map(item => {
+          const codeConstraint = item.key === 'capped-delay' || item.key === 'stable-api';
+          const policy = 'Original operation identity and current authority remain required policy-only constraints; do not infer PM completion.';
+          return { key: item.key, file: codeConstraint ? 'repo/src/retry.ts' : 'repo/README.md', quote: codeConstraint ? 'return Math.min(maxMs, Math.max(exponential, serverMs));' : policy, testFile: codeConstraint ? 'repo/test/retry-after.test.ts' : 'repo/README.md', testQuote: codeConstraint ? "assert.equal(retryDelay(3, { retryAfter: '2', nowMs: 0 }), 8000);" : policy };
+        }),
+        avoidedFailures: ['uncapped-delay'],
+      });
+    } else if (taskId === 'D04') {
+      putPublic(after, 'artifacts/delivery.md', `Retry-After delivered for ${entity.id}; original ${originalOperationId}. Source docs/atlas/retry-design.md. Preserved partial decisions and regressions.`);
+      updateEntity(entity, { body: `${String(entity.entity.body)}\ndovspace:D04:delivered` }, 'reference-final-write', 'update', 'reference-session-2');
+    } else {
+      putPublic(after, 'repo/test/retry-change.test.ts', REFERENCE_RETRY_TEST);
+      putPublic(after, 'artifacts/plan.json', { requirementRevision: 'retry-v2', requirements: ['server-minimum', 'decimal-seconds', 'http-date', 'capped-delay'] });
+      putPublic(after, 'artifacts/rework.json', { checkpointSourceHash: contentHash(REFERENCE_INITIAL_RETRY_SOURCE), finalSourceHash: contentHash(REFERENCE_GUIDANCE_RETRY_SOURCE), reused: [{ file: 'repo/src/retry.ts', quote: RETAINED_BACKOFF }], discarded: ['server-replacement'], added: ['server-minimum'], measurement: { unit: 'changed-lines', value: changedLines(REFERENCE_INITIAL_RETRY_SOURCE, REFERENCE_GUIDANCE_RETRY_SOURCE) } });
+      putPublic(after, 'artifacts/delivery.md', `retry-v2 server-minimum delivered for ${entity.id}. Source ${REQUIREMENT_PATH}.`);
+      updateEntity(entity, { body: `${String(entity.entity.body)}\ndovspace:L03:retry-v2; server-minimum` }, 'reference-final-write', 'update', 'reference-session-2');
+    }
   }
   if (taskId === 'L02') {
     const entity = target('beacon-receipt');

@@ -76,10 +76,10 @@
 .projectIdentity a svg { flex-shrink: 0; color: var(--text-secondary); }
 .projectIdentity a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-inline-value); font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-secondary); }
-.progress { display: grid; grid-template-columns: minmax(28px, 1fr) 36px; align-items: center; gap: 4px 8px; font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.progress > span { text-align: right; }
-.progress small { grid-column: 1 / -1; text-align: right; font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-muted); }
-.progressTrack { height: 6px; background: var(--surface-pressed); border-radius: var(--pill-radius); overflow: hidden; }
+.progress { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.progress > span { flex-shrink: 0; width: 36px; text-align: right; }
+.progress small { flex-shrink: 0; margin-left: auto; text-align: right; white-space: nowrap; font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-muted); }
+.progressTrack { flex: 1; min-width: 28px; height: 6px; background: var(--surface-pressed); border-radius: var(--pill-radius); overflow: hidden; }
 .progressTrack > span { display: block; height: 100%; background: var(--foreground); border-radius: inherit; }
 .projectDue { max-width: 110px; color: var(--text-secondary); font-size: var(--text-meta); line-height: var(--text-meta--line-height); text-align: right; }
 .projectDue > span { display: block; font-size: var(--text-meta); color: var(--text-muted); }

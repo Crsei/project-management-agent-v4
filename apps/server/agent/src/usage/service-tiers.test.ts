@@ -37,7 +37,7 @@ test("launch selection survives durable reopen without canonical telemetry and c
   await isolated(() => {
     capture("generation", [{ id: "serviceTier", value: "priority" }]);
     // A later current-thread preference (or accidental recapture) is not launch evidence.
-    writeRecord("threads", "thread", { settings: { modelOptions: [{ id: "serviceTier", value: "ultrafast" }] } });
+    writeRecord("chat:threads", "thread", { remoteId: "thread", settings: { modelOptions: [{ id: "serviceTier", value: "ultrafast" }] } });
     capture("generation", [{ id: "serviceTier", value: "ultrafast" }]);
     closeStore();
     const resolved = resolveCodexServiceTiers([scan()])[0]!.records[0]!;

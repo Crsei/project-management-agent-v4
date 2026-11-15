@@ -43,6 +43,25 @@ export function trustedMcpOrigin(value: string): URL {
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || !['https:', 'http:'].includes(url.protocol) || url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('MCP requires a clean HTTPS origin (HTTP only on loopback).');
   return url;
 }
+/** Private deployment configuration only; never use this policy for an OAuth issuer or client URL. */
+export function trustedMcpServiceOrigin(value: string): URL {
+  const url = new URL(value);
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || !['https:', 'http:'].includes(url.protocol)) throw new Error('MCP service transport requires a clean HTTP(S) origin.');
+  if (url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return url;
+  let listed = false;
+  try {
+    const configured: unknown = JSON.parse(process.env.MCP_INTERNAL_HTTP_ORIGINS ?? '[]');
+    if (!Array.isArray(configured)) throw new Error();
+    for (const candidate of configured) {
+      if (typeof candidate !== 'string') throw new Error();
+      const allowed = new URL(candidate);
+      if (allowed.protocol !== 'http:' || allowed.username || allowed.password || allowed.search || allowed.hash || allowed.pathname !== '/') throw new Error();
+      if (allowed.origin === url.origin) listed = true;
+    }
+  } catch { throw new Error('MCP_INTERNAL_HTTP_ORIGINS must be a JSON array of exact clean HTTP origins.'); }
+  if (!listed) throw new Error('Non-loopback MCP service HTTP requires its exact origin in MCP_INTERNAL_HTTP_ORIGINS; otherwise use HTTPS.');
+  return url;
+}
 export class McpBodyLimitError extends Error {}
 export async function readBoundedMcpBody(response: Response | Request, maximum = 65_536): Promise<string> {
   const reader = response.body?.getReader(); if (!reader) return '';
@@ -62,7 +81,7 @@ export async function readBoundedMcpBody(response: Response | Request, maximum =
   finally { clearTimeout(timer); void reader.cancel().catch(() => undefined); }
 }
 export async function introspectMcpGrant(identity: McpServiceIdentity): Promise<McpInvocationIdentity> {
-  const endpoint = new URL('/internal/mcp/introspect', trustedMcpOrigin(process.env.PM_MCP_AGENT_URL ?? process.env.PM_AUTOMATION_AGENT_URL ?? ''));
+  const endpoint = new URL('/internal/mcp/introspect', trustedMcpServiceOrigin(process.env.PM_MCP_AGENT_URL ?? process.env.PM_AUTOMATION_AGENT_URL ?? ''));
   const body = JSON.stringify(identity);
   const response = await fetch(endpoint, { method: 'POST', body, headers: mcpServiceHeaders('POST', endpoint.pathname, body), signal: AbortSignal.timeout(5_000), redirect: 'error' });
   if (!response.ok) { await response.body?.cancel(); throw new Error('MCP grant is not currently authorized.'); }

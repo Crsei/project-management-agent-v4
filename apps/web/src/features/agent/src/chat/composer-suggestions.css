@@ -14,6 +14,9 @@
 .composer-command-label { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .composer-command-prefix { color: var(--text-muted); }
 .composer-command-item[aria-selected=true] .composer-command-prefix { color: inherit; }
+.composer-command-details { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 2px; }
+.composer-command-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: 11px; }
+.composer-command-item[aria-selected=true] .composer-command-source { color: inherit; }
 .composer-command-description { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
 .composer-command-item[aria-selected=true] .composer-command-description { color: inherit; }
 .composer-command-badge { display: inline-flex; flex: none; align-items: center; gap: 3px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 11px; }

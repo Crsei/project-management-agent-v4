@@ -85,7 +85,7 @@ type Row=MetadataRow&{before_snapshot:ChangeSnapshot|null;after_snapshot:ChangeS
 const metadataColumns='change_id,sequence::text,stream_key,target,entity_kind,project_id,change_kinds,changed_fields,origin,actor_id,occurred_at,observed_at,completeness,before_revision,after_revision,before_project,before_address,after_address';
 const columns=`${metadataColumns},before_snapshot,after_snapshot`;
 type CoreHistoryIndex={files:Map<string,FileRecord>;backlinks:Map<string,FileRecord[]>};
-export type ChangeHistoryContext={sql:SqlExecutor;actor:Actor;workspaceId:string;snapshot:ReadonlyCoreSnapshot;authorizeExternal:(target:Extract<ChangeHistoryTarget,{kind:'external'}>)=>Promise<ExternalDocumentHistoryAddress>;resolveExternal:(expected:ExternalDocumentHistoryAddress)=>Promise<ExternalDocumentHistoryAddress>;coreIndex?:CoreHistoryIndex};
+export type ChangeHistoryContext={sql:SqlExecutor;actor:Actor;workspaceId:string;snapshot:ReadonlyCoreSnapshot;authorizeExternal:(target:Extract<ChangeHistoryTarget,{kind:'external'}>)=>Promise<ExternalDocumentHistoryAddress>;resolveExternal:(expected:ExternalDocumentHistoryAddress)=>Promise<ExternalDocumentHistoryAddress>;coreIndex?:CoreHistoryIndex;authorizedProjectIds?:readonly string[]};
 type Scope={stream:string;cursorKey:string;relation:ChangeSummary['relation'];projectId:string|null;authorizationKey?:string};
 function coreIndex(ctx:ChangeHistoryContext):CoreHistoryIndex {
  if(ctx.coreIndex)return ctx.coreIndex;
@@ -96,7 +96,12 @@ function coreIndex(ctx:ChangeHistoryContext):CoreHistoryIndex {
  ctx.coreIndex={files,backlinks};return ctx.coreIndex;
 }
 function scopeAllowed(member:Membership,projectId:string|null):boolean {return member.projectIds===null||!!projectId&&member.projectIds.includes(projectId);}
-async function memberFor(ctx:ChangeHistoryContext):Promise<Membership> {const member=await getMembership(ctx.sql,ctx.actor,ctx.workspaceId);if(!member.capabilities.includes('domain.read'))throw new DomainError('permission_denied',undefined,403);return member;}
+async function memberFor(ctx:ChangeHistoryContext):Promise<Membership> {
+ const member=await getMembership(ctx.sql,ctx.actor,ctx.workspaceId);
+ if(!member.capabilities.includes('domain.read'))throw new DomainError('permission_denied',undefined,403);
+ if(ctx.authorizedProjectIds===undefined)return member;
+ return {...member,projectIds:ctx.authorizedProjectIds.filter(id=>member.projectIds===null||member.projectIds.includes(id))};
+}
 async function resolve(ctx:ChangeHistoryContext,target:ChangeHistoryTarget,related:boolean,member:Membership):Promise<Scope[]> {
  const key=historyTargetKey(target);
  if(target.kind==='external') {
@@ -207,8 +212,8 @@ export async function readChangeHistory(ctx:ChangeHistoryContext,input:ChangeHis
  const bounded=await statistics(ctx,scopes,member,head);
  return {items,head,nextCursor:result.rows.length===limit?result.rows.at(-1)!.sequence:null,reviewedThrough:bounded.reviewed,pendingCount:bounded.pending,observationToken:token,completeness:bounded.completeness};
 }
-export async function readChangeDetail(ctx:ChangeHistoryContext,changeId:string):Promise<ChangeDetail> {
- const member=await memberFor(ctx),result=await ctx.sql.query<MetadataRow>(`SELECT ${metadataColumns} FROM change_history_entries WHERE workspace_id=$1 AND change_id=$2`,[ctx.workspaceId,changeId]),row=result.rows[0];
+async function authorizedChange(ctx:ChangeHistoryContext,changeId:string,member:Membership):Promise<MetadataRow> {
+ const result=await ctx.sql.query<MetadataRow>(`SELECT ${metadataColumns} FROM change_history_entries WHERE workspace_id=$1 AND change_id=$2`,[ctx.workspaceId,changeId]),row=result.rows[0];
  if(!row||!await readableRow(ctx,row,member))throw new DomainError('not_found_or_forbidden',undefined,404);
  if(row.target.kind==='core')await resolve(ctx,row.target,false,member);
  else {
@@ -216,6 +221,10 @@ export async function readChangeDetail(ctx:ChangeHistoryContext,changeId:string)
   if(!stream.rows[0])throw new DomainError('not_found_or_forbidden',undefined,404);
   await ctx.resolveExternal(stream.rows[0].address);
  }
+ return row;
+}
+export async function readChangeDetail(ctx:ChangeHistoryContext,changeId:string):Promise<ChangeDetail> {
+ const row=await authorizedChange(ctx,changeId,await memberFor(ctx));
  const content=await ctx.sql.query<{before_snapshot:ChangeSnapshot|null;after_snapshot:ChangeSnapshot|null}>('SELECT before_snapshot,after_snapshot FROM change_history_entries WHERE workspace_id=$1 AND change_id=$2',[ctx.workspaceId,changeId]);
  const snapshots=content.rows[0];if(!snapshots)throw new DomainError('not_found_or_forbidden',undefined,404);
  return {change:summary(row),before:snapshots.before_snapshot,after:snapshots.after_snapshot};
@@ -245,12 +254,28 @@ export async function compareChangeHistory(ctx:ChangeHistoryContext,input:Change
  const state=continuity.rows[0]!;
  return {target:input.target,before:from?.after_snapshot??first?.before_snapshot??null,after:to?.after_snapshot??null,fromChangeId:from?.change_id??null,toChangeId:to?.change_id??null,head:to?.sequence??'0',completeness:!to||state.gap?'missing_before':state.observed?'observed_endpoints':state.baseline?'baseline':'exact'};
 }
-export async function acknowledgeChangeHistory(ctx:ChangeHistoryContext,input:ChangeAcknowledgeInput):Promise<ChangeAcknowledgement> {
+async function observedScope(ctx:ChangeHistoryContext,input:ChangeAcknowledgeInput):Promise<{member:Membership;scopes:Scope[]}> {
  const member=await memberFor(ctx),grant=await ctx.sql.query<{through_sequence:string;includes_related:boolean;scope_digest:string}>('SELECT through_sequence::text,includes_related,scope_digest FROM change_history_observations WHERE token=$1 AND workspace_id=$2 AND actor_id=$3 AND target_key=$4',[input.observationToken,ctx.workspaceId,ctx.actor.id,historyTargetKey(input.target)]),seen=grant.rows[0];
  if(!seen||seen.through_sequence!==input.through)throw new DomainError('unobserved_history_head',undefined,409);
  const scopes=await resolve(ctx,input.target,seen.includes_related,member);
  const current=await statistics(ctx,scopes,member);
  if(digest([member.version,scopes,current.authorizationDigest])!==seen.scope_digest)throw new DomainError('history_scope_changed','Read the current related sources before acknowledging',409);
+ return {member,scopes};
+}
+/** Current-source check only: never advances a personal cursor or creates a fresh observation. */
+export async function authorizeChangeHistoryObservation(ctx:ChangeHistoryContext,input:ChangeAcknowledgeInput):Promise<void> {
+ await observedScope(ctx,input);
+}
+/** Rechecks stored history against today's formal related sources, not only its surviving root project. */
+export async function authorizeChangeHistoryEntries(ctx:ChangeHistoryContext,target:ChangeHistoryTarget,includeRelated:boolean,entries:readonly ChangeSummary[]):Promise<void> {
+ const member=await memberFor(ctx),scopes=await resolve(ctx,target,includeRelated,member);
+ for(const entry of entries) {
+  const row=await authorizedChange(ctx,entry.changeId,member);
+  if(!scopes.some(scope=>scope.stream===row.stream_key&&scope.relation===entry.relation))throw new DomainError('history_scope_changed','A retained history source is no longer linked in the current scope',409);
+ }
+}
+export async function acknowledgeChangeHistory(ctx:ChangeHistoryContext,input:ChangeAcknowledgeInput):Promise<ChangeAcknowledgement> {
+ const {member,scopes}=await observedScope(ctx,input);
  for(const scope of scopes)await ctx.sql.query(`INSERT INTO change_history_cursors(workspace_id,actor_id,target_key,reviewed_through) VALUES($1,$2,$3,$4) ON CONFLICT(workspace_id,actor_id,target_key) DO UPDATE SET reviewed_through=greatest(change_history_cursors.reviewed_through,excluded.reviewed_through)`,[ctx.workspaceId,ctx.actor.id,scope.cursorKey,input.through]);
  const stats=await statistics(ctx,await resolve(ctx,input.target,true,member),member);return {reviewedThrough:stats.reviewed,head:stats.head,pendingCount:stats.pending};
 }

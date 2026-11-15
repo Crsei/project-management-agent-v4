@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Link } from "react-router"
 import { ApiError } from "@contracts"
 import { ArrowRight, Eye, EyeOff, FolderKanban, MessageSquare, Users } from "lucide-react"
-import { DovspaceWordmark } from "@/components/dovspace-brand"
+import { DovspaceMark, DovspaceWordmark } from "@/components/dovspace-brand"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field } from "@/components/ui/field"
@@ -24,6 +24,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
     <div className={styles.shell}>
       <header className={`${styles.header} desktop-titlebar desktop-titlebar-reserve-controls desktop-titlebar-traffic-lights`}>
         <Link to="/pm" className={styles.brand}>
+          <DovspaceMark decorative />
           <DovspaceWordmark />
         </Link>
         {toolbar && <div className={styles.toolbar}>{toolbar}</div>}
@@ -61,6 +62,7 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
   const [password, setPassword] = useState("")
   const [visible, setVisible] = useState(false)
   const [attempted, setAttempted] = useState(false)
+  const [step, setStep] = useState<"email" | "password">("email")
   const [phase, setPhase] = useState<LoginPhase>("idle")
   const [failure, setFailure] = useState<unknown>(null)
   const [handledServiceError, setHandledServiceError] = useState<unknown>(null)
@@ -99,9 +101,18 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
     event.preventDefault()
     if (locked || requestPending.current) return
     setAttempted(true)
-    if (emailError || passwordError) {
-      if (emailError) emailInput.current?.focus()
-      else passwordInput.current?.focus()
+    if (emailError) {
+      setStep("email")
+      emailInput.current?.focus()
+      return
+    }
+    if (step === "email") {
+      setAttempted(false)
+      setStep("password")
+      return
+    }
+    if (passwordError) {
+      passwordInput.current?.focus()
       return
     }
     requestPending.current = true
@@ -156,17 +167,17 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
 
   return (
     <section className={styles.authForm} aria-labelledby="pm-login-title">
-      <div className="mb-6 flex justify-center"><DovspaceWordmark height={30} /></div>
       <Title id="pm-login-title" className={styles.title}>{t("欢迎回来", "Welcome back")}</Title>
       <p className={styles.description}>{t("登录，继续与团队一起推进项目。", "Sign in to continue working with your team.")}</p>
+      <p className={styles.hint} aria-live="polite">{step === "email" ? t("第 1 步，共 2 步", "Step 1 of 2") : t("第 2 步，共 2 步", "Step 2 of 2")}</p>
       <form noValidate aria-labelledby="pm-login-title" onSubmit={(event) => { void submit(event) }}>
         <fieldset disabled={locked} className={styles.fields}>
-          <Field label={t("邮箱", "Email")} required error={attempted ? emailError : null}>
+          {step === "email" && <Field label={t("邮箱", "Email")} required error={attempted ? emailError : null}>
             {(props) => (
               <Input {...props} ref={emailInput} name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={254} placeholder="you@example.com" value={email} onChange={(event) => { setEmail(event.target.value); setFailure(null) }} />
             )}
-          </Field>
-          <Field label={t("密码", "Password")} required error={attempted ? passwordError : null}>
+          </Field>}
+          {step === "password" && <><p className={styles.hint}>{email.trim()}</p><Field label={t("密码", "Password")} required error={attempted ? passwordError : null}>
             {(props) => (
               <div className={styles.password}>
                 <Input {...props} ref={passwordInput} name="password" type={visible ? "text" : "password"} autoComplete="current-password" maxLength={256} value={password} onChange={(event) => { setPassword(event.target.value); setFailure(null) }} />
@@ -175,11 +186,12 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
                 </Button>
               </div>
             )}
-          </Field>
+          </Field></>}
           <Button type="submit" className={styles.submit} loading={busy || service.loading} disabled={locked}>
-            {phase === "signing-in" ? t("正在登录…", "Signing in…") : phase === "checking" || service.loading ? t("正在检查会话…", "Checking session…") : t("登录", "Sign in")}
+            {phase === "signing-in" ? t("正在登录…", "Signing in…") : phase === "checking" || service.loading ? t("正在检查会话…", "Checking session…") : step === "email" ? t("继续", "Continue") : t("登录", "Sign in")}
             {!busy && !service.loading && <ArrowRight size={16} aria-hidden="true" />}
           </Button>
+          {step === "password" && <Button type="button" variant="outline" disabled={locked} onClick={() => { setAttempted(false); setFailure(null); setPassword(""); setStep("email") }}>{t("返回", "Back")}</Button>}
         </fieldset>
       </form>
       <div className={styles.feedback}>
@@ -204,6 +216,11 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
           <Link to="/pm/account/recovery" className="text-sm text-primary hover:text-foreground">{t("忘记密码 / 查看邮件找回状态", "Forgot password / email recovery availability")}</Link>
           <Link to="/pm/account/security" className="text-sm text-primary hover:text-foreground">{t("本人账号安全", "Account security")}</Link>
+        </div>
+        <div className={styles.registerAttribution}>
+          <p className={styles.registerTitle}>{t("还没有账号？", "No account yet?")}{" "}<Link to="/pm/register" className={styles.registerLink}>{t("注册账号", "Create an account")}</Link></p>
+          <p>{t("注册后可创建工作区；加入已有工作区仍需管理员邀请。", "After signup you can create a workspace; joining an existing workspace still requires an administrator's invitation.")}</p>
+          <p>{t("全新实例的初始账号与第一个工作区由首次设置页创建：实例未初始化时该页替换本登录表单，桌面端自动带入本机一次性设置令牌。", "A fresh instance creates its initial account and first workspace on the first-use setup page: while the instance is uninitialized that page replaces this sign-in form, and the desktop app supplies this machine's one-time setup token automatically.")}</p>
         </div>
       </div>
     </section>

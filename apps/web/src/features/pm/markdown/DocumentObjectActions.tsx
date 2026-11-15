@@ -206,7 +206,7 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
     try { latest.current.onInsert(markdown); }
     catch (cause) { commitAction({ ...action, inserted: false, insertion: undefined }); throw cause; }
     commitAction({ ...action, inserted: true, insertion: 'inserted' });
-    setMessage(t('已插入共享草稿；请显式保存文档。', 'Inserted into the shared draft; explicitly save the document.'));
+    setMessage(t('已插入共享草稿；停止输入后自动保存。', 'Inserted into the shared draft; it saves automatically after edits settle.'));
   }
   async function prepareTask() {
     const source = panelSource ?? currentSource();

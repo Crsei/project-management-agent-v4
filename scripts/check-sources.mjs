@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
 import { verifyHostBuildInputs } from '../vendor/t3code/scripts/host-inputs.mjs';
-import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, validateAdaptationManifest } from '../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
+import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, validateAdaptationStructure } from '../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
 import { verifyOutputs as verifyOpenHands, offlineOriginals } from '../vendor/openhands-extensions/scripts/provenance.mjs';
 
 const root = await realpath(fileURLToPath(new URL('../', import.meta.url)));
@@ -54,7 +54,7 @@ async function verifyT3Code() {
   }
   const adaptations = JSON.parse((await input('vendor/t3code/mcp-skills-adaptations.json')).bytes);
   if (adaptations.version !== 1 || adaptations.baselineCommit !== inventory.upstreamCommit || !Array.isArray(adaptations.outputs)) throw new Error('T3 Code supplemental source identity mismatch');
-  const retirements = validateAdaptationManifest(adaptations);
+  const retirements = validateAdaptationStructure(adaptations);
   await assertRetiredTargetsAbsent(root, retirements);
   assertNoRetiredImportEdges(JSON.parse((await input('vendor/t3code/sync-imports.json')).bytes), retirements);
   const retired = new Set(retirements.map(entry => entry.destination));

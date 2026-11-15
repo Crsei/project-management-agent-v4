@@ -1,0 +1,41 @@
+.rich-composer { min-width: 0; }
+.rich-composer-editor {
+  min-height: 68px;
+  max-height: min(320px, 40dvh);
+  overflow: auto;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.rich-composer-editor[aria-disabled="true"] { opacity: .65; }
+.rich-composer-editor p { min-height: 1.65em; margin: 0; }
+.rich-composer-editor:has(> p:only-child:empty)::before,
+.rich-composer-editor:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  opacity: .65;
+  pointer-events: none;
+  position: absolute;
+}
+.rich-composer-editor [data-node-view-wrapper].ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: 3px; }
+.rich-composer-context { margin-inline: 0.15em; vertical-align: baseline; }
+.rich-composer-code { margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--secondary); overflow: hidden; white-space: normal; }
+.rich-composer-code-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
+.rich-composer-code-toolbar > svg { width: 13px; height: 13px; }
+.rich-composer-code-toolbar input { min-width: 60px; width: 100px; max-width: 100%; border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; background: var(--background); color: var(--foreground); }
+.rich-composer-code-toolbar span { margin-inline-start: auto; }
+.rich-composer-code pre { margin: 0; padding: 8px; overflow-x: auto; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.6; white-space: pre; }
+.rich-composer-tools { display: flex; align-items: center; gap: 8px; padding: 0 10px 2px; color: var(--muted-foreground); font-size: 11px; }
+.rich-composer-tools button { display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; padding: 2px 5px; }
+.rich-composer-tools button:hover:not(:disabled), .rich-composer-tools button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
+.rich-composer-tools button:focus-visible { outline: 2px solid var(--ring); }
+.rich-composer-tools button:disabled { opacity: .5; }
+.rich-composer-tools button svg { width: 13px; height: 13px; }
+.rich-composer[data-editing="true"] .rich-composer-editor { min-height: 56px; }
+@media (max-width: 600px) {
+  .rich-composer-editor { max-height: 34dvh; font-size: 16px; }
+  .rich-composer-tools > span, .rich-composer-code-toolbar > span { display: none; }
+}

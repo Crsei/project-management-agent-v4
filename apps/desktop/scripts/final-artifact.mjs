@@ -146,7 +146,7 @@ export const NSIS_UNINSTALLER_BYTE_LIMIT = 64 * 1024 * 1024;
 export function nsisUninstallerMember(members) {
   // NSIS sets this exact installed filename; SLT may retain the $INSTDIR root.
   // Neither spelling admits private plugins or a suffix/path wildcard.
-  const selected = members.filter((entry) => ["Uninstall PM Agent v4.exe", "$INSTDIR/Uninstall PM Agent v4.exe"].includes(entry.path));
+  const selected = members.filter((entry) => ["Uninstall Dovspace.exe", "$INSTDIR/Uninstall Dovspace.exe"].includes(entry.path));
   if (selected.length !== 1 || !/^[0-9]+$/.test(selected[0].Size ?? "")
     || Number(selected[0].Size) < 1 || Number(selected[0].Size) > NSIS_UNINSTALLER_BYTE_LIMIT
     || selected[0].Folder === "+" || /(?:^|\s)D/.test(selected[0].Attributes ?? "")
@@ -177,7 +177,7 @@ async function extractNsisPayload(installer, directory, options) {
     } catch (cause) { child.kill(); await closed.catch(() => {}); throw cause; }
     if (bytes !== Number(member.Size)) throw new Error("Installed uninstaller extraction size differs from its exact archive member.");
     uninstaller = { member: member.path, ...await verifyWindowsFile(path, options.signer),
-      scope: "Separately embedded native executable installed as Uninstall PM Agent v4.exe; private NSIS plugins are not subject to this per-file publisher check." };
+      scope: "Separately embedded native executable installed as Uninstall Dovspace.exe; private NSIS plugins are not subject to this per-file publisher check." };
   }
   const archive = join(directory, "app-64.7z");
   const { child, closed } = start(await sevenZip(), ["x", "-so", "-bd", "--", installer, payloads[0].Path]);
@@ -299,14 +299,14 @@ export async function inspectFinalArtifacts(output, artifacts, options, onArtifa
           mounted = join(temporary, "volume");
           await mkdir(mounted);
           await execute("/usr/bin/hdiutil", ["attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mounted, archive]);
-          resources = join(mounted, "PM Agent v4.app", "Contents", "Resources");
+          resources = join(mounted, "Dovspace.app", "Contents", "Resources");
         } else {
           if (process.platform === "darwin") {
             await listArchive(archive);
             await mkdir(application);
             await execute("/usr/bin/ditto", ["-x", "-k", archive, application]);
           } else await extractArchive(archive, application, false);
-          resources = join(application, "PM Agent v4.app", "Contents", "Resources");
+          resources = join(application, "Dovspace.app", "Contents", "Resources");
         }
       }
       const checked = await inspectInstalledApplication(resources, options);

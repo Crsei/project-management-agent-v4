@@ -14,6 +14,7 @@ import { formatFileSize, formatRelativeTime, classifyFile, kindLabel, type FileE
 import { useArtifactCopyOrigin } from "./hooks"
 import type { FileLifecycleAction } from "./LifecycleDialog"
 import styles from "./project-files.module.css"
+import { HumanIdentity } from "../human-identity"
 
 type FilePreviewDialogProps = {
   entry: FileEntry
@@ -72,7 +73,7 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
           <div><dt>SHA-256</dt><dd className={styles.digest}>{String(selected.data.sha256)}</dd></div>
           <div><dt>{t("类型", "Type")}</dt><dd>{kindLabel(selectedKind, en)}{mediaType ? ` · ${mediaType}` : ""}</dd></div>
           <div><dt>{t("大小", "Size")}</dt><dd>{size || t("大小未知", "Size unavailable")}</dd></div>
-          <div><dt>{t("上传者", "Uploaded by")}</dt><dd>{uploader}</dd></div>
+          <div><dt>{t("上传者", "Uploaded by")}</dt><dd><HumanIdentity userId={typeof selected.data.producerId === "string" ? selected.data.producerId : selected.createdBy} projectId={selected.projectId ?? undefined} /></dd></div>
           <div><dt>{t("时间", "Date")}</dt><dd>{display.dateTime(selected.createdAt)}</dd></div>
           <div><dt>{t("版本", "Version")}</dt><dd>{entry.versions.length - entry.versions.findIndex(version => version.id === selected.id)} / {entry.versions.length}</dd></div>
         </dl>

@@ -20,11 +20,19 @@ export type PmAutomationMutationPort = {
   execute(name: string, input: unknown, context: AgentChatToolContext): Promise<AgentChatToolResult>;
   recover(name: string, input: unknown, context: AgentChatToolContext): Promise<AgentChatToolResult | null>;
 };
-type Options = { database: () => Pool; core: NotificationCorePort; mutations?: PmAutomationMutationPort };
+type Options = { database: () => Pool; core: NotificationCorePort; mutations?: PmAutomationMutationPort; checkAuthorization?: (sql: SqlExecutor) => Promise<void>; checkSourceProject?: (projectId: string) => void };
 type CandidateRow = { candidate: PmAutomationCandidate; revision: number; active_request_id: string | null };
 type ReceiptRow = { request_id: string; execution_id: string; candidate_id: string; request_hash: string; operation: string; input: ReviewInput; result: unknown; http_status: number; settled: boolean };
 type StepRow = { step_id: string; operation_id: string; tool: string; input: unknown; result: AgentChatToolResult | null; error: { code: string; message: string } | null };
 type ReviewInput = PmAutomationReviewRequest & { candidate?: PmAutomationCandidate | undefined; selectedItemIds?: string[] | undefined; previewToken?: string | undefined };
+export type PmAutomationReadablePayload =
+  | { kind: 'snapshot'; value: PmAutomationSnapshot }
+  | { kind: 'result'; value: PmAutomationResult }
+  | { kind: 'review'; value: PmAutomationReviewReceipt }
+  | { kind: 'preview'; value: PmAutomationCandidatePreview }
+  | { kind: 'candidate'; value: PmAutomationCandidate };
+const coreSourceEntities: Partial<Record<PmAutomationSourceRef['kind'], string>> = { project: 'project', task: 'work_item', document: 'document', milestone: 'milestone', goal: 'goal' };
+const sourceNotReadable = () => new DomainError('not_found_or_forbidden', 'An original automation source is not readable in the current authorized scope', 404);
 const unknownResult = (error: unknown): boolean => !(error instanceof DomainError) || error.status >= 500 || /unknown|pending|recovered/.test(error.code) || ['permission_denied', 'not_found_or_forbidden'].includes(error.code);
 
 export async function validatePmAutomationScope(sql: SqlExecutor, core: NotificationCorePort, actor: Actor, workspaceId: string, projectId: string, args: PmAutomationArguments): Promise<void> {
@@ -44,7 +52,7 @@ export async function validatePmAutomationScope(sql: SqlExecutor, core: Notifica
 export function createPmAutomationService(options: Options) {
   async function scoped<T>(actor: Actor, workspaceId: string, operation: (sql: PoolClient) => Promise<T>): Promise<T> {
     const sql = await options.database().connect();
-    try { await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); const member = await getMembership(sql, actor, workspaceId); if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403); const result = await operation(sql); await sql.query('COMMIT'); return result; }
+    try { await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); const member = await getMembership(sql, actor, workspaceId); if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403); await options.checkAuthorization?.(sql); const result = await operation(sql); await sql.query('COMMIT'); return result; }
     catch (error) { await sql.query('ROLLBACK'); throw error; } finally { sql.release(); }
   }
   async function executionRow(sql: SqlExecutor, actor: Actor, workspaceId: string, id: string, active = false): Promise<StudioExecutionRow> {
@@ -75,6 +83,94 @@ export function createPmAutomationService(options: Options) {
     if (candidate.kind === 'create-document') return candidate.document.taskIds;
     const drafts = candidate.kind === 'plan' ? candidate.plan.tasks : [candidate.task];
     return drafts.flatMap(task => [...task.dependsOn, ...task.relatedTaskIds, ...(task.milestoneId ? [task.milestoneId] : []), ...('existingTaskId' in task && typeof task.existingTaskId === 'string' ? [task.existingTaskId] : [])]);
+  }
+  /** Current placement/visibility only. Historical revisions, content and execution facts remain immutable. */
+  async function readablePayload(sql: SqlExecutor, actor: Actor, workspaceId: string, executionId: string, frozen: PmAutomationSnapshot, payload: PmAutomationReadablePayload): Promise<void> {
+    if (frozen.actorId !== actor.id || frozen.workspaceId !== workspaceId || frozen.executionId !== executionId) throw sourceNotReadable();
+    const sources = new Map(frozen.sources.map(source => [source.refId, source]));
+    const coreIds = new Set<string>();
+    const addCandidate = (candidate: PmAutomationCandidate) => {
+      for (const source of [...candidate.sourceRefs, ...(candidate.reviewSources ?? [])]) sources.set(source.refId, source);
+      for (const id of referencedIds(candidate)) coreIds.add(id);
+      for (const id of Object.values(candidate.application?.idMap ?? {})) coreIds.add(id);
+    };
+    const addPreview = (preview: PmAutomationCandidatePreview) => {
+      addCandidate(preview.candidate);
+      for (const source of preview.currentSources) sources.set(source.refId, source);
+      if (preview.currentTask) coreIds.add(preview.currentTask.id);
+    };
+    if (payload.kind === 'snapshot') {
+      if (payload.value.executionId !== executionId || payload.value.actorId !== actor.id || payload.value.workspaceId !== workspaceId) throw sourceNotReadable();
+      for (const source of payload.value.sources) sources.set(source.refId, source);
+    } else if (payload.kind === 'result') {
+      if (payload.value.executionId !== executionId) throw sourceNotReadable();
+      for (const candidate of payload.value.candidates) addCandidate(candidate);
+      for (const finding of payload.value.findings) for (const evidence of finding.evidence) if (!sources.has(evidence.sourceRefId)) throw sourceNotReadable();
+    } else if (payload.kind === 'preview') addPreview(payload.value);
+    else if (payload.kind === 'candidate') addCandidate(payload.value);
+    else {
+      const result = payload.value.result;
+      if ('currentSources' in result) addPreview(result);
+      else { addCandidate(result.candidate); for (const id of Object.values(result.idMap)) coreIds.add(id); }
+    }
+    // Agent and comment/activity sources can retain task links even when a bounded task body was omitted.
+    for (const relation of frozen.relationships) { coreIds.add(relation.fromTaskId); coreIds.add(relation.toTaskId); }
+    for (const comment of frozen.comments) if (comment.taskId) coreIds.add(comment.taskId);
+    for (const activity of frozen.activities) if (activity.taskId) coreIds.add(activity.taskId);
+    for (const session of frozen.sessions) for (const id of session.taskIds) coreIds.add(id);
+    for (const execution of frozen.executions) if (execution.taskId) coreIds.add(execution.taskId);
+    for (const pullRequest of frozen.pullRequests) coreIds.add(pullRequest.taskId);
+    for (const boundary of [frozen.before, frozen.after]) if (boundary) coreIds.add(boundary.task.id);
+    const current = await automationSnapshot(options.core, workspaceId);
+    const files = new Map(current.files.map(file => [file.id, file]));
+    const projects = new Set<string>();
+    const projectReadable = async (projectId: string) => {
+      if (projects.has(projectId)) return;
+      options.checkSourceProject?.(projectId);
+      await authorizeAutomationProject(sql, actor, workspaceId, projectId, current);
+      projects.add(projectId);
+    };
+    await projectReadable(frozen.projectId);
+    const comments = new Set<string>(), activities = new Set<string>();
+    for (const source of sources.values()) {
+      if (source.actorId !== actor.id || source.workspaceId !== workspaceId || source.projectId !== frozen.projectId) throw sourceNotReadable();
+      await projectReadable(source.projectId);
+      const entity = coreSourceEntities[source.kind];
+      if (entity) {
+        const file = files.get(source.id);
+        if (!file || file.entity.entity !== entity) throw sourceNotReadable();
+        coreIds.add(source.id);
+      } else if (source.kind === 'comment') comments.add(source.id);
+      else if (source.kind === 'activity') activities.add(source.id);
+      else if (source.kind === 'relationship') {
+        const relation = frozen.relationships.find(item => item.id === source.id);
+        if (!relation) throw sourceNotReadable();
+        coreIds.add(relation.fromTaskId); coreIds.add(relation.toTaskId);
+      }
+    }
+    if (activities.size) {
+      const rows = (await sql.query<{ id: string; project_id: string; target_id: string; audience_actor_id: string | null }>('SELECT id::text,project_id,target_id,audience_actor_id FROM project_audit WHERE workspace_id=$1 AND id::text=ANY($2::text[])', [workspaceId, [...activities]])).rows;
+      if (rows.length !== activities.size) throw sourceNotReadable();
+      for (const row of rows) {
+        if (row.audience_actor_id !== null && row.audience_actor_id !== actor.id) throw sourceNotReadable();
+        await projectReadable(row.project_id);
+        if (/^[A-Z][A-Z0-9]*-\d+$/.test(row.target_id)) coreIds.add(row.target_id);
+        else comments.add(row.target_id);
+      }
+    }
+    if (comments.size) {
+      const rows = (await sql.query<{ id: string; project_id: string; task_id: string }>('SELECT id::text,project_id,task_id FROM task_comments WHERE workspace_id=$1 AND id::text=ANY($2::text[])', [workspaceId, [...comments]])).rows;
+      for (const source of sources.values()) if (source.kind === 'comment' && !rows.some(row => row.id === source.id)) throw sourceNotReadable();
+      for (const row of rows) { await projectReadable(row.project_id); coreIds.add(row.task_id); }
+    }
+    for (const id of coreIds) {
+      const file = files.get(id);
+      if (!file) throw sourceNotReadable();
+      if (file.stale || file.error || file.diagnostics?.some(issue => issue.severity === 'error')) throw new DomainError('automation_source_unavailable', 'Current authoritative source placement is unavailable', 503);
+      const projectId = file.entity.entity === 'project' ? file.id : file.entity.project;
+      if (typeof projectId !== 'string') throw sourceNotReadable();
+      await projectReadable(projectId);
+    }
   }
   function trustedCandidate(candidate: PmAutomationCandidate, snapshot: PmAutomationSnapshot): PmAutomationCandidate {
     const sources = new Map(snapshot.sources.map(source => [source.refId, source]));
@@ -183,10 +279,16 @@ export function createPmAutomationService(options: Options) {
   async function review(actor: Actor, workspaceId: string, executionId: string, candidateId: string, operation: 'edit' | 'preview' | 'apply' | 'ignore', input: ReviewInput): Promise<unknown> {
     const saved = await scoped(actor, workspaceId, async sql => {
       const execution = await executionRow(sql, actor, workspaceId, executionId);
+      const frozen = await snapshotRow(sql, executionId);
       const hash = pmSourceHash({ executionId, candidateId, operation, input });
       const prior = await receiptRow(sql, actor, workspaceId, input.requestId);
-      if (prior) { if (prior.request_hash !== hash) throw new DomainError('idempotency_conflict', 'The original request ID represents another review decision', 409); return prior; }
+      if (prior) {
+        if (prior.request_hash !== hash) throw new DomainError('idempotency_conflict', 'The original request ID represents another review decision', 409);
+        await readablePayload(sql, actor, workspaceId, executionId, frozen, { kind: 'review', value: pmAutomationReviewReceiptSchema.parse({ requestId: input.requestId, httpStatus: prior.http_status, result: prior.result }) });
+        return prior;
+      }
       const row = await candidateRow(sql, executionId, candidateId);
+      await readablePayload(sql, actor, workspaceId, executionId, frozen, { kind: 'candidate', value: row.candidate });
       if (row.active_request_id) throw new DomainError('automation_pm_outcome_unknown', 'Reconcile the original application request before any new decision', 409);
       const initial: ReviewResult = { candidate: row.candidate, idMap: {}, status: 'outcome_unknown' };
       await sql.query('INSERT INTO automation_pm_receipts(workspace_id,actor_id,request_id,execution_id,candidate_id,request_hash,operation,input,http_status,result) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,202,$9::jsonb)', [workspaceId, actor.id, input.requestId, executionId, candidateId, hash, operation, JSON.stringify(input), JSON.stringify(initial)]);
@@ -258,6 +360,7 @@ export function createPmAutomationService(options: Options) {
     const ownRevisions = new Map<string, string>();
     let attemptedMutation = false;
     const guarded = async (sql: SqlExecutor): Promise<void> => {
+      await options.checkAuthorization?.(sql);
       await requireCapability(sql, actor, workspaceId, 'domain.read', execution.project_id);
       const current = await automationSnapshot(options.core, workspaceId);
       await authorizeAutomationProject(sql, actor, workspaceId, execution.project_id, current);
@@ -373,11 +476,28 @@ export function createPmAutomationService(options: Options) {
     }
   }
   return {
-    snapshot: (actor: Actor, workspaceId: string, executionId: string) => scoped(actor, workspaceId, async sql => { await executionRow(sql, actor, workspaceId, executionId); return snapshotRow(sql, executionId); }),
+    snapshot: (actor: Actor, workspaceId: string, executionId: string) => scoped(actor, workspaceId, async sql => {
+      await executionRow(sql, actor, workspaceId, executionId);
+      const snapshot = await snapshotRow(sql, executionId);
+      await readablePayload(sql, actor, workspaceId, executionId, snapshot, { kind: 'snapshot', value: snapshot });
+      return snapshot;
+    }),
+    authorizeRead: (actor: Actor, workspaceId: string, executionId: string | null, payload: PmAutomationReadablePayload) => scoped(actor, workspaceId, async sql => {
+      if (payload.kind === 'review') {
+        const original = await receiptRow(sql, actor, workspaceId, payload.value.requestId);
+        if (!original || executionId !== null && executionId !== original.execution_id) throw sourceNotReadable();
+        executionId = original.execution_id;
+      }
+      if (executionId === null) throw sourceNotReadable();
+      await executionRow(sql, actor, workspaceId, executionId);
+      await readablePayload(sql, actor, workspaceId, executionId, await snapshotRow(sql, executionId), payload);
+    }),
     freeze: (actor: Actor, workspaceId: string, executionId: string, agentEvidence: PmAutomationAgentEvidence) => scoped(actor, workspaceId, async sql => {
       const execution = await executionRow(sql, actor, workspaceId, executionId, true);
-      const prior = (await sql.query<{ snapshot: PmAutomationSnapshot }>('SELECT snapshot FROM automation_pm_snapshots WHERE execution_id=$1', [executionId])).rows[0]; if (prior) return pmAutomationSnapshotSchema.parse(prior.snapshot);
+      const prior = (await sql.query<{ snapshot: PmAutomationSnapshot }>('SELECT snapshot FROM automation_pm_snapshots WHERE execution_id=$1', [executionId])).rows[0];
+      if (prior) { const snapshot = pmAutomationSnapshotSchema.parse(prior.snapshot); await readablePayload(sql, actor, workspaceId, executionId, snapshot, { kind: 'snapshot', value: snapshot }); return snapshot; }
       const snapshot = await buildPmAutomationSnapshot(sql, options.core, actor, execution, agentEvidence);
+      await readablePayload(sql, actor, workspaceId, executionId, snapshot, { kind: 'snapshot', value: snapshot });
       await sql.query('INSERT INTO automation_pm_snapshots(execution_id,workspace_id,actor_id,project_id,snapshot) VALUES($1,$2,$3,$4,$5::jsonb)', [executionId, workspaceId, actor.id, execution.project_id, JSON.stringify(snapshot)]); return snapshot;
     }),
     publish: (actor: Actor, workspaceId: string, executionId: string, value: PmAutomationResult) => scoped(actor, workspaceId, async sql => {
@@ -385,6 +505,7 @@ export function createPmAutomationService(options: Options) {
       let parsed: PmAutomationResult;
       try { parsed = validatePmAutomationResult(snapshot, value); } catch (error) { throw new DomainError('automation_pm_result_invalid', error instanceof Error ? error.message : 'Result does not match its trusted sources', 400); }
       if (parsed.executionId !== executionId || parsed.templateId !== snapshot.templateId || parsed.observedAt !== snapshot.observedAt) throw new DomainError('automation_pm_result_identity', 'Result must identify its exact frozen source execution and time', 400);
+      await readablePayload(sql, actor, workspaceId, executionId, snapshot, { kind: 'result', value: parsed });
       const hash = pmSourceHash(parsed), prior = (await sql.query<{ result: PmAutomationResult; result_hash: string }>('SELECT result,result_hash FROM automation_pm_results WHERE execution_id=$1', [executionId])).rows[0];
       if (prior) { if (prior.result_hash !== hash) throw new DomainError('idempotency_conflict', 'An immutable result was already published for this execution', 409); return prior.result; }
       const refs = new Set(snapshot.sources.map(source => source.refId));
@@ -396,16 +517,39 @@ export function createPmAutomationService(options: Options) {
       for (const candidate of reviewCandidates) { await sql.query('INSERT INTO automation_pm_candidates(execution_id,id,revision,candidate) VALUES($1,$2,1,$3::jsonb)', [executionId, candidate.id, JSON.stringify(candidate)]); await sql.query('INSERT INTO automation_pm_candidate_history(execution_id,candidate_id,revision,actor_id,candidate) VALUES($1,$2,1,$3,$4::jsonb)', [executionId, candidate.id, actor.id, JSON.stringify(candidate)]); }
       return result;
     }),
-    result: (actor: Actor, workspaceId: string, executionId: string, original = false) => scoped(actor, workspaceId, async sql => { await executionRow(sql, actor, workspaceId, executionId); const row = (await sql.query<{ result: PmAutomationResult }>('SELECT result FROM automation_pm_results WHERE execution_id=$1', [executionId])).rows[0]; if (!row) throw new DomainError('automation_pm_result_missing', 'This execution has no published PM result yet', 404); if (original) return row.result; const candidates = (await sql.query<{ candidate: PmAutomationCandidate }>('SELECT candidate FROM automation_pm_candidates WHERE execution_id=$1 ORDER BY id', [executionId])).rows.map(row => row.candidate); return { ...row.result, candidates }; }),
+    result: (actor: Actor, workspaceId: string, executionId: string, original = false) => scoped(actor, workspaceId, async sql => {
+      await executionRow(sql, actor, workspaceId, executionId);
+      const row = (await sql.query<{ result: PmAutomationResult }>('SELECT result FROM automation_pm_results WHERE execution_id=$1', [executionId])).rows[0];
+      if (!row) throw new DomainError('automation_pm_result_missing', 'This execution has no published PM result yet', 404);
+      const candidates = original ? row.result.candidates : (await sql.query<{ candidate: PmAutomationCandidate }>('SELECT candidate FROM automation_pm_candidates WHERE execution_id=$1 ORDER BY id', [executionId])).rows.map(row => row.candidate);
+      const result = { ...row.result, candidates };
+      await readablePayload(sql, actor, workspaceId, executionId, await snapshotRow(sql, executionId), { kind: 'result', value: result });
+      return result;
+    }),
     edit: (actor: Actor, workspaceId: string, executionId: string, candidateId: string, input: ReviewInput) => review(actor, workspaceId, executionId, candidateId, 'edit', input),
     preview: (actor: Actor, workspaceId: string, executionId: string, candidateId: string, input: ReviewInput) => review(actor, workspaceId, executionId, candidateId, 'preview', input),
     apply: (actor: Actor, workspaceId: string, executionId: string, candidateId: string, input: ReviewInput) => review(actor, workspaceId, executionId, candidateId, 'apply', input),
     ignore: (actor: Actor, workspaceId: string, executionId: string, candidateId: string, input: ReviewInput) => review(actor, workspaceId, executionId, candidateId, 'ignore', input),
-    async receipt(actor: Actor, workspaceId: string, requestId: string): Promise<PmAutomationReviewReceipt> {
-      let row = await scoped(actor, workspaceId, sql => receiptRow(sql, actor, workspaceId, requestId));
+    inspectReceipt: (actor: Actor, workspaceId: string, requestId: string) => scoped(actor, workspaceId, async sql => {
+      const row = await receiptRow(sql, actor, workspaceId, requestId);
       if (!row) throw new DomainError('not_found_or_forbidden', 'Review receipt is not accessible', 404);
-      if (!row.settled && row.operation === 'apply') { await reconcile(actor, workspaceId, requestId); row = await scoped(actor, workspaceId, sql => receiptRow(sql, actor, workspaceId, requestId)); }
-      return pmAutomationReviewReceiptSchema.parse({ requestId, httpStatus: row!.http_status, result: row!.result });
+      const execution = await executionRow(sql, actor, workspaceId, row.execution_id);
+      const partial = row.operation === 'apply' && row.http_status >= 400
+        ? (await sql.query<{ present: boolean }>('SELECT EXISTS(SELECT 1 FROM automation_pm_apply_steps WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3 AND (result IS NOT NULL OR error IS NULL)) AS present', [workspaceId, actor.id, requestId])).rows[0]!.present
+        : false;
+      return { hash: row.request_hash, projectIds: [execution.project_id], status: !row.settled || row.http_status >= 500 || partial ? 'unknown' as const : row.http_status >= 400 ? 'failed' as const : 'succeeded' as const };
+    }),
+    async receipt(actor: Actor, workspaceId: string, requestId: string): Promise<PmAutomationReviewReceipt> {
+      const read = () => scoped(actor, workspaceId, async sql => {
+        const row = await receiptRow(sql, actor, workspaceId, requestId);
+        if (!row) throw new DomainError('not_found_or_forbidden', 'Review receipt is not accessible', 404);
+        const value = pmAutomationReviewReceiptSchema.parse({ requestId, httpStatus: row.http_status, result: row.result });
+        await readablePayload(sql, actor, workspaceId, row.execution_id, await snapshotRow(sql, row.execution_id), { kind: 'review', value });
+        return { row, value };
+      });
+      const saved = await read();
+      if (!saved.row.settled && saved.row.operation === 'apply') { await reconcile(actor, workspaceId, requestId); return (await read()).value; }
+      return saved.value;
     },
   };
 }

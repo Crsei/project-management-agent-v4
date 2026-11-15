@@ -11,6 +11,7 @@ import {
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { dataDirectory } from "../paths.ts";
+import { initializePersistence, preflightPersistence } from "./persistence-schema.ts";
 
 type StoreState = {
   database: DatabaseSync;
@@ -73,6 +74,9 @@ export function getDatabase(): DatabaseSync {
   try {
     const filename = join(directory, "workspace.sqlite");
     database = new DatabaseSync(filename);
+    const persistence = preflightPersistence(database);
+    if (persistence.legacy)
+      throw new Error("Legacy Agent Store requires a reviewed stopped-copy persistence inventory/bootstrap before this writer can start. Offline backup/export remains available; no production migration was run.");
     chmodSync(filename, 0o600);
     database.exec(`
       PRAGMA journal_mode = WAL;
@@ -97,6 +101,7 @@ export function getDatabase(): DatabaseSync {
       );
     `);
     database.exec("BEGIN IMMEDIATE");
+    initializePersistence(database);
     const owner = database.prepare("SELECT pid, token FROM worker_owner WHERE singleton = 1").get();
     if (owner) {
       let alive = true;

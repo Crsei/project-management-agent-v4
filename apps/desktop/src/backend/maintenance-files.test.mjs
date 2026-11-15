@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, link, realpath } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { copyTree, snapshotTree, verifyTree } from './maintenance-files.ts';
+import { copyTree } from './maintenance-files.ts';
+import { snapshotTree, verifyTree } from '../../../../packages/infrastructure/src/maintenance-tree.ts';
 
 async function fixture(t) {
   const root = await mkdtemp(join(await realpath(tmpdir()), 'desktop-backup-files-'));

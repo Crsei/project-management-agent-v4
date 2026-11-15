@@ -17,6 +17,8 @@ import { TeamEditorDialog, type TeamEditorSelection } from "./pm-team-editors"
 import { directoryTeams, teamProjectRecord, teamRecord, workloadProjection } from "./pm-team-model"
 import { TeamMemberTaskActions, TeamTaskEstimateEditor } from "./team-task-actions"
 import { teamFilterConditions, teamMatchesConditions, withSingleTeamFields } from "@/views/pm/team-filter"
+import { PeopleTeamDetail } from "./people-team-detail"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function ServiceTeams({ variant }: { variant: "team1" | "team3" }) {
   return <ServiceGuard><TeamsSurface key={variant} variant={variant} /></ServiceGuard>
@@ -33,6 +35,8 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
   const location = useLocation()
   const { workspaceSlug } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const selectedTeamId = variant === "team1" ? searchParams.get("team") : null
+  const archived = searchParams.get("archive") === "archived"
   const memberId = variant === "team3" ? searchParams.get("memberId") || null : null
   const teamId = variant === "team3" ? searchParams.get("teamId") || null : null
   const t = useText()
@@ -48,13 +52,14 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
     if (original.commandType === "UpdateProjectTeamDetails" || original.commandType === "RenameProjectTeam") return { id: original.targetId, mode: "details" }
     if (original.commandType === "SetProjectTeamMembers" || original.commandType === "SetProjectTeamMaintainers") return { id: original.targetId, mode: "members" }
     if (original.commandType === "ArchiveProjectTeam") return { id: original.targetId, mode: "archive" }
+    if (original.commandType === "RestoreProjectTeam") return { id: original.targetId, mode: "restore" }
     return null
   })
   const [estimateTaskId, setEstimateTaskId] = useDraftState<string | null>("teams-workload", "estimateTaskId", null)
   const trigger = useRef<HTMLElement | null>(null)
   const [copyReceipt, setCopyReceipt] = useState<TeamCollectionViewProps["readModel"]["copyReceipt"]>(null)
   const allMembers = (membersQuery.data?.members ?? []).map(member => directoryMemberRecord(member, workspace?.ownerId, membersQuery.estimatedServerNow, membersQuery.data!.presenceTtlMs))
-  const teams = (teamsQuery.data?.teams ?? []).filter(team => !team.data.archivedAt).map(teamRecord)
+  const teams = (teamsQuery.data?.teams ?? []).filter(team => !!team.data.archivedAt === archived).map(teamRecord)
   const teamOptions = directoryTeams(allMembers, teams)
   for (const summary of workloadQuery.data?.teams ?? []) {
     if (!teamOptions.some(team => team.id === summary.id)) teamOptions.push({ id: summary.id, name: summary.name, description: "", identifier: null, focus: null, responseTarget: null, activityAt: null, openWorkCount: null, members: [], projectIds: [], version: "", scopeComplete: false })
@@ -82,7 +87,7 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
   const memberByUserId = new Map(allMembers.map(member => [member.userId, member]))
   const conditions = teamFilterConditions(interaction)
   const visibleTeams = teams.filter(team => teamMatchesConditions(team, conditions, memberByUserId) && [team.name, team.identifier ?? "", team.description, team.focus ?? "", ...team.members.map(entry => allMembers.find(member => member.userId === entry.userId)?.name ?? ""), ...team.projectIds.map(id => projects.find(project => project.id === id)?.title ?? "")].join(" ").toLocaleLowerCase().includes(needle)).sort((a, b) => interaction.sort === "activity" ? (b.activityAt ?? "").localeCompare(a.activityAt ?? "") : interaction.sort === "members" ? b.members.length - a.members.length : a.name.localeCompare(b.name) * (interaction.sort === "name-desc" ? -1 : 1))
-  const effectiveInteraction = variant === "team3" ? { ...interaction, teamId, memberFilter: interaction.memberFilter ?? memberId } : interaction
+  const effectiveInteraction = { ...interaction, detailOpen: false, memberDetailOpen: false, ...(variant === "team3" ? { teamId, memberFilter: interaction.memberFilter ?? memberId } : {}) }
   const workloadConditions = withSingleTeamFields(conditions, ["state", "team", "member"]).filter(condition => condition.field === "state" || condition.field === "team" || condition.field === "member")
   const workload = workloadQuery.data && membersQuery.data ? workloadProjection(workloadQuery.data, allMembers, {
     ...effectiveInteraction,
@@ -99,7 +104,7 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
     setEditor({ id, mode })
   }
   const roles = [{ value: memberRoleValues.admin, label: "Admin" }, { value: memberRoleValues.member, label: "Member" }, { value: memberRoleValues.guest, label: "Guest" }, { value: memberRoleValues.custom, label: "Custom" }, { value: memberRoleValues.unknown, label: t("权限未知", "Access unknown") }]
-  const headerActions = <div className="flex min-w-0 flex-wrap items-center gap-2">{variant === "team1" && teamsQuery.data && <span className="text-xs text-muted-foreground">{t(`${visibleTeams.length} 个可见团队`, `${visibleTeams.length} visible teams`)}</span>}<Button size="icon-sm" variant="ghost" aria-label={t("刷新当前来源", "Refresh current sources")} disabled={teamsQuery.isFetching || membersQuery.isFetching || workloadQuery.isFetching} onClick={refresh}><RefreshCw size={14} aria-hidden="true" /></Button></div>
+  const headerActions = <div className="flex min-w-0 flex-wrap items-center gap-2">{variant === "team1" && <RadixSelect value={archived ? "archived" : "active"} aria-label={t("团队归档状态", "Team archive status")} className="h-8 rounded-md border bg-background px-2 text-xs" onChange={event => { const next = new URLSearchParams(searchParams); next.set("archive", event.target.value); setSearchParams(next) }}><option value="active">{t("活动团队", "Active teams")}</option><option value="archived">{t("已归档团队", "Archived teams")}</option></RadixSelect>}{variant === "team1" && teamsQuery.data && <span className="text-xs text-muted-foreground">{t(`${visibleTeams.length} 个可见团队`, `${visibleTeams.length} visible teams`)}</span>}<Button size="icon-sm" variant="ghost" aria-label={t("刷新当前来源", "Refresh current sources")} disabled={teamsQuery.isFetching || membersQuery.isFetching || workloadQuery.isFetching} onClick={refresh}><RefreshCw size={14} aria-hidden="true" /></Button></div>
   const openWorkload = (filter: { memberId: string } | { teamId: string }) => {
     setInteraction(previous => ({ ...previous, detailOpen: false, memberDetailOpen: false }))
     const params = new URLSearchParams(searchParams)
@@ -145,7 +150,7 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
       {memberId && <Button variant="outline" className="h-auto min-w-0 max-w-full whitespace-normal break-all text-left" onClick={() => clearFilter("memberId")} aria-label={t("清除成员筛选", "Clear member filter")}><span>{t("成员：", "Member: ")}{allMembers.find(member => member.userId === memberId)?.name ?? t("不可用成员", "Unavailable member")} · {memberId}</span><X className="shrink-0" size={14} aria-hidden="true" /></Button>}
       {teamId && <Button variant="outline" className="h-auto min-w-0 max-w-full whitespace-normal break-all text-left" onClick={() => clearFilter("teamId")} aria-label={t("清除团队筛选", "Clear team filter")}><span>{t("团队：", "Team: ")}{teamOptions.find(team => team.id === teamId)?.name ?? t("不可用团队", "Unavailable team")} · {teamId}</span><X className="shrink-0" size={14} aria-hidden="true" /></Button>}
     </div>}
-    <TeamCollectionView interactive embedded variant={variant} headerActions={headerActions}
+    {selectedTeamId ? <PeopleTeamDetail teamId={selectedTeamId} onEdit={mode => { if (canManage && !teamReadBlocked && !locked) edit(selectedTeamId, mode, document.activeElement instanceof HTMLElement ? document.activeElement : null) }} /> : <TeamCollectionView interactive embedded variant={variant} headerActions={headerActions}
       readModel={{
         teams: visibleTeams, selectedTeam: teams.find(team => team.id === interaction.selectedId) ?? null,
         teamsAvailable: variant === "team1" ? !!teamsQuery.data : !!membersQuery.data,
@@ -159,12 +164,26 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
       }}
       interaction={effectiveInteraction}
       capabilities={{ create: canManage && !teamReadBlocked && !locked, edit: team => canWriteTeam(team.id), members: team => canWriteTeam(team.id) && !memberReadBlocked, projectRelations: team => canWriteTeam(team.id), archive: team => canWriteTeam(team.id), openProject: id => projects.some(project => project.id === id), memberOpen: () => !memberReadBlocked, filterPresence: !!membersQuery.data, sortActivity: true, filterWorkloadTeam: !!workloadQuery.data, copyContact: (member, kind) => !memberReadBlocked && (kind === "email" ? !!member.email : kind === "phone" ? !!member.phone : !!member.email || !!member.phone) }}
-      actions={{ setInteraction: changeInteraction, teamWorkload: variant === "team1" ? team => openWorkload({ teamId: team.id }) : undefined, memberWorkload: member => openWorkload({ memberId: member.userId }), copyContact: async (member, kind) => { const value = kind === "email" ? member.email : kind === "phone" ? member.phone : [member.email, member.phone].filter(Boolean).join("\n"); if (!memberReadBlocked && value) setCopyReceipt({ membershipId: member.membershipId, kind, ok: await copyText(value) }) }, open: team => setInteraction(previous => ({ ...previous, selectedId: team.id, detailOpen: true })), create: element => edit(null, "details", element), edit: (team, element) => edit(team.id, "details", element), members: (team, element) => edit(team.id, "members", element), projectRelations: (team, element) => edit(team.id, "projects", element), archive: (team, element) => edit(team.id, "archive", element), openProject: id => navigate(`${root}/projects/${encodeURIComponent(id)}`, { state: { returnTo: `${location.pathname}${location.search}` } }), memberOpen: member => setInteraction(previous => ({ ...previous, selectedMemberId: member.membershipId, memberDetailOpen: true })), openIssue: issue => navigate(taskOpenMode === "panel" ? `${root}/issues?${new URLSearchParams({ entity: issue.id, returnTo: `${location.pathname}${location.search}` })}` : `${root}/entities/${encodeURIComponent(issue.id)}?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`, { state: { returnTo: `${location.pathname}${location.search}` } }) }}
+      actions={{
+        setInteraction: changeInteraction,
+        teamWorkload: variant === "team1" ? team => openWorkload({ teamId: team.id }) : undefined,
+        memberWorkload: member => openWorkload({ memberId: member.userId }),
+        copyContact: async (member, kind) => { const value = kind === "email" ? member.email : kind === "phone" ? member.phone : [member.email, member.phone].filter(Boolean).join("\n"); if (!memberReadBlocked && value) setCopyReceipt({ membershipId: member.membershipId, kind, ok: await copyText(value) }) },
+        open: team => { const next = new URLSearchParams(searchParams); next.set("team", team.id); next.set("section", "overview"); setSearchParams(next) },
+        create: element => edit(null, "details", element),
+        edit: (team, element) => edit(team.id, "details", element),
+        members: (team, element) => edit(team.id, "members", element),
+        projectRelations: (team, element) => edit(team.id, "projects", element),
+        archive: (team, element) => edit(team.id, "archive", element),
+        openProject: id => navigate(`${root}/projects/${encodeURIComponent(id)}`, { state: { returnTo: `${location.pathname}${location.search}` } }),
+        memberOpen: member => navigate(`${root}/members?person=${encodeURIComponent(member.userId)}&presentation=drawer`),
+        openIssue: issue => navigate(taskOpenMode === "panel" ? `${root}/issues?${new URLSearchParams({ entity: issue.id, returnTo: `${location.pathname}${location.search}` })}` : `${root}/entities/${encodeURIComponent(issue.id)}?${new URLSearchParams({ returnTo: `${location.pathname}${location.search}` })}`, { state: { returnTo: `${location.pathname}${location.search}` } }),
+      }}
       memberTaskActions={member => <TeamMemberTaskActions userId={member.userId} memberName={member.name} canManageCapacity={allowed(workspace, "access.manage") && !!workloadQuery.data && !workloadQuery.error && !memberReadBlocked} onChanged={refresh} />}
       taskActions={issue => <Button size="sm" variant="ghost" disabled={capabilities?.business.enabled !== true || !workspace?.capabilities.includes("planning.edit") || !workspace.capabilities.includes("domain.read") || !workloadQuery.data || !!workloadQuery.error || memberReadBlocked} onClick={() => setEstimateTaskId(issue.id)}>{t("编辑估算", "Edit estimate")}</Button>}
       poolActions={<TeamMemberTaskActions userId={null} onChanged={refresh} />}
-      editDialog={<TeamEditorDialog selection={canManage ? editor : null} directory={teamsQuery.data} members={allMembers} disabled={!canManage || teamReadBlocked || editor?.mode === "members" && memberReadBlocked} onClose={() => setEditor(null)} onChanged={refresh} finalFocus={() => trigger.current} />}
-    />
+    />}
+    <TeamEditorDialog selection={canManage ? editor : null} directory={teamsQuery.data} members={allMembers} disabled={!canManage || teamReadBlocked || editor?.mode === "members" && memberReadBlocked} onClose={() => setEditor(null)} onChanged={refresh} finalFocus={() => trigger.current} />
     <Dialog open={variant === "team3" && estimateTaskId !== null} onOpenChange={open => { if (!open) setEstimateTaskId(null) }}><DialogContent>
       <DialogTitle>{t("任务估算点", "Task estimate points")}</DialogTitle><DialogDescription>{t("只修改原生 Markdown 的 x-pm-estimate，不修改任务状态。", "Changes only native Markdown x-pm-estimate, never task status.")}</DialogDescription>
       <DialogBody>{estimateTaskId && <TeamTaskEstimateEditor workItemId={estimateTaskId} onSaved={refresh} onClose={() => setEstimateTaskId(null)} />}</DialogBody>

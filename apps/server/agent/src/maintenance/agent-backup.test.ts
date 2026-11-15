@@ -12,6 +12,9 @@ import { createAgentBackup, restoreAgentBackup, verifyAgentBackup } from "./agen
 import { getStoredInstance, listStoredInstances, providerContext } from "../providers/instances.ts";
 import { makePmProviderCredentials } from "../providers/t3code/credentials.ts";
 import { assertPrivatePath, makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
+import { getStoreIdentity } from "../durable/persistence-schema.ts";
+import { assertThreadWritable } from "../durable/threads.ts";
+import { closeStore } from "../durable/store.ts";
 
 type Fixture = {
   root: string; source: string; bundle: string; target: string; home: string; close: () => void;
@@ -122,6 +125,74 @@ test("explicit secret-inclusive offline bundle recovers credentials and dedicate
     assert.equal(JSON.parse(String(restoredRecords(f.target).find((row) => row.namespace === "chat:threads")!.value)).nativeSession.sessionId, "old-native-session");
     assert.equal(existsSync(path.join(f.source, "workspace.lock")), false);
   } finally { f.close(); }
+});
+
+test("native continuation state follows exclude/include policy without removing historical or business evidence", async () => {
+  for (const secrets of ["exclude", "include"] as const) {
+    const f = fixture();
+    try {
+      const environment = { version: 2, hostId: "local", agentWorkspaceId: "folder-a", agentWorkspaceRevision: 1,
+        sourcePath: "/synthetic-code", executionPath: "/synthetic-code", worktree: null, frozen: true };
+      const continuation = { version: 1, upstreamCommit: "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c", protocol: "synthetic-protocol",
+        providerInstanceId: "codex-a", localDriver: "codex", instanceRevision: 2, cwd: "/synthetic-code", nativeHome: "/synthetic-native-home",
+        continuationKey: "synthetic-identity", nativeSessionId: "old-native-session", ownerThreadId: "thread-a", lastGenerationId: "generation-a",
+        providerSessionJson: { id: "upstream-session" }, providerThreadJson: { id: "upstream-thread" }, providerTurnsJson: [],
+        nativeHistory: { completedTurnRefs: [] } };
+      const db = new DatabaseSync(path.join(f.source, "workspace.sqlite"));
+      try {
+        const thread = JSON.parse(String(db.prepare("SELECT value FROM records WHERE namespace='chat:threads'").get()!.value));
+        Object.assign(thread, { executionEnvironment: environment, nativeEnvironment: environment, pendingForkEnvironment: environment,
+          nativeMessageId: "assistant-a", nativeSystemPrompt: "private native prompt" });
+        db.prepare("UPDATE records SET value=? WHERE namespace='chat:threads'").run(JSON.stringify(thread));
+        const generation = JSON.parse(String(db.prepare("SELECT value FROM records WHERE namespace='chat:generations'").get()!.value));
+        Object.assign(generation, { threadId: "thread-a", inputMessageId: "message-a", continuationOf: "generation-prior",
+          request: { messages: [{ id: "message-a", role: "user", parts: [{ type: "text", text: "preserve accepted request" }] }] },
+          output: { id: "assistant-a", parts: [{ type: "text", text: "preserve output and historical old-native-session reference" }] } });
+        db.prepare("UPDATE records SET value=? WHERE namespace='chat:generations'").run(JSON.stringify(generation));
+        const put = db.prepare("INSERT INTO records VALUES(?,?,?)");
+        put.run("provider:t3code:continuations", JSON.stringify(["codex-a", 2, "/synthetic-code", "old-native-session"]), JSON.stringify(continuation));
+        put.run("pm-tool-calls", "operation-a", JSON.stringify({ record: { operationId: "operation-a", status: "succeeded", commandIds: ["command-a"] },
+          request: { arguments: { text: "preserve original business request" } } }));
+        put.run("pm-content-provenance", "generation-a", JSON.stringify({ threadId: "thread-a", generationId: "generation-a",
+          operationIds: ["operation-a"], messageIds: ["assistant-a"] }));
+        put.run("native-output", "generation-a", JSON.stringify({ generationId: "generation-a", threadId: "thread-a", status: "completed", sequence: 3,
+          items: [{ id: "saved-output", type: "assistant_message", status: "completed", text: "preserve native output evidence" }] }));
+      } finally { db.close(); }
+      const originalDatabase = readFileSync(path.join(f.source, "workspace.sqlite"));
+      const originalConfig = readFileSync(path.join(f.source, "provider-instances.json"));
+      const originalRecords = restoredRecords(f.source);
+      const manifest = await create(f, secrets);
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      const rows = restoredRecords(f.target);
+      const restored = (namespace: string) => rows.find(row => row.namespace === namespace);
+      if (secrets === "include") {
+        assert.deepEqual(rows.filter(row => row.namespace !== "agent:persistence:v1"), originalRecords);
+      } else {
+        assert.equal(restored("provider:t3code:continuations"), undefined);
+        const thread = JSON.parse(String(restored("chat:threads")!.value));
+        for (const field of ["nativeSession", "nativeMessageId", "nativeSystemPrompt", "nativeEnvironment", "pendingFork", "pendingForkEnvironment"])
+          assert.equal(field in thread, false, field);
+        assert.deepEqual(thread.executionEnvironment, environment);
+        const generation = JSON.parse(String(restored("chat:generations")!.value));
+        const before = JSON.parse(String(originalRecords.find(row => row.namespace === "chat:generations")!.value));
+        assert.equal(generation.nativeSession, undefined);
+        assert.deepEqual(generation.request, before.request);
+        assert.deepEqual(generation.output, before.output);
+        assert.equal(generation.inputMessageId, "message-a");
+        assert.equal(generation.continuationOf, "generation-prior");
+        const run = JSON.parse(String(restored("durable:runs")!.value));
+        assert.equal(run.steps[0].nativeSession, undefined);
+        assert.equal(run.steps[0].output, "saved output");
+      }
+      for (const namespace of ["chat:history", "pm-tool-calls", "pm-content-provenance", "native-output"])
+        assert.deepEqual(restored(namespace), originalRecords.find(row => row.namespace === namespace), namespace);
+      assert.equal(manifest.coverage.events, 1);
+      assert.deepEqual(readFileSync(path.join(f.source, "workspace.sqlite")), originalDatabase);
+      assert.deepEqual(readFileSync(path.join(f.source, "provider-instances.json")), originalConfig);
+      assert.deepEqual(restoredRecords(f.source), originalRecords);
+    } finally { f.close(); }
+  }
 });
 
 test("restored backups cannot revive OAuth grants or live App context in either secret mode", async () => {
@@ -593,6 +664,51 @@ test("Claude MCP backup paths stay authoritative across binding snapshots and ar
       }
       assert.equal(restored.externalTargets[0].claudeMcpFile, explicitFile ? path.join(f.target, "provider-homes/claude-a/.claude/.claude.json") : undefined);
       assert.equal(existsSync(path.join(f.target, "provider-homes/claude-a/.claude.json")), false);
+    } finally { f.close(); }
+  }
+});
+
+test("real SQLite restore verifies relationships, allocates new identity and fences every original Session without rebinding", async () => {
+  const f = fixture(), previous = process.env.AGENT_WORKSPACE_DATA_DIR;
+  try {
+    const manifest = await create(f, "include");
+    assert.equal(manifest.version, 2); assert.equal(manifest.relationshipVersion, 1);
+    assert.ok(manifest.sourceIdentity);
+    restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+    verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+    const db = new DatabaseSync(path.join(f.target, "workspace.sqlite"), { readOnly: true });
+    try {
+      const identity = getStoreIdentity(db);
+      assert.notEqual(identity.storeId, manifest.sourceIdentity!.storeId);
+      assert.equal(identity.sourceStoreId, manifest.sourceIdentity!.storeId);
+      assert.equal(identity.restoreEpoch, manifest.sourceIdentity!.restoreEpoch + 1);
+      assert.equal(identity.restoredThreads!["thread-a"], true);
+    } finally { db.close(); }
+    process.env.AGENT_WORKSPACE_DATA_DIR = f.target;
+    assert.throws(() => assertThreadWritable("thread-a", { allowArchived: true }), { code: "restored_history_read_only" });
+    closeStore();
+    assert.match(String(restoredRecords(f.target).find(row => row.namespace === "chat:history")!.value), /private history must recover exactly/);
+  } finally {
+    closeStore(); if (previous === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previous;
+    f.close();
+  }
+});
+
+test("unknown namespaces and broken submission/head relationships refuse export without source cleanup", async () => {
+  for (const kind of ["namespace", "submission", "head"] as const) {
+    const f = fixture();
+    try {
+      const db = new DatabaseSync(path.join(f.source, "workspace.sqlite"));
+      if (kind === "namespace") db.prepare("INSERT INTO records VALUES(?,?,?)").run("unregistered:module", "unknown", JSON.stringify({ retained: true }));
+      if (kind === "submission") db.prepare("INSERT INTO records VALUES(?,?,?)").run("chat:requests", "broken", JSON.stringify({ id: "missing", fingerprint: "original" }));
+      if (kind === "head") {
+        const history = JSON.parse(String(db.prepare("SELECT value FROM records WHERE namespace='chat:history'").get()!.value));
+        history.headId = "not-a-message"; db.prepare("UPDATE records SET value=? WHERE namespace='chat:history'").run(JSON.stringify(history));
+      }
+      db.close(); const original = readFileSync(path.join(f.source, "workspace.sqlite"));
+      await assert.rejects(create(f), /Unregistered|blocked|blockers/);
+      assert.equal(existsSync(f.bundle), false);
+      assert.deepEqual(readFileSync(path.join(f.source, "workspace.sqlite")), original);
     } finally { f.close(); }
   }
 });

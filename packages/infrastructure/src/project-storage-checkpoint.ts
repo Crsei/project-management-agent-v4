@@ -10,7 +10,8 @@ import { captureCoreCheckpoint, coreCheckpointSchema } from './blob-storage-chec
 import { SafeDirectory, assertStorageRelativePath, exclusiveFileFlags } from './portable-directory.ts';
 
 const treeSchema = z.strictObject({ files: coreCheckpointSchema, directories: z.array(z.string()) });
-export const localProjectCheckpointSchema = z.strictObject({ formatVersion: z.literal(1), core: coreCheckpointSchema, coreDirectories: z.array(z.string()), projects: z.array(z.strictObject({ workspaceId: z.uuid(), projectId: z.string().min(1), storageId: z.uuid(), files: coreCheckpointSchema, directories: z.array(z.string()) })) });
+type CheckpointFile = z.infer<typeof coreCheckpointSchema>[number];
+export const localProjectCheckpointSchema = z.strictObject({ formatVersion: z.literal(1), core: coreCheckpointSchema, coreDirectories: z.array(z.string()), projects: z.array(z.strictObject({ workspaceId: z.uuid(), projectId: z.string().min(1), storageId: z.uuid(), layout: z.enum(['legacy', 'dovspace-v1']).optional(), files: coreCheckpointSchema, directories: z.array(z.string()) })) });
 export type LocalProjectCheckpoint = z.infer<typeof localProjectCheckpointSchema>;
 export function localProjectCheckpointSha256(manifest: LocalProjectCheckpoint): string { return createHash('sha256').update(JSON.stringify(localProjectCheckpointSchema.parse(manifest))).digest('hex'); }
 /** Maintenance roots must be canonical, non-sensitive and pairwise independent before any writes. */
@@ -85,7 +86,7 @@ async function snapshotTree(root: string): Promise<z.infer<typeof treeSchema>> {
   try { await walk(directory, ''); } finally { await directory.close(); }
   return checkedTree({ files, directories });
 }
-async function copyTree(source: string, target: string, tree: z.infer<typeof treeSchema>, resume = false, acceptReboundRegistry?: (path: string) => Promise<boolean>): Promise<void> {
+async function copyTree(source: string, target: string, tree: z.infer<typeof treeSchema>, resume = false, acceptReboundRegistry?: (original: CheckpointFile, current: CheckpointFile) => Promise<boolean>): Promise<void> {
   const checked = checkedTree(tree);
   const destination = await createDirectory(target, resume);
   try {
@@ -96,7 +97,7 @@ async function copyTree(source: string, target: string, tree: z.infer<typeof tre
       const expected = expectedFiles.get(entry.path);
       if (!expected) throw new DomainError('blob_checkpoint_mismatch', 'Restore target contains an unknown file');
       if (entry.sha256 !== expected.sha256 || entry.size !== expected.size) {
-        if (!acceptReboundRegistry || !await acceptReboundRegistry(entry.path)) throw new DomainError('blob_checkpoint_mismatch', 'Restore target conflicts with the original checkpoint');
+        if (!acceptReboundRegistry || !await acceptReboundRegistry(expected, entry)) throw new DomainError('blob_checkpoint_mismatch', 'Restore target conflicts with the original checkpoint');
         expectedFiles.set(entry.path, entry);
       }
       existingFiles.add(entry.path);
@@ -160,8 +161,8 @@ export async function captureLocalProjectCheckpoint(coreRoot: string): Promise<L
     for (const entry of await directory.entries()) {
       if (!entry.isDirectory() || !z.uuid().safeParse(entry.name).success) throw new DomainError('blob_checkpoint_unknown_workspace');
       for (const mount of enumerateProjectMounts(join(coreRoot, entry.name))) {
-        const projectTree = await snapshotTree(join(mount.root, '.pm'));
-        projects.push({ workspaceId: mount.workspaceId, projectId: mount.projectId, storageId: mount.storageId, ...projectTree });
+        const projectTree = await snapshotTree(join(mount.storageRoot, '.pm'));
+        projects.push({ workspaceId: mount.workspaceId, projectId: mount.projectId, storageId: mount.storageId, layout: mount.layout, ...projectTree });
       }
     }
     await directory.assertIdentity();
@@ -185,7 +186,7 @@ export async function exportLocalProjectCheckpoint(options: { coreRoot: string; 
     for (const project of manifest.projects) {
       const mount = enumerateProjectMounts(join(options.coreRoot, project.workspaceId)).find(item => item.projectId === project.projectId);
       if (!mount || mount.storageId !== project.storageId) throw new DomainError('blob_checkpoint_changed');
-      await copyTree(join(mount.root, '.pm'), join(options.directory, 'projects', project.storageId), { files: project.files, directories: project.directories });
+      await copyTree(join(mount.storageRoot, '.pm'), join(options.directory, 'projects', project.storageId), { files: project.files, directories: project.directories });
     }
     if (!isDeepStrictEqual(await captureLocalProjectCheckpoint(options.coreRoot), manifest)) throw new DomainError('blob_checkpoint_changed');
     const file = await directory.openFile('manifest.json', exclusiveFileFlags);
@@ -194,19 +195,29 @@ export async function exportLocalProjectCheckpoint(options: { coreRoot: string; 
   } finally { await directory.close(); }
   return { manifest, manifestSha256: localProjectCheckpointSha256(manifest) };
 }
-async function readRegistry(path: string): Promise<unknown> {
+async function readRegistry(path: string, expected: CheckpointFile): Promise<unknown> {
   const directory = await SafeDirectory.open(dirname(path));
   let file: FileHandle | undefined;
   try {
     file = await directory.openFile(basename(path));
-    const stat = await file.stat();
-    if (!stat.isFile() || stat.nlink !== 1 || stat.size > 64 * 1024 * 1024) throw new DomainError('blob_checkpoint_unsafe');
-    const bytes = Buffer.alloc(stat.size); let offset = 0;
+    const stat = await file.stat({ bigint: true });
+    if (!stat.isFile() || stat.nlink !== 1n || stat.size > 64n * 1024n * 1024n) throw new DomainError('blob_checkpoint_unsafe');
+    if (stat.size !== BigInt(expected.size)) throw new DomainError('blob_checkpoint_changed');
+    const bytes = Buffer.alloc(Number(stat.size)); let offset = 0;
     while (offset < bytes.length) { const result = await file.read(bytes, offset, bytes.length - offset, offset); if (!result.bytesRead) throw new DomainError('blob_checkpoint_changed'); offset += result.bytesRead; }
     if ((await file.read(Buffer.alloc(1), 0, 1, bytes.length)).bytesRead) throw new DomainError('blob_checkpoint_changed');
+    const after = await file.stat({ bigint: true });
+    if (createHash('sha256').update(bytes).digest('hex') !== expected.sha256 || after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.ctimeNs !== stat.ctimeNs) throw new DomainError('blob_checkpoint_changed');
     await directory.assertFile(basename(path), file);
     return JSON.parse(bytes.toString('utf8'));
   } finally { await file?.close(); await directory.close(); }
+}
+async function readDirectoryIdentity(root: string): Promise<{ device: string; inode: string }> {
+  const directory = await SafeDirectory.open(root);
+  try {
+    const stat = await directory.identity();
+    return { device: String(stat.dev), inode: String(stat.ino) };
+  } finally { await directory.close(); }
 }
 /** Copies to new roots and rebinds from copied identities only; source paths are never opened. */
 export async function restoreLocalProjectCheckpoint(options: { directory: string; manifest: LocalProjectCheckpoint; expectedManifestSha256: string; targetCoreRoot: string; targetProjectsRoot: string; stopped: boolean }): Promise<{ coreRoot: string; projects: { workspaceId: string; projectId: string; storageId: string; root: string }[] }> {
@@ -224,18 +235,26 @@ export async function restoreLocalProjectCheckpoint(options: { directory: string
     if (storageIds.has(storageId) || projectIds.has(identity)) throw new DomainError('blob_checkpoint_unsafe');
     storageIds.add(storageId); projectIds.add(identity);
   }
-  const registrySchema = z.object({ entries: z.array(z.object({ projectId: z.string(), workspaceId: z.string(), storageId: z.string(), root: z.string(), identity: z.unknown() }).passthrough()) }).passthrough();
-  await copyTree(join(options.directory, 'core'), options.targetCoreRoot, { files: manifest.core, directories: manifest.coreDirectories }, true, async path => {
-    if (!/^[a-f0-9-]{36}\/\.pm\/state\/project-locations\.json$/.test(path)) return false;
-    const original = registrySchema.parse(await readRegistry(join(options.directory, 'core', path)));
-    const current = registrySchema.parse(await readRegistry(join(options.targetCoreRoot, path)));
-    for (const entry of current.entries) {
+  const registrySchema = z.object({ entries: z.array(z.object({ projectId: z.string(), workspaceId: z.string(), storageId: z.string(), root: z.string(), layout: z.enum(['legacy', 'dovspace-v1']).optional(), identity: z.unknown() }).passthrough()) }).passthrough();
+  await copyTree(join(options.directory, 'core'), options.targetCoreRoot, { files: manifest.core, directories: manifest.coreDirectories }, true, async (expected, existing) => {
+    if (!/^[a-f0-9-]{36}\/\.pm\/state\/project-locations\.json$/.test(expected.path)) return false;
+    const original = registrySchema.parse(await readRegistry(join(options.directory, 'core', expected.path), expected));
+    const current = registrySchema.parse(await readRegistry(join(options.targetCoreRoot, existing.path), existing));
+    if (original.entries.length !== current.entries.length) return false;
+    const reboundEntries = [];
+    for (const [index, entry] of original.entries.entries()) {
       const project = manifest.projects.find(project => project.workspaceId === entry.workspaceId && project.projectId === entry.projectId && project.storageId === entry.storageId);
-      if (!project || entry.root !== join(options.targetProjectsRoot, project.storageId)) return false;
+      if (!project || entry.workspaceId !== expected.path.split('/')[0] || (entry.layout ?? 'legacy') !== (project.layout ?? 'legacy')) return false;
+      const root = join(options.targetProjectsRoot, project.storageId);
+      if (current.entries[index]!.root !== root) return false;
+      // Rebind changes both physical identities for the container layout, not just the root.
+      // Match that exact destination-derived transformation; never ignore stored identities.
+      const rebound: z.infer<typeof registrySchema>['entries'][number] = { ...entry, root, identity: await readDirectoryIdentity(root) };
+      if (project.layout === 'dovspace-v1') rebound.storageIdentity = await readDirectoryIdentity(join(root, '.dovspace'));
+      else delete rebound.storageIdentity;
+      reboundEntries.push(rebound);
     }
-    const stableOriginal = { ...original, entries: original.entries.map(({ root: _root, identity: _identity, ...entry }) => entry) };
-    const stableCurrent = { ...current, entries: current.entries.map(({ root: _root, identity: _identity, ...entry }) => entry) };
-    return isDeepStrictEqual(stableOriginal, stableCurrent);
+    return isDeepStrictEqual({ ...original, entries: reboundEntries }, current);
   });
   const parent = await createDirectory(options.targetProjectsRoot, true);
   const projects = [];
@@ -243,13 +262,21 @@ export async function restoreLocalProjectCheckpoint(options: { directory: string
     const allowed = new Set(manifest.projects.map(project => project.storageId));
     if ((await parent.entries()).some(entry => !allowed.has(entry.name))) throw new DomainError('blob_checkpoint_mismatch', 'Project restore parent contains unknown entries');
     for (const project of manifest.projects) {
-      const root = join(options.targetProjectsRoot, project.storageId);
+      const root = join(options.targetProjectsRoot, project.storageId), layout = project.layout ?? 'legacy';
+      const storageRoot = layout === 'dovspace-v1' ? join(root, '.dovspace') : root;
       const projectDirectory = await createDirectory(root, true);
+      let storageDirectory: SafeDirectory | undefined;
       try {
-        if ((await projectDirectory.entries()).some(entry => entry.name !== '.pm')) throw new DomainError('blob_checkpoint_mismatch', 'Project restore root contains unknown entries');
-        await copyTree(join(options.directory, 'projects', project.storageId), join(root, '.pm'), { files: project.files, directories: project.directories }, true);
+        const allowedRootEntries = layout === 'dovspace-v1' ? ['.dovspace'] : ['.pm'];
+        if ((await projectDirectory.entries()).some(entry => !allowedRootEntries.includes(entry.name))) throw new DomainError('blob_checkpoint_mismatch', 'Project restore root contains unknown entries');
+        if (layout === 'dovspace-v1') {
+          storageDirectory = await createDirectory(storageRoot, true);
+          if ((await storageDirectory.entries()).some(entry => entry.name !== '.pm' && entry.name !== '.gitignore')) throw new DomainError('blob_checkpoint_mismatch', 'Project data root contains unknown entries');
+        }
+        await copyTree(join(options.directory, 'projects', project.storageId), join(storageRoot, '.pm'), { files: project.files, directories: project.directories }, true);
         await projectDirectory.assertIdentity();
-      } finally { await projectDirectory.close(); }
+        await storageDirectory?.assertIdentity();
+      } finally { await storageDirectory?.close(); await projectDirectory.close(); }
       projects.push({ workspaceId: project.workspaceId, projectId: project.projectId, storageId: project.storageId, root });
     }
     await parent.assertIdentity();

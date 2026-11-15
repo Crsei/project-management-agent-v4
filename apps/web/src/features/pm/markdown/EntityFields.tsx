@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { fieldRegistry, workflowFor, type EntityKind, type FileRecord, type ProtocolConfiguration } from '@pm-schema';
 import { relationFields } from '@pm-schema/relations';
 import { RadixSelect } from "@/components/ui/radix-select"
+import { MemberPicker } from '../service/people-components';
 
 function TextField({ name, label, value, type, disabled, required, min, max, creating, error, onChange }: { name: string; label: string; value: unknown; type: string; disabled: boolean; required?: boolean; min?: number; max?: number; creating: boolean; error?: string; onChange: (value: unknown) => void }) {
   const rendered = Array.isArray(value) ? value.join(', ') : String(value ?? '');
@@ -32,6 +33,7 @@ export function EntityFields({ kind, values, files, configuration, disabled = fa
     let options = field.options?.map(option => ({ value: option, label: option, disabled: false }));
     if (field.name === 'status') options = workflow?.states.map(state => ({ value: state.id, label: `${state.label} · ${state.category}`, disabled: !creating && value !== state.id && !workflow.transitions.some(t => t.from === value && t.to === state.id) }));
     if (reference) options = files.filter(file => file.id !== values.id && (!reference.target || file.entity.entity === (reference.target === 'self' ? kind : reference.target)) && (!reference.scoped || file.entity.project === (values.project || undefined))).map(file => ({ value: file.id, label: `${file.id} · ${file.entity.title}${file.entity.archived ? ' (archived)' : ''}`, disabled: false }));
+    if (field.name === 'assignee' || field.name === 'owner') return <div className="property-field" key={field.name}><MemberPicker purpose={kind === 'project' && creating ? 'project_owner' : 'assignee'} projectId={kind === 'project' ? typeof values.id === 'string' ? values.id : undefined : typeof values.project === 'string' ? values.project : undefined} value={typeof value === 'string' ? value : null} label={field.label} disabled={disabled} onChange={save} />{error && <small id={errorId} className="creation-field-error">{error}</small>}</div>;
     if (field.type === 'boolean') return <label className="property-field" key={field.name}><span>{field.label}</span><RadixSelect aria-label={`Property ${field.name.replaceAll('_', ' ')}`} {...errorProps} data-testid={`field-${field.name}`} value={value === undefined || value === null ? '' : String(value)} disabled={disabled} onChange={event => save(event.target.value === '' ? null : event.target.value === 'true')}><option value="" disabled={field.required}>{en ? 'Unset' : '未设置'}</option><option value="true">{en ? 'True' : '是'}</option><option value="false">{en ? 'False' : '否'}</option></RadixSelect>{error && <small id={errorId} className="creation-field-error">{error}</small>}</label>;
     if (options) {
       const multiple = reference?.multiple || field.type === 'multi_select';

@@ -1,0 +1,34 @@
+{
+  "kind": "pm-tools-application-byte-observation",
+  "observationDate": "2026-11-13",
+  "command": "node --conditions=development benchmarks/dovspace/pm-tools/application-baseline.ts",
+  "inferencePerformed": false,
+  "boundary": "current application readTaskBrief over isolated real Markdown Workspace",
+  "corpusVersion": "pm-tools-targeted-1",
+  "corpusSemanticHash": "a6f25a016d04f28e701c6614ee874f6e0cd71c29471b6480a355f12101455c48",
+  "source": {
+    "path": "packages/application/src/task-brief.ts",
+    "sha256": "61b4195bf0bb853c22f7a73da6c6ef2a140ab24936d1a3570d6f98c8bcbec9e0",
+    "matchesImmutableBaseline": true
+  },
+  "measurements": [
+    { "name": "standard", "serializedUtf8Bytes": 6362, "bodyUtf8Bytes": 707, "exactVisibleStatementCopyUtf8Bytes": 541, "outsideVisibleBodyStatementUtf8Bytes": 0, "repeatedSourceRefOccurrences": 6, "repeatedSourceRefSerializedUtf8Bytes": 1584, "applicationReadMs": 5.180406000000403 },
+    { "name": "long", "serializedUtf8Bytes": 52089, "bodyUtf8Bytes": 48000, "exactVisibleStatementCopyUtf8Bytes": 0, "outsideVisibleBodyStatementUtf8Bytes": 0, "repeatedSourceRefOccurrences": 2, "repeatedSourceRefSerializedUtf8Bytes": 515, "applicationReadMs": 53.42795600000045 },
+    { "name": "headings", "serializedUtf8Bytes": 6256, "bodyUtf8Bytes": 682, "exactVisibleStatementCopyUtf8Bytes": 289, "outsideVisibleBodyStatementUtf8Bytes": 0, "repeatedSourceRefOccurrences": 6, "repeatedSourceRefSerializedUtf8Bytes": 1583, "applicationReadMs": 4.004553000000669 }
+  ],
+  "httpServiceBytes": null,
+  "ompModelRequestBytes": null,
+  "externalMcpModelRequestBytes": null,
+  "tokenSavings": null,
+  "modelQuality": null,
+  "candidateDecision": "retain-baseline",
+  "treatmentAllowlist": [],
+  "limitations": [
+    "Single-sample before-fix measurement, not a test pass or a latency comparison.",
+    "Serialized hashes/revisions include real generated authority metadata; future runs need not be byte-identical even with identical source semantics.",
+    "Copy-byte components overlap and are not additive savings. References have distinct source/statement/relation roles.",
+    "No PostgreSQL, HTTP, OMP, external MCP or provider request was exercised by this measurement.",
+    "The native content/details and MCP content/structuredContent envelope fields do not establish double model consumption.",
+    "The unstructured final-page prohibition is outside the first long brief body page; deleting non-extracted text would lose necessary context."
+  ]
+}
