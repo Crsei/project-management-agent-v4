@@ -14,7 +14,10 @@ import { readPrivateJson, ensurePrivateDirectory } from './private-state.mjs';
 // with a minimal Electron boundary whose loadURL actually reads a disposable page.
 async function fixture(t) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'desktop-browser-cli-')));
-  await ensurePrivateDirectory(root);
+  // The fixture just created this root. Elevated Windows tokens can own new
+  // objects through the token's group, so only a freshly-created root may
+  // legitimately transfer ownership to the current user.
+  await ensurePrivateDirectory(root, { newlyCreated: true });
   const page = createServer((_request, response) => response.end('<title>Native preview fixture</title><p>actual page bytes</p>'));
   page.listen(0, '127.0.0.1'); await once(page, 'listening');
   const url = `http://127.0.0.1:${page.address().port}/page`;
