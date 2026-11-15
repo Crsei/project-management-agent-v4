@@ -39,7 +39,7 @@ pnpm services:start
 pnpm services:status`} />
     <p>默认入口为 <a href="http://127.0.0.1:3224/pm"><code>http://127.0.0.1:3224/pm</code></a>；PM API 为 4194、Agent API 为 4325、Web 开发上游为 4326、PostgreSQL 为 55444。启动前核对端口、进程归属和工作目录，不接管其他服务。</p>
     <p><code>bootstrap</code> 只在尚无账号和工作区时准备私有 <code>.local/setup-token</code>（0600），数据库仅保存摘要。在 Web 首次设置页输入令牌、姓名、邮箱、密码及工作区名称；不生成默认明文密码，不读取或迁入旧访问文件。已有账号或工作区即关闭设置。响应未知时先核对原结果，不盲目重新初始化。</p>
-    <a class="button button-primary" href={appUrl}>{appLabel}<span aria-hidden="true">↗</span></a>
+    <a class="btn btn-primary" href={appUrl}>{appLabel}<span aria-hidden="true">↗</span></a>
     <p class="entry-note">{appNote}</p>
   </section>
   <section id="existing">
@@ -78,8 +78,7 @@ pnpm build:marketing
 pnpm preview:marketing`} />
     <p>开发／预览使用 <code>http://127.0.0.1:4330/</code>，产物为 <code>apps/marketing/dist/</code>。只部署到明确指定的静态站入口，不覆盖 3224 工作台；本地预览不是正式公网部署。</p>
     <CommandBlock label="apps/marketing/.env：仅公开构建变量" code={`PUBLIC_APP_URL=http://127.0.0.1:3224/pm
-PUBLIC_SOURCE_URL=https://github.com/Crsei/project-management-agent-v4
-PUBLIC_DESKTOP_RELEASE_URL=`} />
-    <p><code>PUBLIC_APP_URL</code> 使用不含凭据的绝对 HTTP(S) 地址。旧 <code>PUBLIC_WORKSPACE_URL</code> 已移除，请迁移到新变量并重新构建。源码与发行地址须为实际 HTTPS 地址；未发布合格安装包时不填下载地址。配置链接不等于发行验收。</p>
+PUBLIC_SOURCE_URL=https://github.com/Crsei/project-management-agent-v4`} />
+    <p><code>PUBLIC_APP_URL</code> 使用不含凭据的绝对 HTTP(S) 地址。旧 <code>PUBLIC_WORKSPACE_URL</code> 已移除，请迁移到新变量并重新构建。源码地址须为实际 HTTPS 地址。<code>PUBLIC_DESKTOP_RELEASE_URL</code> 也已移除：下载页改用明确审阅的发行材料快照，不能靠填写 URL 启用安装包；当前原生验收和发行门禁未闭合时保持不可下载。</p>
   </section>
 </GuideLayout>

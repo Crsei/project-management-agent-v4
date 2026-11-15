@@ -12,28 +12,54 @@ T3 Code visual/source adaptations
   Upstream: https://github.com/pingdotgg/t3code
   Retained full notice: /LICENSE.t3code
   MIT License; Copyright (c) 2026 T3 Tools Inc.
-  The Provider source-manifest does not inventory the marketing files. Their
-  exact upstream revision/byte provenance is not yet recorded. Preserving this
-  MIT notice does not establish rights in every third-party brand icon.
+  The six retained harness SVGs match the exact files at upstream commit
+  d53873b6a4799e87afd63c8d288ef0089f5a3748. Their paths, Git blobs, byte lengths,
+  SHA256 fingerprints and retained original notice are recorded in
+  /fonts/SOURCE.json. The Provider source-manifest does not inventory these
+  marketing assets, and this record does not cover other marketing adaptations.
+  The direct source and MIT notice do not establish all third-party artwork
+  rights or trademark permissions.
 
 DM Sans
   Copyright 2014 The DM Sans Project Authors
   https://github.com/googlefonts/dm-fonts
   SIL Open Font License 1.1: /fonts/dm-sans-OFL.txt
-  Applies to the bundled DM Sans font software, not the host application.
+  Both retained WOFF2 subsets and the OFL match the fixed t3code commit above;
+  exact direct redistribution provenance is in /fonts/SOURCE.json. This does not
+  claim the first font download or subsetting history. The OFL applies to the
+  font software, not the host application.
 
 JetBrains Mono
   Copyright 2020 The JetBrains Mono Project Authors
   https://github.com/JetBrains/JetBrainsMono
   SIL Open Font License 1.1: /fonts/jetbrains-mono-OFL.txt
-  Applies to the bundled JetBrains Mono font software, not the host application.
+  The retained WOFF2 subset and OFL match the fixed t3code commit above;
+  exact direct redistribution provenance is in /fonts/SOURCE.json. This does not
+  claim the first font download or subsetting history. The OFL applies to the
+  font software, not the host application.
+
+Dovspace product artwork
+  The product mark and favicon are generated from the host application's
+  apps/web/public/dovspace.svg, reconstructed from a user-provided validation
+  board and visually approved on 2026-11-15 after removal of the extra wing fold.
+  The approved SVG is retained at /dovspace.svg and /favicon.svg; its embedded
+  description records the reconstruction and visual approval scope.
+  This record does not establish original artwork ownership, trademark
+  registration or public distribution rights.
 
 Names, logos and trademarks identify their respective products. No sponsorship,
-endorsement or trademark license is claimed. The six local brand SVGs and the
-font download/subset versions still require an exact provenance review.
+endorsement or trademark license is claimed. The six local harness SVGs still
+require review of third-party artwork rights and applicable brand-use conditions;
+their direct byte source is recorded, not assumed to grant those rights.
 
-Release review remains blocked. See THIRD_PARTY_NOTICES.md#release-blockers in
-the source distribution for the maintained source, asset and final-package
-licensing blockers. This static notice is not a second source manifest or an
-approval to publish. Keep this file, LICENSE.t3code and both font license files
-when distributing the static website.
+Release review remains blocked. The application's source repository is public:
+  https://github.com/Crsei/project-management-agent-v4
+Public repository availability alone does not verify that current uncommitted
+changes or deployed/distributed artifacts have matching corresponding source,
+legal notices and source-access offers.
+
+See THIRD_PARTY_NOTICES.md#release-blockers in the source distribution for the
+maintained licensing and corresponding-source blockers. This text indexes the
+asset provenance in /fonts/SOURCE.json; it is not an approval to publish. Keep
+this file, LICENSE.t3code, both font license files and /fonts/SOURCE.json when
+distributing the static website.

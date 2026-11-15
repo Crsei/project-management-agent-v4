@@ -1,66 +1,207 @@
 ---
-import V4Layout from "../layouts/V4Layout.astro";
+import SiteLayout from "../layouts/SiteLayout.astro";
 import { agents } from "../lib/agents";
-import { appUrl, sourceUrl } from "../lib/site";
+import { appUrl, appLabel, sourceUrl } from "../lib/site";
+import "../styles/showcase.css";
+
+const screenshots = [
+  {
+    id: "project-board",
+    number: "01",
+    title: "项目与任务，来自同一份真实数据。",
+    badge: "PM 项目看板",
+    file: "nova-project-board",
+    alt: "Dovspace 的 Nova 合成演示项目看板，显示带合成演示标签的任务卡片与真实状态分组；移动端截图为可横向滚动看板的当前可视区域。",
+    description: "同一隔离演示项目中的六条任务，按真实 PM 状态展示。项目与初始状态由人工通过已认证的应用接口建立；不是客户业务，也不是 Agent 交付记录。",
+  },
+  {
+    id: "agent-chat",
+    number: "02",
+    title: "带着明确引用，准备一次对话。",
+    badge: "未发送的 Chat 草稿",
+    file: "nova-agent-chat-draft",
+    alt: "Dovspace 的真实 Agent Chat 输入框，包含待发送的 Nova 任务核对草稿与 TASK-005 引用；没有模型回复，尚未选择 Provider。",
+    description: "真实 Chat 会话与可编辑输入框，手动选择同一演示项目的 TASK-005 引用。未选择 Provider、未发送消息；未执行模型；不代表Provider验收。草稿中的内容不是模型回复。",
+  },
+  {
+    id: "task-readback",
+    number: "03",
+    title: "保存之后，回到任务核对。",
+    badge: "人工写入 · 刷新读回",
+    file: "nova-task-readback",
+    alt: "Dovspace 的 TASK-005 任务详情，刷新后两项人工核对清单仍为勾选状态，正文明确不代表 Agent 或 Provider 验收，任务状态仍为待办。",
+    description: "在实际任务页面勾选两项清单并发布人工核对评论，再刷新读取已保存内容。图中保留待办状态；清单勾选、Run 成功与任务完成不是同一件事，也不把人工操作归为 Agent 输出。",
+  },
+];
+
+const capabilities = [
+  {
+    number: "01 / PROJECT CONTEXT",
+    title: "让项目上下文可查",
+    description: "项目、任务与 Markdown 正文由 PM 管理。同一批任务可以切换视图，任务详情保留明确的业务状态；上方看板与详情来自同一份数据。",
+    label: "阅读 PM 目标与 Agent 目录说明",
+    href: "/get-started/#scope",
+  },
+  {
+    number: "02 / EXPLICIT CONTEXT",
+    title: "让对话目标明确",
+    description: "在真实 Composer 中编辑草稿、选择 PM 任务引用。PM 引用不自动绑定代码目录，也不赋予执行权限；运行仍取决于你自己的 Provider、CLI 与账号。",
+    label: "阅读 Provider 与 Chat 入门说明",
+    href: "/get-started/#first-run",
+  },
+  {
+    number: "03 / READ BACK",
+    title: "让保存结果可核对",
+    description: "从任务页面执行明确操作，重新读取已保存的正文与状态。本次只展示人工 PM 保存与读回；未知写入先核对原操作，不把模型回复当作完成凭证。",
+    label: "阅读取消与结果核对说明",
+    href: "/security/#execution",
+  },
+];
 ---
-<V4Layout>
-  <section class="hero">
+<SiteLayout
+  title="Dovspace · 项目上下文与 Agent，同一个工作台"
+  description="查看来自隔离合成演示数据的真实项目、任务和 Agent Chat 界面，了解 Dovspace 自托管方式、执行边界与桌面发行状态。"
+>
+  <section class="hero showcase-hero">
     <div class="hero-grid" aria-hidden="true"></div>
-    <div class="hero-float" aria-hidden="true">
-      {agents.map((agent) => <span class:list={["float-mark", `float-${agent.position}`]}><span class="float-card"><img src={`/harnesses/${agent.icon}`} alt="" width="48" height="48" /></span></span>)}
-    </div>
     <div class="container hero-inner">
-      <p class="eyebrow hero-eyebrow">PROJECTS. PEOPLE. AGENTS.</p>
-      <h1>项目管理，<br />与编码 Agent，<br /><span>终于在一起。</span></h1>
-      <p class="hero-sub">项目、任务、Markdown 与 Agent Chat，同一个工作台。<br class="desktop-break" />在可信本机自托管，使用你自己的模型账号。</p>
+      <p class="eyebrow hero-eyebrow">PROJECT CONTEXT. AGENT CHAT. DOVSPACE.</p>
+      <h1>把项目上下文与 Agent，<br /><span>放在同一个工作台。</span></h1>
+      <p class="hero-sub">组织项目与任务，在 Agent Chat 中准备明确的上下文，<br class="desktop-break" />再回到真实记录核对结果。由你在可信本机自托管。</p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" href="/get-started/">开始自托管 <span aria-hidden="true">↗</span></a>
-        <a class="source-link" href={sourceUrl ?? '#open-source'}>为你的工作流而构建 <span aria-hidden="true">↗</span></a>
-        <p class="hero-platforms">Web 工作台 <span>·</span> 桌面应用</p>
+        <a class="source-link" href="#product">先看真实界面 <span aria-hidden="true">↓</span></a>
       </div>
-      <figure class="product-preview" aria-label="产品界面截图预留区域">
-        <div class="preview-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Dovspace</span><span>WORKSPACE</span></div>
-        <div class="preview-empty"><span class="preview-monogram" aria-hidden="true">PM</span><p>你的项目，你的 Agent。</p><span class="preview-caption">产品界面截图预留</span></div>
-      </figure>
-      <div class="product-labels"><span>项目与任务</span><span>Agent 对话</span><span>文件与终端</span><span>代码交付</span></div>
+      <p class="showcase-boundary">当前 Agent 面向本机单操作者，PM 身份与权限独立；执行目录不是沙箱。会话与持久化统一设计尚未收口。<a href="/security/">先了解安全边界</a>。</p>
     </div>
   </section>
 
-  <section id="agents" class="section">
+  <section id="product" class="section showcase-section" aria-labelledby="product-title">
     <div class="container">
-      <div class="section-head"><p class="eyebrow">YOUR AGENTS, TOGETHER</p><h2>选择 Provider，<br />在同一工作台里工作。</h2><p>界面提供多种 Provider 适配入口。<br class="desktop-break" />实际可用性取决于本机 CLI、账号、模型与对应能力验收；图标不代表合作或全部功能已验证。</p></div>
-      <div class="harness-grid">
-        {agents.map((agent) => <div class="harness"><img src={`/harnesses/${agent.icon}`} alt="" width="28" height="28" loading="lazy" /><div><h3>{agent.name}</h3><p>{agent.tag}</p></div></div>)}
+      <div class="section-head showcase-intro">
+        <p class="eyebrow">REAL INTERFACE. SYNTHETIC DATA.</p>
+        <h2 id="product-title">不画一个工作台。<br />打开真实的 Dovspace。</h2>
+        <p>下面三组图片来自同一套 Nova 合成演示数据，在隔离的 PostgreSQL、Markdown 与 Agent 实例中实际采集。没有生产账号、客户资料或虚构模型回复。</p>
+        <p class="showcase-note">采集于 2026-11-14，使用当时已有的实际 Web／Agent 产物与 PM 工作树源码，并非正式发行版。桌面与移动端分别实拍；版本、文件摘要、人工操作和清理记录见 <a href="/screenshots/SOURCE.json">截图来源清单</a>。</p>
       </div>
-      <div class="harness-footer"><span>使用自己的账号与模型</span><span>也支持 Muse Code、Pi、OMP 与 ACP Registry</span><span>按 Provider 实际能力运行</span></div>
+      <div class="showcase-gallery">
+        {screenshots.map((shot) => (
+          <figure class="showcase-card" id={shot.id}>
+            <div class="showcase-card-head">
+              <div><p class="showcase-step">{shot.number} / DOVSPACE</p><h3>{shot.title}</h3></div>
+              <span class="showcase-badge">{shot.badge}</span>
+            </div>
+            <div class="showcase-image-viewport" role="region" aria-label={`${shot.badge}截图；宽屏图片可横向滚动，也可打开原图`} tabindex="0">
+              <picture>
+                <source media="(max-width: 640px)" srcset={`/screenshots/${shot.file}-mobile.webp`} width="780" height="1688" />
+                <img src={`/screenshots/${shot.file}-desktop.webp`} width="1440" height="1000" alt={shot.alt} loading="lazy" decoding="async" />
+              </picture>
+            </div>
+            <figcaption class="showcase-caption">
+              <p><strong>{shot.badge}。</strong>{shot.description}</p>
+              <div class="showcase-caption-links">
+                <a href={`/screenshots/${shot.file}-desktop.webp`}>查看桌面原图 <span aria-hidden="true">↗</span></a>
+                <a href={`/screenshots/${shot.file}-mobile.webp`}>查看移动端原图 <span aria-hidden="true">↗</span></a>
+              </div>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <p class="showcase-scroll-hint">图片保持原始比例；较窄屏幕可在图片区域横向滚动，或打开原图按完整尺寸查看细节。手机端显示单独采集的移动界面。</p>
     </div>
   </section>
 
-  <section class="section workflow-section">
-    <div class="container split">
-      <div class="workflow-visual" role="img" aria-label="使用流程示意：项目计划、Agent 会话、结果核对；不是交付工作台截图">
-        <div class="workflow-head"><span class="status-dot"></span> PLAN → VERIFY <span>使用流程示意</span></div>
-        <ol class="workflow-steps">
-          <li><span class="step-number">01</span><div><strong>项目计划</strong><span>需求、任务与文档</span></div><span class="step-tag">Plan</span></li>
-          <li><span class="step-number">02</span><div><strong>Agent 开发</strong><span>对话、文件与终端</span></div><span class="step-tag">Build</span></li>
-          <li><span class="step-number">03</span><div><strong>结果核对</strong><span>原操作收据与业务状态</span></div><span class="step-tag">Verify</span></li>
-        </ol>
-        <div class="workflow-bottom"><span>交付留痕，人工确认。</span><span aria-hidden="true">↗</span></div>
-      </div>
-      <div class="section-head"><p class="eyebrow">LESS SWITCHING. MORE BUILDING.</p><h2>从项目计划，<br />到可核对的结果。</h2><p>把项目、任务、文档和 Agent 会话放在一起。PM 授权与 Agent 执行身份独立；Run 成功不等于任务完成。</p><ul class="checklist"><li>项目与任务，多种视图</li><li>同一执行目录的文件、Git 和终端</li><li>未知写入先核对原操作，不盲目重发</li></ul><p>任务详情的交付工作台目前隐藏；不将后端保留能力表述为已开放页面。</p><a class="text-link" href={appUrl}>进入工作台 <span aria-hidden="true">↗</span></a></div>
-    </div>
-  </section>
-
-  <section id="open-source" class="section">
+  <section id="agents" class="section" aria-labelledby="capabilities-title">
     <div class="container">
-      <div class="section-head"><p class="eyebrow">OPEN SOURCE</p><h2>让工具，按你的方式工作。</h2><p>查看代码，调整界面，连接自己的 Agent。<br class="desktop-break" />在自己的环境里，构建自己的工作流。</p></div>
-      <div class="open-grid">
-        <div class="terminal tile"><div class="terminal-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>~/pm-agent</span></div><div class="terminal-body"><p class="terminal-comment"># 在已初始化的项目中</p><p><span class="prompt">$</span> pnpm install --frozen-lockfile</p><p><span class="prompt">$</span> pnpm dev:v4</p><p class="terminal-comment"># 修改代码，预览你的工作台。</p><p><span class="prompt">$</span> <span class="caret" aria-hidden="true"></span></p></div></div>
-        <div class="open-pitch tile"><ul><li><strong>界面属于你。</strong><span>调整布局，让项目与会话更顺手。</span></li><li><strong>Agent 由你选择。</strong><span>连接自己的 Provider、模型和工具。</span></li><li><strong>运行在自己的环境。</strong><span>使用本地部署或连接自己的服务。</span></li></ul><div class="open-actions">{sourceUrl ? <a class="btn btn-primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">浏览源代码 ↗</a> : <><span class="btn btn-disabled" aria-disabled="true">源码地址待补充</span><span class="small-note">公开仓库链接预留</span></>}</div></div>
+      <div class="section-head">
+        <p class="eyebrow">THREE THINGS YOU CAN INSPECT</p>
+        <h2 id="capabilities-title">从上下文，到可核对的记录。</h2>
+        <p>先看实际界面，再按指南了解功能和边界。不把 Chat 草稿当成执行，也不把 Run 成功当成任务完成。</p>
       </div>
-      <p class="small-note">项目自有代码采用 AGPL-3.0-only；第三方材料保留原许可。公开仓库首页不是当前运行版本或安装包的对应源码证明，具体以 commit／发行清单为准。字体、素材与正式发行门禁见 <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>。</p>
+      <div class="showcase-capabilities">
+        {capabilities.map((capability) => (
+          <article class="tile showcase-capability">
+            <p class="eyebrow">{capability.number}</p>
+            <h3>{capability.title}</h3>
+            <p>{capability.description}</p>
+            <a class="text-link" href={capability.href}>{capability.label} <span aria-hidden="true">↗</span></a>
+          </article>
+        ))}
+      </div>
+      <div class="showcase-adapters">
+        <h3>Provider 图标，表示适配入口。</h3>
+        <p>不是合作或背书，也不表示账号、模型、全部原生功能已验收。实际运行需要本机 CLI、你自己的账号及对应能力配置；本轮界面采集没有执行任何模型。</p>
+        <div class="harness-grid">
+          {agents.map((agent) => <div class="harness"><img src={`/harnesses/${agent.icon}`} alt="" width="28" height="28" loading="lazy" /><div><h3>{agent.name}</h3><p>Provider 适配</p></div></div>)}
+        </div>
+        <p class="showcase-note">Provider 配置与使用边界见 <a href="/get-started/#first-run">Agent 入门说明</a>，不据图标推断能力或可用额度。</p>
+      </div>
     </div>
   </section>
 
-  <section class="section final-cta"><div class="container"><p class="eyebrow">ONE WORKSPACE. YOUR AGENTS.</p><h2>让项目向前。<br />让结果可核对。</h2><p>先了解安全边界，再启动你自己的 Dovspace。</p><div class="cta-actions"><a class="btn btn-primary btn-lg" href="/get-started/">开始自托管 <span aria-hidden="true">↗</span></a><a class="btn btn-ghost btn-lg" href={appUrl}>打开工作台 <span aria-hidden="true">↗</span></a></div></div></section>
-</V4Layout>
+  <section class="section" aria-labelledby="deployment-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">SELF-HOST FIRST</p>
+        <h2 id="deployment-title">从自己的环境开始。</h2>
+        <p>宣传站是静态介绍，不运行 Agent，也不为工作台提供托管。先完成本机配置，再连接实际服务。</p>
+      </div>
+      <div class="showcase-deployment">
+        <article class="tile">
+          <p class="eyebrow">SOURCE / SELF-HOST</p>
+          <h3>Web 自托管</h3>
+          <p>沿用当前安装流程：空实例通过一次性 setup token 建号；已有实例使用原账号登录。不要直接开放到公网，不通过宣传站导入 Provider 凭据。</p>
+          <div class="open-actions"><a class="btn btn-primary" href="/get-started/">阅读自托管指南 <span aria-hidden="true">↗</span></a></div>
+        </article>
+        <article class="tile">
+          <p class="eyebrow">DESKTOP / STATUS</p>
+          <h3>桌面版，先看发行状态</h3>
+          <p>Windows 与 macOS 是构建目标，不等于当前已有可安装的正式版本。当前原生验收与四项发行门禁仍未关闭；不以历史构建或 unsigned preview 代替正式发布。</p>
+          <div class="open-actions"><a class="btn btn-ghost" href="/download/">查看版本与下载状态 <span aria-hidden="true">↗</span></a><a class="text-link" href="/desktop/">桌面运行边界</a></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="plans-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">SELF-HOST TODAY. CLOUD PLANS AHEAD.</p>
+        <h2 id="plans-title">现在自托管，云套餐仍在规划。</h2>
+        <p>当前没有可购买的托管商业云。自托管不赠送平台云空间，也不套用未来云套餐上限；容量与运行成本取决于你自己的环境，不承诺无限容量。</p>
+      </div>
+      <div class="showcase-source">
+        <p>云套餐规划：Free 最多 5 人／共享 5 GB，拟免费；Team 按需购席位、最多 50 人／共享 100 GB；Business 按需购席位、最多 200 人／共享 1 TB。Team 与 Business 价格待成本核算；以上均未生效、不可购买。</p>
+        <p>AI 自带 Provider，由供应商独立计费，不赠送 AI 额度。人数与云附件空间的建议计量规则、项目与任务的规划边界见完整说明。</p>
+        <div class="open-actions"><a class="btn btn-ghost" href="/plans/">了解套餐与用量规划 <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="open-source" class="section" aria-labelledby="source-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">SOURCE AND LICENSE</p>
+        <h2 id="source-title">代码可查看，边界不隐藏。</h2>
+      </div>
+      <div class="showcase-source">
+        <p>项目自有代码采用 <a href="/LICENSE">AGPL-3.0-only</a>；第三方代码、字体与素材保留各自原许可，不统一推定为 AGPL 或 MIT。现有字体与视觉素材保持原样，截图来自本项目实际界面。</p>
+        <p>公开仓库首页不是某个运行版本或安装包的对应源码证明。当前截图使用包含未提交修改的实际产物，精确身份以 <a href="/screenshots/SOURCE.json">截图来源清单</a>及其哈希材料为准，不称为干净 HEAD。字体、其他素材、产物许可随附及对应源码四项发行门禁继续保持开放，见 <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>。</p>
+        <div class="open-actions">
+          {sourceUrl && <a class="btn btn-primary" href={sourceUrl}>浏览源代码 <span aria-hidden="true">↗</span></a>}
+          <a class="text-link" href="/security/">阅读安全与运维边界 <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section final-cta" aria-labelledby="next-title">
+    <div class="container">
+      <p class="eyebrow">YOUR ENVIRONMENT. YOUR NEXT STEP.</p>
+      <h2 id="next-title">让项目向前。<br />让结果可核对。</h2>
+      <p>先阅读指南，再启动你自己的 Dovspace。</p>
+      <div class="cta-actions"><a class="btn btn-primary btn-lg" href="/get-started/">开始自托管 <span aria-hidden="true">↗</span></a><a class="btn btn-ghost btn-lg" href={appUrl}>{appLabel} <span aria-hidden="true">↗</span></a></div>
+      <nav class="showcase-next-links" aria-label="下一步指南"><a href="/plans/">套餐与用量规划</a><a href="/security/">安全与运维</a><a href="/desktop/">桌面使用方式</a><a href="/download/">发行与下载状态</a></nav>
+    </div>
+  </section>
+</SiteLayout>

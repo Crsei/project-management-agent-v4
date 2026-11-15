@@ -1,6 +1,6 @@
 ---
-import '../styles/global.css';
-import { appLabel, appNote, appUrl, sourceUrl } from '../lib/site';
+import "../styles/site.css";
+import { appLabel, appNote, appUrl, sourceUrl } from "../lib/site";
 
 interface Props {
   title: string;
@@ -8,71 +8,66 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const pageTitle = title.includes("Dovspace") ? title : `${title} — Dovspace`;
+const currentPath = `${Astro.url.pathname.replace(/\/+$/, '')}/`;
 const navigation = [
   { href: '/', label: '产品' },
   { href: '/get-started/', label: '自托管' },
   { href: '/desktop/', label: '桌面' },
   { href: '/download/', label: '下载状态' },
+  { href: '/plans/', label: '套餐与用量' },
   { href: '/security/', label: '安全与运维' },
 ];
 ---
-
 <!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#fafaf9" />
+    <meta name="theme-color" content="#09090b" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={`${title} — Dovspace`} />
+    <meta property="og:site_name" content="Dovspace" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>{title} — Dovspace</title>
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <link rel="icon" href="/favicon.svg?v=20261115" type="image/svg+xml" />
+    <title>{pageTitle}</title>
   </head>
-  <body>
+  <body class="marketing">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
-    <header class="site-header">
-      <div class="container header-inner">
-        <a class="wordmark" href="/" aria-label="Dovspace 首页">
-          <svg viewBox="0 0 24 24" width="25" height="25" fill="none" aria-hidden="true">
-            <path d="M2 2h8v8H2zm12 0h8v8h-8zM2 14h8v8H2z" fill="currentColor" />
-            <path d="M14 14h8v8h-8z" fill="var(--accent)" />
-          </svg>
-          <span>Dovspace</span>
-        </a>
-        <nav class="primary-navigation" aria-label="主要导航">
+    <header class="nav">
+      <div class="container nav-inner">
+        <a href="/" class="brand" aria-label="Dovspace 首页"><img class="brand-mark" src="/dovspace.svg?v=20261115" width="32" height="32" alt="" /><span>Dovspace</span></a>
+        <nav class="nav-links" aria-label="主要导航">
           {navigation.map(({ href, label }) => (
-            <a href={href} aria-current={Astro.url.pathname === href ? 'page' : undefined}>{label}</a>
+            <a href={href} aria-current={currentPath === href ? 'page' : undefined}>{label}</a>
           ))}
+          <a class="nav-workspace" href={appUrl}>{appLabel} <span aria-hidden="true">↗</span></a>
         </nav>
-        <a class="button button-small button-outline header-entry" href={appUrl}>
-          {appLabel}<span aria-hidden="true">↗</span>
-        </a>
       </div>
     </header>
-    <main id="main-content" tabindex="-1">
-      <slot />
-    </main>
-    <footer class="site-footer">
-      <div class="container">
-        <div class="footer-top">
-          <div>
-            <a class="footer-name" href="/">Dovspace</a>
-            <p>可信本机、单操作者的项目与 Agent 工作台。</p>
-          </div>
-          <nav aria-label="页脚导航">
-            <a href="/get-started/">自托管入门</a>
-            <a href="/desktop/">桌面说明</a>
-            <a href="/security/">安全与限制</a>
-            {sourceUrl && <a href={sourceUrl}>源码仓库 ↗</a>}
-            <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>
-          </nav>
-        </div>
-        <div class="footer-bottom">
-          <p>PM 账号与 Agent 操作者身份独立，不提供公网多租户隔离。</p>
-          <p>{appNote}</p>
-        </div>
+    <main id="main-content" tabindex="-1"><slot /></main>
+    <footer class="footer">
+      <div class="container footer-inner">
+        <a class="footer-brand" href="/" aria-label="Dovspace 首页"><span class="footer-wordmark"><img class="brand-mark" src="/dovspace.svg?v=20261115" width="24" height="24" alt="" />Dovspace</span><span class="footer-tagline">项目与 Agent，同一个工作台。</span></a>
+        <nav aria-label="页脚导航">
+          <a href="/get-started/">自托管</a>
+          <a href="/desktop/">桌面说明</a>
+          <a href="/plans/">套餐与用量</a>
+          <a href="/security/">安全与限制</a>
+          <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>
+          {sourceUrl && <a href={sourceUrl}>源码仓库 ↗</a>}
+          <a href="/download/">下载状态</a>
+          <a href={appUrl}>{appLabel} ↗</a>
+        </nav>
+      </div>
+      <div class="container footer-notes">
+        <p>可信本机、单操作者使用；PM 账号与 Agent 操作者身份独立，文件目录不是沙箱。</p>
+        <p>{appNote}</p>
       </div>
     </footer>
   </body>

@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "product": "Dovspace",
+  "captureDate": "2026-11-14",
+  "purpose": "P1-A/P1-B genuine product screenshots for the static marketing homepage; not a formal release or Provider acceptance.",
+  "capture": {
+    "method": "Real authenticated browser against the real PM HTTP application, real disposable PostgreSQL, real Markdown storage, real Agent server/SQLite, and the existing built Web SPA behind the real same-origin gateway.",
+    "browser": "Chrome/138.0.7204.92",
+    "theme": "Existing product light theme and original fonts/assets; no theme/DOM/style injection.",
+    "images": "Direct WebP viewport captures at quality 94. Desktop 1440×1000 CSS pixels at DPR 1; mobile 390×844 CSS pixels at DPR 2. No crop, painting, compositing, generated UI or fabricated history.",
+    "authentication": "Generated disposable PM account authenticated by POST /api/v1/auth/login. Independently generated disposable Agent token authenticated by POST /agent/api/access. Only the returned real HttpOnly cookies were installed in the isolated browser. No authentication bypass; no production login or data writes.",
+    "isolation": "An owned postgres:16-alpine container with random loopback allocation and tmpfs storage, verified by the existing isOwnedCiPostgres ownership guard. Reused tests/local-project-fixture.ts for real PM API/Worker/Markdown/blob lifecycle. Agent child received an allowlisted environment, private empty HOME and private data root; PM_DESKTOP_MANAGED=1 prevented loading checkout dotenv credentials. No user token file or native CLI account was imported.",
+    "modelExecution": "None. No Provider configured or selected; no message sent, generation started, mocked Provider, injected history or model response. Chat shows a real empty-history session, editable unsent draft and manually selected real PM task reference. 未执行模型；不代表Provider验收。",
+    "securityBoundary": "PM authorization and the Agent local operator identity are independent. Directory configuration is not a sandbox. Unified session persistence remains an unadopted candidate."
+  },
+  "dataset": {
+    "id": "marketing-nova-v1",
+    "name": "Nova · 合成演示",
+    "origin": "Task-specific deterministic synthetic dataset, not customer data and not the full built-in Nova template. Names, descriptions and preset statuses are synthetic. UUIDs, revisions and timestamps are generated normally by the real application.",
+    "workspaceId": "26259f03-9096-4ae9-bd0c-443dad74bfd1",
+    "project": {
+      "id": "PRJ-001",
+      "title": "Nova 门户 · 合成演示"
+    },
+    "actorDisplayName": "演示操作者",
+    "tasks": [
+      {
+        "id": "TASK-001",
+        "title": "梳理门户信息架构",
+        "initialStatus": "done",
+        "initialPriority": "high",
+        "label": "合成演示"
+      },
+      {
+        "id": "TASK-002",
+        "title": "设计项目首页与导航",
+        "initialStatus": "in_progress",
+        "initialPriority": "urgent",
+        "label": "合成演示"
+      },
+      {
+        "id": "TASK-003",
+        "title": "实现任务列表与筛选",
+        "initialStatus": "in_progress",
+        "initialPriority": "high",
+        "label": "合成演示"
+      },
+      {
+        "id": "TASK-004",
+        "title": "补充移动端阅读布局",
+        "initialStatus": "todo",
+        "initialPriority": "medium",
+        "label": "合成演示"
+      },
+      {
+        "id": "TASK-005",
+        "title": "核对任务写入与读回",
+        "initialStatus": "todo",
+        "initialPriority": "high",
+        "label": "合成演示"
+      },
+      {
+        "id": "TASK-006",
+        "title": "整理自托管使用说明",
+        "initialStatus": "todo",
+        "initialPriority": "low",
+        "label": "合成演示"
+      }
+    ],
+    "initialWrites": "Project and six tasks created through authenticated real PM native entity HTTP endpoints with stable per-record idempotency keys. The project used the normal registered local-directory initialization, not a core permission bypass. Preset done/in_progress states are fixture content, not demonstrated Agent achievements.",
+    "manualUiActions": [
+      "Opened the real project board and TASK-005 detail.",
+      "Manually checked both Markdown checklist items in TASK-005 and allowed the normal UI autosave to finish.",
+      "Manually posted the comment: 人工演示核对：已在任务详情勾选两项清单，保存后重新读取。仅记录本次 PM 页面操作；未调用模型，不是 Agent 输出，任务仍保留 todo。",
+      "Opened the full task detail and reloaded the document. The real UI readback retained both checked items, the comment, and todo status.",
+      "Created one real only-chat Session in the UI; typed the unsent draft and selected TASK-005 from the real authorized PM workspace/task picker. No Send action."
+    ],
+    "readback": {
+      "taskId": "TASK-005",
+      "afterDocumentReload": true,
+      "checkedItems": [
+        true,
+        true
+      ],
+      "commentVisibleInDocument": true,
+      "statusDisplayed": "待办",
+      "statusValue": "todo",
+      "notAnAgentOutput": true
+    }
+  },
+  "runtime": {
+    "node": {
+      "version": "v24.21.0",
+      "executableSha256": "7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c"
+    },
+    "postgres": {
+      "image": "postgres:16-alpine",
+      "imageId": "sha256:de3a4eab8fdfa507ea92aac488b916b08089e515db49b055fe71dfa271ba3a28"
+    },
+    "git": {
+      "contextHead": "988818143f00d04456ceb94e5d15948538f19004",
+      "clean": false,
+      "correspondingSourceClaim": false,
+      "currentRuntimeRelevantTrackedDiffSha256": "d5aa24026082e90f34d024bf6992b68ef2c1754a360d10bd318ce050497a3baf",
+      "currentRuntimeRelevantTrackedDiffBytes": 1182561,
+      "diffCommand": "git diff --binary HEAD -- apps/web apps/server packages tests/local-project-fixture.ts tests/local-project-process.ts tests/mail-fixture-lifecycle.ts",
+      "warning": "HEAD is context only. Existing artifacts came from dirty source; the exact pre-build frontend source identity is unavailable. Current PM API/Worker and fixture execute working-tree source. Artifact digests, not a clean-HEAD claim, identify what was shown."
+    },
+    "web": {
+      "root": "apps/web/dist",
+      "treeSha256": "6cecabe49fc16885c661eaa4b245b48f078b72d44762cfe03a142db682b6179d",
+      "files": 7014,
+      "bytes": 916049260,
+      "indexSha256": "9b1b52313f2d556927cebf301523a20f5c1e32b23fea473785e6b4fa627c6203",
+      "buildDuringCapture": false,
+      "warning": "The existing dist contains retained historical hashed assets. The complete tree is recorded, not all files were loaded by these routes. The frontend shell differs from the prior frozen delivery snapshot; do not attribute this entire Web tree to that snapshot."
+    },
+    "agent": {
+      "root": "apps/server/agent/dist",
+      "treeSha256": "5498e2a0f66f372dbd4cb79bdea3261cf208692daaef64ed74d60987d290b9c9",
+      "files": 85,
+      "bytes": 41087896,
+      "indexSha256": "1a47d66cbffd18015bae27c5d209dbb207101947cfbecd7199f796dfa2448873",
+      "buildInputsSha256": "1594cdf3b4e2330fa75c04eb838c1d2d2413f28e444a303bdbe4833c5e71a85d",
+      "buildDuringCapture": false,
+      "priorFrozenSnapshot": {
+        "opaqueSourceFingerprint": "efc2ae22fd9a5ba660b2e326383886f1ef04e5e2a03b003119a34d44597c3ca3",
+        "all85ArtifactFilesByteMatched": true,
+        "scope": "Existing Agent distribution only; not frontend source correspondence, fresh test evidence, native desktop or Provider acceptance."
+      }
+    },
+    "pmSource": {
+      "treeSha256": "7576006fd6ec7df8c60a5efde05b0e9bbeaafe32630923cd4d6c1fc5df10a535",
+      "files": 456,
+      "manifest": "PM-SOURCE.json",
+      "manifestSha256": "10afc35d71bf43bfa1c80977ff1164e9b1ed3432625cf39cefac2eb827ea9ef4",
+      "scope": "Working-tree PM/application/domain/infrastructure/contracts/Markdown sources and reused fixture/gateway code, plus the hash of the now-removed temporary capture controller. Exact file identities, not a clean source release."
+    },
+    "artifactManifest": {
+      "file": "RUNTIME.json",
+      "sha256": "a0566f7dee4d60c05d2398049c50e9984b5947508e77843a6431487f3683c1e2",
+      "bytes": 1343170,
+      "algorithm": "sha256(JSON.stringify(sorted [{path,sha256,bytes}])); paths relative to root; includes all regular files"
+    }
+  },
+  "screenshots": [
+    {
+      "file": "nova-task-readback-desktop.webp",
+      "kind": "task-readback",
+      "route": "/pm/26259f03-9096-4ae9-bd0c-443dad74bfd1/projects/PRJ-001/entities/TASK-005?returnTo=%2Fpm%2F26259f03-9096-4ae9-bd0c-443dad74bfd1%2Fprojects%2FPRJ-001%2Fissues%3Fview%3Dkanban%26entity%3DTASK-005",
+      "capturedAt": "2026-11-14T09:16:24.525Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "deviceScaleFactor": 1
+      },
+      "sha256": "ec5244631fb25208b72a4e1dfa7ffd75d1aad0ef7226b6e54fb5d58f103970ee",
+      "bytes": 68016,
+      "width": 1440,
+      "height": 1000,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    },
+    {
+      "file": "nova-project-board-desktop.webp",
+      "kind": "project-board",
+      "route": "/pm/26259f03-9096-4ae9-bd0c-443dad74bfd1/projects/PRJ-001/issues?view=kanban",
+      "capturedAt": "2026-11-14T09:16:28.076Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "deviceScaleFactor": 1
+      },
+      "sha256": "4e488f9ff93cbea7407d4b87a27fec84b8caa2bb379837913bc03522855632f7",
+      "bytes": 59466,
+      "width": 1440,
+      "height": 1000,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    },
+    {
+      "file": "nova-agent-chat-draft-desktop.webp",
+      "kind": "agent-chat-draft",
+      "route": "/agent/workspace?thread=8d097a79-9759-46b4-8575-bae9e2bcff4e",
+      "capturedAt": "2026-11-14T09:18:23.187Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "deviceScaleFactor": 1
+      },
+      "sha256": "3a772a6e52c6e109961369b6a8072918d2ef18d419fcca34d00079c869cfb114",
+      "bytes": 38718,
+      "width": 1440,
+      "height": 1000,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    },
+    {
+      "file": "nova-agent-chat-draft-mobile.webp",
+      "kind": "agent-chat-draft",
+      "route": "/agent/workspace?thread=8d097a79-9759-46b4-8575-bae9e2bcff4e",
+      "capturedAt": "2026-11-14T09:18:29.850Z",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2
+      },
+      "sha256": "c04761f0485535c641dc81191083849e8b6a95eb4521b4bea02049be90cca0bb",
+      "bytes": 44002,
+      "width": 780,
+      "height": 1688,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    },
+    {
+      "file": "nova-task-readback-mobile.webp",
+      "kind": "task-readback",
+      "route": "/pm/26259f03-9096-4ae9-bd0c-443dad74bfd1/projects/PRJ-001/entities/TASK-005?returnTo=%2Fpm%2F26259f03-9096-4ae9-bd0c-443dad74bfd1%2Fprojects%2FPRJ-001%2Fissues%3Fview%3Dkanban%26entity%3DTASK-005",
+      "capturedAt": "2026-11-14T09:18:41.000Z",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2
+      },
+      "sha256": "d93dca12f15622b32a70fce88cbccd65d9824fef20f92cb593363dbf64b52d2d",
+      "bytes": 69704,
+      "width": 780,
+      "height": 1688,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    },
+    {
+      "file": "nova-project-board-mobile.webp",
+      "kind": "project-board",
+      "route": "/pm/26259f03-9096-4ae9-bd0c-443dad74bfd1/projects/PRJ-001/issues?view=kanban",
+      "capturedAt": "2026-11-14T09:18:44.501Z",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 2
+      },
+      "sha256": "f3271cbab3b5c50d9bba53224bf9e8eafdb66f192228c74bd5b19350eee728dc",
+      "bytes": 71008,
+      "width": 780,
+      "height": 1688,
+      "encoding": {
+        "format": "webp",
+        "quality": 94
+      },
+      "editing": "None: direct browser viewport capture; no crop, compositing, redaction or UI injection."
+    }
+  ],
+  "licensing": {
+    "capture": "Original captures of this repository’s running UI and explicitly synthetic demo content, not third-party product screenshots. Project-owned material follows the repository AGPL-3.0-only license; incorporated third-party components, original fonts and visual assets retain their existing terms.",
+    "license": "/LICENSE",
+    "thirdPartyNotices": "/THIRD_PARTY_NOTICES.txt",
+    "releaseStatus": "NOT a legal-clearance or public-release approval. MiSans conditional font rights, other brand/background materials, final artifact license accompaniment and exact corresponding source remain four OPEN release gates. No release/download is enabled by these assets."
+  },
+  "cleanup": {
+    "status": "completed",
+    "controllerPid": 37304,
+    "agentPid": 51557,
+    "gatewayPort": 35653,
+    "pmApiPort": 40577,
+    "agentApiPort": 41673,
+    "postgresPort": 32872,
+    "containerId": "7ad5fd33ffb444b2b50cf6b3e661abaad7c1433488aa31a404138ae02109fbf2",
+    "schema": "test_local_project_c374e0af89524b6e83c4e0bcb8148481",
+    "evidence": "capture_cleaned emitted after real gateway shutdown, owned Agent SIGTERM/exit, fixture.close() (API/Worker exit, DROP SCHEMA, disposable Markdown/blob roots removal), owned Docker identity re-check and docker rm --force --volumes, then private controller-state/HOME/data-root removal. Controller exited 0. The isolated browser tab was released before shutdown.",
+    "temporaryCaptureController": "Removed after collection; only its SHA-256 remains in PM-SOURCE.json. No credentials, cookies, generated account emails or private absolute filesystem paths are published.",
+    "initialAttempt": "The first owned container 139f32c12a5c121f090c9133ac254c924a761caa9b1894f2f6fe1de4fc0177b4 was removed with its private root after an early PostgreSQL initialization connection failure. Its controller PID 12016 retained only its own port-reservation socket; the owned supervised service was explicitly stopped and reported exited. The next attempt waited for real PostgreSQL TCP readiness, performed the captures successfully, and exited 0 after cleanup.",
+    "production": "No production service stopped, restarted, rebuilt, overwritten, authenticated to or mutated. Existing production artifact bytes were read only."
+  }
+}

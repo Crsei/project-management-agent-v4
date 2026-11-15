@@ -33,8 +33,6 @@ export const appNote = appIsLocal
 export const agentWorkspaceUrl = new URL("/agent/workspace", app).href;
 
 // Public, build-time links only. Never put access tokens or provider keys here.
-export const desktopReleaseUrl = publicUrl(import.meta.env.PUBLIC_DESKTOP_RELEASE_URL, true)?.href;
-
 export const sourceUrl = publicUrl(
   import.meta.env.PUBLIC_SOURCE_URL?.trim() || "https://github.com/Crsei/project-management-agent-v4",
   true,

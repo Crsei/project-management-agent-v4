@@ -9,5 +9,5 @@ const { label, code } = Astro.props;
 
 <figure class="command-block">
   <figcaption>{label}</figcaption>
-  <pre><code>{code}</code></pre>
+  <pre tabindex="0" role="region" aria-label={label}><code>{code}</code></pre>
 </figure>

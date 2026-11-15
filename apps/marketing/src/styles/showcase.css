@@ -1,0 +1,57 @@
+.marketing .showcase-hero { padding-top: 66px; padding-bottom: 20px; }
+.marketing .showcase-hero .hero-actions { margin-bottom: 28px; }
+.marketing .showcase-hero .hero-sub { max-width: 720px; }
+.marketing .showcase-boundary { max-width: 760px; margin: 0 auto; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.marketing .showcase-boundary a, .marketing .showcase-note a, .marketing .showcase-caption a, .marketing .showcase-source a { text-decoration: underline; text-underline-offset: 4px; }
+.marketing .showcase-section { padding-top: 64px; }
+.marketing .showcase-intro { max-width: 780px; }
+.marketing .showcase-note { margin-top: 18px; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.marketing .showcase-gallery { display: grid; gap: 48px; }
+.marketing .showcase-card { min-width: 0; overflow: hidden; border: 1px solid var(--strong); border-radius: 14px; background: var(--card); }
+.marketing .showcase-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 24px 28px; }
+.marketing .showcase-card-head h3 { font-size: 22px; line-height: 1.4; }
+.marketing .showcase-step { margin-bottom: 6px; color: var(--accent); font: 11px/1.6 var(--mono); letter-spacing: .08em; }
+.marketing .showcase-badge { flex-shrink: 0; padding: 5px 10px; border: 1px solid var(--strong); border-radius: 100px; color: var(--muted); font-size: 12px; }
+.marketing .showcase-image-viewport { overflow-x: auto; background: #fff; border-block: 1px solid var(--border); }
+.marketing .showcase-image-viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.marketing .showcase-image-viewport picture { display: block; min-width: 1180px; }
+.marketing .showcase-image-viewport img { width: 100%; height: auto; }
+.marketing .showcase-caption { padding: 22px 28px 24px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.marketing .showcase-caption strong { color: var(--fg); font-weight: 500; }
+.marketing .showcase-caption-links { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; font-size: 13px; }
+.marketing .showcase-scroll-hint { margin-top: 16px; color: var(--muted); font-size: 12px; }
+.marketing .showcase-capabilities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 50px; }
+.marketing .showcase-capability { display: flex; flex-direction: column; align-items: flex-start; padding: 28px; }
+.marketing .showcase-capability h3 { margin: 14px 0 12px; font-size: 21px; }
+.marketing .showcase-capability p:not(.eyebrow) { margin-bottom: 22px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.marketing .showcase-capability .text-link { margin-top: auto; text-decoration: underline; text-underline-offset: 4px; }
+.marketing .showcase-adapters { padding-top: 36px; border-top: 1px solid var(--border); }
+.marketing .showcase-adapters h3 { margin-bottom: 12px; font-size: 22px; }
+.marketing .showcase-adapters > p { max-width: 800px; margin-bottom: 24px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.marketing .showcase-deployment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.marketing .showcase-deployment article { display: flex; flex-direction: column; align-items: flex-start; padding: 32px; }
+.marketing .showcase-deployment h3 { margin: 14px 0; font-size: 26px; }
+.marketing .showcase-deployment p:not(.eyebrow) { margin-bottom: 20px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.marketing .showcase-deployment .open-actions { margin-top: auto; }
+.marketing .showcase-source { max-width: 820px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.marketing .showcase-source p + p { margin-top: 18px; }
+.marketing .showcase-source .open-actions { margin-top: 28px; }
+.marketing .showcase-next-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 24px; margin-top: 24px; color: var(--muted); font-size: 13px; }
+.marketing .showcase-next-links a { text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 900px) {
+  .marketing .showcase-capabilities { grid-template-columns: 1fr; }
+  .marketing .showcase-deployment { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .marketing .showcase-hero { padding-top: 42px; padding-bottom: 12px; }
+  .marketing .showcase-hero h1 { font-size: clamp(36px, 9vw, 48px); }
+  .marketing .showcase-hero .hero-eyebrow { font-size: 10px; }
+  .marketing .showcase-section { padding-top: 48px; }
+  .marketing .showcase-card-head { flex-direction: column; gap: 12px; padding: 20px; }
+  .marketing .showcase-card-head h3 { font-size: 21px; }
+  .marketing .showcase-image-viewport picture { min-width: 0; }
+  .marketing .showcase-caption { padding: 20px; font-size: 13px; }
+  .marketing .showcase-scroll-hint { display: none; }
+  .marketing .showcase-capability, .marketing .showcase-deployment article { padding: 24px; }
+  .marketing .showcase-gallery { gap: 30px; }
+}

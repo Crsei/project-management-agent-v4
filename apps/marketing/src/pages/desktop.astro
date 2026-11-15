@@ -1,7 +1,7 @@
 ---
 import CommandBlock from '../components/CommandBlock.astro';
 import GuideLayout from '../layouts/GuideLayout.astro';
-import { desktopReleaseUrl } from '../lib/site';
+import { currentDesktopSource, historicalDesktopRelease, releaseSnapshot } from '../lib/release-inventory';
 const contents = [
   { id: 'requirements', label: '支持目标与前提' },
   { id: 'source', label: '源码开发' },
@@ -14,8 +14,9 @@ const contents = [
 ---
 <GuideLayout title="Dovspace 桌面说明" description="桌面复用同一工作台，管理独立本地服务与数据库。构建目标、更新器接入和实际原生验收是不同事实。" eyebrow="桌面 / 构建与使用" contents={contents}>
   <div class="release-notice">
-    <strong>当前版本的正式发行与原生安装验收尚未闭合。</strong>
-    <p>以下说明当前源码能力，不代表已有合格安装包。{desktopReleaseUrl && <a href={desktopReleaseUrl}>核对配置的发行页 ↗</a>} 配置发行链接不证明任一平台可安装；下载状态见<a href="/download/">下载页</a>。</p>
+    <strong>当前源码声明版本 {currentDesktopSource.declaredVersion}，正式发行与原生安装验收仍未闭合。</strong>
+    <p>截至 {releaseSnapshot.reviewedOn} 核对到的历史预发布为 <a href={historicalDesktopRelease.url}>{historicalDesktopRelease.tag}</a>，其包内版本实际是 {historicalDesktopRelease.applicationVersion}，不是当前工作树的安装包。历史 Windows unsigned preview 仅供测试，macOS 仅 ad-hoc 且未公证；不提供已验收安装入口。</p>
+    <p>以下说明当前源码能力，不代表已有合格安装包。<a href="/download/">下载与发行材料页</a>逐项列出历史平台、SHA256、签名、声明源码与缺失证据；配置链接、历史冒烟或公开仓库首页都不能替代当前成品的原生验收及对应源码。</p>
   </div>
   <section id="requirements">
     <h2>构建目标不等于验收通过</h2>

@@ -1,4 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="18" fill="#000"/>
-  <path fill="#fff" fill-rule="evenodd" d="M17 14h13c14 0 22 6.5 22 18s-8 18-22 18H17V14Zm10 9v18h3c8 0 12-3 12-9s-4-9-12-9h-3Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="dovspace-title dovspace-description">
+  <title id="dovspace-title">Dovspace</title>
+  <desc id="dovspace-description">Approved visual reconstruction of the supplied validation board: a blue-violet D and a pale wing on a dark rounded tile. Approved 2026-11-15 with no extra wing-fold.</desc>
+  <defs>
+    <linearGradient id="dovspace-tile" x1="40" y1="24" x2="464" y2="496" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2231"/>
+      <stop offset="0.48" stop-color="#111622"/>
+      <stop offset="1" stop-color="#0D111B"/>
+    </linearGradient>
+    <linearGradient id="dovspace-letter" x1="148" y1="112" x2="366" y2="396" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5276FF"/>
+      <stop offset="0.5" stop-color="#4945F5"/>
+      <stop offset="1" stop-color="#7778FF"/>
+    </linearGradient>
+    <linearGradient id="dovspace-wing" x1="156" y1="274" x2="263" y2="396" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEEFFF"/>
+      <stop offset="0.5" stop-color="#D8D8FF"/>
+      <stop offset="1" stop-color="#B7B5FA"/>
+    </linearGradient>
+  </defs>
+  <!-- Tile: remove this group for a transparent-background mark. -->
+  <g id="tile">
+    <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#dovspace-tile)"/>
+  </g>
+  <!-- Letter and wing use explicit paths; no fonts or embedded raster images. -->
+  <g id="mark">
+    <path id="letter-d" d="M164 120H267C354 120 418 176 418 254C418 333 354 392 267 392H144V140C144 126 150 120 164 120Z" fill="url(#dovspace-letter)"/>
+    <path id="wing-face" d="M151 291L302 233C308 231 312 234 310 241L265 381C263 388 259 392 251 392H89C84 392 82 389 85 384L139 302C142 297 146 293 151 291Z" fill="url(#dovspace-wing)"/>
+    <path id="wing-edge" d="M91 389H251C257 389 261 386 263 380L308 240C309 236 307 234 303 236L152 294C147 296 144 299 141 304" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

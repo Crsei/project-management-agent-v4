@@ -1,23 +1,109 @@
 ---
-import V4Layout from "../layouts/V4Layout.astro";
-import { appUrl, desktopReleaseUrl, sourceUrl } from "../lib/site";
-const targets = [
-  { name: "macOS", arch: "Apple Silicon", format: ".dmg / .zip · arm64", mark: "M", note: "macOS 15 或更高版本" },
-  { name: "macOS", arch: "Intel", format: ".dmg / .zip · x64", mark: "M", note: "macOS 15 或更高版本" },
-  { name: "Windows", arch: "Windows x64", format: "NSIS 安装包 · .exe", mark: "W", note: "x64 架构" },
-];
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { appLabel, appUrl } from "../lib/site";
+import {
+  currentDesktopSource,
+  historicalDesktopRelease as release,
+  releaseRepository,
+  releaseSnapshot,
+} from "../lib/release-inventory";
 ---
-<V4Layout title="下载与发行状态 — Dovspace" description="核对 Dovspace 桌面构建目标与发行边界；未完成当前原生验收的安装包不作为正式下载。">
+<SiteLayout title="下载与发行状态 — Dovspace" description="核对 Dovspace 当前源码与历史桌面预发布的版本、平台、摘要、签名及源码证据。未完成验收的安装入口保持禁用。">
   <section class="download-page container">
-    <header class="download-head"><span class="app-icon" aria-hidden="true">D</span><h1>Dovspace 下载与发行状态</h1><p>桌面构建目标不是已经验收的安装包。也可先从源码自托管。</p></header>
-    <div class="download-grid">
-      {targets.map((target) => <article class="download-card"><span class="platform-mark" aria-hidden="true">{target.mark}</span><h2>{target.name}</h2><p class="arch">{target.arch}</p><p class="format">{target.format}</p>{desktopReleaseUrl ? <a class="btn btn-primary" href={desktopReleaseUrl} target="_blank" rel="noopener noreferrer">查看发布版本 ↗</a> : <span class="btn btn-disabled" aria-disabled="true">下载链接待补充</span>}<p class="small-note">{target.note}</p></article>)}
+    <header class="download-head">
+      <img class="app-icon" src="/dovspace.svg?v=20261115" width="66" height="66" alt="" />
+      <h1>Dovspace 下载与发行状态</h1>
+      <p>有历史预发布材料，不等于当前版本已经可以安装。</p>
+    </header>
+
+    <section class="release-summary" aria-labelledby="current-release-heading">
+      <p class="eyebrow">CURRENT SOURCE · NOT A RELEASE</p>
+      <h2 id="current-release-heading">当前源码：暂不提供安装下载</h2>
+      <dl class="release-meta">
+        <div><dt>源码声明版本</dt><dd><code>{currentDesktopSource.declaredVersion}</code>；不是已验收的安装包版本</dd></div>
+        <div><dt>发行通道</dt><dd>未发布；不能仅按版本后缀认定已有 preview 安装包</dd></div>
+        <div><dt>平台／原生验收</dt><dd>{currentDesktopSource.installation.reason}</dd></div>
+        <div><dt>安装器、摘要与签名</dt><dd>{currentDesktopSource.materials.reason}</dd></div>
+        <div><dt>精确源码身份</dt><dd>{currentDesktopSource.sourceIdentity.reason}</dd></div>
+        <div><dt>发行许可门禁</dt><dd>{currentDesktopSource.openReleaseBlockers.map((blocker, index) => <>{index > 0 && "、"}<code>{blocker}</code></>)} 仍为 OPEN；<a href="/THIRD_PARTY_NOTICES.txt">核对第三方说明</a></dd></div>
+      </dl>
+      <p class="release-links"><a class="text-link" href="/get-started/">开始源码自托管 →</a><a class="text-link" href="/desktop/#build">原生构建前提 →</a></p>
+    </section>
+
+    <section aria-labelledby="historical-release-heading">
+      <header class="release-history-heading">
+        <p class="eyebrow">HISTORICAL RELEASE INVENTORY</p>
+        <h2 id="historical-release-heading">可核对的历史预发布材料</h2>
+        <p>公开资料核对日期：<time datetime={releaseSnapshot.reviewedOn}>{releaseSnapshot.reviewedOn}</time>。{releaseSnapshot.scope}</p>
+        <p>历史标签 <code>{release.tag}</code>，通道 <code>{release.channel}</code>，发布于 <time datetime={release.publishedAt}>{release.publishedAt.slice(0, 10)}</time>；三个平台清单的<strong>包内版本实际为 <code>{release.applicationVersion}</code></strong>。标签与包内版本不同，不按当前发行规则视为合格新包。</p>
+        <p class="release-links"><a class="text-link" href={release.url} target="_blank" rel="noopener noreferrer">查看该历史发行说明 ↗</a><a class="text-link" href={releaseRepository.releasesUrl} target="_blank" rel="noopener noreferrer">浏览仓库 Releases ↗</a></p>
+      </header>
+      <div class="download-grid">
+        {release.platforms.map((platform) => (
+          <article class="download-card" aria-labelledby={`release-${platform.target}-heading`}>
+            <span class="platform-mark" aria-hidden="true">{platform.mark}</span>
+            <h3 id={`release-${platform.target}-heading`}>{platform.name}</h3>
+            <p class="arch">{platform.architecture}</p>
+            <p class="format">{platform.format}</p>
+            <dl class="release-meta">
+              <div><dt>历史包内版本</dt><dd><code>{release.applicationVersion}</code></dd></div>
+              <div><dt>标签／通道</dt><dd><code>{release.tag}</code> / <code>{release.channel}</code></dd></div>
+              <div><dt>平台／架构</dt><dd><code>{platform.target}</code></dd></div>
+              <div><dt>签名状态</dt><dd>{platform.signature === "unsigned" ? "未签名 · 仅供测试" : "仅 ad-hoc；非 Developer ID 签名"}</dd></div>
+              <div><dt>公证状态</dt><dd>{platform.notarization === "not-applicable" ? "不适用（Windows）" : "未公证"}</dd></div>
+              <div><dt>声明的历史源码</dt><dd><a href={release.source.commitUrl} target="_blank" rel="noopener noreferrer"><code>{release.source.commit}</code></a>；依据 tag 与发行说明，非包内源码身份验证</dd></div>
+            </dl>
+            <span class="btn btn-disabled" aria-disabled="true" aria-describedby={`release-${platform.target}-reason`}>安装下载未开放</span>
+            <p id={`release-${platform.target}-reason`} class="small-note">{platform.installation.reason}</p>
+            <p class="small-note">{platform.requirement}</p>
+            <details class="release-artifacts-details">
+              <summary>资产与 SHA256（{platform.artifacts.length} 项）</summary>
+              <ul class="release-artifacts">
+                {platform.artifacts.map((artifact) => (
+                  <li>
+                    <p><code>{artifact.name}</code></p>
+                    <p>{artifact.bytes.toLocaleString("en-US")} bytes</p>
+                    <p>SHA256：<code>{artifact.sha256}</code></p>
+                    <a class="text-link" href={artifact.metadataUrl} target="_blank" rel="noopener noreferrer">核对该资产的 API 元数据 ↗</a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <p><a class="text-link" href={platform.manifestUrl} target="_blank" rel="noopener noreferrer">查看历史平台 JSON 清单 ↗</a></p>
+          </article>
+        ))}
+      </div>
+      <p class="download-note">上方是历史资产记录，不是面向当前版本的安装推荐。Windows unsigned preview 仅供测试；macOS ad-hoc 不等于正式签名或公证。平台清单、摘要和历史冒烟不能替代安装／升级／卸载、GUI、真实 Provider 及许可验收。<a href="/desktop/">查看桌面说明</a>。</p>
+    </section>
+
+    <section class="release-summary" aria-labelledby="release-evidence-heading">
+      <h2 id="release-evidence-heading">摘要、源码与缺失材料分别核对</h2>
+      <p class="release-evidence-note">{release.checksums.evidence}</p>
+      <p class="release-links"><a class="text-link" href={release.checksums.url} target="_blank" rel="noopener noreferrer">历史 SHA256SUMS.txt ↗</a><a class="text-link" href={release.source.tagEvidenceUrl} target="_blank" rel="noopener noreferrer">历史 tag → commit 证据 ↗</a></p>
+      <ul class="release-gap-list">
+        <li><strong>包与源码的精确绑定：未证实。</strong>{release.source.packageIdentity.reason}</li>
+        <li><strong>当前格式发行材料：不可用。</strong>{release.materials.reason}</li>
+        <li><strong>完整原生验收：未证实。</strong>{release.nativeAcceptance.reason}</li>
+      </ul>
+      <p class="release-evidence-note">下列源码 ZIP 只归档历史提交的仓库内容，不是经过核验的完整对应源码交付，也不包含当前本地改动。会话与持久化统一设计仍未收口，继续沿用 Agent Chat；历史包也不承诺新版本的更新能力。</p>
+      <p class="release-links"><a class="text-link" href={release.source.commitUrl} target="_blank" rel="noopener noreferrer">浏览历史精确提交 ↗</a><a class="text-link" href={release.source.archiveUrl} target="_blank" rel="noopener noreferrer">该历史提交的 GitHub 源码 ZIP ↗</a><a class="text-link" href={releaseRepository.url} target="_blank" rel="noopener noreferrer">仓库首页（非成品源码证明）↗</a></p>
+      <p class="release-evidence-note">本页记录 {releaseSnapshot.publicReleaseCount} 个公开历史预发布，不实时抓取网络资料。<a href={releaseSnapshot.inventoryUrl} target="_blank" rel="noopener noreferrer">核对公开 Releases API</a>与<a href={release.apiUrl} target="_blank" rel="noopener noreferrer">本次历史发行的 API 记录</a>；仓库公开状态见<a href={releaseRepository.metadataUrl} target="_blank" rel="noopener noreferrer">仓库 API</a>，不沿用旧发行说明中的私有仓库描述。页面不发布 Release，也不因配置外部链接开放安装。</p>
+    </section>
+
+    <div class="web-card tile">
+      <div><p class="eyebrow">IN YOUR BROWSER</p><h2>从源码自托管，使用浏览器。</h2><p>已有服务可打开自己的工作台；尚未安装请先阅读<a href="/get-started/">入门指南</a>。这与桌面历史安装包是不同路径。</p></div>
+      <a class="btn btn-ghost" href={appUrl}>{appLabel} ↗</a>
     </div>
-    <p class="download-note">以上为构建目标，不表示当前版本可安装。Windows unsigned preview 仅供测试，macOS 原生安装／签名／公证尚需对应平台验收；源码推送不等于正式发行。<a href="/desktop/">查看桌面说明</a>与<a href="/THIRD_PARTY_NOTICES.txt">第三方发行门禁</a>。</p>
-    <div class="web-card tile"><div><p class="eyebrow">IN YOUR BROWSER</p><h2>从源码自托管，使用浏览器。</h2><p>已有服务可打开工作台；尚未安装请先阅读<a href="/get-started/">入门指南</a>。</p></div><a class="btn btn-ghost" href={appUrl}>打开工作台 ↗</a></div>
-    <details class="build-details"><summary>从源码构建 <span aria-hidden="true">＋</span></summary><p>在对应 Windows / macOS 构建环境中，使用 Node.js 24.21.0 和 pnpm 11.9.0。</p><pre><code>pnpm install --frozen-lockfile
+    <details class="build-details">
+      <summary>从源码构建桌面 <span aria-hidden="true">＋</span></summary>
+      <p>在匹配目标 OS／CPU 的独立 Windows / macOS 原生构建检出中，使用 Node.js 24.21.0 和 pnpm 11.9.0；完整工具前提见<a href="/desktop/#build">桌面构建说明</a>。打包会重建产品，不在正在提供服务的检出中执行。</p>
+      <pre tabindex="0" role="region" aria-label="桌面源码构建命令"><code>node scripts/doctor.mjs
+pnpm install --frozen-lockfile
 pnpm --filter @agent-workspace/desktop runtime:prepare
-pnpm --filter @agent-workspace/desktop package</code></pre><p>默认生成 unsigned 测试包。Git、Provider CLI 与账号需要另外配置。</p>{sourceUrl && <a class="text-link" href={sourceUrl} target="_blank" rel="noopener noreferrer">浏览源代码 ↗</a>}</details>
+pnpm --filter @agent-workspace/desktop package</code></pre>
+      <p>默认生成 unsigned 测试包，不是已验收发行。Git、Provider CLI 与账号需要另外配置；当前版本的源码身份、原生验收及发行许可仍须独立闭合。</p>
+      <a class="text-link" href={releaseRepository.url} target="_blank" rel="noopener noreferrer">浏览公开源码仓库，自行选择构建提交 ↗</a>
+    </details>
     <a class="back-link" href="/">← 返回首页</a>
   </section>
-</V4Layout>
+</SiteLayout>

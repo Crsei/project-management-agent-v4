@@ -1,0 +1,192 @@
+---
+import GuideLayout from '../layouts/GuideLayout.astro';
+
+const contents = [
+  { id: 'current', label: '现在：自托管' },
+  { id: 'cloud-plans', label: '未来：云套餐规划' },
+  { id: 'ai', label: '项目、任务与 AI' },
+  { id: 'faq', label: '计量与生效 FAQ' },
+];
+
+const cloudPlans = [
+  { id: 'free', name: 'Free', audience: '小规模协作的规划起点', price: '拟免费', members: '最多 5 名真人', storage: '共享 5 GB', seats: '拟提供最多 5 个真人席位' },
+  { id: 'team', name: 'Team', audience: '按实际团队规模购席位', price: '价格待成本核算', members: '最多 50 名真人', storage: '共享 100 GB', seats: '按需购买席位，非默认含 50 席' },
+  { id: 'business', name: 'Business', audience: '面向更大工作区的规划', price: '价格待成本核算', members: '最多 200 名真人', storage: '共享 1 TB', seats: '按需购买席位，非默认含 200 席' },
+];
+---
+
+<GuideLayout title="套餐与用量规划" description="现在使用自托管工作台，未来云套餐仍在规划。了解真人席位、共享云附件空间与独立 AI 费用的建议边界；没有已开放购买的托管商业云。" eyebrow="套餐 / 用量说明" contents={contents}>
+  <section id="current">
+    <h2>现在：由你在自己的环境运行</h2>
+    <div class="callout callout-warning">
+      <strong>这是说明页，不是购买页。</strong>
+      <p>当前没有可购买的托管商业云，订阅与全量用量计量服务尚未接入。本页不收款，不启用订阅或套餐限额，也不改变现有权限。</p>
+    </div>
+    <p>自托管使用你自己的主机、磁盘或已配置的私有存储，相关运行、存储与备份成本由你承担。<strong>自托管不赠送平台云空间、不套用下面的未来云套餐上限，也不承诺无限容量。</strong>实际可用容量与性能取决于环境和现有技术边界。</p>
+    <p>当前 Agent 面向可信本机、单操作者；PM 成员授权不等于 Agent 会话隔离。未来套餐中的人数不是现有 Agent 多租户能力的声明。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。</p>
+    <div class="open-actions">
+      <a class="btn btn-primary" href="/get-started/">阅读自托管指南 <span aria-hidden="true">↗</span></a>
+      <a class="btn btn-ghost" href="/security/">了解安全与运行边界</a>
+    </div>
+  </section>
+
+  <section id="cloud-plans">
+    <h2>未来：按工作区规划云套餐</h2>
+    <p><strong>以下均为规划，未生效、不可购买。</strong>未来订阅按工作区，而不是按项目分别购买。人数是套餐允许的真人上限，空间由整个工作区共享，不是每人各有一份。</p>
+    <div class="plan-grid">
+      {cloudPlans.map((plan) => (
+        <article class="plan-card" aria-labelledby={`plan-${plan.id}`}>
+          <p class="plan-status">规划中 · 未生效 · 不可购买</p>
+          <h3 id={`plan-${plan.id}`}>{plan.name}</h3>
+          <p class="plan-audience">{plan.audience}</p>
+          <p class="plan-price"><strong>{plan.price}</strong></p>
+          <dl class="plan-facts">
+            <div><dt>工作区人数上限</dt><dd>{plan.members}</dd></div>
+            <div><dt>工作区云附件空间</dt><dd>{plan.storage}</dd></div>
+            <div><dt>席位规划</dt><dd>{plan.seats}</dd></div>
+          </dl>
+        </article>
+      ))}
+    </div>
+    <p class="entry-note">GB、TB 使用十进制：1 GB = 10⁹ 字节，1 TB = 10¹² 字节。Team／Business 的单席价格与计费周期尚未确定；上表不是报价，也不承诺 SAML、SSO、SLA 或生产多租户 Agent 服务。</p>
+  </section>
+
+  <section id="ai">
+    <h2>项目与任务不按数量收费，是规划；AI 独立计费</h2>
+    <p>未来云套餐拟不按项目或任务数量收费。<strong>这不是无限性能、无限并发或无限存储的承诺</strong>，也不改变当前实现的技术边界；套餐规划没有启用新的项目或任务限额。</p>
+    <p>AI 使用你自己配置的 Provider、原生 CLI 或 API 账号，由对应供应商按其规则计费。工作区席位、云附件空间与 AI 用量是不同维度，<strong>不赠送或虚构 AI 额度</strong>，也不将 Provider 的可用额度计入云套餐。</p>
+  </section>
+
+  <section id="faq">
+    <h2>计量与生效 FAQ</h2>
+    <p>下面是未来云服务的建议规则，不是当前已启用的计费或限额行为。它们不增加现有工作台的角色或权限。</p>
+    <div class="plan-faq">
+      <details>
+        <summary>哪些人占用真人席位？邀请和 Agent 怎么算？</summary>
+        <div class="plan-answer">
+          <p>建议按同一工作区内有效、未撤销、未禁用的真人去重计数，管理员也计入；同一人加入多个项目只计一次。尚未接受的邀请不计费，接受邀请、加入或恢复成员时重新核对可用席位与套餐上限。</p>
+          <p>Agent 不占真人席位，但不因此获得 PM 权限或免费 AI 额度。没有免费访客席位的承诺，不能用项目访客等称呼绕过真人计数。</p>
+        </div>
+      </details>
+      <details>
+        <summary>已用席位、已购席位和套餐人数上限有什么区别？</summary>
+        <div class="plan-answer">
+          <p>已用席位是当前计入的真人数；已购席位是未来付费订阅实际购买的席位数；套餐上限是该档允许的最大人数。Team 最多 50 人、Business 最多 200 人，不表示默认购买或附带全部席位。</p>
+          <p>加入或恢复成员不能超过可用席位及套餐上限。撤销成员可以释放可用席位，<strong>不等于减少已购席位或自动退款</strong>。</p>
+        </div>
+      </details>
+      <details>
+        <summary>什么会计入共享云附件空间？</summary>
+        <div class="plan-answer">
+          <p>未来先计量“云附件空间”：由平台托管的附件及其保留版本计入工作区共享容量。本地代码、外部 Markdown 和自带存储桶不混入该指标；它不是整个工作台、主机磁盘或 AI 上下文的总大小。</p>
+          <p>同一底层文件的多处引用去重，不重复计算；仅隐藏文件或移除可见入口不会释放其仍保留的字节。<strong>当前没有自动孤立文件 GC</strong>，不能把删除引用当作已回收容量的证明。</p>
+        </div>
+      </details>
+      <details>
+        <summary>临时上传、上传失败或结果未知时怎么处理？</summary>
+        <div class="plan-answer">
+          <p>建议在上传前预占所需空间，将临时上传预占与已保留附件分开核对。失败后先确认原上传及实际保留状态，再释放可确认的预占；结果未知时不能直接视作未占用，也不能盲目重复上传。</p>
+        </div>
+      </details>
+      <details>
+        <summary>接近满额、已经满额或降级时会删数据吗？</summary>
+        <div class="plan-answer">
+          <p>建议在云附件空间达到 80% 时提醒，满额后拒绝继续增加占用的操作，<strong>不删除已有数据</strong>。真人席位不足时拒绝会超额的加入或恢复，不自动给工作区增加付费席位。</p>
+          <p>降级不删除文件。若已用空间高于目标套餐容量，保留现有数据并限制继续增长；不能通过静默删文件来完成降级。这些提醒与拦截目前均未接入。</p>
+        </div>
+      </details>
+      <details>
+        <summary>规划总容量能提高当前单文件上限吗？</summary>
+        <div class="plan-answer">
+          <p>不能。当前单文件上传上限为 <strong>8 MiB</strong>（8 × 2²⁰ 字节），与规划中的 5 GB、100 GB 或 1 TB 总容量独立；总容量较大不代表可以上传同等大小的单个文件，也不改变外部 Markdown 等其他技术边界。</p>
+        </div>
+      </details>
+      <details>
+        <summary>为什么这里没有显示我的成员数、已用空间或当前套餐？</summary>
+        <div class="plan-answer">
+          <p>这是公开静态说明页，正式后端尚未提供订阅和全量计量合同，服务未接入。页面不读取或伪造真实成员数、已用空间及订阅权益；未知用量不能显示成 0 或无限，也不能因缺少订阅数据就判定为 Free 或自托管模式。</p>
+        </div>
+      </details>
+      <details>
+        <summary>何时才算订阅或套餐变更生效？</summary>
+        <div class="plan-answer">
+          <p>当前没有购买或升级流程。未来即使接入支付，支付页面返回、成功提示或客户端跳转都不等于权益生效；仍须以实际工作区的真实服务端权益为准，状态未知时先核对，不提前解锁或冒称升级成功。</p>
+        </div>
+      </details>
+    </div>
+  </section>
+</GuideLayout>
+
+<style>
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-block: 24px;
+  }
+  .plan-card {
+    min-width: 0;
+    padding: 22px 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+  }
+  .plan-card .plan-status {
+    margin-bottom: 16px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .plan-card h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+  }
+  .plan-card .plan-audience {
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .plan-card .plan-price {
+    margin-bottom: 0;
+    font-size: 16px;
+  }
+  .plan-facts {
+    display: grid;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+  .plan-facts dt {
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .plan-facts dd {
+    margin: 0;
+    font-size: 14px;
+  }
+  .plan-faq {
+    border-top: 1px solid var(--border);
+  }
+  .plan-faq details {
+    border-bottom: 1px solid var(--border);
+  }
+  .plan-faq summary {
+    min-height: 48px;
+    padding: 18px 8px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .plan-answer {
+    padding: 0 8px 20px;
+  }
+  .plan-answer > :last-child {
+    margin-bottom: 0;
+  }
+  @media (max-width: 1050px) {
+    .plan-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
