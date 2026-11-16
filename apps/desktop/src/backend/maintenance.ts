@@ -121,10 +121,11 @@ async function createBackup(request: Request): Promise<void> {
     const barrierId = randomUUID(), barrierStartedAt = new Date().toISOString();
     const agentRoot = join(request.dataDir, 'agent-data');
     const agentPresent = await exists(join(agentRoot, 'workspace.sqlite'));
+    diagnosticPhase = 'agent-backup';
     const agentState = agentPresent ? z.strictObject({ fingerprint: digest, storeId: z.string().nullable(), restoreEpoch: z.number().int().nonnegative().nullable() }).parse(JSON.parse(await agentMaintenance(request, 'source-state', agentRoot))) : null;
+    diagnosticPhase = 'project-export';
     await mkdir(destination, { mode: 0o700 });
     await ensurePrivateDirectory(destination, { newlyCreated: true });
-    diagnosticPhase = 'project-export';
     const files = await exportLocalProjectCheckpoint({ coreRoot, directory: join(destination, 'files'), stopped: true });
     const dump = join(destination, 'database.dump');
     diagnosticPhase = 'database-dump';

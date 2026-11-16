@@ -2,7 +2,7 @@
 // Never serialize error messages, stacks, command arguments, paths or SQL details.
 const operations = new Set(['backup', 'restore', 'validate']);
 const phases = new Set(['request', 'runtime', 'stopped-clients', 'project-export', 'database-dump', 'database-clone', 'blob-export', 'chat-copy', 'agent-backup', 'manifest', 'backup-validation', 'dump-validation', 'project-restore', 'agent-restore', 'database-restore', 'database-migrate', 'blob-restore', 'area-rebind', 'bootstrap', 'cleanup']);
-const reasons = new Set(['failed', 'command-start', 'command-failed', 'output-limit', 'active-clients', 'monitor-mismatch', 'ENOENT', 'EACCES', 'EPERM', 'ENOSPC', 'EIO', 'EMFILE', 'ENFILE', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', '42501', '53100', '53200', '53300', '57P01', '08006']);
+const reasons = new Set(['failed', 'command-start', 'command-failed', 'output-limit', 'active-clients', 'monitor-mismatch', 'private-acl', 'ENOENT', 'EACCES', 'EPERM', 'ENOSPC', 'EIO', 'EMFILE', 'ENFILE', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', '42501', '53100', '53200', '53300', '57P01', '08006']);
 
 /** @param {unknown} value */
 export function maintenanceDiagnostic(value) {

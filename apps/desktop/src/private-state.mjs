@@ -63,7 +63,7 @@ async function windowsAcl(path, secure, newlyCreated = false) {
     if (!error) return done();
     const phase = /^PM_DESKTOP_ACL_FAILURE:(load-modules|inspect-path|owner-check|write-acl|verify-acl)$/.exec(stdout.trim())?.[1] ?? "helper";
     const detail = error.killed || error.signal ? "deadline-or-signal" : Number.isInteger(error.code) ? `exit-${error.code}` : ["ENOENT", "EACCES", "EPERM"].includes(error.code) ? error.code : "failed";
-    reject(new Error(`Desktop private path ACL cannot be verified (${phase}; ${detail}). Check current-user ownership and private access permissions.`));
+    reject(Object.assign(new Error(`Desktop private path ACL cannot be verified (${phase}; ${detail}). Check current-user ownership and private access permissions.`), { code: "private-acl" }));
   }));
 }
 
