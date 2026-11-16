@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, mkdtemp, readdir, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import { crc32 } from "node:zlib";
-import { listArchive, nsisUninstallerMember, NSIS_UNINSTALLER_BYTE_LIMIT } from "./final-artifact.mjs";
+import { applicationTree, listArchive, nsisUninstallerMember, NSIS_UNINSTALLER_BYTE_LIMIT } from "./final-artifact.mjs";
+import { hashFile, portable } from "./runtime-manifest.mjs";
 
 // Actual uncompressed ZIP structures, including Unix symlink metadata. No shell
 // echo, extractor mock, executable installer or native smoke is involved.
@@ -95,4 +97,67 @@ test("NSIS installed uninstaller parser rejects missing, ambiguous, linked, non-
     [{ ...entry, Size: "1e6" }], [{ ...entry, Folder: "+" }], [{ ...entry, Attributes: "D" }],
     [{ ...entry, "Symbolic Link": "another.exe" }], [{ ...entry, "Hard Link": "another.exe" }],
   ]) assert.throws(() => nsisUninstallerMember(members), /exactly one bounded regular/);
+});
+
+// Restates the digest contract sequentially: sorted entries, directory record before
+// its contents, link record with its target, and one file read at a time. The tree
+// walker may read files concurrently but must produce this exact byte stream.
+async function sequentialTreeDigest(root, { modes = false } = {}) {
+  const hash = createHash("sha256");
+  const record = (value) => hash.update(`${JSON.stringify(value)}\n`);
+  async function visit(directory) {
+    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const path = join(directory, entry.name);
+      const info = await lstat(path);
+      const location = portable(relative(root, path));
+      if (info.isSymbolicLink()) record({ path: location, link: portable(await readlink(path)) });
+      else if (info.isDirectory()) { record({ path: location, directory: true }); await visit(path); }
+      else record({ path: location, bytes: info.size, sha256: await hashFile(path), ...(modes ? { mode: info.mode & 0o777 } : {}) });
+    }
+  }
+  await visit(root);
+  return hash.digest("hex");
+}
+
+async function applicationFixture(t) {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-application-tree-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // More files than the hash concurrency, plus nested and empty directories and one
+  // contained link, so ordering and counts are exercised rather than assumed.
+  const files = [
+    ["alpha/a.txt", "alpha"],
+    ["alpha/nested/deep.bin", Buffer.alloc(4096, 7)],
+    ["empty.txt", ""],
+    ...Array.from({ length: 12 }, (_, index) => [`many/f${String(index).padStart(2, "0")}.txt`, `entry ${index}\n`]),
+  ];
+  for (const [path, data] of files) {
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), data);
+  }
+  await mkdir(join(root, "beta/nested-empty"), { recursive: true });
+  await symlink("alpha", join(root, "link"));
+  return {
+    root,
+    summary: { files: files.length, logicalBytes: files.reduce((total, [, data]) => total + Buffer.byteLength(data), 0), links: 1 },
+  };
+}
+
+test("application tree digest, counts and link records match a sequential walk", async (t) => {
+  const { root, summary } = await applicationFixture(t);
+  const tree = await applicationTree(root, { digest: true });
+  assert.deepEqual({ files: tree.files, logicalBytes: tree.logicalBytes, links: tree.links }, summary);
+  assert.match(tree.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(tree.sha256, await sequentialTreeDigest(root));
+  // Repeated concurrent walks must stay byte-identical; ordering is not luck.
+  assert.equal((await applicationTree(root, { digest: true })).sha256, tree.sha256);
+  assert.equal((await applicationTree(root, { digest: true, modes: true })).sha256, await sequentialTreeDigest(root, { modes: true }));
+  assert.deepEqual(await applicationTree(root), summary);
+});
+
+test("application tree digest still fails closed on an escaping link", async (t) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-application-tree-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "file.txt"), "payload");
+  await symlink("../outside", join(root, "escape"));
+  await assert.rejects(applicationTree(root, { digest: true }), /escaping resource/);
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -53,6 +53,26 @@ async function measured<T>(phase: string, operation: () => Promise<T>): Promise<
   }
 }
 
+/**
+ * Runs independent restore cases with bounded concurrency. The first failure stops
+ * new work but every started case is awaited, so no PostgreSQL controller or child
+ * outlives the test.
+ */
+async function runBounded(limit: number, operations: ReadonlyArray<() => Promise<void>>): Promise<void> {
+  let next = 0;
+  let failure: unknown;
+  const worker = async () => {
+    while (failure === undefined) {
+      const index = next++;
+      if (index >= operations.length) return;
+      try { await operations[index](); }
+      catch (error) { failure = error; return; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, operations.length) }, worker));
+  if (failure !== undefined) throw failure;
+}
+
 async function rejectedMaintenance(input: Record<string, unknown>): Promise<{ phase: string; reason: string }> {
   const child = spawn(process.execPath, ['--conditions=development', join(serverRoot, 'apps/desktop/src/backend/maintenance.ts')], {
     cwd: serverRoot, env: { ...process.env, PM_DESKTOP_MANAGED: '1' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
@@ -86,7 +106,14 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   const dataDir = join(root, 'source'), destination = join(root, 'encrypted-backup');
   const database = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
   const databases = [database];
-  t.after(async () => { for (const pg of databases) await pg.stop(); await rm(root, { recursive: true, force: true }); });
+  t.after(async () => {
+    // Every controller this test created must stop even when an earlier stop fails,
+    // and the private tree is always removed after the attempt.
+    const failures: unknown[] = [];
+    for (const pg of [...databases].reverse()) { try { await pg.stop(); } catch (error) { failures.push(error); } }
+    try { await rm(root, { recursive: true, force: true }); } catch (error) { if (!failures.length) failures.push(error); }
+    if (failures.length) throw failures[0];
+  });
   assert.equal((await lstat(join(serverRoot, 'apps/server/agent/dist/desktop-agent-maintenance.mjs'))).isFile(), true, 'Build the Agent desktop maintenance entry before this real regression.');
   const started = await database.start();
   const setup = { email: 'backup-roundtrip@example.invalid', password: `login-${randomUUID()}`, name: 'Backup User', workspaceName: 'Backup Workspace' };
@@ -224,54 +251,97 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   assert.equal(manifest.recoverySet.quiescence.operatorConfirmedStopped, true);
   assert.equal(manifest.recoverySet.externalSideEffectsCheckpointed, false);
   assert.equal(manifest.recoverySet.executionRestored, false);
-  for (const [label, change] of [
+  // Independent rejection scenarios never share a mutable fixture. Each case gets
+  // its own private plaintext copy plus its own encrypted and target directories,
+  // then joins a bounded pool so real PostgreSQL restores overlap without racing
+  // manifest, blob or destination paths.
+  const casesRoot = join(root, 'restore-cases');
+  await ensurePrivateDirectory(casesRoot);
+  const prepareCase = async (label: string) => {
+    const caseRoot = join(casesRoot, label);
+    await mkdir(caseRoot, { mode: 0o700 });
+    // Adopt the current-user owner for the case root before populating it: an
+    // elevated Windows token creates paths owned by its default owner group, which
+    // non-restrict private-path checks refuse.
+    await ensurePrivateDirectory(caseRoot, { newlyCreated: true });
+    const fixture = join(caseRoot, 'fixture');
+    await cp(plaintext, fixture, { recursive: true });
+    // fs.cp does not preserve the Windows owner/DACL. Restore the private guarantees
+    // the decrypted fixture already had, but only for the component files that
+    // recovery-set and agent-bundle verification inspect; blobs and chat files are
+    // content-hashed only.
+    for (const relative of ['desktop-backup.json', 'recovery-set.json', 'database.dump', 'files/manifest.json', 'blobs/manifest.json', 'agent/manifest.json']) {
+      const component = join(fixture, relative);
+      try { await securePrivateFile(component, { newlyCreated: true }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+    return { caseRoot, fixture, manifestPath: join(fixture, 'desktop-backup.json') };
+  };
+  const encryptCase = async (caseRoot: string, fixture: string, phase: string) => {
+    const directory = join(caseRoot, 'encrypted');
+    await mkdir(directory);
+    await measured(phase, () => encryptBackupDirectory(fixture, join(directory, 'desktop-backup.enc'), backupPassword));
+    return directory;
+  };
+  const rejectCase = async (caseRoot: string, phase: string, source: string) => {
+    const denied = join(caseRoot, 'denied');
+    await measured(phase, () => assert.rejects(restoreDesktop({ ...options, source, dataDir: denied, password: backupPassword })));
+    await assert.rejects(lstat(denied), { code: 'ENOENT' });
+  };
+  const incompatible = [
     ['application-version', { applicationVersion: '999.0.0' }],
     ['operating-system', { platform: process.platform === 'win32' ? 'darwin' : 'win32' }],
     ['format-version', { version: 999 }],
     ['mixed-recovery-set', { recoverySet: { ...manifest.recoverySet, recoverySetId: randomUUID() } }],
     ['legacy-container-downgrade', { version: 1, applicationVersion: undefined }],
-  ] as const) {
-    await writeFile(manifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
-    const incompatible = join(root, label); await mkdir(incompatible);
-    await measured(`encrypt-${label}`, () => encryptBackupDirectory(plaintext, join(incompatible, 'desktop-backup.enc'), backupPassword));
-    await measured(`reject-${label}`, () => assert.rejects(restoreDesktop({ ...options, source: incompatible, dataDir: denied, password: backupPassword })));
-    await assert.rejects(lstat(denied), { code: 'ENOENT' });
-  }
-  await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
-  await writeFile(join(plaintext, 'unclassified-private-data'), 'must not silently disappear', { mode: 0o600 });
-  const malformed = join(root, 'malformed'); await mkdir(malformed);
-  await measured('encrypt-unclassified', () => encryptBackupDirectory(plaintext, join(malformed, 'desktop-backup.enc'), backupPassword));
-  await measured('reject-unclassified', () => assert.rejects(restoreDesktop({ ...options, source: malformed, dataDir: denied, password: backupPassword })));
-  await assert.rejects(lstat(denied), { code: 'ENOENT' });
-  await rm(join(plaintext, 'unclassified-private-data'));
-  // Make an internally authenticated, filesystem-valid backup whose attachment
-  // inventory disagrees with the real dump. Detection requires restored SQL;
-  // failure must roll the newly initialized destination back to an empty folder.
-  const blobManifestPath = join(plaintext, 'blobs/manifest.json');
-  const blobManifest = JSON.parse(await readFile(blobManifestPath, 'utf8'));
-  const inconsistentBlobs = { ...blobManifest, entries: [] };
-  await writeFile(blobManifestPath, JSON.stringify(inconsistentBlobs), { mode: 0o600 });
-  await rm(join(plaintext, 'blobs/objects', blob.key));
-  const inconsistentSet = { ...manifest.recoverySet, components: { ...manifest.recoverySet.components, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) } };
-  await writeFile(join(plaintext, 'recovery-set.json'), JSON.stringify(inconsistentSet), { mode: 0o600 });
-  await writeFile(manifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs), recoverySet: inconsistentSet }), { mode: 0o600 });
-  const inconsistent = join(root, 'sql-inconsistent'); await mkdir(inconsistent);
-  await measured('encrypt-sql-inconsistent', () => encryptBackupDirectory(plaintext, join(inconsistent, 'desktop-backup.enc'), backupPassword));
-  await ensurePrivateDirectory(denied);
-  await measured('reject-sql-inconsistent', () => assert.rejects(restoreDesktop({ ...options, source: inconsistent, dataDir: denied, password: backupPassword })));
-  assert.deepEqual(await readdir(denied), [], 'failed restore must not leave PostgreSQL ownership, data or a ready bootstrap');
-  await rm(denied, { recursive: true });
-  await writeFile(blobManifestPath, JSON.stringify(blobManifest), { mode: 0o600 });
-  await writeFile(join(plaintext, 'blobs/objects', blob.key), attachment, { mode: 0o600 });
-  await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
-  await writeFile(join(plaintext, 'recovery-set.json'), JSON.stringify(manifest.recoverySet), { mode: 0o600 });
-  const { applicationVersion: _applicationVersion, recoverySet: _recoverySet, ...legacy } = manifest;
-  await rm(join(plaintext, 'recovery-set.json'));
-  await writeFile(manifestPath, JSON.stringify({ ...legacy, version: 1 }), { mode: 0o600 });
-  await assert.rejects(restoreDesktop({ ...options, source: plaintext, dataDir: denied }));
-  await assert.rejects(lstat(denied), { code: 'ENOENT' });
-  const legacyTarget = join(root, 'legacy-restored');
-  await measured('legacy-restore', () => restoreDesktop({ ...options, source: plaintext, dataDir: legacyTarget, allowLegacyUnencrypted: true }));
-  assert.equal(await readFile(join(legacyTarget, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
-  assert.equal((await readPrivateJson(join(legacyTarget, 'bootstrap.json'))).phase, 'ready');
+  ] as const;
+  const cases: Array<() => Promise<void>> = [
+    // The two cases that reach a real restored database enter the pool first so the
+    // metadata-only rejections overlap with them instead of trailing behind.
+    async () => {
+      // Make an internally authenticated, filesystem-valid backup whose attachment
+      // inventory disagrees with the real dump. Detection requires restored SQL;
+      // failure must roll the newly initialized destination back to an empty folder.
+      const { caseRoot, fixture, manifestPath: caseManifestPath } = await prepareCase('sql-inconsistent');
+      const blobManifestPath = join(fixture, 'blobs/manifest.json');
+      const blobManifest = JSON.parse(await readFile(blobManifestPath, 'utf8'));
+      const inconsistentBlobs = { ...blobManifest, entries: [] };
+      await writeFile(blobManifestPath, JSON.stringify(inconsistentBlobs), { mode: 0o600 });
+      await rm(join(fixture, 'blobs/objects', blob.key));
+      const inconsistentSet = { ...manifest.recoverySet, components: { ...manifest.recoverySet.components, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) } };
+      await writeFile(join(fixture, 'recovery-set.json'), JSON.stringify(inconsistentSet), { mode: 0o600 });
+      await writeFile(caseManifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs), recoverySet: inconsistentSet }), { mode: 0o600 });
+      const inconsistent = await encryptCase(caseRoot, fixture, 'encrypt-sql-inconsistent');
+      const denied = join(caseRoot, 'denied');
+      await ensurePrivateDirectory(denied);
+      await measured('reject-sql-inconsistent', () => assert.rejects(restoreDesktop({ ...options, source: inconsistent, dataDir: denied, password: backupPassword })));
+      assert.deepEqual(await readdir(denied), [], 'failed restore must not leave PostgreSQL ownership, data or a ready bootstrap');
+    },
+    async () => {
+      const { caseRoot, fixture, manifestPath: caseManifestPath } = await prepareCase('legacy-restore');
+      const { applicationVersion: _applicationVersion, recoverySet: _recoverySet, ...legacy } = manifest;
+      await rm(join(fixture, 'recovery-set.json'));
+      await writeFile(caseManifestPath, JSON.stringify({ ...legacy, version: 1 }), { mode: 0o600 });
+      const legacyDenied = join(caseRoot, 'denied');
+      await assert.rejects(restoreDesktop({ ...options, source: fixture, dataDir: legacyDenied }));
+      await assert.rejects(lstat(legacyDenied), { code: 'ENOENT' });
+      const legacyTarget = join(caseRoot, 'restored');
+      await measured('legacy-restore', () => restoreDesktop({ ...options, source: fixture, dataDir: legacyTarget, allowLegacyUnencrypted: true }));
+      assert.equal(await readFile(join(legacyTarget, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
+      assert.equal((await readPrivateJson(join(legacyTarget, 'bootstrap.json'))).phase, 'ready');
+    },
+    ...incompatible.map(([label, change]) => async () => {
+      const { caseRoot, fixture, manifestPath: caseManifestPath } = await prepareCase(label);
+      await writeFile(caseManifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
+      const directory = await encryptCase(caseRoot, fixture, `encrypt-${label}`);
+      await rejectCase(caseRoot, `reject-${label}`, directory);
+    }),
+    async () => {
+      const { caseRoot, fixture } = await prepareCase('unclassified');
+      await writeFile(join(fixture, 'unclassified-private-data'), 'must not silently disappear', { mode: 0o600 });
+      const malformed = await encryptCase(caseRoot, fixture, 'encrypt-unclassified');
+      await rejectCase(caseRoot, 'reject-unclassified', malformed);
+    },
+  ];
+  await measured('isolated-cases', () => runBounded(2, cases));
 });

@@ -98,6 +98,67 @@ export function payloadBudgets({ files, bytes }, { fileLimit = WINDOWS_INSTALL_F
   };
 }
 
+// Mirror the attribute cache bound so the advisory list can never outgrow the
+// cache it fills, even for trees made mostly of empty directories.
+const maxPrefetchPaths = 200_000;
+
+/**
+ * Advisory, bounded prewarm for the Windows attribute helper. Windows verification
+ * costs one native helper process per directory listing inside the guarded visit,
+ * so a complete install tree prices one process per ~10 paths. A single recursive
+ * pass lets cacheWindowsPathAttributes batch the same handles 256 paths at a time.
+ *
+ * Lineage validation here never touches the guarded primitive or the native
+ * helper: a cache miss inside assertNoWindowsReparsePath would recreate the very
+ * calls this pass exists to batch. Plain lstats of the directory and every
+ * ancestor plus an exact realpath must all hold before and after each readdir, so
+ * an ancestor swapped for a junction abandons the prewarm instead of traversing
+ * outside the payload. Links are never descended, the total-path cap and packaging
+ * file budget still apply, and every failure is ignored: the guarded visit below
+ * still re-reads each path, re-verifies its attributes and fails closed, so a
+ * changed tree can never be certified by this prewarm.
+ */
+async function prefetchWindowsPathAttributes(root, fileLimit) {
+  if (process.platform !== "win32") return;
+  const paths = [root];
+  let files = 0;
+  try {
+    // Helper-free lineage snapshot: ordinary directory at every level and an
+    // unredirected realpath for the directory being listed.
+    const lineage = async (directory, ancestors) => {
+      const stats = [];
+      for (const path of [directory, ...ancestors]) {
+        const info = await lstat(path, { bigint: true });
+        if (!info.isDirectory() || info.isSymbolicLink()) return undefined;
+        stats.push(info);
+      }
+      return await realpath(directory) === directory ? stats : undefined;
+    };
+    const pending = [{ directory: root, ancestors: [] }];
+    while (pending.length > 0) {
+      const { directory, ancestors } = pending.pop();
+      const before = await lineage(directory, ancestors);
+      if (!before) return;
+      const entries = await readdir(directory, { withFileTypes: true });
+      const after = await lineage(directory, ancestors);
+      if (!after || after[0].dev !== before[0].dev || after[0].ino !== before[0].ino) return;
+      for (const entry of entries) {
+        if (paths.length >= maxPrefetchPaths) return;
+        if (entry.isFile() && ++files > fileLimit) {
+          // Reuse the packaging budget error rather than inventing a second ceiling.
+          assertWindowsInstallFileLimit("win32-", files, fileLimit);
+          return;
+        }
+        const path = join(directory, entry.name);
+        paths.push(path);
+        if (entry.isDirectory() && !entry.isSymbolicLink())
+          pending.push({ directory: path, ancestors: [...ancestors, directory] });
+      }
+    }
+    cacheWindowsPathAttributes(paths);
+  } catch { /* Advisory only; the guarded visit reports the authoritative counts. */ }
+}
+
 /**
  * Inventory loose regular-file paths, not expanded archive members or allocated
  * disk space. Optional contained POSIX symlinks are counted separately and never
@@ -174,7 +235,10 @@ export async function inspectPayloadFiles(root, {
     assertCurrent();
     if (fileStamp(directory.currentStat()) !== before) throw new Error("Payload directory changed while counting.");
   }
-  try { await visit(boundary, ""); }
+  try {
+    await prefetchWindowsPathAttributes(absolute, fileLimit);
+    await visit(boundary, "");
+  }
   finally { boundary.close(); }
   const topAreas = [...topLevel.entries()].sort(([left], [right]) => compare(left, right));
   const totals = Object.values(components).reduce((sum, component) => ({

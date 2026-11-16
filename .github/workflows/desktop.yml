@@ -126,16 +126,43 @@ jobs:
       - name: Keep every recorded OPEN blocker fatal, including preview tests
         run: node scripts/check-third-party-notices.mjs --release
 
+  fast-gates:
+    name: Fast source, notice-integrity and advisory gates
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Reject dependency sources that are not allowlisted
+        run: node scripts/check-sources.mjs
+      - name: Keep third-party notices byte-identical to the lockfile
+        run: node scripts/check-third-party-notices.mjs --integrity
+      - name: Query OSV for the resolved production closure before any build or test
+        run: node apps/desktop/scripts/preflight-advisories.mjs
+
   unsigned:
-    needs: [release-preflight]
+    needs: [fast-gates, release-preflight]
     if: >-
-      ${{ !cancelled() && inputs.distribution == 'unsigned'
+      ${{ !cancelled() && needs.fast-gates.result == 'success'
+        && inputs.distribution == 'unsigned'
         && (inputs.release_action == 'none'
           || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
             && needs.release-preflight.outputs.staged_draft != 'true')) }}
     name: Unsigned ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
+    env:
+      # Cache only the upstream download stores; the artifacts are still built
+      # and verified from scratch on every run.
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +193,31 @@ jobs:
           # Signed and unsigned caches stay separate. Never cache node_modules,
           # built applications, user homes, keychains or signing materials.
           key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
+      - name: Resolve pinned Electron and electron-builder versions
+        id: electron-cache
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.cache/electron" "$GITHUB_WORKSPACE/.cache/electron-builder"
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFile } from "node:fs/promises";
+          const manifest = JSON.parse(await readFile("apps/desktop/package.json", "utf8"));
+          const pinned = (name) => manifest.devDependencies?.[name] ?? manifest.dependencies?.[name] ?? "missing";
+          console.log(`electron=${pinned("electron")}`);
+          console.log(`builder=${pinned("electron-builder")}`);
+          NODE
+      - name: Restore pinned Electron and electron-builder download archives
+        uses: actions/cache@v4
+        with:
+          # Exactly the two package-toolchain download stores. Electron archives
+          # are checksum-verified by @electron/get on every use. Never cache
+          # node_modules, build output, user homes, keychains, certificates or
+          # any other signing material.
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: desktop-${{ inputs.distribution }}-electron-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.electron-cache.outputs.electron }}-${{ steps.electron-cache.outputs.builder }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            desktop-${{ inputs.distribution }}-electron-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.electron-cache.outputs.electron }}-${{ steps.electron-cache.outputs.builder }}-
       - name: Configure Windows C++ compiler and SDK
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -243,9 +295,10 @@ jobs:
           path: ${{ env.DESKTOP_DELIVERY_DIR }}/
 
   signed:
-    needs: [release-preflight]
+    needs: [fast-gates, release-preflight]
     if: >-
-      ${{ !cancelled() && inputs.distribution == 'signed'
+      ${{ !cancelled() && needs.fast-gates.result == 'success'
+        && inputs.distribution == 'signed'
         && (inputs.release_action == 'none'
           || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
             && needs.release-preflight.outputs.staged_draft != 'true')) }}
@@ -255,6 +308,11 @@ jobs:
     environment: desktop-signing
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
+    env:
+      # Cache only the upstream download stores; the artifacts are still built,
+      # signed and verified from scratch on every run.
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
     strategy:
       fail-fast: false
       matrix:
@@ -285,6 +343,31 @@ jobs:
           # Signed and unsigned caches stay separate. Never cache node_modules,
           # built applications, user homes, keychains or signing materials.
           key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
+      - name: Resolve pinned Electron and electron-builder versions
+        id: electron-cache
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.cache/electron" "$GITHUB_WORKSPACE/.cache/electron-builder"
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFile } from "node:fs/promises";
+          const manifest = JSON.parse(await readFile("apps/desktop/package.json", "utf8"));
+          const pinned = (name) => manifest.devDependencies?.[name] ?? manifest.dependencies?.[name] ?? "missing";
+          console.log(`electron=${pinned("electron")}`);
+          console.log(`builder=${pinned("electron-builder")}`);
+          NODE
+      - name: Restore pinned Electron and electron-builder download archives
+        uses: actions/cache@v4
+        with:
+          # Exactly the two package-toolchain download stores. Electron archives
+          # are checksum-verified by @electron/get on every use. Never cache
+          # node_modules, build output, user homes, keychains, certificates or
+          # any other signing material.
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: desktop-${{ inputs.distribution }}-electron-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.electron-cache.outputs.electron }}-${{ steps.electron-cache.outputs.builder }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            desktop-${{ inputs.distribution }}-electron-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.electron-cache.outputs.electron }}-${{ steps.electron-cache.outputs.builder }}-
       - name: Configure Windows C++ compiler and SDK
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1

@@ -238,10 +238,42 @@ export async function verifyInstalledApplication(resources, expectedPayload, opt
   return { ...checked, sourceArtifact: { path: expectedPayload.path, sha256: expectedPayload.sha256, bytes: expectedPayload.bytes }, installationExecutedByThisCommand: false };
 }
 
+// File hashing dominates digesting a complete final application tree (~45k files),
+// so reads run bounded and concurrent. Traversal stays serial and sorted, and the
+// records are fed to the digest in that same order, so the sha256 is unchanged.
+const APPLICATION_TREE_HASH_CONCURRENCY = 8;
+
+// Bounded pool: never more than `limit` outstanding calls, no unbounded Promise.all
+// over the whole tree, and no new work scheduled once a call has failed.
+async function mapLimit(items, limit, work) {
+  const results = Array.from({ length: items.length });
+  let cursor = 0;
+  let failure = null;
+  async function worker() {
+    while (!failure) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      try {
+        results[index] = await work(items[index]);
+      } catch (error) {
+        // Keep the earliest failing index so the surfaced error matches the
+        // sequential traversal rather than whichever read finished first.
+        if (!failure || index < failure.index) failure = { index, error };
+        return;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  if (failure) throw failure.error;
+  return results;
+}
+
 export async function applicationTree(root, { digest = false, modes = false } = {}) {
-  const hash = digest ? createHash("sha256") : null;
-  const record = (value) => hash?.update(`${JSON.stringify(value)}\n`);
   const summary = { files: 0, logicalBytes: 0, links: 0 };
+  // Traversal order and record shape are part of the digest contract: a directory
+  // record precedes its contents, a link is recorded with its target, and a file is
+  // recorded as {path, bytes, sha256, optional mode}.
+  const records = [];
   async function visit(directory) {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
       const path = join(directory, entry.name);
@@ -252,20 +284,30 @@ export async function applicationTree(root, { digest = false, modes = false } = 
         if (isAbsolute(link) || !inside(root, resolve(dirname(path), link)) || !inside(root, await realpath(path)))
           throw new Error(`Final application contains an escaping resource: ${portable(path)}`);
         summary.links++;
-        record({ path: location, link: portable(link) });
+        if (digest) records.push({ record: { path: location, link: portable(link) } });
       } else if (info.isDirectory()) {
-        record({ path: location, directory: true });
+        if (digest) records.push({ record: { path: location, directory: true } });
         await visit(path);
       } else if (info.isFile()) {
         summary.files++;
         summary.logicalBytes += info.size;
-        if (hash) record({ path: location, bytes: info.size, sha256: await hashFile(path), ...(modes ? { mode: info.mode & 0o777 } : {}) });
+        if (digest) records.push({ file: path, path: location, bytes: info.size, mode: info.mode & 0o777 });
       }
       else throw new Error("Final application contains an unsupported filesystem resource.");
     }
   }
   await visit(root);
-  return { ...summary, ...(hash ? { sha256: hash.digest("hex") } : {}) };
+  if (!digest) return { ...summary };
+  const hashes = await mapLimit(records.filter((entry) => entry.file), APPLICATION_TREE_HASH_CONCURRENCY, (entry) => hashFile(entry.file));
+  const hash = createHash("sha256");
+  let next = 0;
+  for (const entry of records) {
+    const value = entry.file
+      ? { path: entry.path, bytes: entry.bytes, sha256: hashes[next++], ...(modes ? { mode: entry.mode } : {}) }
+      : entry.record;
+    hash.update(`${JSON.stringify(value)}\n`);
+  }
+  return { ...summary, sha256: hash.digest("hex") };
 }
 
 // The callback runs while validated FINAL distributable resources are available.

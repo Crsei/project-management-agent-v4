@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { assertWindowsInstallFileLimit, inspectPayloadFiles, payloadBudgets, WINDOWS_INSTALL_FILE_LIMIT } from "./payload-files.mjs";
+import { getWindowsPathAttributeMetrics } from "../../../packages/pm-core/windows-reparse.ts";
 
 async function fixture(t) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "pm-payload-files-")));
@@ -162,6 +163,50 @@ test("payload roots, ancestors and descendants reject symbolic links and Windows
   await assert.rejects(inspectPayloadFiles(root));
   if (process.platform === "win32")
     await assert.rejects(inspectPayloadFiles(root, { allowContainedSymlinks: true }));
+});
+
+test("advisory Windows attribute prefetch leaves portable reports and counters identical", async (t) => {
+  const root = await fixture(t);
+  await put(root, "resources/nested/deep/file.js", "bytes");
+  await put(root, "resources/app.asar", "asar");
+  const before = getWindowsPathAttributeMetrics();
+  const first = await inspectPayloadFiles(root);
+  const second = await inspectPayloadFiles(root);
+  assert.deepEqual(second, first);
+  assert.equal(first.files, 2);
+  assert.equal(first.bytes, 9);
+  assert.deepEqual(Object.keys(first.topLevelBytes), ["resources"]);
+  if (process.platform !== "win32") {
+    const after = getWindowsPathAttributeMetrics();
+    assert.equal(after.nativeCalls, before.nativeCalls, "non-Windows prefetch must not launch the native helper");
+    assert.equal(after.nativePaths, before.nativePaths);
+  }
+});
+
+if (process.platform === "win32") test("Windows prefetch abandons an over-budget tree without changing the authoritative report", async (t) => {
+  const root = await fixture(t);
+  for (const name of ["a.js", "b.js", "c.js"]) await put(root, `resources/${name}`, "x");
+  const before = getWindowsPathAttributeMetrics();
+  const report = await inspectPayloadFiles(root, { fileLimit: 1 });
+  assert.equal(report.files, 3);
+  assert.equal(report.budgets.files.withinLimit, false);
+  assert.equal(report.budgets.files.remaining, -2);
+  const calls = getWindowsPathAttributeMetrics().nativeCalls - before.nativeCalls;
+  assert.ok(calls <= 4, `abandoned prewarm must leave only the guarded visit batches, observed ${calls}`);
+});
+
+if (process.platform === "win32") test("Windows payload prefetch batches nested attributes far below the path count", async (t) => {
+  const root = await fixture(t);
+  for (let directory = 0; directory < 24; directory++)
+    for (let file = 0; file < 12; file++) await put(root, `resources/group-${directory}/file-${file}.js`, "x");
+  const before = getWindowsPathAttributeMetrics();
+  const report = await inspectPayloadFiles(root);
+  const after = getWindowsPathAttributeMetrics();
+  const paths = report.files + 24 + 2; // files, group directories, resources and root
+  assert.equal(report.files, 288);
+  const calls = after.nativeCalls - before.nativeCalls;
+  assert.ok(calls <= Math.ceil(paths / 256) + 8, `prefetch must batch ${paths} paths, observed ${calls} calls`);
+  assert.ok(calls * 8 < paths, `prefetch must stay far below one call per path, observed ${calls} calls for ${paths}`);
 });
 
 if (process.platform !== "win32") {
