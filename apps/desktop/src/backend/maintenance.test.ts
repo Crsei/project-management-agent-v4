@@ -54,9 +54,9 @@ async function measured<T>(phase: string, operation: () => Promise<T>): Promise<
 }
 
 /**
- * Runs independent restore cases with bounded concurrency. The first failure stops
- * new work but every started case is awaited, so no PostgreSQL controller or child
- * outlives the test.
+ * Runs independent cases with bounded concurrency. The first failure stops new work
+ * but every started case is awaited, so no PostgreSQL controller or child outlives
+ * the test.
  */
 async function runBounded(limit: number, operations: ReadonlyArray<() => Promise<void>>): Promise<void> {
   let next = 0;
@@ -252,9 +252,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   assert.equal(manifest.recoverySet.externalSideEffectsCheckpointed, false);
   assert.equal(manifest.recoverySet.executionRestored, false);
   // Independent rejection scenarios never share a mutable fixture. Each case gets
-  // its own private plaintext copy plus its own encrypted and target directories,
-  // then joins a bounded pool so real PostgreSQL restores overlap without racing
-  // manifest, blob or destination paths.
+  // its own private plaintext copy plus its own encrypted and target directories.
+  // Metadata-only cases share a two-lane pool beside one serialized full restore so
+  // real PostgreSQL clusters never overlap.
   const casesRoot = join(root, 'restore-cases');
   await ensurePrivateDirectory(casesRoot);
   const prepareCase = async (label: string) => {
@@ -295,9 +295,10 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
     ['mixed-recovery-set', { recoverySet: { ...manifest.recoverySet, recoverySetId: randomUUID() } }],
     ['legacy-container-downgrade', { version: 1, applicationVersion: undefined }],
   ] as const;
-  const cases: Array<() => Promise<void>> = [
-    // The two cases that reach a real restored database enter the pool first so the
-    // metadata-only rejections overlap with them instead of trailing behind.
+  const fullRestoreCases: Array<() => Promise<void>> = [
+    // Each case starts a real PostgreSQL cluster and restores into it. They are
+    // chained below so only one runs at a time; the metadata pool keeps working
+    // beside whichever restore is active.
     async () => {
       // Make an internally authenticated, filesystem-valid backup whose attachment
       // inventory disagrees with the real dump. Detection requires restored SQL;
@@ -330,6 +331,8 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
       assert.equal(await readFile(join(legacyTarget, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
       assert.equal((await readPrivateJson(join(legacyTarget, 'bootstrap.json'))).phase, 'ready');
     },
+  ];
+  const metadataCases: Array<() => Promise<void>> = [
     ...incompatible.map(([label, change]) => async () => {
       const { caseRoot, fixture, manifestPath: caseManifestPath } = await prepareCase(label);
       await writeFile(caseManifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
@@ -343,5 +346,26 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
       await rejectCase(caseRoot, 'reject-unclassified', malformed);
     },
   ];
-  await measured('isolated-cases', () => runBounded(2, cases));
+  await measured('isolated-cases', async () => {
+    // Shared promise chain: only one full restore (and therefore one real PostgreSQL
+    // cluster) runs at a time. Each link normalizes its outcome, so a failed restore
+    // cannot deadlock the next one, and Promise.allSettled still awaits every started
+    // case before the first failure is rethrown.
+    let fullRestoreChain: Promise<void> = Promise.resolve();
+    const runSerially = (operation: () => Promise<void>): Promise<void> => {
+      const started = fullRestoreChain.then(operation);
+      fullRestoreChain = started.then(() => undefined, () => undefined);
+      return started;
+    };
+    const settle = async (operation: () => Promise<void>): Promise<unknown> => {
+      try { await operation(); return undefined; }
+      catch (error) { return error; }
+    };
+    const [metadataFailure, restores] = await Promise.all([
+      settle(() => runBounded(2, metadataCases)),
+      Promise.allSettled(fullRestoreCases.map(runSerially)),
+    ]);
+    if (metadataFailure !== undefined) throw metadataFailure;
+    for (const result of restores) if (result.status === 'rejected') throw result.reason;
+  });
 });
