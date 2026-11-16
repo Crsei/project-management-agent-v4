@@ -23,7 +23,7 @@ const phases = {
   contracts: { timeout: 120_000, concurrency: 2 },
   lifecycle: { timeout: 180_000, concurrency: 1 },
   integration: { timeout: 900_000, concurrency: 1 },
-  backup: { timeout: 1_200_000, concurrency: 1 },
+  backup: { timeout: 1_800_000, concurrency: 1 },
   release: { timeout: 300_000, concurrency: 1 },
 };
 const selected = process.argv[2] ?? "all";

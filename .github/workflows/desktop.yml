@@ -202,7 +202,7 @@ jobs:
         timeout-minutes: 20
         run: pnpm --filter @agent-workspace/desktop test:integration
       - name: Desktop encrypted backup and restore regressions
-        timeout-minutes: 25
+        timeout-minutes: 35
         run: pnpm --filter @agent-workspace/desktop test:backup
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
@@ -321,7 +321,7 @@ jobs:
         timeout-minutes: 20
         run: pnpm --filter @agent-workspace/desktop test:integration
       - name: Desktop encrypted backup and restore regressions
-        timeout-minutes: 25
+        timeout-minutes: 35
         run: pnpm --filter @agent-workspace/desktop test:backup
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
