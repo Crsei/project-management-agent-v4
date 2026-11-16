@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, lstat, mkdir, open, readFile, readdir } from 'node:fs/promises';
+import { lstat, mkdir, open, readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { Pool } from 'pg';
@@ -12,7 +12,7 @@ import { exportLocalProjectCheckpoint, restoreLocalProjectCheckpoint, captureLoc
 import { readProjectLocation } from '../../../../packages/pm-core/project-locations.ts';
 import { readStoredBlob } from '../../../../packages/infrastructure/src/project-blobs.ts';
 import { registerRestoredBootstrap, validateBootstrapState } from './bootstrap.ts';
-import { ensurePrivateDirectory } from '../private-state.mjs';
+import { ensurePrivateDirectory, securePrivateFile } from '../private-state.mjs';
 import { copyTree } from './maintenance-files.ts';
 import { hashFile, snapshotTree, treeManifestSchema, verifyTree } from '../../../../packages/infrastructure/src/maintenance-tree.ts';
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
@@ -127,10 +127,11 @@ async function createBackup(request: Request): Promise<void> {
     await mkdir(destination, { mode: 0o700 });
     await ensurePrivateDirectory(destination, { newlyCreated: true });
     const files = await exportLocalProjectCheckpoint({ coreRoot, directory: join(destination, 'files'), stopped: true });
+    await securePrivateFile(join(destination, 'files/manifest.json'), { newlyCreated: true });
     const dump = join(destination, 'database.dump');
     diagnosticPhase = 'database-dump';
     await command(pgCommand(request, 'pg_dump'), ['--format=custom', '--no-owner', '--no-acl', '--file', dump], pgEnvironment(request.databaseUrl));
-    await chmod(dump, 0o600);
+    await securePrivateFile(dump, { newlyCreated: true });
     const databaseDumpSha256 = (await hashFile(dump)).sha256;
     // Inventory and attachment references must come from the frozen dump, not a later live SQL view.
     diagnosticPhase = 'database-clone';
@@ -144,6 +145,7 @@ async function createBackup(request: Request): Promise<void> {
       databaseDumpSha256, coreManifestSha256: files.manifestSha256, stopped: true,
       readObject: entry => readStoredBlob({ sql: clone!, legacy: bindBlobStore(clone!, locator, source), resolveProject: (workspaceId, projectId) => readProjectLocation(join(coreRoot, workspaceId), projectId) }, entry),
     });
+    await securePrivateFile(join(destination, 'blobs/manifest.json'), { newlyCreated: true });
     diagnosticPhase = 'chat-copy';
     const sourceChatRoot = join(request.dataDir, 'chat-spaces');
     const chatFiles = await exists(sourceChatRoot) ? await snapshotTree(sourceChatRoot) : null;
@@ -162,6 +164,7 @@ async function createBackup(request: Request): Promise<void> {
       if (finalAgentState.fingerprint !== agentState.fingerprint) throw new Error('Agent source changed inside the common stopped recovery barrier.');
     }
     await assertStopped(pool, request.monitor);
+    diagnosticPhase = 'manifest';
     const applicationVersion = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
     const manifest = manifestSchema.parse({ format: 'pm-agent-desktop-backup', version: 2, applicationVersion, createdAt: new Date().toISOString(), postgresMajor: 16, platform: process.platform,
       privateData: true, bootstrap, databaseDumpSha256, coreManifestSha256: files.manifestSha256, blobManifestSha256: blobs.manifestSha256,
@@ -177,7 +180,9 @@ async function createBackup(request: Request): Promise<void> {
         sourceFingerprint: agentState.fingerprint, secrets: agentManifest.secrets } : null, exclusions: manifest.exclusions });
     manifest.recoverySet = recoverySet;
     await writeJson(join(destination, 'desktop-backup.json'), manifest);
+    await securePrivateFile(join(destination, 'desktop-backup.json'), { newlyCreated: true });
     await writeStoppedRecoverySet(destination, recoverySet);
+    await securePrivateFile(join(destination, 'recovery-set.json'), { newlyCreated: true });
   } finally {
     source.close();
     await clone?.end();
