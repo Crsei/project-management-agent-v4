@@ -340,25 +340,10 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
     },
   ];
   await measured('isolated-cases', async () => {
-    // Shared promise chain: only one full restore (and therefore one real PostgreSQL
-    // cluster) runs at a time. Each link normalizes its outcome, so a failed restore
-    // cannot deadlock the next one, and Promise.allSettled still awaits every started
-    // case before the first failure is rethrown.
-    let fullRestoreChain: Promise<void> = Promise.resolve();
-    const runSerially = (operation: () => Promise<void>): Promise<void> => {
-      const started = fullRestoreChain.then(operation);
-      fullRestoreChain = started.then(() => undefined, () => undefined);
-      return started;
-    };
-    const settle = async (operation: () => Promise<void>): Promise<unknown> => {
-      try { await operation(); return undefined; }
-      catch (error) { return error; }
-    };
-    const [metadataFailure, restores] = await Promise.all([
-      settle(() => runBounded(2, metadataCases)),
-      Promise.allSettled(fullRestoreCases.map(runSerially)),
-    ]);
-    if (metadataFailure !== undefined) throw metadataFailure;
-    for (const result of restores) if (result.status === 'rejected') throw result.reason;
+    // Metadata-only cases finish first in a bounded pool; the real PostgreSQL
+    // restores then run strictly one after another. This keeps every assertion and
+    // avoids overlapping a full project restore with any other maintenance child.
+    await runBounded(2, metadataCases);
+    for (const operation of fullRestoreCases) await operation();
   });
 });
