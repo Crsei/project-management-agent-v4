@@ -101,7 +101,7 @@ async function rejectedMaintenance(input: Record<string, unknown>): Promise<{ ph
 // Linux execution is not Windows/macOS native or Electron GUI acceptance.
 test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; rejects unsafe restores before target initialization', { skip: !binariesDir, timeout: 1_800_000 }, async t => {
   const runtimeRoot = dirname(binariesDir!);
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'desktop-full-encrypted-roundtrip-')));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'desktop-backup-')));
   await ensurePrivateDirectory(root, { newlyCreated: true });
   const dataDir = join(root, 'source'), destination = join(root, 'encrypted-backup');
   const database = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
@@ -268,8 +268,10 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   const encryptCase = async (directory: string, phase: string) => {
     await measured(phase, () => encryptBackupDirectory(plaintext, join(directory, 'desktop-backup.enc'), backupPassword));
   };
-  const rejectCase = async (caseRoot: string, phase: string, source: string) => {
-    const denied = join(caseRoot, 'denied');
+  const rejectCase = async (label: string, phase: string, source: string) => {
+    // Keep restore targets at the temporary root with short unique names: Windows
+    // project files otherwise approach the legacy path limit under restore-cases/.
+    const denied = join(root, `denied-${label}`);
     await measured(phase, () => assert.rejects(restoreDesktop({ ...options, source, dataDir: denied, password: backupPassword })));
     await assert.rejects(lstat(denied), { code: 'ENOENT' });
   };
@@ -288,13 +290,13 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
     await writeFile(manifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
     await encryptCase(prepared.directory, `encrypt-${label}`);
     await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
-    metadataCases.push(async () => { await rejectCase(prepared.caseRoot, `reject-${label}`, prepared.directory); });
+    metadataCases.push(async () => { await rejectCase(label, `reject-${label}`, prepared.directory); });
   }
   const unclassifiedCase = await createCase('unclassified');
   await writeFile(join(plaintext, 'unclassified-private-data'), 'must not silently disappear', { mode: 0o600 });
   await encryptCase(unclassifiedCase.directory, 'encrypt-unclassified');
   await rm(join(plaintext, 'unclassified-private-data'));
-  metadataCases.push(async () => { await rejectCase(unclassifiedCase.caseRoot, 'reject-unclassified', unclassifiedCase.directory); });
+  metadataCases.push(async () => { await rejectCase('unclassified', 'reject-unclassified', unclassifiedCase.directory); });
   // Make an internally authenticated, filesystem-valid backup whose attachment
   // inventory disagrees with the real dump. Detection requires restored SQL;
   // failure must roll the newly initialized destination back to an empty folder.
@@ -324,16 +326,16 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
     // chained below so only one runs at a time; the metadata pool keeps working
     // beside whichever restore is active.
     async () => {
-      const denied = join(sqlInconsistentCase.caseRoot, 'denied');
+      const denied = join(root, 'denied-sql-inconsistent');
       await ensurePrivateDirectory(denied);
       await measured('reject-sql-inconsistent', () => assert.rejects(restoreDesktop({ ...options, source: sqlInconsistentCase.directory, dataDir: denied, password: backupPassword })));
       assert.deepEqual(await readdir(denied), [], 'failed restore must not leave PostgreSQL ownership, data or a ready bootstrap');
     },
     async () => {
-      const legacyDenied = join(legacyCase.caseRoot, 'denied');
+      const legacyDenied = join(root, 'denied-legacy');
       await assert.rejects(restoreDesktop({ ...options, source: plaintext, dataDir: legacyDenied }));
       await assert.rejects(lstat(legacyDenied), { code: 'ENOENT' });
-      const legacyTarget = join(legacyCase.caseRoot, 'restored');
+      const legacyTarget = join(root, 'legacy-restored');
       await measured('legacy-restore', () => restoreDesktop({ ...options, source: plaintext, dataDir: legacyTarget, allowLegacyUnencrypted: true }));
       assert.equal(await readFile(join(legacyTarget, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
       assert.equal((await readPrivateJson(join(legacyTarget, 'bootstrap.json'))).phase, 'ready');
