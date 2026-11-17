@@ -133,9 +133,9 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
 function composerExtensions() {
   return [
     StarterKit.configure({
-      blockquote: false, bulletList: false, codeBlock: false,
+      blockquote: false, codeBlock: false,
       dropcursor: false, heading: false, horizontalRule: false, link: false,
-      listItem: false, listKeymap: false, orderedList: false, paragraph: false, trailingNode: false, underline: false,
+      listKeymap: false, paragraph: false, trailingNode: false, underline: false,
     }),
     Node.create({
       name: "paragraph", group: "block", content: "inline*", priority: 1000,
@@ -281,6 +281,10 @@ function RichComposerEditor(props: Props) {
         if (Date.now() - compositionEnded.current < 80) { event.preventDefault(); return true; }
         const inCode = view.state.selection.$from.parent.type.name === "codeBlock";
         if (inCode) return false;
+        const inList = view.state.selection.$from.node(view.state.selection.$from.depth - 1)?.type.name === "listItem";
+        // Inside a list, plain Enter continues the list; sending still works
+        // with Ctrl/Cmd+Enter or the send button.
+        if (inList && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) return false;
         const thread = aui.thread.getState();
         if (event.shiftKey && (event.ctrlKey || event.metaKey) && thread.capabilities.queue && aui.composer.getState().canSend) {
           event.preventDefault();

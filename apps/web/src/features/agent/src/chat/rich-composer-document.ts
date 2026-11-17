@@ -58,6 +58,22 @@ export function parseComposerDocument(source: string, citation?: QuoteInfo, cont
         }
       }
     }
+    const listMatch = /^([-*+]|\d+[.)])\s+(.*)$/u.exec(line);
+    if (listMatch) {
+      const ordered = /^\d/u.test(listMatch[1]!);
+      const start = ordered ? Number.parseInt(listMatch[1]!, 10) : undefined;
+      const items: JSONContent[] = [];
+      let itemIndex = index;
+      while (itemIndex < lines.length) {
+        const item = /^([-*+]|\d+[.)])\s+(.*)$/u.exec(lines[itemIndex]!);
+        if (!item || /^\d/u.test(item[1]!) !== ordered) break;
+        items.push({ type: "listItem", content: [{ type: "paragraph", content: inlineContent(item[2]!) }] });
+        itemIndex++;
+      }
+      content.push({ type: ordered ? "orderedList" : "bulletList", ...(ordered ? { attrs: { start } } : {}), content: items });
+      index = itemIndex - 1;
+      continue;
+    }
     if (opening && close >= 0) {
       const body = lines.slice(index + 1, close).join("\n");
       content.push({ type: "codeBlock", attrs: {
@@ -140,7 +156,22 @@ export function composerInlineSource(node: DocumentNode): string {
   return text;
 }
 
+function listItemSource(item: DocumentNode, index: number, ordered: boolean, start: number): string {
+  const paragraph = item.firstChild;
+  const prefix = ordered ? `${start + index}. ` : "- ";
+  return prefix + (paragraph ? composerInlineSource(paragraph) : "");
+}
+
+function listSource(node: DocumentNode): string {
+  const ordered = node.type.name === "orderedList";
+  const start = ordered && Number.isFinite(Number(node.attrs.start)) ? Number(node.attrs.start) : 1;
+  const lines: string[] = [];
+  node.forEach((item, _position, index) => { lines.push(listItemSource(item, index, ordered, start)); });
+  return lines.join("\n");
+}
+
 function blockSource(node: DocumentNode): string {
+  if (node.type.name === "bulletList" || node.type.name === "orderedList") return listSource(node);
   if (node.type.name !== "codeBlock") return composerInlineSource(node);
   const body = node.textContent;
   const opening = codeBlockOpening(node);
@@ -154,6 +185,50 @@ function citationOnly(node: DocumentNode): boolean {
   let onlyContexts = true;
   node.forEach(child => { if (child.type.name !== "composerCitation" && child.type.name !== "composerContext") onlyContexts = false; });
   return onlyContexts;
+}
+
+function listPrefix(node: DocumentNode, index: number): string {
+  const ordered = node.type.name === "orderedList";
+  const start = ordered && Number.isFinite(Number(node.attrs.start)) ? Number(node.attrs.start) : 1;
+  return ordered ? `${start + index}. ` : "- ";
+}
+
+function listItemParagraph(item: DocumentNode): DocumentNode | null {
+  const child = item.firstChild;
+  return child && child.type.name === "paragraph" ? child : null;
+}
+
+function inlineSourceOffset(paragraph: DocumentNode, local: number): number {
+  let offset = 0;
+  paragraph.forEach((child, childPosition) => {
+    if (childPosition >= local) return;
+    if (child.isText) {
+      const text = child.text ?? "";
+      offset += textSourceLength(text, markNames(child), Math.min(text.length, local - childPosition));
+    } else offset += composerInlineSource(child).length;
+  });
+  return offset;
+}
+
+function inlinePositionAtSource(paragraph: DocumentNode, local: number): number {
+  let offset = 0;
+  let answer: number | undefined;
+  paragraph.forEach((child, childPosition) => {
+    if (answer !== undefined) return;
+    if (child.isText) {
+      const text = child.text ?? "";
+      const value = textSourceLength(text, markNames(child));
+      if (local <= offset + value) {
+        answer = childPosition + sourceOffsetToTextIndex(text, local - offset, markNames(child));
+      }
+      offset += value;
+    } else {
+      const value = composerInlineSource(child);
+      if (local <= offset + value.length) answer = childPosition + (local > offset ? child.nodeSize : 0);
+      offset += value.length;
+    }
+  });
+  return answer ?? paragraph.content.size;
 }
 
 export function serializeComposerDocument(doc: DocumentNode): string {
@@ -176,6 +251,23 @@ export function composerSourceCursor(doc: DocumentNode, position: number): numbe
       const local = Math.max(0, position - blockPosition - 1);
       if (block.type.name === "codeBlock") {
         answer = sourceOffset + codeBlockOpening(block).length + 1 + Math.min(local, block.content.size);
+      } else if (block.type.name === "bulletList" || block.type.name === "orderedList") {
+        let offset = 0;
+        let itemIndex = 0;
+        let done = false;
+        block.forEach((item, itemPosition) => {
+          if (done) return;
+          const prefix = listPrefix(block, itemIndex);
+          const paragraph = listItemParagraph(item);
+          const paragraphLocal = Math.max(0, local - itemPosition - 2);
+          if (local <= itemPosition + item.nodeSize) {
+            answer = sourceOffset + offset + prefix.length + (paragraph ? inlineSourceOffset(paragraph, paragraphLocal) : 0);
+            done = true;
+          }
+          offset += prefix.length + (paragraph ? composerInlineSource(paragraph).length : 0);
+          itemIndex++;
+        });
+        if (!done) answer = sourceOffset + offset;
       } else {
         let offset = 0;
         block.forEach((child, childPosition) => {
@@ -209,6 +301,25 @@ export function composerDocumentCursor(doc: DocumentNode, sourcePosition: number
       const local = Math.max(0, sourcePosition - sourceOffset);
       if (block.type.name === "codeBlock") {
         answer = blockPosition + 1 + Math.min(block.content.size, Math.max(0, local - codeBlockOpening(block).length - 1));
+      } else if (block.type.name === "bulletList" || block.type.name === "orderedList") {
+        let offset = 0;
+        let itemIndex = 0;
+        let found = false;
+        block.forEach((item, itemPosition) => {
+          if (found) return;
+          const prefix = listPrefix(block, itemIndex);
+          const paragraph = listItemParagraph(item);
+          const paragraphSource = paragraph ? composerInlineSource(paragraph) : "";
+          const total = prefix.length + paragraphSource.length;
+          if (local <= offset + total) {
+            const relative = local - offset - prefix.length;
+            answer = blockPosition + 3 + itemPosition + (paragraph ? inlinePositionAtSource(paragraph, Math.max(0, relative)) : 0);
+            found = true;
+          }
+          offset += total;
+          itemIndex++;
+        });
+        if (!found) answer = blockPosition + block.nodeSize;
       } else {
         let offset = 0;
         let found = false;

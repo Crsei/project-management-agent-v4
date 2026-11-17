@@ -147,3 +147,25 @@ test("composer marks serialize to escaped Markdown and map source carets", () =>
   assert.equal(serializeComposerDocument(literal), "*not italic*");
   assert.equal(serializeComposerDocument(markSchema.nodeFromJSON(parseComposerDocument(serializeComposerDocument(literal)))), "*not italic*");
 });
+
+const listSchema = getSchema([
+  Node.create({ name: "doc", topNode: true, content: "block+" }),
+  Node.create({ name: "text", group: "inline" }),
+  Node.create({ name: "paragraph", group: "block", content: "inline*", addAttributes: () => ({ citationOnly: { default: false } }) }),
+  Node.create({ name: "bulletList", group: "block", content: "listItem+" }),
+  Node.create({ name: "orderedList", group: "block", content: "listItem+", addAttributes: () => ({ start: { default: 1 } }) }),
+  Node.create({ name: "listItem", content: "paragraph block*" }),
+  Mark.create({ name: "bold" }), Mark.create({ name: "italic" }), Mark.create({ name: "strike" }), Mark.create({ name: "code" }),
+]);
+
+test("flat bullet and ordered lists round-trip without changing literal lines", () => {
+  for (const source of ["- one\n- two", "1. one\n2. two", "3. three\n4. four", "- **bold** item", "- one\n1. two", "  - indented stays literal"]) {
+    const doc = listSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source, source);
+    if (source === "- one\n- two") {
+      for (const offset of [2, 3, 4, 5, 7, 8, 9, 10]) {
+        assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+      }
+    }
+  }
+});
