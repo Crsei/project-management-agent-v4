@@ -316,3 +316,6 @@
     transition-duration: 0.01ms;
   }
 }
+
+.token { color: var(--code-token-light, inherit); }
+:global(.dark) .token { color: var(--code-token-dark, inherit); }

@@ -26,6 +26,7 @@ import { useChatBrowserPreferences } from "@agent/src/settings/browser-preferenc
 import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
+import { useMessageTimes } from "@agent/src/chat/generation-times";
 import { ThreadFind } from "@agent/src/chat/thread-find";
 import "@agent/src/chat/composer-shell.css";
 import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
@@ -81,8 +82,10 @@ import {
   SquareIcon,
   MessageSquareReplyIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore, type FC, type ReactElement, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FC, type ReactElement, type ReactNode } from "react";
+import { useI18n } from "@/lib/i18n-provider";
 import styles from "./composer-layout.module.css";
+import "@agent/src/chat/thread-message.css";
 
 
 const ThreadHistorySkeleton: FC = () => (
@@ -537,12 +540,45 @@ const MessageError: FC = () => {
   );
 };
 
+const MessageTime: FC<{ at?: string; label: string; className?: string }> = ({ at, label, className }) => {
+  const { locale } = useI18n();
+  if (!at) return null;
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return null;
+  const short = new Intl.DateTimeFormat(locale === "en" ? "en" : "zh-CN", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return <time dateTime={at} title={`${label} ${date.toLocaleString()}`} className={cn("text-[11px] text-muted-foreground tabular-nums", className)}>{short}</time>;
+};
+
+/** Collapse only when the real content exceeds the reading height; never truncate silently. */
+const UserMessageFold: FC<{ children: ReactNode }> = ({ children }) => {
+  const t = useAgentText();
+  const ref = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setOverflow(element.scrollHeight > 324);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return <>
+    <div ref={ref} className="aui-user-message-fold" data-collapsed={overflow && !expanded ? true : undefined}>{children}</div>
+    {overflow && <button type="button" data-thread-find-ignore className="aui-user-message-fold-toggle" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? t("收起", "Show less") : t("展开全文", "Show more")}</button>}
+  </>;
+};
+
 const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   const t = useAgentText();
   const ACTION_BAR_PT = "pt-1.5";
   const ACTION_BAR_HEIGHT = `min-h-7.5 ${ACTION_BAR_PT}`;
   const durable = useAuiState((s) => s.message.metadata.custom.durable) as { generationId?: unknown; nativeOutput?: unknown } | undefined;
   const generationId = durable?.nativeOutput === true && typeof durable.generationId === "string" ? durable.generationId : undefined;
+  const messageId = useAuiState((state) => state.message.id);
+  const threadId = useAuiState((state) => state.threadListItem.remoteId);
+  const times = useMessageTimes(threadId);
 
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="assistant">
@@ -597,8 +633,9 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
 
       <div
         data-slot="aui_assistant-message-footer"
-        className={cn("ms-2 flex items-center", ACTION_BAR_HEIGHT)}
+        className={cn("ms-2 flex items-center gap-2", ACTION_BAR_HEIGHT)}
       >
+        <MessageTime at={times.get(messageId)} label={t("生成开始于", "Generation started")} />
         <BranchPicker />
         <AssistantActionBar actionsDisabled={actionsDisabled} />
       </div>
@@ -722,6 +759,10 @@ const AssistantActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled 
 };
 
 const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
+  const t = useAgentText();
+  const messageId = useAuiState((state) => state.message.id);
+  const threadId = useAuiState((state) => state.threadListItem.remoteId);
+  const times = useMessageTimes(threadId);
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="user">
     <MessagePrimitive.Root
@@ -734,8 +775,9 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0 max-w-(--bubble-max-width)">
         <div className="aui-user-message-content peer bg-secondary text-foreground rounded-(--bubble-radius) px-4 py-2 text-sm leading-6 wrap-break-word empty:hidden">
-          <MessagePrimitive.Parts components={{ Text: UserContextText }} />
+          <UserMessageFold><MessagePrimitive.Parts components={{ Text: UserContextText }} /></UserMessageFold>
         </div>
+        <div className="mt-1 flex justify-end"><MessageTime at={times.get(messageId)} label={t("发送于", "Sent")} /></div>
         <PmMessageContext />
         <MessagePrimitive.Quote>
           {quote => <QuoteBlock {...quote} />}

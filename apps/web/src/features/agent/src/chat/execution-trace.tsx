@@ -3,6 +3,7 @@ import { Check, ChevronDown, Copy } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@agent/components/ui/collapsible";
 import { useAgentText } from "../i18n";
+import { useShikiTokens } from "./use-shiki-tokens";
 import styles from "./execution-trace.module.css";
 
 export type TraceStatus = "running" | "error" | "pending";
@@ -71,14 +72,16 @@ export function TraceStatusBadge({ status, tone, children }: { status?: TraceSta
 
 export type CodeBlockRow = { text: string; kind?: "context" | "added" | "removed" };
 
-export function CodeBlock({ code, rows, wrap = false, lineNumbers = false, maxHeight = 260 }: {
+export function CodeBlock({ code, rows, wrap = false, lineNumbers = false, maxHeight = 260, language }: {
   code?: string;
   rows?: CodeBlockRow[];
   wrap?: boolean;
   lineNumbers?: boolean;
   maxHeight?: number;
+  language?: string;
 }) {
   const t = useAgentText();
+  const tokens = useShikiTokens(rows ? "" : code ?? "", language ?? "");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
   const lines: CodeBlockRow[] = rows ?? (code ?? "").split("\n").map(text => ({ text }));
@@ -104,7 +107,11 @@ export function CodeBlock({ code, rows, wrap = false, lineNumbers = false, maxHe
       {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
     </Button>
     <pre className={styles.codeContent} tabIndex={0} style={{ maxHeight }}><code>
-      {lines.map((line, index) => <span key={index} className={styles.codeLine} data-variant={line.kind} data-line={lineNumbers ? index + 1 : undefined}>{line.text || " "}</span>)}
+      {tokens ? tokens.map((line, index) => <span key={index} className={styles.codeLine} data-line={lineNumbers ? index + 1 : undefined}>{line.map((token, tokenIndex) => {
+        const light = token.variants.light?.color;
+        const dark = token.variants.dark?.color;
+        return <span key={tokenIndex} className={styles.token} style={{ "--code-token-light": /^#[\da-f]{3,8}$/i.test(light ?? "") ? light : undefined, "--code-token-dark": /^#[\da-f]{3,8}$/i.test(dark ?? "") ? dark : undefined } as React.CSSProperties}>{token.content}</span>;
+      })}{index < tokens.length - 1 ? "\n" : ""}</span>) : lines.map((line, index) => <span key={index} className={styles.codeLine} data-variant={line.kind} data-line={lineNumbers ? index + 1 : undefined}>{line.text || " "}</span>)}
     </code></pre>
     {error && <p role="status" className={styles.codeError}>{t("无法访问剪贴板；请手动选择内容。", "Clipboard unavailable; select the content manually.")}</p>}
   </div>;

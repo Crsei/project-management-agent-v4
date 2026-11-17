@@ -1,11 +1,11 @@
 import { Fragment, useContext, useEffect, useId, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Check, Copy, Maximize2, WrapText } from "lucide-react";
-import type { ThemedTokenWithVariants } from "shiki";
 import { StreamdownContext } from "streamdown";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@agent/components/ui/dialog";
 import { cn } from "@agent/lib/utils";
 import { markdownMermaidError, markdownTableCsv, markdownTableData, markdownTableMarkdown, type MarkdownNode } from "./markdown-rich-policy";
+import { useShikiTokens } from "./use-shiki-tokens";
 import styles from "./markdown.module.css";
 
 type Locale = "zh-CN" | "en";
@@ -31,20 +31,7 @@ export function MarkdownCopyButton({ text, label, locale }: { text: string; labe
 }
 
 function HighlightedCode({ code, language, streaming }: { code: string; language: string; streaming: boolean }) {
-  const [result, setResult] = useState<{ code: string; language: string; tokens: ThemedTokenWithVariants[][] } | null>(null);
-  useEffect(() => {
-    if (!language || language === "mermaid" || code.length > 100_000) return;
-    let current = true;
-    const timer = window.setTimeout(() => {
-      void import("shiki").then(async ({ bundledLanguages, bundledLanguagesAlias, codeToTokensWithThemes }) => {
-        if (!current || (!Object.hasOwn(bundledLanguages, language) && !Object.hasOwn(bundledLanguagesAlias, language))) return;
-        const tokens = await codeToTokensWithThemes(code, { lang: language as keyof typeof bundledLanguages, themes: { light: "github-light", dark: "github-dark" }, tokenizeMaxLineLength: 10_000, tokenizeTimeLimit: 100 });
-        if (current) setResult({ code, language, tokens });
-      }).catch(() => { /* A failed/unsupported grammar stays literal code, never HTML. */ });
-    }, streaming ? 120 : 0);
-    return () => { current = false; window.clearTimeout(timer); };
-  }, [code, language, streaming]);
-  const tokens = result?.code === code && result.language === language ? result.tokens : null;
+  const tokens = useShikiTokens(code, language, streaming);
   return <pre tabIndex={0} data-native-context-menu><code className={language ? `language-${language}` : undefined}>{tokens ? tokens.map((line, index) => <Fragment key={index}>{line.map((token, tokenIndex) => {
     const light = token.variants.light?.color;
     const dark = token.variants.dark?.color;

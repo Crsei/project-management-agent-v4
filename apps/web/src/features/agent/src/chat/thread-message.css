@@ -1,0 +1,4 @@
+.aui-user-message-fold[data-collapsed] { max-height: 20rem; overflow: hidden; mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent); }
+.aui-user-message-fold-toggle { margin-top: .3rem; padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: .72rem; line-height: 1.4; cursor: pointer; }
+.aui-user-message-fold-toggle:hover { color: var(--foreground); text-decoration: underline; }
+@media (prefers-reduced-motion: no-preference) { .aui-user-message-fold[data-collapsed] { transition: max-height var(--motion-panel, 240ms) ease-out; } }
