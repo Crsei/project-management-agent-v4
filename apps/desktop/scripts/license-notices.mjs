@@ -1,3 +1,4 @@
+import { loadNoticeSupplements } from "./supplement-notices.mjs";
 import { cp, lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -36,7 +37,7 @@ export async function collectNotices(roots, output) {
   }
   for (const root of roots) await visit(root);
   await mkdir(output, { recursive: true });
-  const notices = [];
+  const notices = [], supplements = await loadNoticeSupplements();
   const ordered = [...packages].sort(([, left], [, right]) => `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`, "en"));
   for (const [index, [root, metadata]] of ordered.entries()) {
     const files = [];
@@ -49,7 +50,35 @@ export async function collectNotices(roots, output) {
       await cp(join(root, name), join(output, path), { recursive: true });
       files.push(path);
     }
-    notices.push({ name: metadata.name, version: metadata.version ?? null, license: metadata.license ?? null, files });
+    let source;
+    if (!files.length) {
+      const match = supplements.get(metadata.name + "@" + metadata.version);
+      if (match) {
+        if (match.license !== metadata.license) throw new Error("Supplemental notice license differs from the installed manifest: " + metadata.name);
+        const folder = String(index).padStart(4, "0");
+        await mkdir(join(output, folder), { recursive: true });
+        await writeFile(join(output, folder, "UPSTREAM-LICENSE.txt"), match.bytes);
+        files.push(folder + "/UPSTREAM-LICENSE.txt");
+        source = match.source;
+      } else {
+        // Several exact npm tarballs ship a complete MIT notice only inside README.
+        // Preserve the actual upstream bytes rather than inferring text from SPDX.
+        for (const name of (await readdir(root)).filter(n => /^readme(?:\.md|\.txt)?$/i.test(n))) {
+          const info = await lstat(join(root, name));
+          if (!info.isFile() || info.size > 1024 * 1024 || metadata.license !== "MIT") continue;
+          const bytes = await readFile(join(root, name));
+          const normalized = bytes.toString("utf8").replace(/\s+/g, " ");
+          if (!/copyright.{1,200}permission is hereby granted, free of charge/i.test(normalized) || !normalized.includes("THE SOFTWARE IS PROVIDED") || !/DEALINGS IN THE SOFTWARE/i.test(normalized)) continue;
+          const folder = String(index).padStart(4, "0");
+          await mkdir(join(output, folder), { recursive: true });
+          await writeFile(join(output, folder, name), bytes);
+          files.push(folder + "/" + name);
+          source = "Actual installed package: " + name;
+          break;
+        }
+      }
+    }
+    notices.push({ ...(source ? { source } : {}), name: metadata.name, version: metadata.version ?? null, license: metadata.license ?? null, files });
   }
   await writeFile(join(output, "index.json"), JSON.stringify({ scope: "Installed root, Electron host and Web production dependency notices; Agent exact build-input notices are in ../bundled and ../provenance.", packages: notices }, null, 2) + "\n");
 }

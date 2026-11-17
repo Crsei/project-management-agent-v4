@@ -95,10 +95,11 @@ const publish = (fixture, client, extra = {}) => publishCandidate({ client, requ
 test('desktop release identity binds repository, exact tag/version/SHA/channel and provenance', () => {
   assert.equal(assertReleaseRequest(request()).tag, 'v0.1.1-preview.1');
   assertReleaseRequest(request({ version: '0.1.1', tag: 'v0.1.1', channel: 'stable', distribution: 'signed' }));
+  assertReleaseRequest(request({ distribution: 'signed', targets: ['darwin-x64', 'darwin-arm64'] }));
   for (const overrides of [
     { repository: 'other/repository' }, { tag: 'v0.1.1-preview.2' }, { sha: 'main' }, { sha: 'A'.repeat(40) },
     { version: '0.1.1-beta.1', tag: 'v0.1.1-beta.1' }, { channel: 'stable' }, { attempt: '0' }, { ciRunId: '' },
-    { targets: ['darwin-arm64'] }, { targets: ['win32-x64', 'darwin-x64', 'darwin-arm64'] },
+    { targets: ['darwin-x64', 'darwin-arm64'] }, { distribution: 'signed', targets: ['darwin-arm64'] }, { targets: ['darwin-arm64'] }, { targets: ['win32-x64', 'darwin-x64', 'darwin-arm64'] },
     { version: '0.1.1', tag: 'v0.1.1', channel: 'stable' },
   ]) assert.throws(() => assertReleaseRequest(request(overrides)));
 });

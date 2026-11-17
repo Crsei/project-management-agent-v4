@@ -23,9 +23,9 @@ export function assertReleaseRequest(request) {
   if (!['preview', 'stable'].includes(channel) || (channel === 'preview') !== version.includes('-preview.'))
     throw new Error('Release channel must match the exact stable or preview application version');
   if (!['unsigned', 'signed'].includes(distribution)) throw new Error('Unknown desktop distribution');
-  if (!same(targets, ['win32-x64']) && !same(targets, ['win32-x64', 'darwin-x64', 'darwin-arm64']))
-    throw new Error('Release requires the exact Windows-only or complete native target set');
-  if (distribution === 'unsigned' && (channel !== 'preview' || targets.length !== 1))
+  if (!same(targets, ['win32-x64']) && !same(targets, ['darwin-x64', 'darwin-arm64']) && !same(targets, ['win32-x64', 'darwin-x64', 'darwin-arm64']))
+    throw new Error('Release requires Windows-only, both macOS architectures, or the complete native target set');
+  if (distribution === 'unsigned' && (channel !== 'preview' || !same(targets, ['win32-x64'])))
     throw new Error('Unsigned release is supported only for explicitly labeled Windows preview tests');
   for (const [label, value] of Object.entries({ runId, attempt, ciRunId })) {
     if (!/^[1-9]\d*$/.test(String(value ?? ''))) throw new Error(`${label} must identify an exact workflow run/attempt`);
@@ -378,7 +378,7 @@ async function requestFromEnvironment(env) {
   if (desktopVersion !== version) throw new Error('Root and desktop application versions differ');
   const request = { repository: env.GITHUB_REPOSITORY, tag: env.DESKTOP_RELEASE_TAG, sha: env.DESKTOP_RELEASE_SHA,
     version, channel: env.DESKTOP_RELEASE_CHANNEL, distribution: env.DESKTOP_DISTRIBUTION,
-    targets: env.DESKTOP_WINDOWS_ONLY === 'true' ? ['win32-x64'] : ['win32-x64', 'darwin-x64', 'darwin-arm64'],
+    targets: env.DESKTOP_MACOS_ONLY === 'true' ? ['darwin-x64', 'darwin-arm64'] : env.DESKTOP_WINDOWS_ONLY === 'true' ? ['win32-x64'] : ['win32-x64', 'darwin-x64', 'darwin-arm64'],
     runId: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT, ciRunId: env.DESKTOP_CI_RUN_ID };
   assertReleaseRequest(request);
   const checked = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });

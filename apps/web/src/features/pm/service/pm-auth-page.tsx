@@ -48,6 +48,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
       </main>
       <footer className={styles.footer}>
         <span>© Dovspace</span>
+        <a href="/legal.html" target="_blank" rel="noreferrer">{t("许可与对应源码", "License and corresponding source")}</a>
         <span>{t("为团队协作而建", "Built for working together")}</span>
       </footer>
     </div>

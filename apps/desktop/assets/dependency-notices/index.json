@@ -1,0 +1,182 @@
+[
+  {
+    "name": "@connectrpc/connect-web",
+    "version": "1.7.0",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/%40connectrpc%2Fconnect-web/1.7.0",
+    "url": "https://raw.githubusercontent.com/connectrpc/connect-es/9e34d24373bb666c427510d774d4b8b13fd9aff3/LICENSE",
+    "sha256": "5780f83112ef0026ca40dd55d88535f4475962a2edc90f39410bf908502d7e62",
+    "bytes": 11354
+  },
+  {
+    "name": "@connectrpc/connect",
+    "version": "1.7.0",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/%40connectrpc%2Fconnect/1.7.0",
+    "url": "https://raw.githubusercontent.com/connectrpc/connect-es/9e34d24373bb666c427510d774d4b8b13fd9aff3/LICENSE",
+    "sha256": "5780f83112ef0026ca40dd55d88535f4475962a2edc90f39410bf908502d7e62",
+    "bytes": 11354
+  },
+  {
+    "name": "@napi-rs/keyring-darwin-arm64",
+    "version": "1.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40napi-rs%2Fkeyring-darwin-arm64/1.3.0",
+    "url": "https://raw.githubusercontent.com/Brooooooklyn/keyring-node/e46be75c3ba8d5fde6b88a17c6153b87ffe4b946/LICENSE",
+    "sha256": "02965ed67e29f871a53f7a7afa593a0ddc8020f86ccce0faaf1aa59215b5269e",
+    "bytes": 1071
+  },
+  {
+    "name": "@redis/bloom",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fbloom/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/838c28d9f55d13a7933e650b9f7782fdb5af4f71/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/bloom",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fbloom/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/badfdf09691d0a787bba4af102acfe743f924291/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/client",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fclient/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/789d6d5c5c774fda24257ce1fc7f4f66b80ae689/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/client",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fclient/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/bfdd485b0bb24eab1a99aeb0de96b2285e4b26e1/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/json",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fjson/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/02cfd5ad4c07ef6c1d703e25d3c2076eacfb4b45/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/json",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fjson/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/7b732cdd48ce93cbe4d4904cf402f4c63639a24d/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/search",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fsearch/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/9e7767c5bf2cb06bcce872fe99e5dbb349e3a074/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/search",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Fsearch/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/6b63940d1b53b84a78be47a009a8d03a57068b9b/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/time-series",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Ftime-series/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/de70920ecb4caf2a9c871a24cf08f1fcb41b1d2d/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@redis/time-series",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40redis%2Ftime-series/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/3843988541aed0a7d0b6ff89eef889db7090e411/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "@statsig/client-core",
+    "version": "3.31.0",
+    "license": "ISC",
+    "metadata": "https://registry.npmjs.org/%40statsig%2Fclient-core/3.31.0",
+    "url": "https://raw.githubusercontent.com/statsig-io/js-client-monorepo/8b68b26c4da461cbd69cb16ed1183148389a1a96/LICENSE",
+    "sha256": "27cc00620b2a268e83c28709e19c28228d32cda69f4d7c62ffb09d4ed3822075",
+    "bytes": 750
+  },
+  {
+    "name": "@uiw/codemirror-extensions-basic-setup",
+    "version": "4.25.12",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40uiw%2Fcodemirror-extensions-basic-setup/4.25.12",
+    "url": "https://raw.githubusercontent.com/uiwjs/react-codemirror/1e2e11f865860c6bd5029d71a2a09bd894ed5bad/LICENSE",
+    "sha256": "fd1f049b3bb5cbaf5143516b72dbc6805cd30cca0cda94edb37160e37662fd17",
+    "bytes": 1060
+  },
+  {
+    "name": "@uiw/react-codemirror",
+    "version": "4.25.12",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40uiw%2Freact-codemirror/4.25.12",
+    "url": "https://raw.githubusercontent.com/uiwjs/react-codemirror/1e2e11f865860c6bd5029d71a2a09bd894ed5bad/LICENSE",
+    "sha256": "fd1f049b3bb5cbaf5143516b72dbc6805cd30cca0cda94edb37160e37662fd17",
+    "bytes": 1060
+  },
+  {
+    "name": "redis",
+    "version": "5.12.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/redis/5.12.1",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/6a447261fc77c4577aa5127fb269f8b69cfe6732/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "redis",
+    "version": "6.3.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/redis/6.3.0",
+    "url": "https://raw.githubusercontent.com/redis/node-redis/c3e8b53b0d9c97d05ca674f92a24a9ee91a50a0e/LICENSE",
+    "sha256": "a57b250a5bf03d7afe55b74063313f2adb7b00d546c0ab149a89398333fe3cc8",
+    "bytes": 1074
+  },
+  {
+    "name": "rehype-katex",
+    "version": "7.0.1",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/rehype-katex/7.0.1",
+    "url": "https://raw.githubusercontent.com/remarkjs/remark-math/88a9497e1ede93b958237c85edbf5651faeca7af/license",
+    "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+    "bytes": 1098
+  },
+  {
+    "name": "remark-math",
+    "version": "6.0.0",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/remark-math/6.0.0",
+    "url": "https://raw.githubusercontent.com/remarkjs/remark-math/d5d0660b150810a535bbb07eac6cc96a4510aa24/license",
+    "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+    "bytes": 1098
+  }
+]

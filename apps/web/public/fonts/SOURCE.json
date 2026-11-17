@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "pathBase": "repository-root",
-  "scope": "Exact retained Inter font bytes and original OFL notice; not the MiSans redistribution review or final-artifact authorization.",
+  "scope": "Retained Inter font and original OFL notice.",
   "reviewedOn": "2026-11-14",
   "evidenceMethod": "Local byte lengths and Git blob SHA1 identities matched the official immutable-commit GitHub Contents API; SHA256 fingerprints identify the retained local bytes.",
   "upstreams": {
@@ -48,7 +48,6 @@
   ],
   "limitations": [
     "The exact official v4.1 file is identified by its Git blob and bytes; the font's internal version string is not used as a release or download identity.",
-    "MiSans-Regular.woff2, MiSans-Medium.woff2 and MiSans-Semibold.woff2 are not covered by Inter's OFL. MISANS-GRANT remains OPEN in THIRD_PARTY_NOTICES.md.",
     "This source record does not establish unknown asset rights, final-package notice coverage or permission to publish the application."
   ]
 }

@@ -182,6 +182,7 @@ export function PmUserMenu({ collapsed = false, placement = "sidebar" }: { colla
           </>
         )}
         <div className={styles.separator} />
+        <a className={styles.item} href="/legal.html" target="_blank" rel="noreferrer">{t("许可与对应源码", "License and corresponding source")}</a>
         <button
           type="button"
           className={styles.item}

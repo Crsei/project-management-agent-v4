@@ -118,7 +118,7 @@ function TypographyGallery() {
     [t("控件", "Control"), "--text-control", 500, t("筛选本地示例", "Filter local examples")],
     [t("元数据", "Metadata"), "--text-meta", 500, t("EXAMPLE-01 · 仅本页", "EXAMPLE-01 · This page only")],
   ] as const
-  return <GallerySection title={t("字体", "Typography")} description={t("Inter · MiSans 中文回退 · 系统等宽字体；沿用 PM 字体与排版层级", "Inter · MiSans CJK fallback · system monospace; existing PM typography scale")}>
+  return <GallerySection title={t("字体", "Typography")} description={t("Inter · 系统中文字体 · 系统等宽字体；沿用 PM 字体与排版层级", "Inter · system CJK fallback · system monospace; existing PM typography scale")}>
     <div className={styles.panel}>{specimens.map(([label, token, weight, text]) => <div key={label} className={styles.typeRow}>
       <span className={styles.caption}>{label}</span><span style={{ fontSize: `var(${token})`, lineHeight: `var(${token}--line-height)`, fontWeight: weight }}>{text}</span><code>{token} / {weight}</code>
     </div>)}<div className={styles.typeRow}><span className={styles.caption}>{t("等宽字体", "Monospace")}</span><code>const example = "PM"</code><code>--font-mono</code></div></div>

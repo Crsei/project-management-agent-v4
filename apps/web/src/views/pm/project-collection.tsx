@@ -187,8 +187,6 @@ function ProjectCard({
   const taskCounts = project.taskCounts
   const days = projectDaysLeft(project.dueDate, readModel.referenceDate)
   const configuredArtwork = project.artwork !== null && Number.isInteger(project.artwork) && project.artwork >= 0 && project.artwork < 10
-  // One shared decorative cover is presentation, never configured project metadata.
-  const artwork = configuredArtwork ? `/images/project-backgrounds/${project.artwork! + 1}.webp` : "/images/project-backgrounds/1.webp"
   const daysLabel =
     days === null
       ? readModel.unavailableDateLabel ?? "—"
@@ -207,7 +205,7 @@ function ProjectCard({
       aria-labelledby={`${project.id}-title`}
     >
       <div className={styles.cover} data-artwork={project.coverVersionId ?? (configuredArtwork ? project.artwork : "decorative-default")} data-pm-cover-source={project.coverVersionId ? "artifact-version" : configuredArtwork ? "project" : "decorative-default"}>
-        {project.coverVersionId && readModel.renderCover ? readModel.renderCover(project, styles.coverImage) : <img className={styles.coverImage} src={artwork} alt="" aria-hidden="true" loading="lazy" />}
+        {project.coverVersionId && readModel.renderCover ? readModel.renderCover(project, styles.coverImage) : <span className={styles.decorativeCover} aria-hidden="true" />}
         <div className={styles.coverTop}>
           <Badge
             className={styles.coverStatus}

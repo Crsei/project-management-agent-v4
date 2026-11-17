@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { writeSourceOffer } from "../../../scripts/source-offer.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -677,6 +678,11 @@ async function installationModes(directory) {
 // A real two-level 7z container fixture exercises member listing/extraction. It
 // is deliberately NOT an executable NSIS installer or native execution evidence.
 async function sealPayload(output, manifest, payloadRoot = join(dirname(output), "payload")) {
+  const webDist = join(payloadRoot, "resources/workspace-runtime/apps/web/dist");
+  if (!fs.existsSync(join(webDist, "corresponding-source"))) {
+    await put(webDist, "legal.html", await readFile(new URL("../../web/public/legal.html", import.meta.url), "utf8"));
+    await writeSourceOffer({ dist: webDist, archive: join(output, "desktop-source.tar.gz"), commit: manifest.source.commit, dirty: false, notices: new URL("../../../THIRD_PARTY_NOTICES.md", import.meta.url) });
+  }
   await installationModes(join(payloadRoot, "resources/workspace-runtime"));
   const scratch = join(dirname(output), "archive-fixture");
   const stamp = JSON.parse(await readFile(join(payloadRoot, "resources/desktop-install-stamp.json"), "utf8"));

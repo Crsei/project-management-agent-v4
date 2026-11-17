@@ -50,7 +50,7 @@ node scripts/release-package.mjs verify --directory <已生成目录>
 - 源码证据不推送容器镜像、npm 包、桌面安装器或更新源；不创建签名／公证材料，也不部署服务。
 - 桌面发行需要仓库／组织允许对应作业请求 `contents: write`；权限不足直接失败，不降级为无校验发布。
 - draft 不会被客户端识别为可用更新；只有显式 `publish` 且全部门禁通过才改变可见性。
-- 四个记录在案的发行 blocker（字体授权、素材来源、最终产物 notices、AGPL 对应源码入口）仍以 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES.md#release-blockers) 为准；流水线通过许可脚本不代表这些事项已经闭合。
+- 四个记录在案的发行 blocker（字体授权、素材来源、最终产物 notices、AGPL 对应源码入口）的逐项状态以 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES.md#release-blockers) 为准；流水线通过许可脚本不代表这些事项已经闭合。
 - 真实 Provider、桌面 GUI、安装器生命周期、TLS/公网部署与业务验收必须分别提供证据。
 
 ## 桌面更新发行
@@ -91,7 +91,7 @@ gh workflow run desktop.yml --ref "v$VERSION" \
 
 1. 固定仓库、tag 指向、dispatch ref／SHA、根与桌面版本、通道、签名模式、准确成功 CI。
 2. 完整目标集合、相同公开源码字节、准确 native run／attempt、最终发行文件检查与 native payload smoke；Actions artifact 不是安装／GUI 验收。
-3. 原有 `--release` 授权、来源、OSV、签名及材料门禁。**四项 OPEN 仍阻塞，包括 unsigned preview；不提供跳过开关。**
+3. 原有 `--release` 授权、来源、OSV、签名及材料门禁。**任一 OPEN 即阻塞，包括 unsigned preview；不提供跳过开关。**
 4. 先创建 draft，上传完整材料，核对远端资产名、数量、大小与 SHA256，再在改变可见性前重复门禁。上传失败保持不可见；重试不删除／覆盖已有资产。
 
 ### 更新材料
@@ -106,3 +106,14 @@ gh workflow run desktop.yml --ref "v$VERSION" \
 本次基线为 `0.1.1-preview.1`，候选为 `0.1.1-preview.2`。两个包均包含更新客户端，第二个版本保持相同数据兼容指纹，分别绑定独立 SHA 和原生构建 run。历史 `v0.1.0-preview.1` 的包内部版本是 `0.1.0`，没有更新客户端，不能直接用作测试基线。
 
 先手动安装第一版并确认界面版本；第二版完整发布后，在第一版点击检查更新、下载、取消安装确认，再选择正常重启安装并核对第二版与数据。若要验证发布前后状态变化，可先构建两个版本，等待第一版安装确认后才发布第二版。仅构建成功、停在 draft 或门禁阻塞时，客户端不会得到第二版的公开更新；不能写成“双版本自动更新已通过”。完整范围与待办属于内部计划，不随公开树分发。
+
+### 仅发布 macOS（两个架构，必须签名）
+
+按[逐项发行材料核对](distribution-audit.md)准备，`desktop-signing` 环境配置 `DESKTOP_MAC_CSC_LINK`、`DESKTOP_MAC_CSC_KEY_PASSWORD`（Developer ID Application）、`DESKTOP_APPLE_ID`、`DESKTOP_APPLE_APP_SPECIFIC_PASSWORD`、`DESKTOP_APPLE_TEAM_ID`，并将期望 Team ID 环境变量 `DESKTOP_MAC_TEAM_ID` 与证书、公证团队核对一致。私钥/密码只放受保护的 secrets，不进仓库、日志或讨论。只选择两个 Mac 目标，不需 Windows 证书，不能改为 unsigned，也不能少一个架构。使用签名测试模式先取得两个架构的审阅材料；与正式发布分开：
+
+```sh
+gh workflow run desktop.yml --ref main -f distribution=signed \
+  -f windows_only=false -f macos_only=true -f install_e2e=false -f release_action=none
+```
+
+待准确 tag、同 SHA CI、授权门禁与受保护环境满足，再按上面的 draft/publish 命令显式指定 `distribution=signed windows_only=false macos_only=true` 及同一组版本、通道和来源参数。

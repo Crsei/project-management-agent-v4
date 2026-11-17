@@ -7,7 +7,9 @@ import { prepackApplication } from "./application-asar.mjs";
 import { inspectDeployment, run, stageWorkspace } from "./stage-workspace.mjs";
 import { inspectPackagedApplication } from "./packaged-application.mjs";
 import { inspectFinalArtifacts } from "./final-artifact.mjs";
-import { captureSource, collectLegal, fileRecord, observePackagingPhase, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
+import { checkRetiredAssets } from "../../../scripts/retired-release-assets.mjs";
+import { writeSourceOffer } from "../../../scripts/source-offer.mjs";
+import { archiveDesktopSource, captureSource, collectLegal, fileRecord, observePackagingPhase, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
 import { computeMigrationsSha256, createInstallStamp } from "./install-stamp.mjs";
 import { configuredArtifactNames } from "./delivery-assets.mjs";
 import { peFileRecord, windowsSignerIdentity } from "./signatures.mjs";
@@ -67,18 +69,23 @@ try {
   const sourceRoot = join(staging, "source");
   const source = await captureSource(sourceRoot);
   const sourceIdentity = { commit: source.commit, dirty: source.dirty, sha256: source.sha256 };
+  const webDist = join(staging, "fresh-web");
   const builderOutput = join(staging, "builder-output");
   await observePackagingPhase("buildWorkspace", async () => {
     const pnpm = process.env.npm_execpath;
     if (!pnpm) throw new Error("Run desktop packaging through pnpm.");
     await run(process.execPath, [pnpm, "run", "build:agent"]);
-    await run(process.execPath, [pnpm, "run", "build:web", "--config", join(desktopRoot, "../web/vite.desktop.config.mjs")]);
+    await run(process.execPath, [pnpm, "run", "build:web", "--config", join(desktopRoot, "../web/vite.desktop.config.mjs"), "--outDir", webDist]);
+    await checkRetiredAssets(webDist);
     await run(process.execPath, [join(desktopRoot, "scripts/build.mjs")]);
   });
   const application = join(staging, "application");
   const workspaceRuntime = join(staging, "workspace-runtime");
-  await observePackagingPhase("stageWorkspace", () => stageWorkspace(workspaceRuntime, application));
+  await observePackagingPhase("stageWorkspace", () => stageWorkspace(workspaceRuntime, application, { webDist }));
   await copyFile(join(desktopRoot, "package.json"), join(workspaceRuntime, "apps/desktop/package.json"), constants.COPYFILE_EXCL);
+  const sourceArchive = join(staging, "desktop-source.tar.gz");
+  await archiveDesktopSource(sourceRoot, source, sourceArchive);
+  await writeSourceOffer({ dist: join(workspaceRuntime, "apps/web/dist"), archive: sourceArchive, commit: source.commit, dirty: source.dirty, notices: join(sourceRoot, "THIRD_PARTY_NOTICES.md") });
   const installStamp = createInstallStamp({ commit: source.commit, version: manifest.version, source: { sha256: source.sha256, dirty: source.dirty },
     signing: mode, platform: process.platform, arch: process.arch, distribution: process.platform === "win32" ? "nsis" : "dmg",
     ownership: { installation: process.platform === "darwin" ? "os-managed" : "self", scope: "per-user" },
@@ -190,7 +197,7 @@ try {
   requireCleanVulnerabilityReport(vulnerabilityScan.report);
   await requireUnchangedSource(source);
   const delivery = await observePackagingPhase("writeReleaseMaterials", () => writeReleaseMaterials({
-    output, resources, platform: process.platform, sourceRoot, source, legalRoot, legalCollected: true,
+    output, resources, platform: process.platform, sourceRoot, source, sourceArchive, legalRoot, legalCollected: true,
     manifest: {
       version: manifest.version, target, signing: mode,
       signingDetail: mode === "unsigned" && process.platform === "darwin" ? "ad-hoc only; not Developer ID signed or notarized" : mode,

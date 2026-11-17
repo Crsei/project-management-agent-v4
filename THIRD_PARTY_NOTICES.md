@@ -4,7 +4,7 @@
 
 来源身份、固定版本、原始文件哈希及本地适配以各组件已有 `source-manifest.json` / `source-pin.json`、`LICENSING.md`、`SYNC.md` 为准；字体和营销静态资产的精确字节记录分别见 [Web 字体来源](apps/web/public/fonts/SOURCE.json)与[营销资产来源](apps/marketing/public/fonts/SOURCE.json)。本文件是索引和发布阻塞记录，不重复维护上述文件清单。下述本地静态审阅不代表已生成或验收发布包。
 
-根 `LICENSE` 逐字保留用户指定 Plane 仓库的 GNU AGPL v3 标准全文，只含 FSF 对许可文本的版权，不冒用 Plane 项目版权。Plane 的 [公开声明](https://github.com/makeplane/plane#license) 为 AGPL v3.0；本次读取的本地 `package.json` 为旧标识 `AGPL-3.0`，没有项目级“or later”声明。许可证附录中的示例不自动为本项目选择 later。涉及网络交互、源码和二进制分发时，必须履行对应源码提供等适用义务。[本项目源码仓库](https://github.com/Crsei/project-management-agent-v4)已公开，但公开 HEAD 不证明当前本地未提交修改或实际部署/成品的对应源码已提供；版本绑定、适用交互法律声明和网络源码获取入口仍待验收。
+根 `LICENSE` 逐字保留用户指定 Plane 仓库的 GNU AGPL v3 标准全文，只含 FSF 对许可文本的版权，不冒用 Plane 项目版权。Plane 的 [公开声明](https://github.com/makeplane/plane#license) 为 AGPL v3.0；本次读取的本地 `package.json` 为旧标识 `AGPL-3.0`，没有项目级“or later”声明。许可证附录中的示例不自动为本项目选择 later。涉及网络交互、源码和二进制分发时，必须履行对应源码提供等适用义务。[本项目源码仓库](https://github.com/Crsei/project-management-agent-v4)已公开，但公开 HEAD 不证明当前本地未提交修改或实际部署/成品的对应源码已提供；按[发行审计说明](docs/guides/distribution-audit.md)从实际成品验证版本绑定、交互声明和源码下载。
 
 ## Vendored source
 
@@ -26,12 +26,12 @@
 | 本地资产 | 现有来源与许可证据 | 发布边界 |
 | --- | --- | --- |
 | `apps/web/src/assets/fonts/InterVariable.woff2` | [Inter OFL-1.1 全文](apps/web/public/fonts/Inter-LICENSE.txt)，`Copyright (c) 2016 The Inter Project Authors`；[Inter upstream](https://github.com/rsms/inter)，官方 v4.1，提交 `e3a3d4c57d5ecc01453a575621882a384c1995a3` | [来源记录](apps/web/public/fonts/SOURCE.json)将字体及现有 OFL 原文字节绑定到同一官方提交的 Git blob、bytes 和 SHA256；字体不变，许可原文继续随 Web `public/fonts/` 分发。此来源链不关闭其他资产或最终产物门禁 |
-| `apps/web/src/assets/fonts/MiSans-{Regular,Medium,Semibold}.woff2` | [既有 NOTICE](apps/web/public/fonts/MiSans-NOTICE.txt)；[本次保存的官方网页协议文本](apps/web/public/fonts/MiSans-LICENSE.txt)；[小米官方来源](https://hyperos.mi.com/font/en/download/)（2026-11-05 查阅） | **不是 OFL 或 MIT**。官方页面授予有条件、不可转让、可撤销的使用许可，要求明确标注使用 MiSans，禁止改编，并限制字体本体再分发。网页允许分发使用字体创作的作品，但不能据此推定公开仓库内 WOFF2 本体或转换行为已获授权；当前文件与原始下载协议版本的对应关系未记录，保留发布阻塞 |
+| MiSans（历史） | 三份 WOFF2 已移除；[保留的历史协议](apps/web/public/fonts/MiSans-LICENSE.txt)不作为授权依据 | 当前仅自托管 Inter OFL，中文使用系统回退，不复制系统字体。旧安装包与旧提交不在本次放行范围 |
 | `apps/marketing/public/type/dm-sans-*.woff2` | [DM Sans OFL-1.1 全文](apps/marketing/public/fonts/dm-sans-OFL.txt)，`Copyright 2014 The DM Sans Project Authors`；[DM Fonts upstream](https://github.com/googlefonts/dm-fonts) | 两份现有子集及 OFL 与直接分发来源 `t3code@d53873b6a4799e87afd63c8d288ef0089f5a3748` 的准确 Git blob/bytes 相同，见[来源记录](apps/marketing/public/fonts/SOURCE.json)；保留 OFL，不宣称取得最初下载/子集操作日志 |
 | `apps/marketing/public/type/jetbrains-mono-latin.woff2` | [JetBrains Mono OFL-1.1 全文](apps/marketing/public/fonts/jetbrains-mono-OFL.txt)，`Copyright 2020 The JetBrains Mono Project Authors`；[upstream](https://github.com/JetBrains/JetBrainsMono) | 现有子集及 OFL 与上述 t3code 固定提交的准确 Git blob/bytes 相同，见[来源记录](apps/marketing/public/fonts/SOURCE.json)；保留 OFL，不将字体改授 AGPL 或 MIT |
-| 营销站 t3code 视觉适配与 `apps/marketing/public/harnesses/*.svg` | 根 README 与 `v4.css` 标识来自/参考 `t3code/apps/marketing`；独立站点保留 [t3code MIT 原文](apps/marketing/public/LICENSE.t3code)及[静态 notices](apps/marketing/public/THIRD_PARTY_NOTICES.txt)；六个现有 SVG 的直接字节来源为上述 `d53873b6…` 固定提交，见[来源记录](apps/marketing/public/fonts/SOURCE.json) | Provider 的 t3code manifest **未收录营销文件**，不能套用其 pin。该资产记录不覆盖其他营销改写源码；六个 Agent 标志的第三方原始权利与商标/品牌使用条件仍待核对，保留 MIT 不意味着品牌授权或背书 |
-| `apps/web/public/images/project-backgrounds/1.webp` 至 `10.webp` | 背景图被页面直接引用；本仓未找到这些背景图的逐资产来源/许可台账 | 保留现有素材，仍需实际来源、作者/授权；不推定其来自某图库或 t3code，也不自动赋予许可 |
-| Dovspace Web／营销站 favicon 与品牌图形、`apps/desktop/build/` 图标及安装器图形 | 用户提供验证板，由其确认移除额外折面后的重建 SVG；[重建来源记录](apps/desktop/assets/brand-source.json)绑定参考图片与母版 SHA256、视觉确认范围和导出工具；[导出脚本](scripts/generate-brand-assets.mjs)从同一母版生成各端资产 | 已记录本次视觉重建与派生过程，不等于取得原始矢量稿、证明参考图权属或商标注册；原始作者／授权及公开分发权仍待核对，不自动关闭资产发布门禁 |
+| 营销站 t3code 视觉适配 | 保留 [t3code MIT 原文](apps/marketing/public/LICENSE.t3code) 与 [营销 notices](apps/marketing/public/THIRD_PARTY_NOTICES.txt) | 不再分发六个营销品牌 SVG，改用普通产品名与首字母，不主张品牌授权或背书 |
+| 项目卡片默认封面 | 使用本项目直接编写的 CSS 渐变和既有色值 | 旧版十张来源不明的 WebP 已移除；不影响用户自己的已上传封面 |
+| Dovspace Web／营销站 favicon 与品牌图形、`apps/desktop/build/` 图标及安装器图形 | 用户提供验证板，由其确认移除额外折面后的重建 SVG；[重建来源记录](apps/desktop/assets/brand-source.json)绑定参考图片与母版 SHA256、视觉确认范围和导出工具；[导出脚本](scripts/generate-brand-assets.mjs)从同一母版生成各端资产 | 2026-11-17 参考板及重建图形的权利人明确确认拥有权利并同意公开随源码和安装包分发；不宣称商标注册 |
 
 npm 依赖（包括图标库）按**实际安装版本及实际进入产物的依赖图**保留其自身许可，不因使用 `lucide-react`、`@phosphor-icons/react` 等包名就推定所有本地图标都来自该包。远程 registry/logo URL 不是已下载的本地资产，也不是商标使用授权。
 
@@ -42,7 +42,7 @@ npm 依赖（包括图标库）按**实际安装版本及实际进入产物的�
 - **Web**：`vendor/openhands-extensions/scripts/web-build.mjs` 保留 OpenHands 原许可、现有来源/适配清单及共享 cc-switch notices，并为实际 OpenHands/cc-switch 可达模块依赖收集许可；没有 notice 且没有已审阅上游补件时失败。该范围**不是整个 PM/Provider Web bundle** 的完整许可审计。`public/` 本次补齐自有代码 AGPL、t3code MIT 与明确来源的 shadcn MIT；它们及字体 notices 需随静态产物保留，脚本核对公开许可副本的原文内容。
 - **Agent**：`apps/server/agent/scripts/package.mjs` 将根 `LICENSE` 与本文件纳入真实 transfer/hash 清单并保留在 `licenses/provenance/`；同时复制实际磁盘依赖资源、按构建输入发现的 bundled notices，以及 t3code、cc-switch、OpenHands 来源记录。原生 cc-switch 的 `cc-switch.mjs` 另收集目标 Cargo 图及原许可。bundled 清单可以记录空 `notices`，因此“打包成功”本身不等于所有依赖授权齐全；最终包还需逐项核验。通用 SPDX 文本仅是许可条款，不替代上游要求的著作权/NOTICE。依赖聚合包的生成 metadata 不用于将第三方依赖统一重新声明为 AGPL。
 - **Desktop**：`apps/desktop/scripts/stage-workspace.mjs` 合并 Agent legal 目录、Web 产物、automation vendor，检查根许可证与总 notices 已随 Agent 保留，并调用 `license-notices.mjs` 收集根/桌面/Web 生产依赖随包提供的 legal 文件。collector 的 `index.json` 可记录空文件列表或空 `license`，不可把它当最终授权门禁。`prepare-runtime.mjs` 保留固定 Node/PostgreSQL 完整二进制分发的 LICENSE、库/share 及 runtime notices；Electron 自身与其 bundled Chromium/其他组件 notices 仍需在目标平台成品中确认，不能只检查 Electron npm 包包装层。builder 将受管 runtime 目录复制进安装资源。
-- **Marketing**：Astro 的 `public/` 保留自有代码 AGPL、两种字体 OFL、t3code MIT、静态 notices 及 `fonts/SOURCE.json` 资产字节来源记录。原许可和已知直接来源不代表六个品牌 SVG 的全部权利已闭合；部署时不得剔除上述 legal/来源文件。
+- **Marketing**：Astro 的 `public/` 保留自有代码 AGPL、两种字体 OFL、t3code MIT、静态 notices 及 `fonts/SOURCE.json` 资产字节来源记录。不再分发六个旧品牌图标；部署时不得剔除上述 legal/来源文件。
 
 ## Release blockers
 
@@ -52,10 +52,10 @@ npm 依赖（包括图标库）按**实际安装版本及实际进入产物的�
 | --- | --- | --- |
 | OWN-LICENSE | RESOLVED | 用户已明确采用 Plane 相同许可证；根 [LICENSE](LICENSE) 为完整 GNU AGPL v3 正文，本项目声明 `AGPL-3.0-only`。此决定仅解决自有代码许可证选择，不授予未知第三方权利。 |
 | UI-OWNERSHIP | RESOLVED | 项目所有者确认历史 UI 移植代码为其本人作品；本项目将 `apps/web` 的 UI/视图作为自有代码维护，第三方部分保留各自 notice，见 [UI 归属说明](docs/architecture/ui-ownership.md)。 |
-| MISANS-GRANT | OPEN | 确认当前三份 WOFF2 的原始下载/版本、是否转换及随附协议，确认源码仓库和 Web/桌面分发字体本体被许可；现存使用声明和官方网页不是这一对应关系的证明。 |
-| ASSET-ORIGINS | OPEN | Inter、三份营销 OFL 字体及六个营销 SVG 的直接来源版本/字节链已记录；Dovspace 产品图形另有用户确认的视觉重建与派生记录，但参考图权属／公开分发授权仍待确认。仍需补齐背景 WebP 来源/权属，核对六个品牌 SVG 的第三方原始权利与使用条件，并确认参考演示文字的再分发权利。不以“合成”“fixture”或目录名称代替证据。 |
+| MISANS-GRANT | RESOLVED | 当前源码不含三份字体文件，Web 使用 Inter OFL + 系统字体；[旧素材指纹](scripts/retired-release-assets.json)供源码及静态产物复查。不溯及旧包，也不将移除记为小米授予许可。 |
+| ASSET-ORIGINS | RESOLVED | [Dovspace 权利人确认记录](apps/desktop/assets/brand-source.json)覆盖参考板重建图形公开分发；Inter／营销 OFL 原字节和许可仍有来源清单。已移除十张背景、六个品牌图标；旧 audio-playground 参考演示文字、生成器、录音及 conversation-8 媒体均不在当前分发树。保留[审计记录](docs/guides/distribution-audit.md)，不为历史资产补授权。 |
 | ARTIFACT-NOTICES | OPEN | 对最终源码、Web、Agent、营销站与各目标桌面安装包核对实际依赖/原生运行时/嵌套组件的许可及 notices，处理空 notice 或空 license 项，并保留本文件及适用的原始许可。现有部分 collector 不是法律兼容性或发布批准。 |
-| AGPL-SOURCE | OPEN | 公开源码仓库已存在；2026-11-14 查证公开 main 为 `bffc02556ba9b94f3238adbcd480b17cb787604b`，但尚未验收当前本地未提交修改及实际发布/部署成品的对应关系。仍须提供包含构建/安装脚本与本地修改的准确对应源码，并完成适用交互法律声明和网络源码获取入口；根 LICENSE 或公开 HEAD 存在不能代替履约。 |
+| AGPL-SOURCE | OPEN | 已实现无需登录的法律声明及同源准确源码包；桌面最终展开验证绑定安装包内下载文件与公开材料。须完成本代本机构建/下载核验后审阅，其他部署不得用未绑定开发页替代。见[审计说明](docs/guides/distribution-audit.md)。 |
 
 ## Integrity check versus release authorization
 

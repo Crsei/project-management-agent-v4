@@ -1,6 +1,7 @@
 import { copyFile, lstat, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { verifySourceOffer } from "../../../scripts/source-offer.mjs";
 import { inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
 import { fileRecord, refreshVerification, validateSource, verifyCorrespondingSourceArchive } from "./release-materials.mjs";
 import { inside, requireNativeTarget, requirePinnedNode } from "./runtime-manifest.mjs";
@@ -132,6 +133,7 @@ export async function verifyDelivery(output, { nativeSmoke = false, filesOnly = 
       if (report.checks?.application?.status !== "passed" || report.checks.application.sha256 !== checked.application.sha256
         || report.checks.application.version !== checked.application.version)
         throw new Error("Final ASAR bytes differ from the recorded application verification report.");
+      await verifySourceOffer(join(resources, "workspace-runtime/apps/web/dist"), manifest.source.commit, manifest.materials.find(m => m.path === "desktop-source.tar.gz")?.sha256);
       const currentSBOM = await inspectShippedSBOM(resources, { ...manifest, electronVersion: manifest.toolchain.electron, artifacts: manifest.artifacts });
       if (!sameIdentity(currentSBOM, JSON.parse(await readFile(join(output, "desktop-sbom.cdx.json"), "utf8"))))
         throw new Error("SBOM differs from actual final shipped closures.");
