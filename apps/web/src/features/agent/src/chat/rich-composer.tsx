@@ -23,6 +23,7 @@ import { pmReferenceInputSchema } from "@agent-workspace/contracts/pm-references
 import type { PmReference } from "../pm/pm-types";
 import { clipboardAttachmentSchema, prepareComposerContextAttachment, readPreparedComposerAttachment } from "./composer-context-attachments";
 import { ComposerAttachmentStrip } from "./composer-attachment-strip";
+import { COMPOSER_PROMPT_LIMIT, composerPromptTooLong } from "./composer-limit";
 import { SkillContextIcon } from "./context-chip-parts";
 import { MESSAGE_CONTEXT_CLIPBOARD_TYPE as CONTEXT_CLIPBOARD_TYPE, contextClipboardPlainText } from "./message-context-clipboard";
 
@@ -283,7 +284,7 @@ function RichComposerEditor(props: Props) {
         const thread = aui.thread.getState();
         if (event.shiftKey && (event.ctrlKey || event.metaKey) && thread.capabilities.queue && aui.composer.getState().canSend) {
           event.preventDefault();
-          if (!live.current.props.beforeSend?.()) aui.composer.send({ steer: true });
+          if (!composerPromptTooLong(aui.composer.getState().text) && !live.current.props.beforeSend?.()) aui.composer.send({ steer: true });
           return true;
         }
         if (event.shiftKey || event.altKey || (thread.isRunning && !thread.capabilities.queue && thread.voice === undefined)) return false;
@@ -575,6 +576,7 @@ function RichComposerEditor(props: Props) {
   return <div className="rich-composer" data-editing={props.editing || undefined}>
     <ComposerAttachmentStrip attachments={attachments} disabled={disabled} onRemove={removeAttachment} />
     <EditorContent editor={editor} />
+    {composerPromptTooLong(text) && <p role="alert" className="px-2 text-xs text-destructive">{t(`消息超过 ${COMPOSER_PROMPT_LIMIT.toLocaleString()} 字符，请缩短后发送。`, `Message exceeds ${COMPOSER_PROMPT_LIMIT.toLocaleString()} characters; shorten it before sending.`)}</p>}
     {contextError && <p role="alert" className="px-2 text-xs text-destructive">{contextError}</p>}
     <div className="rich-composer-tools">
       <button type="button" disabled={disabled || !editor} aria-pressed={!!state?.code} title={t("切换代码块；代码块内 Enter 换行", "Toggle code block; Enter inserts a line inside code")}

@@ -27,6 +27,7 @@ import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
 import { useGenerationRecords, useMessageTimes } from "@agent/src/chat/generation-times";
+import { COMPOSER_PROMPT_LIMIT, composerPromptTooLong } from "@agent/src/chat/composer-limit";
 import { ThreadFind } from "@agent/src/chat/thread-find";
 import "@agent/src/chat/composer-shell.css";
 import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
@@ -388,6 +389,7 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
   const actionsBlocked = !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || suggestions.blocked || quotePending || contextDraft.blocked || submitting;
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col" onSubmit={(event) => {
+      if (composerPromptTooLong(aui.composer.getState().text)) { event.preventDefault(); return; }
       if (actionsBlocked || threadRunning || handleSendCommand()) { event.preventDefault(); return; }
       const composer = aui.composer.getState();
       if (!composer.text.trim() && !composer.attachments.length && (contextDraft.items.length || pmWorkspace.references.length)) {
@@ -436,9 +438,12 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
   const provider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : undefined;
   const effectiveOptions = modelOptions ?? provider?.modelPreferences?.options[model];
+  const tooLong = composerPromptTooLong(prompt);
   const sendBlockedReason = historyBlocked
     ? t("会话历史未恢复，发送已暂停。", "Session history is not restored; sending is paused.")
-    : saveError
+    : tooLong
+      ? t(`消息超过 ${COMPOSER_PROMPT_LIMIT.toLocaleString()} 字符，请缩短后发送。`, `Message exceeds ${COMPOSER_PROMPT_LIMIT.toLocaleString()} characters; shorten it before sending.`)
+      : saveError
       ? t("会话参数保存失败，先重试保存。", "Saving session settings failed; retry the save first.")
       : saving
         ? t("正在保存会话参数…", "Saving session settings…")
