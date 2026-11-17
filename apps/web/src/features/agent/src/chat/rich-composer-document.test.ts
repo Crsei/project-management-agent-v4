@@ -156,6 +156,7 @@ const listSchema = getSchema([
   Node.create({ name: "orderedList", group: "block", content: "listItem+", addAttributes: () => ({ start: { default: 1 } }) }),
   Node.create({ name: "listItem", content: "paragraph block*" }),
   Node.create({ name: "blockquote", group: "block", content: "paragraph+" }),
+  Node.create({ name: "heading", group: "block", content: "inline*", addAttributes: () => ({ level: { default: 1 } }) }),
   Mark.create({ name: "bold" }), Mark.create({ name: "italic" }), Mark.create({ name: "strike" }), Mark.create({ name: "code" }),
 ]);
 
@@ -177,5 +178,16 @@ test("flat blockquotes round-trip and map source carets", () => {
   assert.equal(serializeComposerDocument(doc), source);
   for (const offset of [2, 3, 4, 5, 8, 9, 10, 11]) {
     assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+  }
+});
+
+test("flat headings round-trip and map source carets", () => {
+  for (const source of ["# Title", "### Sub", "###### Deep"]) {
+    const doc = listSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source);
+    const prefix = source.indexOf(" ") + 1;
+    for (const offset of [prefix, prefix + 1, source.length]) {
+      assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `${source} offset ${offset}`);
+    }
   }
 });

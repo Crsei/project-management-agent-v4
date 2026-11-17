@@ -58,6 +58,12 @@ export function parseComposerDocument(source: string, citation?: QuoteInfo, cont
         }
       }
     }
+    const headingMatch = /^(#{1,6})\s+(.*)$/u.exec(line);
+    if (headingMatch) {
+      content.push({ type: "heading", attrs: { level: headingMatch[1]!.length }, content: inlineContent(headingMatch[2]!) });
+      index++;
+      continue;
+    }
     const quoteMatch = /^>\s?(.*)$/u.exec(line);
     if (quoteMatch) {
       const paragraphs: JSONContent[] = [];
@@ -185,6 +191,10 @@ function listSource(node: DocumentNode): string {
 }
 
 function blockSource(node: DocumentNode): string {
+  if (node.type.name === "heading") {
+    const level = Math.min(6, Math.max(1, Number(node.attrs.level) || 1));
+    return `${"#".repeat(level)} ${composerInlineSource(node)}`;
+  }
   if (node.type.name === "blockquote") {
     const lines: string[] = [];
     node.forEach(child => { lines.push(`> ${composerInlineSource(child)}`); });
@@ -270,6 +280,9 @@ export function composerSourceCursor(doc: DocumentNode, position: number): numbe
       const local = Math.max(0, position - blockPosition - 1);
       if (block.type.name === "codeBlock") {
         answer = sourceOffset + codeBlockOpening(block).length + 1 + Math.min(local, block.content.size);
+      } else if (block.type.name === "heading") {
+        const prefix = Math.min(6, Math.max(1, Number(block.attrs.level) || 1)) + 1;
+        answer = sourceOffset + prefix + inlineSourceOffset(block, Math.min(block.content.size, local));
       } else if (block.type.name === "blockquote") {
         let offset = 0;
         let done = false;
@@ -333,6 +346,9 @@ export function composerDocumentCursor(doc: DocumentNode, sourcePosition: number
       const local = Math.max(0, sourcePosition - sourceOffset);
       if (block.type.name === "codeBlock") {
         answer = blockPosition + 1 + Math.min(block.content.size, Math.max(0, local - codeBlockOpening(block).length - 1));
+      } else if (block.type.name === "heading") {
+        const prefix = Math.min(6, Math.max(1, Number(block.attrs.level) || 1)) + 1;
+        answer = blockPosition + 1 + (local > prefix ? inlinePositionAtSource(block, local - prefix) : 0);
       } else if (block.type.name === "blockquote") {
         let offset = 0;
         let found = false;
