@@ -4,6 +4,7 @@ import type { QuoteInfo } from "@assistant-ui/react";
 import type { MessageContextDraftItem } from "./message-context-store";
 import type { PmReference } from "../pm/pm-types";
 import type { ComposerContextAttachment } from "./composer-context-attachments";
+import { COMPOSER_MARKS, parseInlineMarkdown, serializeInlineText, serializedPrefixLength, sourceOffsetToTextIndex, type ComposerMark } from "./composer-inline-markdown.ts";
 
 export type ComposerContextPayload = { type: "native"; item: MessageContextDraftItem } | { type: "pm"; reference: PmReference } | { type: "attachment"; attachment: ComposerContextAttachment };
 
@@ -17,18 +18,27 @@ export function referenceLabel(kind: string, value: string): string {
 
 function inlineContent(text: string): JSONContent[] {
   const content: JSONContent[] = [];
-  let offset = 0;
-  for (const token of collectComposerInlineTokens(`${text} `)) {
-    if (token.start < offset || token.end > text.length) continue;
-    if (token.start > offset) content.push({ type: "text", text: text.slice(offset, token.start) });
-    content.push({ type: "composerReference", attrs: {
-      kind: token.type === "skill" ? "skill" : "file", value: token.value, source: token.source,
-    } });
-    offset = token.end;
+  for (const segment of parseInlineMarkdown(text)) {
+    const marks = segment.marks.length ? segment.marks.map(type => ({ type })) : undefined;
+    let offset = 0;
+    for (const token of collectComposerInlineTokens(`${segment.text} `)) {
+      if (token.start < offset || token.end > segment.text.length) continue;
+      if (token.start > offset) content.push({ type: "text", text: segment.text.slice(offset, token.start), ...(marks ? { marks } : {}) });
+      content.push({ type: "composerReference", attrs: {
+        kind: token.type === "skill" ? "skill" : "file", value: token.value, source: token.source,
+      }, ...(marks ? { marks } : {}) });
+      offset = token.end;
+    }
+    if (offset < segment.text.length) content.push({ type: "text", text: segment.text.slice(offset), ...(marks ? { marks } : {}) });
   }
-  if (offset < text.length) content.push({ type: "text", text: text.slice(offset) });
   return content;
 }
+
+const markNames = (node: DocumentNode): ComposerMark[] => node.isText
+  ? node.marks.map(mark => mark.type.name).filter((name): name is ComposerMark => (COMPOSER_MARKS as readonly string[]).includes(name))
+  : [];
+const textSourceLength = (text: string, marks: readonly ComposerMark[], count = text.length): number =>
+  serializedPrefixLength(text, count, marks);
 
 /** Source text, not editor HTML, remains the assistant-ui draft and wire format. */
 export function parseComposerDocument(source: string, citation?: QuoteInfo, contexts: readonly ComposerContextPayload[] = []): JSONContent {
@@ -121,7 +131,7 @@ export function codeBlockOpening(node: DocumentNode): string {
 }
 
 export function composerInlineSource(node: DocumentNode): string {
-  if (node.isText) return node.text ?? "";
+  if (node.isText) return serializeInlineText(node.text ?? "", markNames(node));
   if (node.type.name === "composerReference") return String(node.attrs.source ?? "");
   if (node.type.name === "composerCitation" || node.type.name === "composerContext") return "";
   if (node.type.name === "hardBreak") return "\n";
@@ -170,8 +180,13 @@ export function composerSourceCursor(doc: DocumentNode, position: number): numbe
         let offset = 0;
         block.forEach((child, childPosition) => {
           if (childPosition >= local) return;
-          const value = composerInlineSource(child);
-          offset += child.isText ? Math.min(value.length, local - childPosition) : value.length;
+          if (child.isText) {
+            const text = child.text ?? "";
+            const count = Math.min(text.length, local - childPosition);
+            offset += textSourceLength(text, markNames(child), count);
+          } else {
+            offset += composerInlineSource(child).length;
+          }
         });
         answer = sourceOffset + offset;
       }
@@ -199,12 +214,22 @@ export function composerDocumentCursor(doc: DocumentNode, sourcePosition: number
         let found = false;
         block.forEach((child, childPosition) => {
           if (found) return;
-          const value = composerInlineSource(child);
-          if (local <= offset + value.length) {
-            answer = blockPosition + 1 + childPosition + (child.isText ? local - offset : local > offset ? child.nodeSize : 0);
-            found = true;
+          if (child.isText) {
+            const text = child.text ?? "";
+            const value = textSourceLength(text, markNames(child));
+            if (local <= offset + value) {
+              answer = blockPosition + 1 + childPosition + sourceOffsetToTextIndex(text, local - offset, markNames(child));
+              found = true;
+            }
+            offset += value;
+          } else {
+            const value = composerInlineSource(child);
+            if (local <= offset + value.length) {
+              answer = blockPosition + 1 + childPosition + (local > offset ? child.nodeSize : 0);
+              found = true;
+            }
+            offset += value.length;
           }
-          offset += value.length;
         });
         if (!found) answer = blockPosition + 1 + block.content.size;
       }

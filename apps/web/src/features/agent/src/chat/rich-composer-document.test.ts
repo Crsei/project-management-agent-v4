@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getSchema, Node } from "@tiptap/react";
+import { getSchema, Mark, Node } from "@tiptap/react";
 import { serializeComposerFileLink } from "@agent-workspace/client-runtime";
 import {
   composerDocumentCursor, composerPasteSlice, composerSourceCursor, parseComposerDocument,
@@ -120,4 +120,30 @@ test("native context, PM revision and image payload atoms survive deletion/undo 
     assert.deepEqual(readComposerContexts(restored), contexts);
     assert.equal(serializeComposerDocument(restored), source);
   }
+});
+
+const markSchema = getSchema([
+  Node.create({ name: "doc", topNode: true, content: "block+" }),
+  Node.create({ name: "text", group: "inline" }),
+  Node.create({ name: "paragraph", group: "block", content: "inline*", addAttributes: () => ({ citationOnly: { default: false } }) }),
+  Node.create({ name: "codeBlock", group: "block", content: "text*", code: true, addAttributes: () => ({
+    language: { default: "" }, fence: { default: "```" }, originalOpening: { default: null },
+    originalLanguage: { default: null }, closing: { default: "```" }, hasBodyLine: { default: true },
+  }) }),
+  Node.create({ name: "composerReference", group: "inline", inline: true, atom: true, addAttributes: () => ({
+    kind: { default: "file" }, value: { default: "" }, source: { default: "" },
+  }) }),
+  Mark.create({ name: "bold" }), Mark.create({ name: "italic" }), Mark.create({ name: "strike" }), Mark.create({ name: "code" }),
+]);
+
+test("composer marks serialize to escaped Markdown and map source carets", () => {
+  const source = "**bold** and *italic* and ~~gone~~ and `code`";
+  const doc = markSchema.nodeFromJSON(parseComposerDocument(source));
+  assert.equal(serializeComposerDocument(doc), source);
+  for (const offset of [0, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 21, 22]) {
+    assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+  }
+  const literal = markSchema.nodeFromJSON(parseComposerDocument("\\*not italic\\*"));
+  assert.equal(serializeComposerDocument(literal), "*not italic*");
+  assert.equal(serializeComposerDocument(markSchema.nodeFromJSON(parseComposerDocument(serializeComposerDocument(literal)))), "*not italic*");
 });

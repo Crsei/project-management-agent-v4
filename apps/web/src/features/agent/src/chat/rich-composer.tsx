@@ -133,9 +133,9 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
 function composerExtensions() {
   return [
     StarterKit.configure({
-      blockquote: false, bold: false, bulletList: false, code: false, codeBlock: false,
-      dropcursor: false, heading: false, horizontalRule: false, italic: false, link: false,
-      listItem: false, listKeymap: false, orderedList: false, paragraph: false, strike: false, trailingNode: false, underline: false,
+      blockquote: false, bulletList: false, codeBlock: false,
+      dropcursor: false, heading: false, horizontalRule: false, link: false,
+      listItem: false, listKeymap: false, orderedList: false, paragraph: false, trailingNode: false, underline: false,
     }),
     Node.create({
       name: "paragraph", group: "block", content: "inline*", priority: 1000,
