@@ -103,3 +103,9 @@
 @supports (background-clip: text) or (-webkit-background-clip: text) { .native-shimmer { color: transparent; } }
 @keyframes native-working-shimmer { from { background-position: 150% 0; } to { background-position: -150% 0; } }
 @media (prefers-reduced-motion: reduce) { .native-shimmer { animation: none; background: none; color: var(--muted-foreground); } .native-group-details[data-live] { scroll-behavior: auto; } }
+
+.native-system-divider { display: flex; align-items: center; gap: .55rem; margin-block: .35rem; color: var(--muted-foreground); font-size: .72rem; }
+.native-system-divider > span:first-child, .native-system-divider > span:last-child { height: 1px; flex: 1; background: var(--border); }
+.native-system-divider[data-tone="error"] { color: var(--destructive); }
+.native-system-divider[data-tone="warning"] { color: var(--warning); }
+.native-system-divider[data-tone="error"] > span:first-child, .native-system-divider[data-tone="error"] > span:last-child { background: color-mix(in srgb, var(--destructive) 40%, var(--border)); }

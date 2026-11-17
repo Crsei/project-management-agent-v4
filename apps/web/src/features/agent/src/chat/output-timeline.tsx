@@ -316,7 +316,11 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
     })}
     {calls.filter(call => !rendered.has(call.operationId)).map(call => <PmToolCard key={`pm:${call.operationId}`} record={call} onUpdate={onUpdateCall} />)}
     {snapshot && <ChangedFilesSummary items={snapshot.items} />}
-    {work ? <WorkingRow state={work} /> : indicator && <div className="native-generation-status" role={indicator === "failed" ? "alert" : "status"}>{indicatorText}</div>}
+    {work ? <WorkingRow state={work} /> : indicator && <div className="native-system-divider" data-tone={indicator === "failed" ? "error" : indicator === "interrupted" ? "warning" : undefined} role={indicator === "failed" ? "alert" : "status"}>
+      <span aria-hidden="true" />
+      <span>{indicatorText}</span>
+      <span aria-hidden="true" />
+    </div>}
   </div>;
 }
 
