@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatDraftInput, ChatGenerationView, QueuedChatMessage, RemoteThread, StashedChatDraft, ThreadActionCapabilities } from "@agent-workspace/contracts/chat";
 import { flushThreadSettings } from "@agent/hooks/use-chat-settings";
 import { Button } from "@agent/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { workspaceClient } from "../network";
 import { useAgentText } from "../i18n";
 import { forkGeneration, getThreadActionCapabilities, rewindThreadConversation } from "./thread-actions";
@@ -13,7 +14,7 @@ import { contextInputLabel } from "./context-presentation";
 import { InlineComposerAttachment } from "./composer-context-attachments";
 import { PmContextChip } from "../pm/pm-reference-tray";
 import { readContextAttachmentBindings, reindexContextAttachmentBindings } from "./context-attachments";
-import { QuoteIcon } from "lucide-react";
+import { ChevronDownIcon, QuoteIcon } from "lucide-react";
 
 export type DraftInput = ChatDraftInput;
 const changed = "agent-message-actions-changed";
@@ -128,10 +129,17 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
     finally { if (target.current === threadId) setPending(false); }
   };
   return <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs" aria-label={t("排队和草稿暂存", "Queue and draft stash")}>
-    <Button type="button" size="sm" variant="ghost" disabled={disabled || pending || Boolean(unknown)} onClick={() => void save("queue")}>{t("加入队列", "Queue draft")}</Button>
-    <Button type="button" size="sm" variant="ghost" disabled={disabled || pending || Boolean(unknown)} onClick={() => void save("stash")}>{t("暂存草稿", "Stash draft")}</Button>
-    <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => { setOpen(!open); if (!open) void refresh().catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("草稿库", "Draft stash")}</Button>
-    <Button type="button" size="sm" variant="ghost" disabled={disabled || pending} onClick={() => { setSteerOpen(!steerOpen); if (!steerOpen) void getThreadActionCapabilities(threadId).then(value => { if (target.current === threadId) setCapabilities(value); }).catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("引导当前执行", "Steer current turn")}</Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button type="button" size="sm" variant="ghost" aria-label={t("草稿与队列", "Draft and queue")} />}>
+        <span>{t("草稿与队列", "Draft and queue")}</span><ChevronDownIcon aria-hidden="true" className="size-3" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" sideOffset={4} className="w-48">
+        <DropdownMenuItem disabled={disabled || pending || Boolean(unknown)} onSelect={() => void save("queue")}>{t("加入队列", "Queue draft")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={disabled || pending || Boolean(unknown)} onSelect={() => void save("stash")}>{t("暂存草稿", "Stash draft")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={pending} onSelect={() => { setOpen(!open); if (!open) void refresh().catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("草稿库", "Draft stash")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={disabled || pending} onSelect={() => { setSteerOpen(!steerOpen); if (!steerOpen) void getThreadActionCapabilities(threadId).then(value => { if (target.current === threadId) setCapabilities(value); }).catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("引导当前执行", "Steer current turn")}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
     {unknown && <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => void reconcileSave()}>{t("核对保存结果", "Check save result")}</Button>}
     {steerOpen && <section className="border-border basis-full space-y-2 rounded border p-2">
       <p>{t("引导直接发给当前活动轮次；队列是结束后才发送的新消息，两者不同。", "Steering changes the active native turn; a queued draft is a new message sent after it ends.")}</p>
