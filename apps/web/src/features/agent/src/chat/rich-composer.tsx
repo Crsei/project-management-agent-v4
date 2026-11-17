@@ -21,7 +21,8 @@ import { PM_REFERENCE_LIMIT, usePmIssueWorkspace } from "../pm/pm-issue-workspac
 import { chatContextInputSchema } from "@agent-workspace/contracts/message-context";
 import { pmReferenceInputSchema } from "@agent-workspace/contracts/pm-references";
 import type { PmReference } from "../pm/pm-types";
-import { clipboardAttachmentSchema, InlineComposerAttachment, prepareComposerContextAttachment, readPreparedComposerAttachment } from "./composer-context-attachments";
+import { clipboardAttachmentSchema, prepareComposerContextAttachment, readPreparedComposerAttachment } from "./composer-context-attachments";
+import { ComposerAttachmentStrip } from "./composer-attachment-strip";
 import { SkillContextIcon } from "./context-chip-parts";
 import { MESSAGE_CONTEXT_CLIPBOARD_TYPE as CONTEXT_CLIPBOARD_TYPE, contextClipboardPlainText } from "./message-context-clipboard";
 
@@ -29,8 +30,8 @@ import { MESSAGE_CONTEXT_CLIPBOARD_TYPE as CONTEXT_CLIPBOARD_TYPE, contextClipbo
 function ContextView({ node, deleteNode }: NodeViewProps) {
   const payload = node.attrs.payload as ComposerContextPayload | undefined;
   return <NodeViewWrapper as="span" className="rich-composer-context inline-flex max-w-full items-center gap-0.5" contentEditable={false}>
-    {payload?.type === "native" ? <MessageContextChip item={payload.item} /> : payload?.type === "pm" ? <PmContextChip reference={payload.reference} /> : payload?.type === "attachment" ? <InlineComposerAttachment attachment={payload.attachment} /> : <span role="status">Context unavailable</span>}
-    <ContextChipAction aria-label="Remove context" onClick={deleteNode}><XIcon /></ContextChipAction>
+    {payload?.type === "native" ? <MessageContextChip item={payload.item} /> : payload?.type === "pm" ? <PmContextChip reference={payload.reference} /> : payload?.type === "attachment" ? <span data-composer-attachment-anchor="" /> : <span role="status">Context unavailable</span>}
+    {payload?.type !== "attachment" && <ContextChipAction aria-label="Remove context" onClick={deleteNode}><XIcon /></ContextChipAction>}
   </NodeViewWrapper>;
 }
 const ComposerContext = Node.create({
@@ -534,7 +535,11 @@ function RichComposerEditor(props: Props) {
   }, [editor, disabled, props.suggestions?.inputRef]);
   useEffect(() => () => cancelAnimationFrame(frame.current ?? 0), []);
 
+  const removeAttachment = (id: string) => {
+    void aui.composer.attachment({ id }).remove().catch(cause => setContextError(cause instanceof Error ? cause.message : String(cause)));
+  };
   return <div className="rich-composer" data-editing={props.editing || undefined}>
+    <ComposerAttachmentStrip attachments={attachments} disabled={disabled} onRemove={removeAttachment} />
     <EditorContent editor={editor} />
     {contextError && <p role="alert" className="px-2 text-xs text-destructive">{contextError}</p>}
     <div className="rich-composer-tools">

@@ -1,0 +1,14 @@
+.composer-attachment-strip { display: flex; gap: .4rem; overflow-x: auto; padding: .1rem .1rem .2rem; scrollbar-width: thin; }
+.composer-attachment-tile { position: relative; display: flex; align-items: center; gap: .4rem; min-width: 0; max-width: 12rem; border: 1px solid var(--border); border-radius: .55rem; background: var(--surface-raised, var(--card)); padding: .25rem .35rem; }
+.composer-attachment-tile[data-error] { border-color: color-mix(in srgb, var(--destructive) 55%, var(--border)); }
+.composer-attachment-preview { display: block; width: 2.2rem; height: 2.2rem; flex: none; overflow: hidden; border: 0; border-radius: .35rem; padding: 0; background: var(--surface-hover, var(--card)); cursor: zoom-in; }
+.composer-attachment-preview img { width: 100%; height: 100%; object-fit: cover; }
+.composer-attachment-file { display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem; flex: none; border-radius: .35rem; background: var(--surface-hover, var(--card)); color: var(--muted-foreground); }
+.composer-attachment-file svg { width: 1rem; height: 1rem; }
+.composer-attachment-meta { display: flex; min-width: 0; flex-direction: column; line-height: 1.3; }
+.composer-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; }
+.composer-attachment-size { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: .65rem; font-variant-numeric: tabular-nums; }
+.composer-attachment-remove { display: inline-flex; align-items: center; justify-content: center; width: 1.2rem; height: 1.2rem; flex: none; border: 0; border-radius: .3rem; padding: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.composer-attachment-remove:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
+.composer-attachment-remove:disabled { opacity: .4; cursor: not-allowed; }
+.composer-attachment-remove svg { width: .75rem; height: .75rem; }

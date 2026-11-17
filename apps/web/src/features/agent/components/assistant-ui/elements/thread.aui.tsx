@@ -27,6 +27,7 @@ import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
 import { ThreadFind } from "@agent/src/chat/thread-find";
+import "@agent/src/chat/composer-shell.css";
 import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
@@ -154,7 +155,7 @@ export const Thread: FC<ThreadProps> = (props) => {
         // Reading width follows the browser's chat appearance preference.
         ["--thread-max-width" as string]: "var(--agent-chat-content-width, 720px)",
         ["--bubble-max-width" as string]: "560px",
-        ["--composer-bg" as string]: "var(--color-card)",
+        ["--composer-bg" as string]: "color-mix(in oklab, var(--color-card) 92%, transparent)",
         ["--composer-radius" as string]: "var(--radius-composer)",
         ["--bubble-radius" as string]: "var(--radius-bubble)",
         ["--composer-padding" as string]: "10px",
@@ -371,6 +372,7 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
+          style={{ backdropFilter: "blur(12px) saturate(1.08)", WebkitBackdropFilter: "blur(12px) saturate(1.08)" }}
           className="aui-composer-surface border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[var(--composer-shadow)] transition-[border-color] duration-[var(--motion-hover)] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
           {props.composerLeading}
