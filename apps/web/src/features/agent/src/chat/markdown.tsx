@@ -10,6 +10,7 @@ import { MarkdownCodeBlock, MarkdownTable } from "./markdown-blocks";
 import { MarkdownImage, MarkdownLink } from "./markdown-links";
 import { markdownNodeText } from "./markdown-rich-policy";
 import { splitDetailsBlocks } from "./markdown-details";
+import { remarkFenceTitle } from "./remark-fence-title";
 import styles from "./markdown.module.css";
 
 export interface MarkdownProps {
@@ -21,7 +22,7 @@ export interface MarkdownProps {
   documentPath?: string;
 }
 
-const remarkPlugins: NonNullable<StreamdownProps["remarkPlugins"]> = [...Object.values(defaultRemarkPlugins), remarkMath];
+const remarkPlugins: NonNullable<StreamdownProps["remarkPlugins"]> = [...Object.values(defaultRemarkPlugins), remarkMath, remarkFenceTitle];
 // No rehype-raw: author HTML stays inert. KaTeX generates only non-trusted math output.
 const rehypePlugins: NonNullable<StreamdownProps["rehypePlugins"]> = [[rehypeKatex, { throwOnError: false, strict: "error", trust: false, maxExpand: 1000, maxSize: 20 }]];
 const remarkRehypeOptions = { allowDangerousHtml: false };
@@ -45,7 +46,8 @@ export function Markdown({ content, locale = "en", streaming = false, className,
       const classNames = codeNode.properties.className;
       const languageClass = Array.isArray(classNames) ? classNames.find(value => typeof value === "string" && value.startsWith("language-")) : undefined;
       const language = typeof languageClass === "string" ? languageClass.slice("language-".length) : "";
-      return <MarkdownCodeBlock code={markdownNodeText(codeNode)} language={language} locale={locale} />;
+      const title = codeNode.properties?.["data-fence-title"];
+      return <MarkdownCodeBlock code={markdownNodeText(codeNode)} language={language} title={typeof title === "string" ? title : undefined} locale={locale} />;
     },
   }), [locale, documentPath]);
   const render = (value: string, key: string) => <Streamdown

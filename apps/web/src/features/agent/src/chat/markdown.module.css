@@ -317,3 +317,6 @@
 .detailsBlock { margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
 .detailsSummary { cursor: pointer; font-weight: 600; }
 .detailsBlock[open] .detailsSummary { margin-bottom: 6px; }
+
+.codeTitle { display: inline-flex; align-items: center; gap: .3rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-ibm-plex-mono); }
+.codeTitle svg { width: .8rem; height: .8rem; flex: none; }

@@ -1,5 +1,5 @@
 import { Fragment, useContext, useEffect, useId, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, Copy, Maximize2, WrapText } from "lucide-react";
+import { Check, Copy, FileCode, Maximize2, WrapText } from "lucide-react";
 import { StreamdownContext } from "streamdown";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@agent/components/ui/dialog";
@@ -75,7 +75,7 @@ function MermaidDiagram({ code, locale }: { code: string; locale: Locale }) {
   return <iframe className={styles.diagram} title={locale === "zh-CN" ? "Mermaid 图表（隔离预览）" : "Mermaid diagram (isolated preview)"} sandbox="" referrerPolicy="no-referrer" srcDoc={active.document} />;
 }
 
-export function MarkdownCodeBlock({ code, language, locale }: { code: string; language: string; locale: Locale }) {
+export function MarkdownCodeBlock({ code, language, title, locale }: { code: string; language: string; title?: string; locale: Locale }) {
   const { isAnimating: streaming } = useContext(StreamdownContext);
   const [wrap, setWrap] = useState(false);
   const [showDiagram, setShowDiagram] = useState(true);
@@ -83,7 +83,7 @@ export function MarkdownCodeBlock({ code, language, locale }: { code: string; la
   const mermaid = language.toLowerCase() === "mermaid";
   return <div className={styles.codeBlock} data-language={language} data-wrap={wrap}>
     <div className={styles.codeHeader}>
-      <span>{language || (chinese ? "纯文本" : "plain text")}</span>
+      {title ? <span className={styles.codeTitle} title={title}><FileCode aria-hidden="true" />{title}</span> : <span>{language || (chinese ? "纯文本" : "plain text")}</span>}
       <div className={styles.blockActions}>
         {mermaid && <Button type="button" variant="ghost" size="xs" aria-pressed={showDiagram} onClick={() => setShowDiagram(value => !value)}>{showDiagram ? (chinese ? "查看源码" : "Show source") : (chinese ? "查看图表" : "Show diagram")}</Button>}
         <Button type="button" variant="ghost" size="xs" aria-label={chinese ? "代码自动换行" : "Wrap code"} aria-pressed={wrap} onClick={() => setWrap(value => !value)}><WrapText aria-hidden="true" />{chinese ? "换行" : "Wrap"}</Button>
