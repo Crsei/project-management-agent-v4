@@ -1084,6 +1084,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
       open={detailsOpen}
       onClose={() => setDetailsOpen(false)}
       workspaceName={currentWorkspace?.name}
+      threadId={remoteId}
       threadTitle={title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}
       activity={currentThread?.sidebar.activity}
       environmentLabel={environment ? environment.agentWorkspaceId ? environment.agentWorkspaceName ?? currentWorkspace?.name ?? t("文件夹环境", "Folder environment") : t("仅对话", "Chat only") : currentWorkspace?.name}

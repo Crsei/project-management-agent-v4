@@ -1,13 +1,17 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { FolderOpenIcon, SlidersHorizontalIcon, XIcon } from "lucide-react";
 import styles from "./thread-details-panel.module.css";
 import { useAgentText } from "../i18n";
+import type { GitStatusResponse } from "@agent-workspace/contracts/inspector";
+import { inspectUrl } from "../workspace/inspector/api";
+import { workspaceClient } from "../network";
 import { threadActivityPresentation, type ThreadActivity } from "./thread-activity";
 
 export function ThreadDetailsPanel({
   open,
   onClose,
   workspaceName,
+  threadId,
   threadTitle,
   activity,
   environmentLabel,
@@ -21,6 +25,7 @@ export function ThreadDetailsPanel({
   open: boolean;
   onClose: () => void;
   workspaceName?: string;
+  threadId?: string;
   threadTitle?: string;
   activity?: ThreadActivity;
   environmentLabel?: string;
@@ -34,6 +39,16 @@ export function ThreadDetailsPanel({
   const t = useAgentText();
   const headingId = useId();
   const status = threadActivityPresentation(activity, t);
+  const [branch, setBranch] = useState<string>();
+  useEffect(() => {
+    setBranch(undefined);
+    if (!open || !threadId || !environmentPath) return;
+    const controller = new AbortController();
+    void workspaceClient.json<GitStatusResponse>(inspectUrl("/api/inspector/git", { threadId }), { signal: controller.signal })
+      .then(result => { if (!controller.signal.aborted && result.repo && result.branch) setBranch(result.branch); })
+      .catch(() => { /* Branch is informational; a missing repository stays hidden. */ });
+    return () => controller.abort();
+  }, [open, threadId, environmentPath]);
   if (!open) return null;
 
   return <section className={`pm-agent-thread-details ${styles.root}`} aria-labelledby={headingId}>
@@ -47,6 +62,7 @@ export function ThreadDetailsPanel({
         <div><dt>{t("会话", "Session")}</dt><dd>{threadTitle || "—"}</dd></div>
         <div><dt>{t("状态", "Status")}</dt><dd data-activity={status.status} data-tone={status.tone} data-priority={status.priority}>{status.label}</dd></div>
         <div><dt>{t("执行环境", "Execution environment")}</dt><dd>{environmentLabel || "—"}</dd>{environmentPath && <dd><code>{environmentPath}</code></dd>}{environmentStatus && <dd>{environmentStatus}</dd>}{environmentError && <dd role="alert" className={styles.environmentError}>{environmentError}</dd>}</div>
+        {branch && <div><dt>{t("代码分支", "Code branch")}</dt><dd><code>{branch}</code></dd></div>}
       </dl>
       <div className={styles.actions} role="group" aria-label={t("会话操作", "Session actions")}>
         <button type="button" className={styles.action} disabled={!onConfigureFiles} onClick={onConfigureFiles}>
