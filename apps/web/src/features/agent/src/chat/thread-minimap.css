@@ -1,0 +1,7 @@
+.thread-minimap { position: absolute; inset-block: 5rem 8rem; inset-inline-end: .35rem; width: 12px; z-index: 20; pointer-events: none; }
+.thread-minimap button { position: absolute; inset-inline: 2px; height: 2px; padding: 0; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--muted-foreground) 35%, transparent); cursor: pointer; pointer-events: auto; transition: background var(--motion-button, 160ms) ease-out, inset-inline var(--motion-button, 160ms) ease-out; }
+.thread-minimap button:hover, .thread-minimap button:focus-visible { inset-inline: 0; background: var(--foreground); }
+.thread-minimap button[data-active] { background: var(--accent, var(--ring)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, var(--ring)) 25%, transparent); }
+@media (max-width: 1023px) { .thread-minimap { display: none; } }
+@media (prefers-reduced-motion: reduce) { .thread-minimap button { transition: none; } }
+.thread-minimap[data-empty] { display: none; }

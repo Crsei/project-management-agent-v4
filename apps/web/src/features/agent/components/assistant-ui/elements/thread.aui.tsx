@@ -26,6 +26,8 @@ import { useChatBrowserPreferences } from "@agent/src/settings/browser-preferenc
 import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
+import { ThreadFind } from "@agent/src/chat/thread-find";
+import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
@@ -147,7 +149,7 @@ export const Thread: FC<ThreadProps> = (props) => {
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-surface @container flex h-full flex-col"
+      className="aui-root aui-thread-root bg-surface @container relative flex h-full flex-col"
       style={{
         // Reading width follows the browser's chat appearance preference.
         ["--thread-max-width" as string]: "var(--agent-chat-content-width, 720px)",
@@ -212,7 +214,9 @@ export const Thread: FC<ThreadProps> = (props) => {
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
+      <ThreadMinimap />
       <SelectionToolbar />
+      <ThreadFind />
     </ThreadPrimitive.Root>
   );
 };

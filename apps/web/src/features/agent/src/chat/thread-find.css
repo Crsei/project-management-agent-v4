@@ -1,0 +1,11 @@
+.thread-find { position: absolute; inset-block-start: .5rem; inset-inline-end: .75rem; z-index: 30; display: flex; align-items: center; gap: .25rem; max-width: min(26rem, calc(100% - 1rem)); border: 1px solid var(--border); border-radius: .6rem; background: var(--card); padding: .2rem .3rem; box-shadow: var(--shadow-floating, 0 4px 16px rgb(0 0 0 / 12%)); }
+.thread-find-icon { width: .9rem; height: .9rem; flex: none; margin-inline-start: .15rem; color: var(--muted-foreground); }
+.thread-find input { width: 12rem; min-width: 0; border: 0; background: transparent; padding: .15rem .2rem; font-size: .8rem; outline: none; }
+.thread-find-count { flex: none; min-width: 2.6rem; text-align: end; color: var(--muted-foreground); font-size: .7rem; font-variant-numeric: tabular-nums; }
+.thread-find button { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; padding: 0; border: 0; border-radius: .3rem; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.thread-find button:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
+.thread-find button:disabled { opacity: .35; cursor: not-allowed; }
+.thread-find button svg { width: .85rem; height: .85rem; }
+::highlight(thread-find) { background-color: color-mix(in srgb, var(--warning) 28%, transparent); color: var(--foreground); }
+::highlight(thread-find-active) { background-color: var(--warning); color: var(--foreground); }
+@media (max-width: 640px) { .thread-find { inset-inline: .5rem; max-width: none; } .thread-find input { flex: 1; width: auto; } }
