@@ -181,6 +181,12 @@ function RichComposerEditor(props: Props) {
   const editedReferences = useSyncExternalStore(subscribeMessageContext, editedSnapshot, editedSnapshot);
   const references = props.editing ? editedReferences : workspace.references;
   const attachments = useAuiState(value => value.composer.attachments);
+  const threadMessages = useAuiState(value => value.thread.messages);
+  const promptHistory = useMemo(() => threadMessages.flatMap(message => message.role === "user"
+    ? [message.content.filter(part => part.type === "text").map(part => part.text).join("\n")].filter(text => text.trim())
+    : []), [threadMessages]);
+  const historyIndex = useRef(-1);
+  const historyDraft = useRef("");
   const contextPayloads = useMemo<ComposerContextPayload[]>(() => [...contextDraft.items.map(item => ({ type: "native" as const, item })), ...references.map(reference => ({ type: "pm" as const, reference })), ...attachments.map(attachment => ({ type: "attachment" as const, attachment }))], [contextDraft.items, references, attachments]);
   const contextLive = useRef({ draft: contextDraft, workspace, payloads: contextPayloads, references, editing: props.editing });
   contextLive.current = { draft: contextDraft, workspace, payloads: contextPayloads, references, editing: props.editing };
@@ -235,6 +241,34 @@ function RichComposerEditor(props: Props) {
         if (live.current.disabled) return false;
         if (composing.current || view.composing || event.isComposing || event.keyCode === 229) return false;
         if (view.state.selection.$from.parent.type.name !== "codeBlock" && live.current.props.suggestions?.onKeyDown(event)) return true;
+        // Recall sent prompts only at the first/last line, keeping normal cursor
+        // movement and menu navigation untouched.
+        if (!live.current.props.editing && (event.key === "ArrowUp" || event.key === "ArrowDown") && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          const selection = view.state.selection;
+          const atStart = selection.empty && selection.from <= 1;
+          const atEnd = selection.empty && selection.to >= view.state.doc.content.size - 1;
+          if (event.key === "ArrowUp" && atStart && promptHistory.length) {
+            event.preventDefault();
+            if (historyIndex.current < 0) { historyDraft.current = aui.composer.getState().text; historyIndex.current = promptHistory.length - 1; }
+            else historyIndex.current = Math.max(0, historyIndex.current - 1);
+            aui.composer.setText(promptHistory[historyIndex.current]!);
+            requestAnimationFrame(() => editor?.commands.focus("end"));
+            return true;
+          }
+          if (event.key === "ArrowDown" && atEnd && historyIndex.current >= 0) {
+            event.preventDefault();
+            if (historyIndex.current < promptHistory.length - 1) {
+              historyIndex.current += 1;
+              aui.composer.setText(promptHistory[historyIndex.current]!);
+            } else {
+              historyIndex.current = -1;
+              aui.composer.setText(historyDraft.current);
+            }
+            requestAnimationFrame(() => editor?.commands.focus("end"));
+            return true;
+          }
+        }
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") historyIndex.current = -1;
         if (event.key === "Escape" && live.current.props.editing && aui.composer.getState().canCancel) {
           event.preventDefault();
           aui.composer.cancel();
