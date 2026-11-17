@@ -403,6 +403,15 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
   const provider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : undefined;
   const effectiveOptions = modelOptions ?? provider?.modelPreferences?.options[model];
+  const sendBlockedReason = historyBlocked
+    ? t("会话历史未恢复，发送已暂停。", "Session history is not restored; sending is paused.")
+    : saveError
+      ? t("会话参数保存失败，先重试保存。", "Saving session settings failed; retry the save first.")
+      : saving
+        ? t("正在保存会话参数…", "Saving session settings…")
+        : disabled
+          ? t("当前会话不可发送。", "This session cannot send right now.")
+          : undefined;
 
   return (
     <div className={cn("aui-composer-action-wrapper", styles.controls)}>
@@ -477,13 +486,13 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
             (s.thread.voice !== undefined && s.composer.submission === undefined)
           }
         >
-          {contextOnly ? <TooltipIconButton type="button" tooltip={t("发送已选上下文", "Send selected context")} aria-label={t("发送已选上下文", "Send selected context")} disabled={historyBlocked || threadBusy} variant="default" className="aui-composer-send size-7 rounded-full" onClick={() => {
+          {contextOnly ? <TooltipIconButton type="button" tooltip={sendBlockedReason ?? t("发送已选上下文", "Send selected context")} aria-label={t("发送已选上下文", "Send selected context")} disabled={historyBlocked || threadBusy} variant="default" className="aui-composer-send size-7 rounded-full" onClick={() => {
             const thread = aui.thread.getState();
             if (historyBlocked || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled || onUsageCommand()) return;
             aui.thread.append({ role: "user", content: [{ type: "text", text: aui.composer.getState().text }] });
           }}><ArrowUpIcon className="size-4" /></TooltipIconButton> : <ComposerPrimitive.Send asChild onClick={(event) => { if (historyBlocked || onUsageCommand()) event.preventDefault(); }}>
             <TooltipIconButton
-              tooltip={t(
+              tooltip={sendBlockedReason ?? t(
                 preferences.sendShortcut === "enter" ? "发送消息 · Enter" : "发送消息 · Ctrl / ⌘ + Enter",
                 preferences.sendShortcut === "enter" ? "Send message · Enter" : "Send message · Ctrl / ⌘ + Enter",
               )}
@@ -492,7 +501,7 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
               variant="default"
               size="icon"
               className="aui-composer-send size-7 rounded-full"
-              disabled={historyBlocked}
+              disabled={historyBlocked || !!sendBlockedReason}
               aria-label={t("发送消息", "Send message")}
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4" />
