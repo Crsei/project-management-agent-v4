@@ -67,5 +67,17 @@ test('editing one product field emits only its patch, preserving hidden node dat
 test('functional node shows one inherited design reference without per-node design configuration',()=>{
   const design={...plan,design:{versionId:'12345678-1111-4111-8111-111111111111',sha256:'a'.repeat(64),title:'清晰的反馈工作台',notes:'静谧、统一导航'}};
   const html=renderToStaticMarkup(editor.CanvasFeatureEditor!({node:plan.nodes[0],plan:design,editable:true,onChange:()=>{}}));
-  assert.match(html,/自动继承产品设计/);assert.match(html,/清晰的反馈工作台/);assert.match(html,/12345678/);assert.match(html,/无需逐节点配置/);
+  assert.match(html,/自动继承产品设计/);assert.match(html,/清晰的反馈工作台/);assert.doesNotMatch(html,/12345678/);assert.match(html,/无需逐节点配置/);
+});
+
+test('local handoff labels real local verification, never invents a GitHub CI check',()=>{
+  const handoff={...receipt,verification:'local' as const,ci:[]};
+  const run={nodes:[{nodeId:'node',phase:'verified',handoff}]};
+  const html=renderToStaticMarkup(component.CanvasNodeContext!({plan,node:plan.nodes[0],run})) as string;
+  assert.match(html,/本机隔离验证（非 GitHub CI）/); assert.doesNotMatch(html,/CI · check/);
+  const valid={...handoff,deliveryId:'11111111-1111-4111-8111-111111111111'};
+  assert.equal(context.canvasHandoffSchema.safeParse(valid).success,true);
+  assert.equal(context.canvasHandoffSchema.safeParse({...valid,ci:['fake CI']}).success,false);
+  const legacy={...valid};delete (legacy as Partial<typeof legacy>).verification;
+  assert.equal(context.canvasHandoffSchema.safeParse(legacy).success,false);
 });

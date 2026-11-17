@@ -1,21 +1,28 @@
 import { z } from 'zod';
 import { ROADMAP_ORIGIN, roadmapOriginSchema, roadmapStoreSchema, type RoadmapDeliveryRead, type RoadmapDeliveryScope, type RoadmapRead } from '../../../../../packages/contracts/src/product-roadmap.ts';
-import type { DeliveryScope, TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
+import { localVerificationPassed, type DeliveryScope, type TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { DeliveryError, type DeliveryTask } from '../../../../../packages/application/src/task-code-delivery.ts';
 import { authorizeDelivery, requestDeliveryPm } from './authority.ts';
 import { deliveryStore, deliveryTaskRevision } from './binding.ts';
-import { git, githubRepository, verifyWorktree } from './git.ts';
+import { git, githubRepository, readTree, verifyWorktree } from './git.ts';
 import { DeliveryGitHub } from './github.ts';
 const github = new DeliveryGitHub();
 export type RoadmapDeliveryPorts = {
   request: typeof requestDeliveryPm; list: typeof deliveryStore.list;
   authorize: typeof authorizeDelivery; revision: typeof deliveryTaskRevision;
   git: typeof git; verify: typeof verifyWorktree; feedback: typeof github.feedback;
+  tree?: typeof readTree;
 };
 const defaultPorts: RoadmapDeliveryPorts = { request: requestDeliveryPm, list: deliveryStore.list, authorize: authorizeDelivery,
-  revision: deliveryTaskRevision, git, verify: verifyWorktree, feedback: value => github.feedback(value) };
+  revision: deliveryTaskRevision, git, verify: verifyWorktree, tree: readTree, feedback: value => github.feedback(value) };
+async function localCurrent(value: TaskCodeDelivery, ports: RoadmapDeliveryPorts) {
+  if (!value.localVerification) return true;
+  const tree = await ports.tree?.(value);
+  return !!tree && tree.head === value.head && !tree.files.length && tree.fingerprint === value.localVerification.fingerprint;
+}
 export function confirmedDelivery(value: TaskCodeDelivery): boolean {
-  return !value.pending && !value.error && !!value.head && !!value.pr && !!value.test?.passed && value.feedback?.head === value.head && value.feedback.state !== 'closed' && value.feedback.checks.length > 0 && value.feedback.checks.every(c => c.conclusion === 'success');
+  const verified = value.localVerification ? localVerificationPassed(value) && value.feedback?.state === 'open' && value.feedback.draft : !!value.feedback?.checks.length && value.feedback.checks.every(c => c.conclusion === 'success');
+  return !value.pending && !value.error && !!value.head && !!value.pr && !!value.test?.passed && value.feedback?.head === value.head && value.feedback.state !== 'closed' && verified;
 }
 async function projectPlan(scope: { workspaceId: string; projectId: string }, headers: Headers, ports: RoadmapDeliveryPorts): Promise<RoadmapRead> {
   const raw = await ports.request(`/api/v1/workspaces/${encodeURIComponent(scope.workspaceId)}/projects/${encodeURIComponent(scope.projectId)}/product-roadmap`, headers);
@@ -48,11 +55,11 @@ export async function checkRoadmapBase(task: DeliveryTask, baseBranch: string, h
     const rows = context.rows.filter(r => r.nodeId === id);
     if (rows.length !== 1 || rows[0]!.archived || rows[0]!.drifted) throw new DeliveryError('roadmap_prerequisite', '前置任务未创建、已变更或已归档。');
     const value = ports.list().find(v => v.workspaceId === task.workspaceId && v.projectId === task.projectId && v.taskId === rows[0]!.taskId);
-    if (!value || !confirmedDelivery(value) || value.git?.root !== task.root) throw new DeliveryError('roadmap_prerequisite', '前置任务尚无同版本测试 / PR / CI 证据，或不在同一仓库。');
+    if (!value || !confirmedDelivery(value) || value.git?.root !== task.root) throw new DeliveryError('roadmap_prerequisite', '前置任务尚无同版本测试、PR 和验证证据，或不在同一仓库。');
     const current = await ports.authorize(value, false, headers);
     if (current.revision !== ports.revision(value)) throw new DeliveryError('roadmap_prerequisite', '前置任务需求版本已变化。');
     const feedback = await ports.feedback(value);
-    if (!confirmedDelivery({ ...value, feedback })) throw new DeliveryError('roadmap_prerequisite', '前置任务最新 GitHub 结果未通过或版本已变化。');
+    if (!confirmedDelivery({ ...value, feedback }) || !await localCurrent(value, ports)) throw new DeliveryError('roadmap_prerequisite', '前置任务最新验证结果未通过或版本已变化。');
     prerequisites.push(value);
   }
   const remote = (await ports.git(task.root, 'remote', 'get-url', 'origin')).trim(); githubRepository(remote);
@@ -78,10 +85,11 @@ export async function inspectRoadmapDelivery(scope: RoadmapDeliveryScope, header
       const current = await ports.authorize(value, false, headers);
       if (current.revision !== ports.revision(value) || current.root !== value.git?.root) issue = '需求版本或项目目录已变化';
       if (refresh && value.pr) value.feedback = await ports.feedback(value);
-      if (!confirmedDelivery(value)) issue ??= '同版本测试、PR 或 CI 证据不完整';
+      if (!confirmedDelivery(value)) issue ??= '同版本测试、PR 或版本验证证据不完整';
+      if (!await localCurrent(value, ports)) issue ??= '本地验证之后代码已变化';
       records.push(value);
     }
-    items.push({ taskId: row?.taskId ?? '', title: node.title, deliveryId: value?.id ?? null, head: value?.head ?? null, pr: value?.pr?.url ?? null, tested: !!value?.test?.passed, ci: value ? confirmedDelivery(value) : false, included: false, observedAt: value?.feedback?.observedAt ?? null, issue });
+    items.push({ taskId: row?.taskId ?? '', title: node.title, deliveryId: value?.id ?? null, head: value?.head ?? null, pr: value?.pr?.url ?? null, tested: !!value?.test?.passed, ci: !!value && !value.localVerification && confirmedDelivery(value), verified: !!value && confirmedDelivery(value), verification: value?.localVerification ? 'local' : 'github', included: false, observedAt: value?.localVerification?.at ?? value?.feedback?.observedAt ?? null, issue });
   }
   const candidate = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (candidate?.head && candidate.git && confirmedDelivery(candidate)) {
@@ -94,5 +102,5 @@ export async function inspectRoadmapDelivery(scope: RoadmapDeliveryScope, header
     }
   }
   const eligible = !!candidate?.head && items.length === release.plan.nodes.length && items.length > 0 && items.every(i => !i.issue && i.included);
-  return { eligible, reason: eligible ? '已核对所有任务提交都在同一个候选版本中，且各自测试 / CI 通过。仍需跨任务功能验收。' : '尚未形成可核验的集成版本；不以任务数量或状态冒充 App 完成。', checkedAt: new Date().toISOString(), candidate: eligible ? { id: candidate!.id, head: candidate!.head! } : null, items };
+  return { eligible, reason: eligible ? '已核对所有任务提交都在同一个候选版本中，且各自指定的版本验证通过。仍需跨任务功能验收。' : '尚未形成可核验的集成版本；不以任务数量或状态冒充 App 完成。', checkedAt: new Date().toISOString(), candidate: eligible ? { id: candidate!.id, head: candidate!.head! } : null, items };
 }

@@ -14,7 +14,8 @@ export interface CanvasPorts {
   child(id: string): Promise<WorkflowRun | null>;
   existing(scope: CanvasScope, taskId: string): Promise<WorkflowRun | null>;
   startChild(run: CanvasRun, node: CanvasRun['nodes'][number], taskRevision: string, base: string): Promise<WorkflowRun>;
-  controlChild(id: string, action: 'pause' | 'resume', version: number): Promise<void>;
+  controlChild(id: string, action: 'pause' | 'resume' | 'retry-test', version: number): Promise<void>;
+  localizeChild?(id: string, version: number): Promise<void>;
   verifyChild(id: string, input: CanvasStart): Promise<{ branch: string; handoff: CanvasHandoff }>;
   integration(run: CanvasRun): Promise<boolean>;
 }
@@ -47,18 +48,40 @@ export class ProductCanvasService {
     if (rows.some(t => t.archived || t.drifted) || new Set(rows.map(t => t.nodeId)).size !== rows.length) fail('节点任务已编辑、归档或重复；请核对，不运行过期需求。');
     return rows;
   }
-  async control(id: string, action: 'pause' | 'resume', version: number) {
+  async control(id: string, action: 'pause' | 'resume' | 'retry-test' | 'use-local', version: number) {
     return this.lock(id, async () => {
       const r = await this.read(id); await this.p.project(r.input, true);
       if (r.version !== version) fail('运行已变化，请刷新后操作。');
       if (r.status === 'completed') return r;
+      if (action === 'retry-test') {
+        const candidates = r.nodes.filter(n => n.phase === 'running');
+        if (r.status !== 'paused' || candidates.length !== 1 || !candidates[0]!.owned) fail('仅能核对本画布暂停的原功能，不创建替代运行。');
+        await this.current(r);
+        const child = await this.p.child(candidates[0]!.childId) ?? fail('原功能运行不可用。');
+        await this.p.controlChild(child.id, 'retry-test', child.version);
+        r.message = '已登记修复结果；核对并继续构建时重新验证。原失败记录保留，尚未通过。'; return this.save(r);
+      }
+      if (action === 'use-local') {
+        if (r.status !== 'paused' || !this.p.localizeChild) fail('请先暂停原画布并确认本地隔离验证器可用。');
+        if (r.nodes.some(n => ['creating', 'starting'].includes(n.phase) || n.phase === 'running' && !n.owned)) fail('原节点派发结果尚未核对或不属于本画布，不能切换验证方式。');
+        await this.current(r); await this.p.preflight({ ...r.input, verification: 'local' });
+        r.localVerification ??= { selectedAt: new Date().toISOString() };
+        r.message = '已选择本地隔离验证，正在核对原节点；尚未通过，不会重建任务或重放开发。'; this.save(r);
+        for (const n of r.nodes.filter(n => n.owned && n.phase === 'running')) {
+          const child = await this.p.child(n.childId) ?? fail('原节点运行不存在。');
+          await this.p.localizeChild!(child.id, child.version);
+        }
+        r.localVerification.ready = true;
+        r.message = '已切换本地隔离验证，保留原云端检查记录。可核对并继续原构建。'; return this.save(r);
+      }
       // Persist the pause first; no further task may start even if child control fails.
       if (action === 'pause') {
         r.status = 'paused'; r.message = '已暂停后续派发；在途命令不保证取消。'; this.save(r);
         for (const n of r.nodes.filter(n => n.owned && n.phase === 'running')) { const c = await this.p.child(n.childId); if (c && ['running', 'waiting'].includes(c.status)) await this.p.controlChild(c.id, 'pause', c.version); }
         return r;
       }
-      await this.current(r); await this.p.preflight(r.input);
+      if (r.localVerification && !r.localVerification.ready) fail('本地验证切换尚未核对完成，请重试原切换入口，不恢复或创建新运行。');
+      await this.current(r); await this.p.preflight(r.localVerification ? { ...r.input, verification: 'local' } : r.input);
       for (const n of r.nodes.filter(n => n.phase === 'running' || n.phase === 'starting')) {
         const c = await this.p.child(n.childId);
         if (c && ['running', 'waiting', 'paused'].includes(c.status) && n.owned) await this.p.controlChild(c.id, 'resume', c.version);

@@ -1,5 +1,5 @@
-import type { DeliveryScope, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
-import { workflowProblems, workflowTemplates, workflowTaskRevision, type WorkflowDefinition, type WorkflowGraph, type WorkflowNode, type WorkflowRun, type WorkflowStart, type WorkflowTransitionRequest, type WorkflowTransitionResult } from '../../contracts/src/task-workflow.ts';
+import { localVerificationPassed, type DeliveryScope, type TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
+import { localCanvasGraph, workflowProblems, workflowTemplates, workflowTaskRevision, type WorkflowDefinition, type WorkflowGraph, type WorkflowNode, type WorkflowRun, type WorkflowStart, type WorkflowTransitionRequest, type WorkflowTransitionResult } from '../../contracts/src/task-workflow.ts';
 import { DeliveryError, type DeliveryTask, type TaskCodeDeliveryService } from './task-code-delivery.ts';
 
 export interface WorkflowPorts {
@@ -86,10 +86,35 @@ export class TaskWorkflowService {
     const v = this.p.readRun(id) ?? fail('not_found', '工作流运行不可用。');
     await this.p.authorize(v.input, false); return v;
   }
-  async control(id: string, action: 'pause' | 'resume' | 'approve' | 'confirm-transition', version: number) {
+  /** Explicit canvas policy amendment, not a retry or a forged CI result. Retain original input/graph/node evidence. */
+  async useLocalVerification(id: string, version: number) {
+    return this.lock(id, async () => {
+      const v = await this.read(id), task = await this.p.authorize(v.input, true);
+      if (v.version !== version) fail('workflow_conflict', '运行版本已变化，请刷新核对。');
+      if (task.revision !== workflowTaskRevision(v) || task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('task_changed', '任务或仓库已变化，不能切换验证方式。');
+      if (v.localSwitch || v.input.definitionId === 'builtin-canvas-local') return v;
+      const node = v.graph.nodes.find(n => n.id === v.current), d = this.p.readDelivery(v.id);
+      if (v.input.definitionId !== 'builtin-canvas-deliver' || !['paused', 'failed'].includes(v.status) || node?.kind !== 'ci' || node.config.verification || v.transitions?.[node.id] || !d?.pr || d.step !== 'pr' || d.pending || !d.test?.passed || d.generationStatus !== 'completed') fail('workflow_switch_blocked', '仅支持已完成原开发、测试和 Draft PR、停在云端检查且无未知操作的画布节点切换；不能重放失败开发。');
+      const inspection = await this.p.delivery.inspect(v.id);
+      if (inspection.taskChanged || !inspection.tree || inspection.tree.head !== d!.head || inspection.tree.files.length) fail('workflow_switch_blocked', '原提交或工作目录已变化，不能切换。');
+      this.validateConsent(v.input, v.graph);
+      const oldId = v.current, newId = 'localVerification';
+      if (v.graph.nodes.some(n => n.id === newId) || v.nodes[newId]) fail('workflow_switch_blocked', '本地验证节点身份冲突。');
+      if (v.graph.nodes.some(n => ['prepare', 'agent', 'test', 'commit', 'push', 'pr'].includes(n.kind) && v.nodes[n.id]?.state !== 'succeeded')) fail('workflow_switch_blocked', '原开发与交付节点尚未全部验证，不能切换。');
+      v.localSwitch = { at: this.time(), previousGraph: structuredClone(v.graph), previousCurrent: v.current, previousStatus: v.status, ...(v.message ? { previousMessage: v.message } : {}) };
+      v.graph = localCanvasGraph(v.graph);
+      // The failed/waiting CI node remains in nodes under its ORIGINAL id.
+      v.graph.nodes.find(n => n.id === oldId)!.id = newId;
+      for (const edge of v.graph.edges) { if (edge.source === oldId) edge.source = newId; if (edge.target === oldId) edge.target = newId; }
+      v.current = newId; v.status = 'paused'; v.message = '已明确切换为本地隔离验证；原云端检查记录保留，尚未验证通过。';
+      return this.save(v);
+    });
+  }
+  async control(id: string, action: 'pause' | 'resume' | 'approve' | 'confirm-transition' | 'retry-test', version: number) {
     return this.lock(id, async () => {
       const v = await this.read(id); let task = await this.p.authorize(v.input, true);
       if (v.version !== version) fail('workflow_conflict', '运行已更新，请刷新后操作。');
+      if (action === 'retry-test') return this.prepareTestRepair(v, task);
       if (['completed', 'failed'].includes(v.status)) fail('workflow_terminal', '运行已结束。');
       if (action === 'pause') { v.status = 'paused'; v.message = '已暂停后续步骤；在途 Agent / 命令不会因此取消。'; return this.save(v); }
       if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '仓库已变化。');
@@ -113,6 +138,25 @@ export class TaskWorkflowService {
       } else { v.status = 'running'; delete v.message; }
       return this.save(v);
     });
+  }
+  /** An explicit new test attempt after a source repair; never reset or rewrite the failed attempt. */
+  private async prepareTestRepair(v: WorkflowRun, task: DeliveryTask) {
+    if (task.revision !== workflowTaskRevision(v) || task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('task_changed', '任务、目录或仓库已变化，不能验证旧运行。');
+    this.validateConsent(v.input, v.graph);
+    const inspection = await this.p.delivery.inspect(v.id), d = inspection.delivery, tree = inspection.tree;
+    if (inspection.taskChanged || !tree || !d.git || d.pending || d.step !== 'tested' || d.generationStatus !== 'completed' || !d.test || d.test.passed || tree.head !== d.git.baseSha || !tree.files.length) return fail('test_repair_blocked', '仅支持已结束开发、结果明确且尚未提交的失败测试；未知操作和已发布版本不能重放。');
+    const last = v.testRepairs?.at(-1);
+    if (v.status === 'paused' && last?.nodeId === v.current && !v.nodes[v.current] && last.head === tree.head && last.fingerprint === tree.fingerprint) return v;
+    const node = v.graph.nodes.find(n => n.id === v.current);
+    if (v.status !== 'failed' || node?.kind !== 'test' || node.config.verification !== 'local' || v.nodes[v.current]?.state !== 'failed' || tree.fingerprint === d.test.fingerprint || v.graph.nodes.some(n => ['commit', 'push', 'pr', 'ci'].includes(n.kind) && v.nodes[n.id])) return fail('test_repair_blocked', '需先修复原测试失败的内容；此入口不跳过测试、不重放开发或发布。');
+    const count = (v.testRepairs?.length ?? 0) + 1, nodeId = `testRepair${count}`;
+    if (count > 5 || v.graph.nodes.some(n => n.id === nodeId) || v.nodes[nodeId]) return fail('test_repair_blocked', '验证修复次数或节点身份需维护人员核对。');
+    const previousCurrent = v.current;
+    (v.testRepairs ??= []).push({ at: this.time(), previousGraph: structuredClone(v.graph), previousCurrent, previousTest: structuredClone(d.test), head: tree.head, fingerprint: tree.fingerprint, nodeId });
+    node!.id = nodeId;
+    for (const edge of v.graph.edges) { if (edge.source === previousCurrent) edge.source = nodeId; if (edge.target === previousCurrent) edge.target = nodeId; }
+    v.current = nodeId; v.status = 'paused'; v.message = '已登记修复后的内容，原失败记录保留。继续后运行一次新的完整测试，尚未通过。';
+    return this.save(v);
   }
   private complete(v: WorkflowRun, node: WorkflowNode, pass: boolean, message: string) {
     v.nodes[node.id] = { ...v.nodes[node.id]!, state: pass ? 'succeeded' : 'failed', outcome: pass ? 'pass' : 'fail', finishedAt: this.time(), message };
@@ -189,6 +233,11 @@ export class TaskWorkflowService {
             }
             break;
           case 'test':
+            if (!existing && v.testRepairs?.some(r => r.nodeId === node.id)) {
+              const repair = v.testRepairs.find(r => r.nodeId === node.id)!;
+              const inspected = await this.p.delivery.inspect(v.id);
+              if (inspected.tree?.head !== repair.head || inspected.tree?.fingerprint !== repair.fingerprint) fail('test_repair_changed', '修复登记后代码再次变化，未执行测试。');
+            }
             if (!existing) d = await this.p.delivery.act(v.id, { action: 'test', command: node.config.command!, confirm: true });
             if (d?.test && !d.pending && d.test.command === node.config.command) this.complete(v, node, d.test.passed, `验证 exit ${d.test.exitCode ?? 'unknown'} · ${d.test.fingerprint}`);
             else this.unknown(v, '验证结果未知；不会自动重跑命令。');
@@ -209,6 +258,14 @@ export class TaskWorkflowService {
             else this.unknown(v, 'PR 创建结果未确认，请核对原交付标记。');
             break;
           case 'ci': {
+            if (node.config.verification === 'local') {
+              if (!existing) d = await this.p.delivery.act(v.id, { action: 'verify-local', head: d!.head!, confirm: true });
+              if (d?.pending || !d?.localVerification) { this.unknown(v, '本地验证结果未确认，不自动重跑。'); break; }
+              const inspection = await this.p.delivery.inspect(v.id);
+              if (!localVerificationPassed(d) || inspection.taskChanged || !inspection.tree || inspection.tree.head !== d!.head || inspection.tree.files.length || inspection.tree.fingerprint !== d.localVerification.fingerprint || !d.feedback || d.feedback.head !== d.head || d.feedback.state !== 'open' || !d.feedback.draft) { this.complete(v, node, false, '本地隔离验证未通过，或版本、测试完整性、Draft PR 已变化；不会跳过。'); break; }
+              if (await this.transitionGate(v, node)) this.complete(v, node, true, `本地隔离验证通过：${d.localVerification.counts!.pass} 项，0 跳过；提交 ${d.head}。非 GitHub CI。`);
+              break;
+            }
             if (!existing) d = await this.p.delivery.act(v.id, { action: 'refresh' });
             const f = d?.feedback;
             if (f && f.head !== d?.head) { this.unknown(v, '远端 HEAD 已变化，本次验证不覆盖新版本。'); break; }

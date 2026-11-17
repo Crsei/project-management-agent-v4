@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { workflowProblems, workflowTemplates, workflowTaskRevision, workflowGraphSchema, workflowStartSchema, type WorkflowDefinition, type WorkflowGraph, type WorkflowRun, type WorkflowStart } from '../../contracts/src/task-workflow.ts';
+import { workflowProblems, workflowTemplates, workflowTaskRevision, workflowGraphSchema, workflowStartSchema, workflowControlSchema, type WorkflowDefinition, type WorkflowGraph, type WorkflowRun, type WorkflowStart } from '../../contracts/src/task-workflow.ts';
 import type { TaskCodeDelivery, DeliveryTree } from '../../contracts/src/task-code-delivery.ts';
 import { TaskWorkflowService, type WorkflowPorts } from '../src/task-workflow.ts';
 import { TaskCodeDeliveryService, type DeliveryPorts } from '../src/task-code-delivery.ts';
@@ -44,7 +44,7 @@ function fixture(template = 'builtin-deliver') {
   const service = new TaskWorkflowService(p);
   const input: WorkflowStart = { ...scope, id, taskRevision: 'r1', definitionId: template, definitionVersion: 1, baseBranch: 'main', repository: 'owner/repo', providerInstanceId: 'codex', model: 'selected', consent: { execute: true, worktreeWrite: template !== 'builtin-analysis', commit: true, push: true, draftPr: true, taskStatus: true } };
   const stepUntil = async (predicate: (r: WorkflowRun) => boolean) => { for (let i = 0; i < 25; i++) { const r = await service.tick(id); if (predicate(r)) return r; } throw new Error('condition not reached'); };
-  return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { deny: () => { allow = false; }, revision: () => { taskRevision = 'external-edit'; }, status: (v: string) => { taskStatus = v; taskRevision = 'external-state'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
+  return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { tree: (v: Partial<DeliveryTree>) => { tree = { ...tree, ...v }; }, deny: () => { allow = false; }, revision: () => { taskRevision = 'external-edit'; }, status: (v: string) => { taskStatus = v; taskRevision = 'external-state'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
 }
 
 test('task and canvas templates parse and validate; strict schemas reject unsupported inputs and reserved node IDs', () => {
@@ -147,7 +147,7 @@ test('pause is not cancellation and concurrent ticks cannot duplicate side effec
 test('templates remain editable without Git readiness and catalogue identifies manual delivery', async () => {
   const f = fixture(); f.p.repository = async () => { throw new Error('no origin'); };
   const catalog = await f.service.catalog(scope);
-  assert.equal(catalog.repository, null); assert.equal(catalog.definitions.length, 4); assert.equal(catalog.hasManualDelivery, false);
+  assert.equal(catalog.repository, null); assert.equal(catalog.definitions.length, workflowTemplates.length); assert.equal(catalog.hasManualDelivery, false);
   await f.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main' });
   assert.equal((await f.service.catalog(scope)).hasManualDelivery, true);
 });
@@ -280,4 +280,99 @@ test('canvas preset advances start and review with scoped consent, not business 
   g.set.ci('failure'); await g.service.start(g.input);
   await g.stepUntil(r => r.status === 'failed');
   assert.ok(!g.calls.includes('state-review'));
+});
+
+function enableLocal(f: ReturnType<typeof fixture>) {
+  f.dp.verifyLocal = async () => { f.calls.push('local-verify'); return { executor: 'linux-bwrap-node24-v1', passed: true, exitCode: 0, outputDigest: 'local-proof', counts: { tests: 4, pass: 4, skipped: 0, cancelled: 0, todo: 0, fail: 0 } }; };
+}
+
+async function failedLocalTest() {
+  const f = fixture('builtin-canvas-local'); enableLocal(f); f.set.test(1);
+  await f.service.start(f.input); const failed = await f.stepUntil(r => r.status === 'failed');
+  assert.equal(failed.current, 'test3');
+  return { ...f, failed };
+}
+test('explicit source repair records a new test attempt, preserves failure and resumes without redeveloping', async () => {
+  const f = await failedLocalTest(), prior = structuredClone(f.deliveries.get(id)!.test);
+  f.set.tree({ fingerprint: 'fixed' }); f.set.test(0);
+  const r = await f.service.control(id, 'retry-test', f.failed.version);
+  assert.equal(r.status, 'paused'); assert.equal(r.current, 'testRepair1');
+  assert.deepEqual(r.input, f.failed.input); assert.deepEqual(r.nodes.test3, f.failed.nodes.test3);
+  assert.deepEqual(r.testRepairs?.[0]?.previousTest, prior); assert.deepEqual(r.testRepairs?.[0]?.previousGraph, f.failed.graph);
+  assert.equal(r.nodes.testRepair1, undefined); assert.equal(f.calls.filter(c => c === 'test').length, 1);
+  assert.deepEqual(await f.service.control(id, 'retry-test', r.version), r);
+  await assert.rejects(f.service.control(id, 'retry-test', f.failed.version), /版本|更新/);
+  await f.service.control(id, 'resume', r.version);
+  const done = await f.stepUntil(v => v.status === 'completed');
+  assert.equal(done.nodes.test3?.state, 'failed'); assert.equal(done.nodes.testRepair1?.state, 'succeeded');
+  assert.equal(f.calls.filter(c => c === 'test').length, 2); assert.equal(f.calls.filter(c => c === 'agent').length, 1);
+  assert.equal(f.calls.filter(c => c === 'commit').length, 1); assert.equal(f.calls.filter(c => c === 'push').length, 1);
+  assert.equal(f.calls.filter(c => c === 'pr').length, 1); assert.equal((await f.p.authorize(scope, false)).status, 'review');
+});
+test('test repair rejects unchanged content, unknown effects, stale task, denied access and changed HEAD', async () => {
+  for (const bad of ['unchanged', 'pending', 'revision', 'deny', 'head', 'generation', 'committed'] as const) {
+    const f = await failedLocalTest();
+    if (bad !== 'unchanged') f.set.tree({ fingerprint: 'fixed' });
+    if (bad === 'pending') f.deliveries.get(id)!.pending = { action: 'test', at: 'now' };
+    if (bad === 'revision') f.set.revision(); if (bad === 'deny') f.set.deny();
+    if (bad === 'head') f.set.tree({ head: 'c'.repeat(40) });
+    if (bad === 'generation') f.deliveries.get(id)!.generationStatus = 'running';
+    if (bad === 'committed') f.deliveries.get(id)!.step = 'committed';
+    await assert.rejects(f.service.control(id, 'retry-test', f.failed.version));
+    assert.equal(f.runs.get(id)?.testRepairs, undefined); assert.equal(f.calls.filter(c => c === 'test').length, 1);
+  }
+});
+test('repair confirmation is bound to exact source and each repeated failure remains distinct', async () => {
+  const changed = await failedLocalTest(); changed.set.tree({ fingerprint: 'fixed' });
+  const ready = await changed.service.control(id, 'retry-test', changed.failed.version);
+  changed.set.tree({ fingerprint: 'changed-after-confirmation' });
+  await changed.service.control(id, 'resume', ready.version);
+  assert.equal((await changed.service.tick(id)).status, 'paused'); assert.equal(changed.calls.filter(c => c === 'test').length, 1);
+  const f = await failedLocalTest(); f.set.tree({ fingerprint: 'first-fix' });
+  const repair = await f.service.control(id, 'retry-test', f.failed.version); await f.service.control(id, 'resume', repair.version);
+  const failedAgain = await f.service.tick(id); assert.equal(failedAgain.status, 'failed'); assert.equal(failedAgain.nodes.testRepair1?.state, 'failed');
+  f.set.tree({ fingerprint: 'second-fix' });
+  const second = await f.service.control(id, 'retry-test', failedAgain.version);
+  assert.equal(second.current, 'testRepair2'); assert.equal(second.testRepairs?.length, 2);
+  assert.equal(second.nodes.test3?.state, 'failed'); assert.equal(second.nodes.testRepair1?.state, 'failed');
+});
+test('repair endpoint contract requires exact action, version and explicit confirmation', () => {
+  assert.ok(workflowControlSchema.safeParse({ action: 'retry-test', version: 1, confirm: true }).success);
+  for (const value of [{ action: 'retry-test', version: 1 }, { action: 'retry-test', version: 1, confirm: false }, { action: 'retry-test', version: 1, confirm: true, skipTests: true }]) assert.equal(workflowControlSchema.safeParse(value).success, false);
+});
+test('explicit cloud-to-local amendment preserves original input, failed CI record and graph; completes with real local evidence only', async () => {
+  const f = fixture('builtin-canvas-deliver'); enableLocal(f); f.set.ci('empty'); await f.service.start(f.input);
+  await f.stepUntil(r => r.status === 'waiting' && r.current.startsWith('ci'));
+  f.set.advance(31 * 60_000); const failed = await f.service.tick(id); assert.equal(failed.status, 'failed');
+  const original = structuredClone(failed), v = await f.service.useLocalVerification(id, failed.version);
+  assert.equal(v.status, 'paused'); assert.equal(v.current, 'localVerification'); assert.deepEqual(v.input, original.input);
+  assert.deepEqual(v.localSwitch?.previousGraph, original.graph); assert.deepEqual(v.nodes[original.current], original.nodes[original.current]);
+  assert.equal(v.nodes[original.current]?.state, 'failed'); assert.equal(v.nodes.localVerification, undefined);
+  assert.deepEqual(await f.service.useLocalVerification(id, v.version), v);
+  await assert.rejects(f.service.useLocalVerification(id, failed.version), /版本/);
+  await f.service.control(id, 'resume', v.version); const complete = await f.stepUntil(r => r.status === 'completed');
+  assert.equal(complete.nodes.localVerification?.state, 'succeeded'); assert.equal(complete.nodes[original.current]?.state, 'failed');
+  assert.deepEqual(f.deliveries.get(id)?.feedback?.checks, []); assert.equal(f.calls.filter(c => c === 'agent').length, 1);
+  assert.equal(f.calls.filter(c => c === 'local-verify').length, 1); assert.ok(f.calls.includes('state-review'));
+});
+test('local preset never requires cloud CI, but skipped tests or changed PR head cannot pass review', async () => {
+  for (const bad of ['none', 'skipped', 'head'] as const) {
+    const f = fixture('builtin-canvas-local'); enableLocal(f); f.set.ci('empty');
+    if (bad === 'skipped') f.dp.verifyLocal = async () => ({ executor: 'linux-bwrap-node24-v1', passed: true, exitCode: 0, outputDigest: 'bad', counts: { tests: 2, pass: 1, skipped: 1, cancelled: 0, todo: 0, fail: 0 } });
+    if (bad === 'head') f.set.ciHead();
+    await f.service.start(f.input); const r = await f.stepUntil(r => ['failed', 'completed'].includes(r.status));
+    assert.equal(r.status, bad === 'none' ? 'completed' : 'failed'); assert.equal(f.calls.includes('state-review'), bad === 'none');
+  }
+});
+test('migration rejects running/early failure, unknown side effects, dirty tree, changed task and denied authority', async () => {
+  const early = fixture('builtin-canvas-deliver'); await early.service.start(early.input);
+  await assert.rejects(early.service.useLocalVerification(id, early.runs.get(id)!.version));
+  for (const bad of ['pending', 'dirty', 'task', 'deny'] as const) {
+    const f = fixture('builtin-canvas-deliver'); f.set.ci('empty'); await f.service.start(f.input); const r = await f.stepUntil(r => r.status === 'waiting');
+    const paused = await f.service.control(id, 'pause', r.version);
+    if (bad === 'pending') f.deliveries.get(id)!.pending = { action: 'verify-local', at: 'now' };
+    if (bad === 'dirty') f.dp.tree = async () => ({ head: 'b'.repeat(40), fingerprint: 'dirty', files: ['file'], diff: '' });
+    if (bad === 'task') f.set.revision(); if (bad === 'deny') f.set.deny();
+    await assert.rejects(f.service.useLocalVerification(id, paused.version)); assert.equal(f.runs.get(id)?.localSwitch, undefined);
+  }
 });

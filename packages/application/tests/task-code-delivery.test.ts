@@ -121,3 +121,41 @@ test('worktree write confirmation is explicit per development attempt, persisted
   await f.service.act(f.input.id, { action: 'develop', providerInstanceId: 'p', model: 'm' });
   assert.deepEqual(seen, [true, false]);
 });
+
+const localResult = { executor: 'linux-bwrap-node24-v1' as const, passed: true, exitCode: 0, outputDigest: 'local-digest', counts: { tests: 2, pass: 2, fail: 0, skipped: 0, cancelled: 0, todo: 0 } };
+async function localFixture() {
+  const f = fixture(); await f.committed();
+  await f.service.act(f.input.id, { action: 'push', head: 'commit-sha', confirm: true });
+  await f.service.act(f.input.id, { action: 'draft-pr', head: 'commit-sha', confirm: true });
+  f.ports.verifyLocal = async () => structuredClone(localResult); return f;
+}
+test('local commit verification binds exact head/fingerprint, keeps CI empty and does not close business task', async () => {
+  const f = await localFixture();
+  const v = await f.service.act(f.input.id, { action: 'verify-local', head: 'commit-sha', confirm: true });
+  assert.equal(v.localVerification?.passed, true); assert.equal(v.localVerification?.head, 'commit-sha');
+  assert.equal(v.localVerification?.fingerprint, 'committed'); assert.equal(v.step, 'pr'); assert.deepEqual(v.feedback?.checks, []);
+  assert.equal('status' in f.task, false);
+});
+test('local verifier refuses dirty or wrong heads before effects and detects mutations/revision/PR changes after testing', async () => {
+  const a = await localFixture(); let calls = 0; a.ports.verifyLocal = async () => { calls++; return localResult; };
+  await assert.rejects(a.service.act(a.input.id, { action: 'verify-local', head: 'other', confirm: true })); assert.equal(calls, 0);
+  a.setTree({ head: 'commit-sha', fingerprint: 'changed', files: ['file'], diff: '' });
+  await assert.rejects(a.service.act(a.input.id, { action: 'verify-local', head: 'commit-sha', confirm: true })); assert.equal(calls, 0);
+  for (const change of ['tree', 'task', 'pr', 'failed'] as const) {
+    const f = await localFixture(); f.ports.verifyLocal = async () => {
+      if (change === 'tree') f.setTree({ head: 'commit-sha', fingerprint: 'mutated', files: ['file'], diff: '' });
+      if (change === 'task') f.task.revision = 'changed';
+      if (change === 'pr') f.ports.feedback = async () => ({ head: 'other', state: 'closed', draft: false, observedAt: 'now', reviews: [], checks: [] });
+      return { ...localResult, passed: change !== 'failed' };
+    };
+    const v = await f.service.act(f.input.id, { action: 'verify-local', head: 'commit-sha', confirm: true }); assert.equal(v.localVerification?.passed, false, change);
+  }
+});
+test('unknown local verification stays pending after refresh/restart, never silently retried; zero exit cannot override strict failure', async () => {
+  const f = await localFixture(); let calls = 0; f.ports.verifyLocal = async () => { calls++; throw new Error('lost response'); };
+  const v = await f.service.act(f.input.id, { action: 'verify-local', head: 'commit-sha', confirm: true }); assert.equal(v.pending?.action, 'verify-local');
+  const restarted = new TaskCodeDeliveryService(f.ports); await restarted.act(f.input.id, { action: 'refresh' });
+  await assert.rejects(restarted.act(f.input.id, { action: 'verify-local', head: 'commit-sha', confirm: true })); assert.equal(calls, 1);
+  const g = fixture(); await g.developed(); g.ports.test = async () => ({ exitCode: 0, passed: false, outputDigest: 'skipped' });
+  assert.equal((await g.service.act(g.input.id, { action: 'test', command: 'npm test', confirm: true })).test?.passed, false);
+});

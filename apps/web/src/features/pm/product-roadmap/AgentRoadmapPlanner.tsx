@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { CanvasOperationNotice } from './CanvasBuildStatus';
 import { designPrompt, readDesignCandidate, type DesignCandidate } from './design-candidate';
 import { Link } from 'react-router';
 import type { ProviderInstance, ProvidersResponse } from '@agent-workspace/contracts/provider';
@@ -53,7 +54,7 @@ export function AgentRoadmapPlanner({ plan, revision, storageKey, workspaceId, p
       setCandidate(result); setError('');
       if (result) { setWatch(false); setStatus('候选已生成，尚未修改草稿。请审阅后明确应用。'); }
       else if (!h.latestGeneration) { setWatch(false); setStatus('未发现已接受的生成。请到原会话核对，不会重放请求。'); }
-      else setStatus('Agent 正在生成路线候选，可继续查看页面；离开不会取消后台生成。');
+      else setStatus('AI 正在生成产品方案，可继续查看页面；离开不会取消后台生成。');
     } catch (e) { if (alive.current) { setCandidate(null); setWatch(false); setError(String(e)); } }
   }
   useEffect(() => {
@@ -106,15 +107,15 @@ export function AgentRoadmapPlanner({ plan, revision, storageKey, workspaceId, p
     finally { if (alive.current) setBusy(false); }
   }
   return <section className="roadmap-card roadmap-agent" aria-label={onDesignCandidate ? "Agent 生成设计候选" : "Agent 生成路线候选"}>
-    <h2>{onDesignCandidate ? "让 Agent 生成界面设计" : "让 Agent 规划产品路线"}</h2><p>{onDesignCandidate ? "描述想要的布局、氛围和交互。生成 HTML/CSS 设计草稿，可在原会话继续讨论后核对最新结果；不会直接开发产品或生成真实图片。" : "根据 PRD 和现有草稿生成可审阅候选。先跑通最小闭环，再逐步扩展同一个 App。"}</p>
-    {!record && <><div className="roadmap-actions"><button disabled={busy} onClick={() => void loadProviders()}>读取已有 Provider</button>
-      <label>Provider<select value={provider} disabled={busy} onChange={e => { setProvider(e.target.value); setModel(''); }}><option value="">请选择</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.configured || !p.nativeSessionReady}>{p.label}{!p.nativeSessionReady ? ' · 未就绪' : ''}</option>)}</select></label>
+    <h2>{onDesignCandidate ? "让 AI 生成界面设计" : "让 AI 规划产品功能"}</h2><p>{onDesignCandidate ? "描述想要的布局、氛围和交互。生成可预览的设计草稿，可在原会话继续讨论后核对最新结果；不会直接开发产品或生成真实图片。" : "根据产品需求和现有草稿生成可调整的功能方案。先实现核心流程，再逐步扩展同一个产品。"}</p>
+    {!record && <><div className="roadmap-actions"><button disabled={busy} onClick={() => void loadProviders()}>读取已配置的 AI 服务</button>
+      <label>AI 服务<select value={provider} disabled={busy} onChange={e => { setProvider(e.target.value); setModel(''); }}><option value="">请选择</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.configured || !p.nativeSessionReady}>{p.label}{!p.nativeSessionReady ? ' · 未就绪' : ''}</option>)}</select></label>
       <label>模型<select value={model} disabled={busy || !selected} onChange={e => setModel(e.target.value)}><option value="">请选择</option>{selected?.models.map(m => <option key={m.id} value={m.id} disabled={!!m.disabledReason}>{m.label}</option>)}</select></label></div>
       <label>补充要求（可选）<textarea rows={2} maxLength={4000} value={instruction} onChange={e => setInstruction(e.target.value)} placeholder={onDesignCandidate ? "例如：浅色、简洁；左侧导航，右侧列表与详情；统一空态和错误提示" : "例如：先做能演示的版本，暂时不做登录"} /></label>
-      <p className="roadmap-muted">点击后会将当前 PRD、草稿和补充要求发送给所选 Provider，并保留 Agent Chat 历史。仅规划，不授予代码写入、任务创建或发布权限。</p>
+      <p className="roadmap-muted">点击后会将产品需求、草稿和补充要求发送给所选 AI 服务并消耗其额度，保留本次对话。只生成方案，不编写代码、创建任务或发布产品。</p>
       <button className="primary" disabled={disabled || busy || storageBroken || !ready || !plan.brief.idea.trim()} onClick={() => void start()}>{onDesignCandidate ? "生成设计草稿" : "生成路线候选"}</button></>}
-    {record && <div className="roadmap-actions"><button disabled={busy} onClick={() => { setWatch(true); void check(); }}>核对原结果</button><button disabled={busy || !!candidate} onClick={() => void stop()}>停止生成</button><Link to={`/agent/workspace?${new URLSearchParams({ workspace: workspaceId, project: projectId, thread: record.threadId })}`}>查看原会话</Link><button disabled={busy} onClick={() => void clear()}>停止并结束本次生成</button></div>}
-    {status && <p role="status">{status}</p>}{error && <p role="alert" className="roadmap-error">{error}</p>}
+    {record && <div className="roadmap-actions"><button disabled={busy} onClick={() => { setWatch(true); void check(); }}>核对原结果</button><button disabled={busy || !!candidate} onClick={() => void stop()}>停止生成</button><Link to={`/agent/workspace?${new URLSearchParams({ workspace: workspaceId, project: projectId, thread: record.threadId })}`}>查看生成对话</Link><button disabled={busy} onClick={() => void clear()}>停止并结束本次生成</button></div>}
+    {status && <p role="status">{status}</p>}{error && <CanvasOperationNotice message={error} />}
     {candidate && <div aria-label="候选审阅"><h3>为什么这样拆</h3><p className="roadmap-agent-prose">{candidate.summary}</p>
       {candidate.questions.length > 0 && <><h3>请先补充这些决定</h3><ul>{candidate.questions.map((q, i) => <li key={i}>{q}</li>)}</ul><p>请回到「明确产品」补充需求，然后重新生成。</p></>}
       <details><summary>对照当前草稿（不会自动覆盖）</summary>{plan.nodes.map(n => <article key={n.id}><strong>{n.stage} · {n.title}</strong><p>{n.outcome}</p><p className="roadmap-agent-prose">{n.acceptance}</p></article>)}</details><p>当前草稿 {plan.nodes.length} 项 → 候选 {candidate.nodes.length} 项。应用会替换草稿节点；PRD、已发布版本和真实任务不会改变。</p>

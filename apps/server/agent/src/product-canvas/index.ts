@@ -15,8 +15,9 @@ import { resolveProviderRuntime } from '../providers/runtime.ts';
 import { requestDeliveryPm, authorizeDelivery } from '../task-delivery/authority.ts';
 import { deliveryStore, deliveryTaskRevision } from '../task-delivery/binding.ts';
 import { confirmedDelivery, inspectRoadmapDelivery } from '../task-delivery/roadmap.ts';
-import { git, githubRepository } from '../task-delivery/git.ts';
+import { git, githubRepository, readTree } from '../task-delivery/git.ts';
 import { DeliveryGitHub } from '../task-delivery/github.ts';
+import { assertLocalVerifier } from '../task-delivery/local-verification.ts';
 import { workflowService } from '../task-workflows/service.ts';
 import { workflowStore } from '../task-workflows/store.ts';
 import { scheduleWorkflow, assertWorkflowRunner } from '../task-workflows/runner.ts';
@@ -48,6 +49,7 @@ function service(headers: Headers) {
   return new ProductCanvasService({ ...store,
     project: (s, write) => project(s, headers, write),
     preflight: async input => {
+      if (input.verification === 'local') await assertLocalVerifier();
       if ((await repository(input, headers)).repository !== input.repository) throw new Error('仓库已变化。');
       const provider = await resolveProviderRuntime({ providerInstanceId: input.providerInstanceId, modelName: input.model });
       if (provider.driver !== 'codex') throw new Error('当前画布写入仅支持已确认的 Codex worktree 策略。');
@@ -60,19 +62,22 @@ function service(headers: Headers) {
       return catalog.runs[0] ?? null;
     },
     startChild: async (r, n, taskRevision, baseBranch) => {
-      const child = await workflowService(headers).start({ id: n.childId, workspaceId: r.input.workspaceId, projectId: r.input.projectId, taskId: n.taskId!, taskRevision, baseBranch, repository: r.input.repository, providerInstanceId: r.input.providerInstanceId, model: r.input.model, definitionId: 'builtin-canvas-deliver', definitionVersion: 1, consent: { execute: true, worktreeWrite: true, commit: true, push: true, draftPr: true, taskStatus: true } });
+      const child = await workflowService(headers).start({ id: n.childId, workspaceId: r.input.workspaceId, projectId: r.input.projectId, taskId: n.taskId!, taskRevision, baseBranch, repository: r.input.repository, providerInstanceId: r.input.providerInstanceId, model: r.input.model, definitionId: r.localVerification || r.input.verification === 'local' ? 'builtin-canvas-local' : 'builtin-canvas-deliver', definitionVersion: 1, consent: { execute: true, worktreeWrite: true, commit: true, push: true, draftPr: true, taskStatus: true } });
       scheduleWorkflow(child.id, headers); return child;
     },
     controlChild: async (id, action, version) => { const child = await workflowService(headers).control(id, action, version); if (action === 'resume') scheduleWorkflow(child.id, headers); },
+    localizeChild: async (id, version) => { await workflowService(headers).useLocalVerification(id, version); },
     verifyChild: async (id, input) => {
       const d = deliveryStore.read(id); if (!d?.git || !d.head || d.workspaceId !== input.workspaceId || d.projectId !== input.projectId) throw new Error('缺少节点交付记录。');
       const current = await authorizeDelivery(d, false, headers);
       if (current.revision !== deliveryTaskRevision(d) || current.root !== d.git.root || `${d.git.owner}/${d.git.repo}` !== input.repository) throw new Error('节点版本或仓库变化。');
       const feedback = await new DeliveryGitHub().feedback(d);
-      if (!confirmedDelivery({ ...d, feedback })) throw new Error('节点最新测试或同版本 CI 未通过。');
+      if (!confirmedDelivery({ ...d, feedback })) throw new Error('节点最新测试或指定的版本验证未通过。');
+      const tree = await readTree(d);
+      if (tree.head !== d.head || tree.files.length || d.localVerification && tree.fingerprint !== d.localVerification.fingerprint) throw new Error('节点代码已变化，原验证不覆盖当前内容。');
       const files = (await git(d.git.directory, 'diff', '--name-only', '-z', `${d.git.baseSha}..${d.head}`)).split('\0').filter(Boolean);
       const report = await readProductReport(d.git.directory, d.head, d.taskId, files);
-      const handoff = canvasHandoffSchema.parse({ schema:'pm/task-handoff/v1',deliveryId:d.id,taskId:d.taskId,head:d.head,branch:d.git.branch,pr:d.pr!.url,testCommand:d.test!.command,testDigest:d.test!.outputDigest,ci:feedback.checks.map(c=>c.name),checkedAt:feedback.observedAt,files:files.slice(0,100),filesTruncated:files.length>100,...(report ? { report } : {}) });
+      const handoff = canvasHandoffSchema.parse({ schema:'pm/task-handoff/v1',deliveryId:d.id,taskId:d.taskId,head:d.head,branch:d.git.branch,pr:d.pr!.url,testCommand:d.localVerification?.command ?? d.test!.command,testDigest:d.localVerification?.outputDigest ?? d.test!.outputDigest,ci:d.localVerification ? [] : feedback.checks.map(c=>c.name),...(d.localVerification ? { verification: 'local' } : {}),checkedAt:d.localVerification?.at ?? feedback.observedAt,files:files.slice(0,100),filesTruncated:files.length>100,...(report ? { report } : {}) });
       return { branch: d.git.branch, handoff };
     },
     integration: async r => (await inspectRoadmapDelivery({ ...r.input }, headers, true)).eligible,

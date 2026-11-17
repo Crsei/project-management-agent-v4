@@ -73,3 +73,25 @@
 .product-design-preview pre { max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .product-design-panel select { max-width: 100%; }
 .product-design-panel p { overflow-wrap: anywhere; }
+
+/* Product-facing progress; diagnostics remain available without dominating the canvas. */
+.canvas-build-status { border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin:18px 0; background:var(--card); }
+.canvas-build-status[data-state="paused"] { border-color:color-mix(in srgb,#d79d28 36%,var(--border)); }
+.canvas-build-summary { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.canvas-build-summary strong { font-size:15px; font-weight:600; }
+.canvas-build-summary span,.canvas-build-status p { font-size:12px; color:var(--muted-foreground); }
+.canvas-build-status p { margin-top:8px; }
+.canvas-build-status progress { display:block; width:100%; height:5px; margin:14px 0; border:0; border-radius:4px; overflow:hidden; background:var(--muted); accent-color:var(--primary); }
+.canvas-build-status progress::-webkit-progress-bar { background:var(--muted); }
+.canvas-build-status progress::-webkit-progress-value { background:var(--primary); border-radius:4px; }
+.canvas-build-status progress::-moz-progress-bar { background:var(--primary); }
+.canvas-operation-notice { padding:12px 16px; border:1px solid var(--border); border-radius:8px; font-size:13px; width:100%; }
+.canvas-operation-notice details { margin-top:8px; font-size:12px; color:var(--muted-foreground); }
+.canvas-operation-notice pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.canvas-build-consent { border:1px solid var(--border); border-radius:8px; padding:12px; min-width:0; }
+.canvas-build-consent legend { padding:0 5px; font-weight:600; font-size:13px; }
+.canvas-dialog .canvas-technical { padding-top:12px; border-top:1px solid var(--border); }
+.canvas-technical summary { cursor:pointer; }
+.canvas-technical[open] summary { margin-bottom:12px; }
+.canvas-technical p { overflow-wrap:anywhere; }
+.roadmap-node { background-color:var(--card, var(--background)); z-index:1; }

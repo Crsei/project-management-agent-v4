@@ -14,7 +14,7 @@ function ExecutionEvidence({ handoff }: { handoff: CanvasHandoff }) {
   const legacy = handoff.report && 'interfaces' in handoff.report ? handoff.report : undefined;
   return <article><p>{handoff.taskId} · 提交 {handoff.head}</p>
     <p>测试：{handoff.testCommand} · 摘要 {handoff.testDigest}</p>
-    <p>CI：{handoff.ci.join('、')} · 核对于 {handoff.checkedAt}</p>
+    <p>{handoff.verification === 'local' ? '本机隔离验证（非 GitHub CI）' : `CI：${handoff.ci.join('、')}`} · 核对于 {handoff.checkedAt}</p>
     <a href={handoff.pr} target="_blank" rel="noreferrer">查看交付 PR ↗</a>
     <details><summary>变更文件{handoff.filesTruncated ? '（部分）' : ''}</summary><pre>{handoff.files.join('\n')}</pre></details>
     {legacy && <details><summary>历史技术交接</summary><p>接口与模型：{legacy.interfaces.join('；')}</p><p>设计决定：{legacy.decisions.join('；')}</p><p>使用方式：{legacy.usage}</p><p>风险与未验证：{legacy.risks.join('；') || '未提供；不代表没有风险'}</p></details>}
@@ -37,7 +37,7 @@ export function CanvasNodeContext({ plan, node, run }: { plan: RoadmapPlan; node
       {handoff && !changes?.length && <p>{changes ? '本次没有产品功能变化。' : '本次运行未提供功能变化说明。'}</p>}
       <details><summary>产品上下文</summary>
       <p>每个节点使用独立会话；自动传递产品能力与体验约定，不传递完整聊天。</p>
-      <h3>体验与共享约定</h3><pre>{plan.brief.sharedContract || '尚未填写，可在画布顶部的“体验约定”中补充。'}</pre>
+      <h3>体验与共享约定</h3><pre>{plan.brief.sharedContract || '尚未填写，可在画布顶部的“产品设计”中补充。'}</pre>
       <h3>节点开始前的产品能力</h3>
       {capabilities ? capabilities.length ? <ul>{capabilities.map((item, i) => <li key={i}>{item}</li>)}</ul> : <p>该版本的能力摘要为空。</p> : <p>该版本尚无能力摘要，执行时需根据代码核实；不会回退到更早的产品说明。</p>}
       {latest?.handoff && capabilities && <small>对应版本 {latest.handoff.head.slice(0, 12)}；Agent 描述，不代表逐项验收通过。</small>}

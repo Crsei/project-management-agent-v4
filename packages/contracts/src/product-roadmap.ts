@@ -60,5 +60,5 @@ export type RoadmapDeliveryScope = z.infer<typeof roadmapDeliveryScopeSchema>;
 export type RoadmapDeliveryRead = {
   eligible: boolean; reason: string; checkedAt: string;
   candidate: { id: string; head: string } | null;
-  items: { taskId: string; title: string; deliveryId: string | null; head: string | null; pr: string | null; tested: boolean; ci: boolean; included: boolean; observedAt: string | null; issue: string | null }[];
+  items: { taskId: string; title: string; deliveryId: string | null; head: string | null; pr: string | null; tested: boolean; ci: boolean; verified?: boolean; verification?: 'local' | 'github'; included: boolean; observedAt: string | null; issue: string | null }[];
 };

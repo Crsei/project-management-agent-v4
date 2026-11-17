@@ -29,6 +29,6 @@ taskWorkflowRoutes.post('/task-workflows/runs/:id/control', async c => {
   assertWorkflowRunner();
   const input = workflowControlSchema.parse(await c.req.json());
   const value = await workflowService(c.req.raw.headers).control(z.uuid().parse(c.req.param('id')), input.action, input.version);
-  if (input.action !== 'pause') scheduleWorkflow(value.id, c.req.raw.headers);
+  if (['running', 'waiting'].includes(value.status)) scheduleWorkflow(value.id, c.req.raw.headers);
   return c.json(value);
 });

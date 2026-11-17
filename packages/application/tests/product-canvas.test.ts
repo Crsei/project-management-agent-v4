@@ -126,6 +126,26 @@ test('adopted task workflow is observed, never owned or silently resumed',async(
 test('failed node blocks downstream task creation and is not retried automatically',async()=>{
   const f=fixture();await f.service.start(f.input);await f.tick();await f.tick();[...f.children.values()][0]!.status='failed';await f.tick();assert.equal(f.read().status,'paused');await assert.rejects(f.service.control(f.input.id,'resume',f.read().version));assert.equal(f.project.tasks[f.input.releaseId]!.length,1);
 });
+test('explicit repair only registers the owned paused child; separate resume preserves original task identity',async()=>{
+  const f=fixture(); await f.service.start(f.input); await f.tick(); await f.tick();
+  const child=[...f.children.values()][0]!; child.status='failed'; await f.tick();
+  const nodes=structuredClone(f.read().nodes), createCount=f.calls.filter(c=>c.startsWith('create:')).length;
+  f.ports.controlChild=async(id,action,version)=>{assert.equal(id,child.id);assert.equal(version,child.version);f.calls.push(`control:${action}`);child.status=action==='resume'?'running':'paused';child.version++;};
+  const r=await f.service.control(f.input.id,'retry-test',f.read().version);
+  assert.equal(r.status,'paused');assert.equal(child.status,'paused');assert.deepEqual(r.nodes,nodes);
+  assert.equal(f.calls.at(-1),'control:retry-test');assert.equal(f.calls.filter(c=>c.startsWith('create:')).length,createCount);
+  await f.service.control(f.input.id,'resume',r.version);assert.equal(child.status,'running');assert.equal(f.children.size,1);
+});
+test('repair never adopts another run, repairs a running parent or ignores requirement drift',async()=>{
+  for(const bad of ['unowned','running','drift','deny'] as const){
+    const f=fixture();await f.service.start(f.input);await f.tick();await f.tick();
+    if(bad!=='running'){[...f.children.values()][0]!.status='failed';await f.tick();}
+    if(bad==='unowned')f.read().nodes[0]!.owned=false;
+    if(bad==='drift')f.project.tasks[f.input.releaseId]![0]!.drifted=true;
+    if(bad==='deny')f.set.deny();
+    await assert.rejects(f.service.control(f.input.id,'retry-test',f.read().version));assert.ok(!f.calls.includes('control:retry-test'));
+  }
+});
 test('requirement drift, archived project and revoked access pause before any new side effect',async()=>{
   for(const mutate of [(f:ReturnType<typeof fixture>)=>{f.project.archived=true;},(f:ReturnType<typeof fixture>)=>{f.set.deny();},(f:ReturnType<typeof fixture>)=>{f.project.tasks[f.input.releaseId]![0]!.drifted=true;}]){const f=fixture();await f.service.start(f.input);await f.tick();mutate(f);await f.tick();assert.equal(f.read().status,'paused');assert.equal(f.children.size,0);}
 });
@@ -166,4 +186,39 @@ test('all isolated nodes inherit one frozen design version; changing its referen
   await f.service.start(f.input);const run=await f.drive();assert.deepEqual(payload(run).product.design,f.plan.design);
   assert.equal(new Set(run.nodes.map(n=>n.context?.sharedVersion)).size,1);
   run.plan.design!.versionId=randomUUID();assert.throws(()=>payload(run),/版本已变化/);
+});
+
+test('local choice is explicit, keeps original frozen input, preserves nodes and requires resume separately', async () => {
+  const f = fixture(); await f.service.start(f.input); await f.tick(); await f.tick();
+  const paused = await f.service.control(f.input.id, 'pause', f.read().version), input = structuredClone(paused.input);
+  const changes: string[] = []; f.ports.localizeChild = async id => { changes.push(id); }; f.ports.preflight = async value => { assert.equal(value.verification, 'local'); };
+  const v = await f.service.control(f.input.id, 'use-local', paused.version);
+  assert.equal(v.status, 'paused'); assert.ok(v.localVerification?.selectedAt); assert.deepEqual(v.input, input);
+  assert.deepEqual(v.nodes, paused.nodes); assert.equal(changes.length, 1);
+  await assert.rejects(f.service.control(f.input.id, 'use-local', paused.version));
+  await f.service.control(f.input.id, 'resume', v.version); assert.equal(f.read().status, 'running');
+  assert.equal(f.calls.filter(c => c.startsWith('start:')).length, 1);
+});
+test('partial local switch remains paused and retry reconciles existing child instead of creating a replacement', async () => {
+  const f = fixture(); await f.service.start(f.input); await f.tick(); await f.tick();
+  await f.service.control(f.input.id, 'pause', f.read().version); let calls = 0;
+  f.ports.localizeChild = async () => { calls++; if (calls === 1) throw new Error('lost amendment reply'); };
+  await assert.rejects(f.service.control(f.input.id, 'use-local', f.read().version));
+  assert.equal(f.read().status, 'paused'); assert.ok(f.read().localVerification);
+  await assert.rejects(f.service.control(f.input.id, 'resume', f.read().version), /尚未核对/);
+  const v = await new ProductCanvasService(f.ports).control(f.input.id, 'use-local', f.read().version);
+  assert.equal(v.status, 'paused'); assert.equal(calls, 2); assert.equal(f.children.size, 1);
+});
+
+
+test('local amendment cannot silently adopt an unknown or unowned child dispatch', async () => {
+  for (const phase of ['starting', 'creating', 'running'] as const) {
+    const f = fixture(); await f.service.start(f.input); await f.tick(); await f.tick();
+    await f.service.control(f.input.id, 'pause', f.read().version);
+    f.runs.get(f.input.id)!.nodes[0]!.phase = phase;
+    if (phase === 'running') f.runs.get(f.input.id)!.nodes[0]!.owned = false;
+    f.ports.localizeChild = async () => { throw new Error('must not call'); };
+    await assert.rejects(f.service.control(f.input.id, 'use-local', f.read().version), /派发结果/);
+    assert.equal(f.read().localVerification, undefined);
+  }
 });

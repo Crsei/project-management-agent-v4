@@ -11,9 +11,9 @@ export type ProductHandoffReport = z.infer<typeof productHandoffReportSchema>;
 export const canvasHandoffSchema = z.strictObject({
   schema:z.literal('pm/task-handoff/v1'), deliveryId:z.uuid(), taskId:z.string().regex(/^TASK-\d+$/),
   head:sha, branch:z.string().min(1).max(200), pr:z.string().max(512).regex(/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[1-9]\d*$/), testCommand:z.string().max(2000), testDigest:z.string().max(256),
-  ci:z.array(z.string().max(200)).min(1).max(100), checkedAt:z.iso.datetime(),
+  ci:z.array(z.string().max(200)).max(100), verification:z.literal('local').optional(), checkedAt:z.iso.datetime(),
   files:z.array(z.string().max(1000)).max(100), filesTruncated:z.boolean(), report:agentHandoffReportSchema.optional(),
-});
+}).refine(v => v.verification === 'local' ? v.ci.length === 0 : v.ci.length > 0, '本地验证不得冒充 CI；云端验证必须有检查名称。');
 const input = z.strictObject({nodeId:z.uuid(),deliveryId:z.uuid(),head:sha});
 export const canvasTaskContextSchema = z.strictObject({
   schema:z.literal('pm/task-context/v1'), releaseId:z.uuid(), nodeId:z.uuid(), sharedVersion:z.string().regex(/^[a-f0-9]{64}$/),

@@ -18,6 +18,7 @@ import { deliveryStore, deliveryTaskRevision } from './binding.ts';
 import { authorizeDelivery } from './authority.ts';
 import { git, preflightPrepare, reconcileCommit, commitTree, prepareWorktree, pushTree, readRemoteHead, readTree, testTree, verifyWorktree } from './git.ts';
 import { DeliveryGitHub } from './github.ts';
+import { runLocalVerification } from './local-verification.ts';
 
 const active = new Set<string>();
 const github = new DeliveryGitHub();
@@ -41,7 +42,9 @@ export function deliveryService(headers: Headers) {
       const binding = await prepareWorktree(value, root, base);
       await checkRoadmapBase({ ...value, root, revision: value.taskRevision }, base, headers, binding.baseSha);
       return binding;
-    }, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
+    }, verify: verifyWorktree, tree: v => readTree(v),
+    test: (v, command) => workflowStore.readRun(v.id)?.graph.nodes.some(n => n.kind === 'test' && n.config.verification === 'local') ? runLocalVerification(v, command) : testTree(v, command),
+    verifyLocal: v => runLocalVerification(v), commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
     findPr: v => github.find(v), createPr: v => github.create(v), feedback: v => github.feedback(v),
     busy: v => !!getActiveChat(v.threadId),
     generation: v => { const generation = listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey); return generation ? { id: generation.id, status: generation.status } : null; },
