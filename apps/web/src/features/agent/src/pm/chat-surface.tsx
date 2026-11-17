@@ -218,6 +218,8 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   // PM hand-offs are reference/business targets, never folder selections.
   const displayScope = useMemo(() => requestedPmTarget(params), [params]);
   const currentThread = remoteId ? state.threads.get(remoteId) : undefined;
+  const parentThreadId = typeof currentThread?.custom?.parentThreadId === "string" ? currentThread.custom.parentThreadId : undefined;
+  const parentThread = parentThreadId ? state.threads.get(parentThreadId) : undefined;
   const currentExecutionSelection = threadExecutionSelection(localId, remoteId);
   const currentWorkspace = state.workspaces.find(item => item.id === currentExecutionSelection?.agentWorkspaceId);
   const selectedWorkspace = state.workspaces.find(item => item.id === selectedWorkspaceId) ?? currentWorkspace;
@@ -711,6 +713,12 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
       setSessionAction(undefined);
     });
   };
+  const openThreadByRemoteId = (id: string) => {
+    const local = threadItems.find(item => item.remoteId === id)?.id;
+    if (!local) { setActionError(t("父会话尚未登记，请重新读取会话列表。", "The parent Session is not registered yet; reload the Session list.")); return; }
+    switchSession(local);
+  };
+
   const sidebarAction = (thread: RemoteThread, action: "pin" | "unpin" | "settle" | "unsettle" | "snooze" | "wake" | "auto-settle" | "mark-unread" | "visit", options?: { snoozedUntil?: string; enabled?: boolean }) => {
     const parkingCurrent = thread.remoteId === remoteId && (action === "settle" || action === "snooze");
     if (parkingCurrent && (!canLeaveAutomation() || !protect())) return;
@@ -1006,7 +1014,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     <main className="pm-agent-main">
       {!boardMode && <header className="pm-agent-context-header desktop-titlebar desktop-titlebar-reserve-controls">
         {(drawerSidebar || sidebarCollapsed) && <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={() => { toggleSidebar(); if (!drawerSidebar) requestAnimationFrame(() => document.getElementById(sidebarId)?.querySelector<HTMLButtonElement>(".pm-agent-product button")?.focus()); }}><PanelLeftIcon /></button>}
-        <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{currentWorkspace && <><span title={currentWorkspace.path}>{currentWorkspace.name}</span><span aria-hidden> / </span></>}<strong onDoubleClick={() => { if (remoteId && !automationsView) openAction(remoteId, title ?? "", "rename"); }} title={remoteId && !automationsView ? t("双击重命名会话", "Double-click to rename session") : undefined}>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}</strong></div>{remoteId && !automationsView && <button type="button" className="pm-agent-icon pm-agent-title-edit" aria-label={t("重命名会话", "Rename session")} title={t("重命名会话", "Rename session")} onClick={() => openAction(remoteId, title ?? "", "rename")}><PencilIcon /></button>}</nav>
+        <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{currentWorkspace && <><span title={currentWorkspace.path}>{currentWorkspace.name}</span><span aria-hidden> / </span></>}{parentThreadId && <><button type="button" className="pm-agent-parent-thread" title={parentThread?.title ?? parentThreadId} onClick={() => openThreadByRemoteId(parentThreadId)}>{parentThread?.title ?? t("父会话", "Parent session")}</button><span aria-hidden> / </span></>}<strong onDoubleClick={() => { if (remoteId && !automationsView) openAction(remoteId, title ?? "", "rename"); }} title={remoteId && !automationsView ? t("双击重命名会话", "Double-click to rename session") : undefined}>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}</strong></div>{remoteId && !automationsView && <button type="button" className="pm-agent-icon pm-agent-title-edit" aria-label={t("重命名会话", "Rename session")} title={t("重命名会话", "Rename session")} onClick={() => openAction(remoteId, title ?? "", "rename")}><PencilIcon /></button>}</nav>
         {!entry && runReturn && <Link className="pm-agent-back" data-automation-leave-guarded="true" to={runReturn} onClick={(event) => { if (!protectNavigation()) event.preventDefault(); }}><ArrowLeftIcon /><span>{t("返回运行面板", "Back to run board")}</span></Link>}
         {!automationsView && <>
           {!entry && automationReturn && <Button variant="outline" size="sm" onClick={() => { if (protect()) navigate(automationReturn); }}><ZapIcon />{t("返回自动化配置", "Return to automation setup")}</Button>}

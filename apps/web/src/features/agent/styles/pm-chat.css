@@ -296,3 +296,6 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .pm-execution-terminal-panes > * { min-width: 0; flex: 1; }
 .pm-execution-terminal-panes[data-split] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .pm-execution-terminal-actions button[data-active="true"] { background: var(--surface-hover); color: var(--foreground); }
+
+.pm-agent-parent-thread { max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; padding: 0; background: transparent; color: var(--text-muted); font-size: inherit; cursor: pointer; }
+.pm-agent-parent-thread:hover { color: var(--foreground); text-decoration: underline; }
