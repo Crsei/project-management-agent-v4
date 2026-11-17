@@ -125,7 +125,7 @@
 .markdown-workbench .task-collection-board .task-board-panel { flex: 1; min-height: 0; }
 .markdown-workbench .task-collection-board .pm-view { display: flex; width: 100%; height: 100%; min-height: 0; }
 .markdown-workbench .task-collection-board .kanban-board { width: 100%; height: 100%; min-height: 0; align-items: stretch; padding-bottom: 12px; }
-.markdown-workbench .task-collection-board .board-column { flex: 1 1 0; width: auto; min-width: 220px; }
+.markdown-workbench .task-collection-board .board-column { flex: 0 0 284px; width: 284px; min-width: 284px; }
 .markdown-workbench .task-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid transparent; border-radius: var(--radius-popover-value); box-shadow: 0 1px 2px rgba(20, 18, 16, .06); position: relative; cursor: pointer; transition: transform .18s var(--motion-ease-out), box-shadow var(--motion-hover), border-color var(--motion-hover); }
 .markdown-workbench .task-card:hover, .markdown-workbench .task-card:focus-within { z-index: 4; border-color: transparent; box-shadow: 0 2px 6px -2px rgba(20, 18, 16, .08), 0 0 0 1px var(--border-hover); transform: translateY(-1px); }
 .markdown-workbench .task-card.dragging { z-index: 6; opacity: .45; box-shadow: var(--shadow-floating); cursor: grabbing; }
@@ -152,16 +152,16 @@
 .markdown-workbench .card-menu-sep { height: 1px; margin: 4px 0; background: var(--border); }
 .markdown-workbench .pm-view .card-title { display: -webkit-box; width: 100%; padding: 0; overflow: hidden; text-align: left; font-size: 13px; line-height: 1.45; font-weight: 500; margin-bottom: 0; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .markdown-workbench .card-title:hover:not(:disabled) { color: var(--accent); }
-.markdown-workbench .blocked-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); padding: 3px 5px; border-radius: var(--radius-inline-value); }
+.markdown-workbench .blocked-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); padding: 3px 5px; border-radius: var(--radius-inline-value); }
 .markdown-workbench .card-bottom { display: flex; align-items: center; gap: 6px; min-height: 22px; padding: 0; }
 /* 看板卡片底栏：待审阅角标与 ID/截止日期同为 10/14，不再高于卡片元数据 */
-.markdown-workbench .pm-view .task-card .task-attention-badge { padding: 1px 5px; font-size: 10px; line-height: 14px; }
-.markdown-workbench .card-id { color: var(--muted-foreground); font-size: 10px; white-space: nowrap; }
+.markdown-workbench .pm-view .task-card .task-attention-badge { padding: 1px 5px; font-size: 10px; line-height: 14px; font-weight: 600; }
+.markdown-workbench .card-id { color: var(--muted-foreground); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .markdown-workbench .priority-icon { width: 13px; height: 13px; flex: none; color: var(--text-secondary); }
 .markdown-workbench .priority-icon.priority-high { color: var(--warning); }
 .markdown-workbench .priority-icon.priority-urgent { color: var(--destructive); }
 .markdown-workbench .priority-icon.priority-low, .markdown-workbench .priority-icon.priority-none { color: var(--text-muted); }
-.markdown-workbench .card-due { display: inline-flex; align-items: center; gap: 3px; color: var(--muted-foreground); font-size: 10px; white-space: nowrap; }
+.markdown-workbench .card-due { display: inline-flex; align-items: center; gap: 3px; color: var(--muted-foreground); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .markdown-workbench .card-due svg { flex: none; }
 .markdown-workbench .card-bottom-spacer { flex: 1; }
 .markdown-workbench .assignee-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-raised); color: var(--muted-foreground); font-size: 10px; }

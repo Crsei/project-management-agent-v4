@@ -30,7 +30,7 @@ export type ArchiveFilter = 'exclude' | 'include' | 'only';
 export type ContextMenuAction = { id: string; label: string; disabled?: boolean; reason?: string; destructive?: boolean; separatorBefore?: boolean; onSelect: () => void };
 export type ContextMenuRenderer = (trigger: React.ReactElement, actions: ContextMenuAction[], file?: FileRecord) => React.ReactNode;
 export function matchesArchive(file: FileRecord, filter: ArchiveFilter = 'exclude') { return filter === 'include' || (filter === 'only' ? !!file.entity.archived : !file.entity.archived); }
-export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; renderItemAdornment?: (file: FileRecord) => React.ReactNode; renderPerson?: (userId: string | undefined, file: FileRecord) => React.ReactNode; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
+export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; renderItemAdornment?: (file: FileRecord) => React.ReactNode; renderPerson?: (userId: string | undefined, file: FileRecord) => React.ReactNode; renderCardPerson?: (userId: string | undefined, file: FileRecord) => React.ReactNode; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
 
 export function filterFiles(files: FileRecord[], config: ViewConfig, search = '', archiveFilter: ArchiveFilter = 'exclude', configuration = defaultConfiguration) { return applyView(files, config, { search, archived: archiveFilter, configuration }); }
 export function unresolvedBlockers(file: FileRecord, files: FileRecord[], configuration = defaultConfiguration) { return file.entity.blocked_by.filter(id => { const entity = files.find(f => f.id === id)?.entity; const category = entity && statusCategory(entity, configuration); return category !== 'completed' && category !== 'canceled'; }); }
@@ -47,8 +47,12 @@ function permitsGroup(file: FileRecord, value: unknown, props: ViewProps): boole
   try { return props.canEdit(file.id, groupChange(file.entity, props.config.group_by || 'status', value, props.configuration)); }
   catch { return false; }
 }
-function PersonCell({ value, file, props }: { value: unknown; file: FileRecord; props: ViewProps }) {
+function PersonCell({ value, file, props, card = false }: { value: unknown; file: FileRecord; props: ViewProps; card?: boolean }) {
   const userId = typeof value === 'string' && value ? value : undefined;
+  if (card) {
+    if (props.renderCardPerson) return props.renderCardPerson(userId, file);
+    if (!userId) return null;
+  }
   if (props.renderPerson) return props.renderPerson(userId, file);
   const label = userId ? (props.en === false ? '身份未解析' : 'Identity unavailable') : (props.en === false ? '未分配' : 'Unassigned');
   return <span className="muted" title={label}><UserRound size={14} aria-label={label} /></span>;
@@ -128,7 +132,7 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
       {blocked.length > 0 && <span className="blocked-badge" title={`Blocked by ${blocked.join(', ')}`}><LockKeyhole size={11} />{blocked.length}</span>}
       <span className="card-bottom-spacer" />
       {file.entity.archived && <span className="draft-pill">Archived</span>}
-      <PersonCell value={file.entity.assignee || file.entity.owner} file={file} props={props} />
+      <PersonCell value={file.entity.assignee || file.entity.owner} file={file} props={props} card />
     </div>
     <MoveControls file={file} props={props} />
   </article>;
