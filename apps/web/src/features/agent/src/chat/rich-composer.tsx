@@ -134,7 +134,7 @@ function composerExtensions() {
   return [
     StarterKit.configure({
       codeBlock: false,
-      dropcursor: false, horizontalRule: false, link: false,
+      dropcursor: false, link: false,
       paragraph: false, trailingNode: false, underline: false,
     }),
     Node.create({

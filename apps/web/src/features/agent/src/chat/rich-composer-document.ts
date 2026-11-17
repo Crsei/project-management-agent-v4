@@ -81,10 +81,13 @@ export function parseComposerDocument(source: string, citation?: QuoteInfo, cont
         }
       }
     }
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/u.test(line)) {
+      content.push({ type: "horizontalRule" });
+      continue;
+    }
     const headingMatch = /^(#{1,6})\s+(.*)$/u.exec(line);
     if (headingMatch) {
       content.push({ type: "heading", attrs: { level: headingMatch[1]!.length }, content: inlineContent(headingMatch[2]!) });
-      index++;
       continue;
     }
     const quoteMatch = /^>\s?(.*)$/u.exec(line);
@@ -265,6 +268,7 @@ function listPositionAtSource(node: DocumentNode, sourceOffset: number, listPosi
 }
 
 function blockSource(node: DocumentNode): string {
+  if (node.type.name === "horizontalRule") return "---";
   if (node.type.name === "heading") {
     const level = Math.min(6, Math.max(1, Number(node.attrs.level) || 1));
     return `${"#".repeat(level)} ${composerInlineSource(node)}`;
@@ -354,6 +358,8 @@ export function composerSourceCursor(doc: DocumentNode, position: number): numbe
       const local = Math.max(0, position - blockPosition - 1);
       if (block.type.name === "codeBlock") {
         answer = sourceOffset + codeBlockOpening(block).length + 1 + Math.min(local, block.content.size);
+      } else if (block.type.name === "horizontalRule") {
+        answer = sourceOffset + (local > 0 ? 3 : 0);
       } else if (block.type.name === "heading") {
         const prefix = Math.min(6, Math.max(1, Number(block.attrs.level) || 1)) + 1;
         answer = sourceOffset + prefix + inlineSourceOffset(block, Math.min(block.content.size, local));
@@ -405,6 +411,8 @@ export function composerDocumentCursor(doc: DocumentNode, sourcePosition: number
       const local = Math.max(0, sourcePosition - sourceOffset);
       if (block.type.name === "codeBlock") {
         answer = blockPosition + 1 + Math.min(block.content.size, Math.max(0, local - codeBlockOpening(block).length - 1));
+      } else if (block.type.name === "horizontalRule") {
+        answer = blockPosition + 1;
       } else if (block.type.name === "heading") {
         const prefix = Math.min(6, Math.max(1, Number(block.attrs.level) || 1)) + 1;
         answer = blockPosition + 1 + (local > prefix ? inlinePositionAtSource(block, local - prefix) : 0);

@@ -157,6 +157,7 @@ const listSchema = getSchema([
   Node.create({ name: "listItem", content: "paragraph block*" }),
   Node.create({ name: "blockquote", group: "block", content: "paragraph+" }),
   Node.create({ name: "heading", group: "block", content: "inline*", addAttributes: () => ({ level: { default: 1 } }) }),
+  Node.create({ name: "horizontalRule", group: "block" }),
   Mark.create({ name: "bold" }), Mark.create({ name: "italic" }), Mark.create({ name: "strike" }), Mark.create({ name: "code" }),
 ]);
 
@@ -200,4 +201,12 @@ test("nested lists round-trip and map source carets", () => {
     assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
   }
   assert.equal(serializeComposerDocument(listSchema.nodeFromJSON(parseComposerDocument("1. one\n   1. child\n2. two"))), "1. one\n  1. child\n2. two");
+});
+
+test("horizontal rules round-trip and keep source positions", () => {
+  for (const source of ["---", "***", "before\n---\nafter"]) {
+    const doc = listSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source === "***" ? "---" : source);
+  }
+  assert.equal(serializeComposerDocument(listSchema.nodeFromJSON(parseComposerDocument("# Head\nbody"))), "# Head\nbody");
 });
