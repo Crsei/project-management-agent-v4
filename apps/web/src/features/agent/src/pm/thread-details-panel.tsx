@@ -18,6 +18,8 @@ export function ThreadDetailsPanel({
   environmentPath,
   environmentStatus,
   environmentError,
+  childThreads,
+  onOpenThread,
   onConfigureFiles,
   onSessionSettings,
   sessionSettingsDisabled,
@@ -32,6 +34,8 @@ export function ThreadDetailsPanel({
   environmentPath?: string;
   environmentStatus?: string;
   environmentError?: string;
+  childThreads?: Array<{ id: string; title: string }>;
+  onOpenThread?: (id: string) => void;
   onConfigureFiles?: () => void;
   onSessionSettings: () => void;
   sessionSettingsDisabled: boolean;
@@ -63,6 +67,7 @@ export function ThreadDetailsPanel({
         <div><dt>{t("状态", "Status")}</dt><dd data-activity={status.status} data-tone={status.tone} data-priority={status.priority}>{status.label}</dd></div>
         <div><dt>{t("执行环境", "Execution environment")}</dt><dd>{environmentLabel || "—"}</dd>{environmentPath && <dd><code>{environmentPath}</code></dd>}{environmentStatus && <dd>{environmentStatus}</dd>}{environmentError && <dd role="alert" className={styles.environmentError}>{environmentError}</dd>}</div>
         {branch && <div><dt>{t("代码分支", "Code branch")}</dt><dd><code>{branch}</code></dd></div>}
+        {!!childThreads?.length && <div><dt>{t("分叉会话", "Forked sessions")}</dt><dd><ul className={styles.lineageList}>{childThreads.map(child => <li key={child.id}><button type="button" onClick={() => onOpenThread?.(child.id)} title={child.title}>{child.title}</button></li>)}</ul></dd></div>}
       </dl>
       <div className={styles.actions} role="group" aria-label={t("会话操作", "Session actions")}>
         <button type="button" className={styles.action} disabled={!onConfigureFiles} onClick={onConfigureFiles}>

@@ -220,6 +220,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const currentThread = remoteId ? state.threads.get(remoteId) : undefined;
   const parentThreadId = typeof currentThread?.custom?.parentThreadId === "string" ? currentThread.custom.parentThreadId : undefined;
   const parentThread = parentThreadId ? state.threads.get(parentThreadId) : undefined;
+  const childThreads = remoteId ? [...state.threads.values()].filter(thread => thread.custom?.parentThreadId === remoteId).map(thread => ({ id: thread.remoteId, title: thread.title ?? t("未命名会话", "Untitled session") })) : [];
   const currentExecutionSelection = threadExecutionSelection(localId, remoteId);
   const currentWorkspace = state.workspaces.find(item => item.id === currentExecutionSelection?.agentWorkspaceId);
   const selectedWorkspace = state.workspaces.find(item => item.id === selectedWorkspaceId) ?? currentWorkspace;
@@ -1099,6 +1100,8 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
       environmentPath={environment?.executionPath ?? currentWorkspace?.path}
       environmentStatus={execution.loading ? t("正在核验环境", "Validating environment") : undefined}
       environmentError={execution.error}
+      childThreads={childThreads}
+      onOpenThread={openThreadByRemoteId}
       onConfigureFiles={configureExecution}
       onSessionSettings={() => setSessionSettingsOpen(true)}
       sessionSettingsDisabled={sessionSettingsDisabled}

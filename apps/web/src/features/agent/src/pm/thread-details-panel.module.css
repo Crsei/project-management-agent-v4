@@ -178,3 +178,7 @@
   font-size: 12px;
   line-height: 16px;
 }
+
+.lineageList { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.lineageList button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; padding: 0; background: transparent; color: var(--foreground); font: inherit; text-align: left; cursor: pointer; }
+.lineageList button:hover { text-decoration: underline; }
