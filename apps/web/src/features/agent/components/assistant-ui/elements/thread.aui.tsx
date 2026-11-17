@@ -154,6 +154,17 @@ export const Thread: FC<ThreadProps> = (props) => {
     messagesEmpty && !historyError && history.status !== "error" &&
     (!threadLoading || isDraft);
   const historyMissing = history.status === "loaded" && history.messageCount > 0 && messagesEmpty && !threadLoading && !threadRunning;
+  const [announcement, setAnnouncement] = useState("");
+  const previousRunning = useRef(threadRunning);
+  useEffect(() => {
+    const wasRunning = previousRunning.current;
+    previousRunning.current = threadRunning;
+    if (threadRunning && !wasRunning) setAnnouncement(t("助手正在工作。", "The assistant is working."));
+    else if (!threadRunning && wasRunning) setAnnouncement(t("助手已停止工作。", "The assistant stopped working."));
+  }, [threadRunning, t]);
+  useEffect(() => {
+    if (threadLoading) setAnnouncement(t("正在读取会话历史。", "Loading session history."));
+  }, [threadLoading, t]);
 
   return (
     <ThreadPrimitive.Root
@@ -170,6 +181,7 @@ export const Thread: FC<ThreadProps> = (props) => {
         ["--composer-shadow" as string]: "var(--shadow-composer)",
       }}
     >
+      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       <ThreadHistoryNavigation />
       {(props.saveError || props.catalog.error || (remoteId && props.sendUnavailable)) && <div className="thread-notice-lane" role="alert">
         <CircleAlertIcon aria-hidden="true" />
