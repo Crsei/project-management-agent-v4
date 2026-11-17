@@ -14,7 +14,7 @@ type TerminalCatalog = { serviceId: string; terminals: TerminalDescriptor[] };
 const PENDING_CREATION_KEY = "pm-v4:terminal-creation:pending";
 export type ExecutionTerminalController = {
   selectedId: string | null; selected: TerminalDescriptor | undefined;
-  terminals: TerminalDescriptor[]; select: (id: string) => void;
+  terminals: TerminalDescriptor[]; select: (id: string) => void; close: (id: string) => Promise<void>;
   enabled: boolean; create: (request: FolderTerminalRequest) => Promise<void>;
   openSession: (target: SessionTerminalTarget) => Promise<void>;
   busy: boolean; error?: string; retry: () => void;
@@ -155,6 +155,18 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
       throw cause;
     } finally { creating.current = false; setBusy(false); }
   };
+  const close = async (id: string) => {
+    assertEnabled();
+    try {
+      const response = await workspaceClient.fetch(`/api/inspector/terminals/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(agentText("终端未能关闭，请核对原终端。", "The terminal could not be closed; reconcile the original terminal."));
+      if (selectedId === id) setSelectedId(null);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
+    }
+  };
   const create = async (folder: FolderTerminalRequest) => {
     assertEnabled();
     try {
@@ -244,16 +256,20 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
     setTerminals(current => current.map(terminal => terminal.id === id ? { ...terminal, status: "exited", exitCode, signal: signal ?? null } : terminal));
   };
   return {
-    selectedId: selected?.id ?? null, selected, terminals: visibleTerminals, select: setSelectedId, enabled: enabled && (!!workspace || !!environment?.agentWorkspaceId || !!pendingCreation),
+    selectedId: selected?.id ?? null, selected, terminals: visibleTerminals, select: setSelectedId, close, enabled: enabled && (!!workspace || !!environment?.agentWorkspaceId || !!pendingCreation),
     create, openSession, busy, error, retry: () => { assertEnabled(); setError(undefined); void (pendingRef.current ? reconcileCreation(true) : refresh()).catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, acceptExit,
   };
 }
 
 export function ExecutionTerminals({ controller: c }: { controller: ExecutionTerminalController }) {
   const selected = c.selected;
+  // Ended PTYs stay visible only while selected; otherwise their tabs would
+  // accumulate without a way to reattach from this surface.
+  const tabs = c.terminals.filter(terminal => terminal.status === "running" || terminal.id === selected?.id);
   return <div className="pm-execution-terminals">
-    {c.terminals.length > 0 && <div className="pm-execution-terminal-tabs" role="tablist" aria-label={agentText("终端标签", "Terminal tabs")}>
-      {c.terminals.map((terminal, index) => {
+    <div className="pm-execution-terminal-bar">
+    {tabs.length > 0 && <div className="pm-execution-terminal-tabs" role="tablist" aria-label={agentText("终端标签", "Terminal tabs")}>
+      {tabs.map((terminal, index) => {
         const base = terminal.startCwd.split(/[\\/]/).filter(Boolean).at(-1);
         const label = terminal.scope === "session" ? agentText("会话终端", "Session terminal") : agentText(`文件夹终端 ${index + 1}`, `Folder terminal ${index + 1}`);
         return <button key={terminal.id} type="button" role="tab" aria-selected={terminal.id === selected?.id} data-active={terminal.id === selected?.id || undefined} title={`${terminal.startCwd}${base ? ` · ${base}` : ""}`} onClick={() => c.select(terminal.id)}>
@@ -263,6 +279,11 @@ export function ExecutionTerminals({ controller: c }: { controller: ExecutionTer
         </button>;
       })}
     </div>}
+    <div className="pm-execution-terminal-actions">
+      <button type="button" disabled={c.busy || !c.enabled} title={agentText("新建会话终端", "New session terminal")} aria-label={agentText("新建会话终端", "New session terminal")} onClick={() => void c.create({ scope: "session", relativePath: "" })}>+</button>
+      {selected && <button type="button" disabled={c.busy} title={agentText("结束当前终端", "End current terminal")} aria-label={agentText("结束当前终端", "End current terminal")} onClick={() => void c.close(selected.id)}>×</button>}
+    </div>
+    </div>
     {c.busy && !selected && <p role="status">{agentText("正在核对会话终端…", "Resolving the Session terminal…")}</p>}
     {c.error && <p role="alert">{c.error} <button type="button" disabled={c.busy} onClick={c.retry}>{agentText("核对原请求", "Reconcile original request")}</button></p>}
     {!selected && !c.busy && !c.error && <p role="status">{agentText("尚未打开终端。请从运行面板明确打开会话终端，或在 Files 中选择目录创建。", "No terminal is open. Explicitly open the Session terminal from the run board, or create one for a folder in Files.")}</p>}

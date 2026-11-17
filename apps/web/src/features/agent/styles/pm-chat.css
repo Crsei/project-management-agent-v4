@@ -284,3 +284,10 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .pm-execution-terminal-status { width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--success); }
 .pm-execution-terminal-status[data-status="exited"] { background: var(--muted-foreground); }
 .pm-execution-terminal-ended { color: var(--muted-foreground); font-size: 10px; }
+
+.pm-execution-terminal-bar { display: flex; align-items: stretch; min-width: 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+.pm-execution-terminal-bar .pm-execution-terminal-tabs { flex: 1; border-bottom: 0; }
+.pm-execution-terminal-actions { display: flex; align-items: center; gap: 2px; padding: 4px 6px 0; flex: none; }
+.pm-execution-terminal-actions button { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.5rem; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 15px; line-height: 1; cursor: pointer; }
+.pm-execution-terminal-actions button:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
+.pm-execution-terminal-actions button:disabled { opacity: .4; cursor: not-allowed; }
