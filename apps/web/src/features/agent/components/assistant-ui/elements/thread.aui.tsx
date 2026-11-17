@@ -27,6 +27,8 @@ import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
 import { useGenerationRecords, useMessageTimes } from "@agent/src/chat/generation-times";
+import { useGenerationOutput } from "@agent/src/chat/output-stream";
+import { nativeContextSourceAnchor } from "@agent/src/chat/context-source-navigation";
 import { COMPOSER_PROMPT_LIMIT, composerPromptTooLong } from "@agent/src/chat/composer-limit";
 import { ThreadFind } from "@agent/src/chat/thread-find";
 import "@agent/src/chat/composer-shell.css";
@@ -83,6 +85,7 @@ import {
   PencilIcon,
   CircleAlertIcon,
   RefreshCwIcon,
+  RouteIcon,
   SquareIcon,
   MessageSquareReplyIcon,
 } from "lucide-react";
@@ -134,12 +137,34 @@ export type ThreadProps = {
   onOpenSessionSettings?: () => void;
 };
 
+const PlanReadyBanner: FC<{ generationId: string }> = ({ generationId }) => {
+  const t = useAgentText();
+  const { snapshot } = useGenerationOutput(generationId);
+  const plan = snapshot?.items.find(item => item.type === "proposed_plan" && item.visibility !== "redacted" && item.visibility !== "unavailable");
+  if (!plan || snapshot?.status !== "completed") return null;
+  return <div className="plan-ready-banner" role="status">
+    <RouteIcon aria-hidden="true" />
+    <span>{t("计划已就绪", "Plan ready")}</span>
+    {plan.title && <span className="plan-ready-title" title={plan.title}>{plan.title}</span>}
+    <button type="button" onClick={() => document.getElementById(nativeContextSourceAnchor(generationId, plan.id))?.scrollIntoView({ block: "center", behavior: "smooth" })}>{t("查看计划", "View plan")}</button>
+  </div>;
+};
+
 export const Thread: FC<ThreadProps> = (props) => {
   const t = useAgentText();
   const threadId = useAuiState((s) => s.threads.mainThreadId);
   const isDraft = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.status === "new");
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
   const messagesEmpty = useAuiState((s) => s.thread.messages.length === 0);
+  const latestGenerationId = useAuiState((state) => {
+    for (let index = state.thread.messages.length - 1; index >= 0; index--) {
+      const message = state.thread.messages[index]!;
+      if (message.role !== "assistant") continue;
+      const durable = (message.metadata as { custom?: { durable?: { nativeOutput?: unknown; generationId?: unknown } } } | undefined)?.custom?.durable;
+      if (durable?.nativeOutput === true && typeof durable.generationId === "string") return durable.generationId;
+    }
+    return undefined;
+  });
   const threadLoading = useAuiState((s) => s.thread.isLoading);
   const threadRunning = useAuiState((s) => s.thread.isRunning);
   const history = useHistoryLoadOutcome(threadId);
@@ -253,6 +278,7 @@ export const Thread: FC<ThreadProps> = (props) => {
           >
             <ThreadScrollToBottom />
             <div className={styles.contextPanels}>
+              {latestGenerationId && <PlanReadyBanner key={latestGenerationId} generationId={latestGenerationId} />}
               <ComposerPendingRequests />
               {remoteId && <QueuedMessages key={remoteId} threadId={remoteId} />}
             </div>
