@@ -10,10 +10,17 @@ import type { SqlExecutor } from '../../../../packages/application/src/ports.ts'
 import { authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation, type CoreWorkspacePool } from './core-routes.ts';
 import { CoreCommandJournal } from './core-journal.ts';
 
-export type ProductRoadmapServiceOptions = { database: () => Pool; coreWorkspaces: CoreWorkspacePool | undefined };
+import type { BlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
+import { resolveProductDesign } from '../../../../packages/application/src/product-design.ts';
+import { downloadArtifactVersion } from '../../../../packages/application/src/delivery.ts';
+import { readEntity } from '../../../../packages/application/src/queries.ts';
+import type { ProductDesign } from '../../../../packages/contracts/src/product-design.ts';
+
+export type ProductRoadmapServiceOptions = { blobs?: BlobStore; database: () => Pool; coreWorkspaces: CoreWorkspacePool | undefined };
 export type ProductRoadmapMutationContext = { actor: Actor; workspaceId: string; projectId: string; checkAuthorization?: (sql: SqlExecutor) => Promise<void> };
 export type ProductRoadmapMaterialization = { roadmap: RoadmapRead; selectedNodeIds: string[]; dependencyClosure: string[]; idMap: { nodeId: string; taskId: string; revision: string }[] };
 export type ProductRoadmapService = {
+  design(actor: Actor, workspaceId: string, projectId: string, versionId: string): ReturnType<typeof resolveProductDesign>;
   read(actor: Actor, workspaceId: string, projectId: string): Promise<RoadmapRead>;
   act(context: ProductRoadmapMutationContext, input: RoadmapAction): Promise<RoadmapRead>;
   materialize(context: ProductRoadmapMutationContext, releaseId: string, nodeIds: string[]): Promise<ProductRoadmapMaterialization>;
@@ -34,10 +41,20 @@ export function createProductRoadmapService(options: ProductRoadmapServiceOption
     const c = await context(actor, workspaceId, projectId, false);
     return roadmapRead(c.project, c.workspace.snapshot().files);
   }
+  async function design(actor: Actor, workspaceId: string, projectId: string, versionId: string, expected?: ProductDesign) {
+    await context(actor, workspaceId, projectId, false);
+    if (!options.blobs) throw new DomainError('design_unavailable', '设计文件存储未就绪。', 503);
+    return resolveProductDesign({ versionId, projectId, ...(expected ? {expected} : {}) }, {
+      version: id => readEntity(options.database(), actor, workspaceId, id),
+      content: id => downloadArtifactVersion(options.database(), actor, workspaceId, id, options.blobs!),
+    });
+  }
   async function act(caller: ProductRoadmapMutationContext, incoming: RoadmapAction): Promise<RoadmapRead> {
     const input = roadmapActionSchema.parse(incoming), { actor: principal, workspaceId, projectId } = caller;
     const { workspace, project, scope } = await context(principal, workspaceId, projectId, true);
     const store = readRoadmap(project);
+    const selectedDesign = input.action === 'save' ? input.plan.design : input.action === 'publish' ? store.draft.design : store.releases.find(r => r.id === input.releaseId)?.plan.design;
+    if (selectedDesign) await design(principal, workspaceId, projectId, selectedDesign.versionId, selectedDesign);
     const checkProject = (id: string) => { if (id !== projectId) throw new DomainError('roadmap_scope', '原收据范围不符。', 409); };
     if (input.action === 'materialize') {
       const release = store.releases.find(r => r.id === input.releaseId);
@@ -116,5 +133,5 @@ export function createProductRoadmapService(options: ProductRoadmapServiceOption
     if ((audit.rows[0]?.count ?? 0) < original.audit.length) return null;
     return roadmap;
   }
-  return { read, act, materialize, recover };
+  return { read, act, materialize, recover, design };
 }

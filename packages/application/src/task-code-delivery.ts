@@ -1,4 +1,4 @@
-import type { DeliveryAction, DeliveryFeedback, DeliveryGit, DeliveryScope, DeliveryTree, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
+import type { DeliveryAction, DeliveryFeedback, DeliveryGit, DeliveryScope, DeliveryTree, LocalVerification, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
 import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export class DeliveryError extends Error {
@@ -22,7 +22,8 @@ export interface DeliveryPorts {
   develop(value: TaskCodeDelivery, provider: string, model: string): Promise<string>;
   generation(value: TaskCodeDelivery): { id: string; status: string } | null;
   busy(value: TaskCodeDelivery): boolean;
-  test(value: TaskCodeDelivery, command: string): Promise<{ exitCode: number | null; outputDigest: string }>;
+  test(value: TaskCodeDelivery, command: string): Promise<{ exitCode: number | null; outputDigest: string; passed?: boolean }>;
+  verifyLocal?(value: TaskCodeDelivery): Promise<Pick<LocalVerification, 'executor' | 'exitCode' | 'outputDigest' | 'counts' | 'passed'>>;
   commit(value: TaskCodeDelivery): Promise<string>;
   push(value: TaskCodeDelivery): Promise<void>;
   remoteHead(value: TaskCodeDelivery): Promise<string | null>;
@@ -107,6 +108,7 @@ export class TaskCodeDeliveryService {
       const tree = await this.ports.tree(value);
       if (input.action === 'develop' && !['ready', 'developed', 'tested'].includes(value.step)) fail('invalid_step', '当前交付阶段不能启动开发。');
       if (input.action === 'test' && !['developed', 'tested'].includes(value.step)) fail('invalid_step', '先完成一次 Agent 开发，再运行验证。');
+      if (input.action === 'verify-local' && (value.step !== 'pr' || !value.pr || !value.test?.passed || tree.files.length || tree.head !== value.head || input.head !== value.head || !this.ports.verifyLocal)) fail('local_verification_unavailable', '本地版本验证需要已测试、已提交且干净的原 Draft PR 版本，以及隔离验证器。');
       if (input.action === 'commit' && (value.step !== 'tested' || !value.test?.passed || value.test.fingerprint !== tree.fingerprint || input.fingerprint !== tree.fingerprint || !tree.files.length)) fail('stale_test', '需要与当前变更完全一致的通过测试及显式提交确认。');
       if (input.action === 'push' && (value.step !== 'committed' || tree.files.length || value.head !== tree.head || input.head !== tree.head)) fail('stale_head', '只允许推送已确认且工作区干净的提交。');
       if (input.action === 'draft-pr' && (value.step !== 'pushed' || tree.files.length || value.head !== tree.head || input.head !== tree.head)) fail('stale_head', '先推送当前已确认提交。');
@@ -127,8 +129,15 @@ export class TaskCodeDeliveryService {
           case 'test': {
             const result = await this.ports.test(value, input.command);
             const after = await this.ports.tree(value);
-            value.test = { command: input.command, fingerprint: tree.fingerprint, taskRevision: this.ports.expectedTaskRevision?.(value) ?? value.taskRevision, head: tree.head, passed: result.exitCode === 0 && tree.fingerprint === after.fingerprint, ...result, at: new Date().toISOString() };
+            value.test = { ...result, command: input.command, fingerprint: tree.fingerprint, taskRevision: this.ports.expectedTaskRevision?.(value) ?? value.taskRevision, head: tree.head, passed: result.exitCode === 0 && result.passed !== false && tree.fingerprint === after.fingerprint, at: new Date().toISOString() };
             value.step = 'tested'; break;
+          }
+          case 'verify-local': {
+            const result = await this.ports.verifyLocal!(value);
+            const after = await this.ports.tree(value), current = await this.ports.authorize(value, true);
+            const feedback = await this.ports.feedback(value);
+            value.localVerification = { ...result, command: 'npm test', head: tree.head, fingerprint: tree.fingerprint, at: new Date().toISOString(), passed: result.passed && result.exitCode === 0 && after.head === tree.head && after.fingerprint === tree.fingerprint && !after.files.length && current.root === value.git!.root && current.revision === (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision) && feedback.head === tree.head && feedback.state === 'open' && feedback.draft };
+            value.feedback = feedback; break;
           }
           case 'commit': value.head = await this.ports.commit(value); value.step = 'committed'; break;
           case 'push': await this.ports.push(value); value.step = 'pushed'; break;

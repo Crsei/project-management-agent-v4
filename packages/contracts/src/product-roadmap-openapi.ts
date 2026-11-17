@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { roadmapActionSchema, roadmapStoreSchema } from './product-roadmap.ts';
+import { designBundleSchema } from './product-design.ts';
 export function productRoadmapPaths() {
   const content = (schema: unknown) => ({ 'application/json': { schema } });
   const parameters = [{ name: 'workspaceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'projectId', in: 'path', required: true, schema: { type: 'string' } }];
@@ -15,5 +16,9 @@ export function productRoadmapPaths() {
       requestBody: { required: true, content: content(z.toJSONSchema(roadmapActionSchema)) },
       responses: { ...common.responses, 200: { description: 'Confirmed original native journal and audit, or unknown when proof is absent/incomplete. roadmap is the current authorized projection, not an overwrite of the original result.', content: content({ type: 'object', additionalProperties: false, required: ['status', 'roadmap'], properties: { status: { type: 'string', enum: ['confirmed', 'unknown'] }, roadmap: { anyOf: [response, { type: 'null' }] } } }) } },
     },
+  }, '/api/v1/workspaces/{workspaceId}/projects/{projectId}/product-roadmap/design/{versionId}': {
+    get: { ...common, operationId:'readProductDesign', parameters:[...parameters,{name:'versionId',in:'path',required:true,schema:{type:'string',format:'uuid'}}],
+      description:'Read an authorized immutable design artifact belonging to this project. Bounded in-memory ZIP inspection, never execution. Private/no-store; unsupported contents are listed, not run.',
+      responses:{...common.responses,200:{description:'Verified design asset index and bounded base64 content.',content:content(z.toJSONSchema(designBundleSchema))},422:{description:'Unsafe, corrupt or oversized design archive.'}} },
   } };
 }

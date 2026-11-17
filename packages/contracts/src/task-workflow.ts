@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { deliveryScopeSchema } from './task-code-delivery.ts';
+import { deliveryScopeSchema, type TaskCodeDelivery } from './task-code-delivery.ts';
 import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export const workflowKinds = ['task', 'prepare', 'agent', 'test', 'condition', 'commit', 'push', 'pr', 'ci', 'approval', 'end'] as const;
@@ -15,7 +15,7 @@ export const workflowGraphSchema = z.strictObject({
   name: z.string().trim().min(1).max(100),
   nodes: z.array(z.strictObject({ id: nodeId, kind: z.enum(workflowKinds), label: z.string().trim().min(1).max(100),
     x: z.number().finite().min(-10000).max(10000), y: z.number().finite().min(-10000).max(10000),
-    config: z.strictObject({ mode: z.enum(['analyze', 'develop']).optional(), instruction: z.string().max(8000).optional(), command: z.string().trim().max(2000).optional(), source: z.enum(['test', 'ci']).optional(), timeoutMinutes: z.number().int().min(1).max(60).optional(), requiredChecks: z.array(z.string().trim().min(1).max(150)).min(1).max(20).optional(), outcome: z.enum(['success', 'failure']).optional(), taskTransition: taskTransitionSchema.optional() }),
+    config: z.strictObject({ verification: z.literal('local').optional(), mode: z.enum(['analyze', 'develop']).optional(), instruction: z.string().max(8000).optional(), command: z.string().trim().max(2000).optional(), source: z.enum(['test', 'ci']).optional(), timeoutMinutes: z.number().int().min(1).max(60).optional(), requiredChecks: z.array(z.string().trim().min(1).max(150)).min(1).max(20).optional(), outcome: z.enum(['success', 'failure']).optional(), taskTransition: taskTransitionSchema.optional() }),
   })).min(2).max(32),
   edges: z.array(z.strictObject({ id: nodeId, source: nodeId, target: nodeId, port: z.enum(['next', 'pass', 'fail']) })).max(64),
 });
@@ -31,10 +31,10 @@ export const workflowStartSchema = deliveryScopeSchema.extend({ id: z.uuid(), ta
 });
 export type WorkflowStart = z.infer<typeof workflowStartSchema>;
 export type WorkflowNodeRecord = { state: 'running' | 'waiting' | 'succeeded' | 'failed'; startedAt: string; finishedAt?: string; outcome?: 'pass' | 'fail'; message?: string; generationKey?: string };
-export type WorkflowRun = { id: string; version: number; input: WorkflowStart; executionSelection?: ExecutionSelection; projectRoot: string; graph: WorkflowGraph; status: 'running' | 'waiting' | 'paused' | 'completed' | 'failed'; current: string; nodes: Record<string, WorkflowNodeRecord>; createdAt: string; updatedAt: string; message?: string; acceptedTaskRevision?: string; transitions?: Record<string, WorkflowTransitionRecord> };
+export type WorkflowRun = { id: string; version: number; input: WorkflowStart; executionSelection?: ExecutionSelection; projectRoot: string; graph: WorkflowGraph; status: 'running' | 'waiting' | 'paused' | 'completed' | 'failed'; current: string; nodes: Record<string, WorkflowNodeRecord>; createdAt: string; updatedAt: string; message?: string; acceptedTaskRevision?: string; transitions?: Record<string, WorkflowTransitionRecord>; testRepairs?: { at: string; previousGraph: WorkflowGraph; previousCurrent: string; previousTest: NonNullable<TaskCodeDelivery['test']>; head: string; fingerprint: string; nodeId: string }[]; localSwitch?: { at: string; previousGraph: WorkflowGraph; previousCurrent: string; previousStatus: string; previousMessage?: string } };
 export const workflowTaskRevision = (run: WorkflowRun) => run.acceptedTaskRevision ?? run.input.taskRevision;
 export const workflowControlSchema = z.discriminatedUnion('action', [
-  z.strictObject({ action: z.enum(['resume', 'pause', 'approve', 'confirm-transition']), version: z.number().int().positive(), confirm: z.literal(true) }),
+  z.strictObject({ action: z.enum(['resume', 'pause', 'approve', 'confirm-transition', 'retry-test']), version: z.number().int().positive(), confirm: z.literal(true) }),
   z.strictObject({ action: z.literal('new-session'), version: z.number().int().positive(), confirm: z.literal(true), executionSelection: executionSelectionSchema.refine(value => value.agentWorkspaceId !== null, 'Select an explicit Agent folder') }),
 ]);
 
@@ -60,7 +60,8 @@ export function workflowProblems(graph: WorkflowGraph): string[] {
     if (n.kind === 'test' && !n.config.command?.trim()) errors.push(`${n.label}需要测试命令。`);
     if (n.kind === 'condition' && !n.config.source) errors.push(`${n.label}需要判断来源。`);
     if (n.kind === 'end' && !n.config.outcome) errors.push(`${n.label}需要结束结果。`);
-    const allowed: Partial<Record<WorkflowKind, string[]>> = { agent: ['mode', 'instruction', 'taskTransition'], test: ['command'], condition: ['source'], ci: ['timeoutMinutes', 'taskTransition', 'requiredChecks'], end: ['outcome'], approval: ['instruction'] };
+    const allowed: Partial<Record<WorkflowKind, string[]>> = { agent: ['mode', 'instruction', 'taskTransition'], test: ['command', 'verification'], condition: ['source'], ci: ['timeoutMinutes', 'taskTransition', 'requiredChecks', 'verification'], end: ['outcome'], approval: ['instruction'] };
+    if (n.config.verification === 'local' && (n.kind === 'ci' && (n.config.requiredChecks || n.config.timeoutMinutes) || n.kind === 'test' && n.config.command !== 'npm test')) errors.push(`${n.label}本地验证仅支持 npm test，不能混用云端 CI 配置。`);
     if (n.config.taskTransition && !(n.kind === 'agent' && n.config.mode === 'develop' && n.config.taskTransition.phase === 'start' || n.kind === 'ci' && n.config.taskTransition.phase === 'review')) errors.push(`${n.label}的状态联动仅支持进入开发或 CI 通过后待审核。`);
     if (Object.keys(n.config).some(key => !(allowed[n.kind] ?? []).includes(key))) errors.push(`${n.label}存在不适用的配置。`);
   }
@@ -122,3 +123,21 @@ const explicitCiGraph = structuredClone(deliveryTemplate.draft);
 explicitCiGraph.nodes.find(n => n.kind === 'ci')!.config.requiredChecks = ['test'];
 deliveryTemplate.draft = explicitCiGraph; deliveryTemplate.revision = 3;
 deliveryTemplate.versions.push({ version: 3, graph: explicitCiGraph, publishedAt: '2026-11-01T15:00:00.000Z' });
+
+// Dedicated canvas preset: authorization includes phase transitions, never business completion.
+const canvasGraph = structuredClone(workflowTemplates.find(d => d.id === 'builtin-deliver')!.versions.at(-1)!.graph);
+canvasGraph.name = '画布节点交付';
+for (const node of canvasGraph.nodes) if (node.config.taskTransition) node.config.taskTransition.mode = 'auto';
+workflowTemplates.push({ id: 'builtin-canvas-deliver', workspaceId: '', projectId: '', revision: 1, draft: canvasGraph, versions: [{ version: 1, graph: canvasGraph, publishedAt: '2026-11-04T00:00:00.000Z' }] });
+
+// Separate opt-in preset. Historical GitHub graphs never silently change meaning.
+export function localCanvasGraph(graph: WorkflowGraph): WorkflowGraph {
+  const next = structuredClone(graph); next.name = '画布节点交付 · 本地隔离验证';
+  for (const n of next.nodes) {
+    if (n.kind === 'test') { n.label = '隔离运行测试'; n.config = { command: 'npm test', verification: 'local' }; }
+    if (n.kind === 'ci') { n.label = '本地提交版本验证'; n.config = { verification: 'local', ...(n.config.taskTransition ? { taskTransition: n.config.taskTransition } : {}) }; }
+  }
+  return next;
+}
+const localGraph = localCanvasGraph(canvasGraph);
+workflowTemplates.push({ id: 'builtin-canvas-local', workspaceId: '', projectId: '', revision: 1, draft: localGraph, versions: [{ version: 1, graph: localGraph, publishedAt: '2026-11-08T00:00:00.000Z' }] });

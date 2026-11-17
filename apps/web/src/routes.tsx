@@ -1,3 +1,4 @@
+import { ProductCanvasPage } from "@/features/pm/product-roadmap/ProductCanvasPage"
 import { ProductRoadmapPage } from "@/features/pm/product-roadmap/ProductRoadmapPage"
 import { lazy, Suspense } from "react"
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router"
@@ -79,6 +80,7 @@ export function AppRoutes() {
         <Route path=":workspaceSlug/projects/:projectId" element={<ServiceProjectLayout />}>
           <Route index element={<ServiceProjectEntry />} />
           <Route path="overview" element={<ServiceProjectOverview />} />
+          <Route path="roadmap/canvas" element={<ProductCanvasPage />} />
           <Route path="roadmap" element={<ProductRoadmapPage />} />
           <Route path="issues" element={<ServiceIssues />} />
           <Route path="documents" element={<ProjectDocumentsRoute />} />

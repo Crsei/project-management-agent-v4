@@ -162,6 +162,8 @@ export type ProjectDetailViewProps = PmControlledSurface & {
   editDialog?: ReactNode
   dependencyPanel?: ReactNode
   headerActions?: ReactNode
+  /** Shared host project navigation; fixtures retain their own tabs when omitted. */
+  projectNavigation?: ReactNode
   tabs?: readonly ProjectDetailViewProps["interaction"]["tab"][]
   /** Host-owned toolbar rendered directly below the tab strip. */
   toolbar?: ReactNode

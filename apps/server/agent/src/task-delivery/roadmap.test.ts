@@ -41,6 +41,17 @@ test('real Git ancestry gates sequential task baselines and integrated preview; 
     assert.equal(confirmedDelivery(records[0]!), false);
     await assert.rejects(checkRoadmapBase(task, 'main', new Headers(), second, ports));
     assert.equal((await inspectRoadmapDelivery(scope, new Headers(), false, ports)).eligible, false);
+    records[0]!.localVerification = { executor: 'linux-bwrap-node24-v1', command: 'npm test', head: first, fingerprint: 'committed', passed: true, exitCode: 0, outputDigest: 'local-proof', at: '2026-11-08T00:00:00Z', counts: { tests: 2, pass: 2, fail: 0, skipped: 0, cancelled: 0, todo: 0 } };
+    assert.equal(confirmedDelivery(records[0]!), true);
+    assert.equal((await inspectRoadmapDelivery(scope, new Headers(), false, ports)).eligible, false, 'missing fresh local tree cannot pass');
+    ports.tree = async value => ({ head: value.head!, files: [], diff: '', fingerprint: 'committed' });
+    const local = await inspectRoadmapDelivery(scope, new Headers(), true, ports);
+    assert.equal(local.eligible, true); assert.equal(local.items[0]!.ci, false); assert.equal(local.items[0]!.verified, true); assert.equal(local.items[0]!.verification, 'local');
+    await checkRoadmapBase(task, 'main', new Headers(), second, ports);
+    ports.tree = async value => ({ head: value.head!, files: ['dirty'], diff: '', fingerprint: 'committed' });
+    await assert.rejects(checkRoadmapBase(task, 'main', new Headers(), second, ports));
+    records[0]!.localVerification.counts!.skipped = 1; assert.equal(confirmedDelivery(records[0]!), false);
+    delete records[0]!.localVerification;
     records[0]!.feedback!.checks = [{ name: 'test', status: 'completed', conclusion: 'success' }]; rows[0]!.drifted = true;
     assert.equal((await inspectRoadmapDelivery(scope, new Headers(), false, ports)).eligible, false);
   } finally { await rm(root, { recursive: true, force: true }); }

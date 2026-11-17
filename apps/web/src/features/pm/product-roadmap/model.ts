@@ -13,7 +13,7 @@ export function suggestRoadmap(brief: ProductBrief, id: () => string): RoadmapPl
   const nodes = steps.map((step, i) => {
     const current = id(), dependsOn = previous ? [previous] : []; previous = current;
     const title = step.slice(0, 160), audience = brief.audience.slice(0, 240) || '目标用户';
-    return { id: current, title, outcome: `让${audience}能够完成：${title}。复用已有项目，不另建独立 App。`, acceptance: `可以通过界面完成“${title}”；结果刷新后保留；无效输入有明确提示；与前置成果串联操作并记录验收证据。`, nonGoals: brief.nonGoals, stage: `M${i + 1} · ${i === 0 ? '最小闭环' : i === steps.length - 1 ? '完整验证' : '逐步扩展'}`, dependsOn, x: i * 310 + 30, y: 30 };
+    return { id: current, title, outcome: `${audience}可以${title}。`, acceptance: `可以通过界面完成“${title}”；结果刷新后保留；无效输入有明确提示；能够衔接前置功能继续操作。`, nonGoals: '', stage: `M${i + 1} · ${i === 0 ? '最小闭环' : i === steps.length - 1 ? '完整验证' : '逐步扩展'}`, dependsOn, x: i * 310 + 30, y: 30 };
   });
   return { brief, nodes };
 }
@@ -37,4 +37,12 @@ export function feedbackScenario(id: () => string): RoadmapPlan {
     '需求按计划中/开发中/已完成展示在路线图三栏；切换状态可持久化；从路线图回看需求及原始反馈；用3条虚构反馈串联验证提交、归并、评分、路线图，重启后全链路保留，并增加端到端回归测试。',
   ];
   return { ...suggested, nodes: suggested.nodes.map((node, i) => ({ ...node, acceptance: criteria[i]! })) };
+}
+
+/** Explicitly add a real task; never mark integration verified just by creating the node. */
+export function addIntegrationTask(plan: RoadmapPlan, id: string): RoadmapPlan {
+  if (!plan.nodes.length || plan.nodes.length >= 24 || plan.nodes.some(n=>n.id===id)) throw new Error('请先添加功能任务，并为集成验收保留一个节点名额。');
+  const depended=new Set(plan.nodes.flatMap(n=>n.dependsOn)), leaves=plan.nodes.filter(n=>!depended.has(n.id));
+  if (!leaves.length) throw new Error('请先修正依赖环。');
+  return {...plan,nodes:[...plan.nodes,{id,title:'阶段集成验收',stage:'集成验收',outcome:'继承前置代码，在同一个 App 上验证核心用户流程、共享数据与接口兼容性，补充跨模块自动化测试。记录实际结果与未验证项，不以单节点成功代替整体可用。',acceptance:`产品验证目标：${plan.brief.success.slice(0,5000)||'请补充完整用户流程与预期结果'}\n串联本阶段前置功能，覆盖正常路径、关键失败路径与已有功能回归；实际执行并记录验证，不自动合并、部署或通过业务验收。`,nonGoals:plan.brief.nonGoals,dependsOn:leaves.map(n=>n.id),x:30,y:Math.min(6000,Math.max(...plan.nodes.map(n=>n.y))+200)}]};
 }

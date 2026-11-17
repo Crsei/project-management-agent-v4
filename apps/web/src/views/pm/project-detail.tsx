@@ -142,7 +142,7 @@ export function ProjectDetailView(props: ProjectDetailViewProps) {
             {!props.metricsInOverview && (regions?.metrics !== undefined ? regions.metrics : <div className={styles.metrics} data-pm-project-metrics>{metrics.map(({ label, count }) => <div key={label} className={styles.metricCard}><span className={styles.metricLabel}>{label}</span><strong className={styles.metricValue}>{count.value ?? "—"}</strong><span className={styles.metricSub}>{count.description}</span></div>)}</div>)}
             <ControlledMutation mutation={model.mutation} reconcile={actions.reconcile} />
             {brief && !tabs.includes("overview") && <>{regions?.overview !== undefined ? regions.overview : briefSection}{attachments}</>}
-            <div role="tablist" aria-label={brief ? en ? "Project delivery views" : "项目交付视图" : en ? "Project sections" : "项目分区"} className={`${styles.tabStrip} ${variantStyles.tabs}`} data-pm-brief-tabs={brief || undefined} data-pm-detail-tabs={!brief || undefined} onKeyDown={(event) => {
+            {props.projectNavigation ?? <div role="tablist" aria-label={brief ? en ? "Project delivery views" : "项目交付视图" : en ? "Project sections" : "项目分区"} className={`${styles.tabStrip} ${variantStyles.tabs}`} data-pm-brief-tabs={brief || undefined} data-pm-detail-tabs={!brief || undefined} onKeyDown={(event) => {
               const index = tabs.findIndex((tab) => tabRefs.current[tab] === document.activeElement)
               const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null
               if (!next) return
@@ -150,9 +150,9 @@ export function ProjectDetailView(props: ProjectDetailViewProps) {
               tabRefs.current[next]?.focus()
             }}>
               {tabs.map((tab) => <button key={tab} ref={(element) => { tabRefs.current[tab] = element }} id={`${prefix}-tab-${tab}`} type="button" role="tab" aria-selected={activeTab === tab} aria-controls={`${prefix}-panel-${tab}`} tabIndex={activeTab === tab ? 0 : -1} className={`${styles.tab} ${variantStyles.tab}`} onClick={() => actions.setInteraction((previous) => ({ ...previous, tab }))}>{labels[tab]}{tab === "comments" && model.activity.some((entry) => entry.kind === "comment") && <span className={styles.muted}> {model.activity.filter((entry) => entry.kind === "comment").length}</span>}</button>)}
-            </div>
+            </div>}
             {props.toolbar}
-            {tabs.filter((tab) => visited.tabs.has(tab)).map((tab) => <div key={tab} role="tabpanel" id={`${prefix}-panel-${tab}`} aria-labelledby={`${prefix}-tab-${tab}`} hidden={activeTab !== tab} data-hidden={activeTab !== tab || undefined} data-pm-brief-panel={brief ? tab : undefined} data-pm-detail-panel={!brief ? tab : undefined} tabIndex={0} className={`${styles.panel} ${variantStyles.panel}`}>{renderPanel(tab)}</div>)}
+            {tabs.filter((tab) => visited.tabs.has(tab)).map((tab) => <div key={tab} role="tabpanel" id={`${prefix}-panel-${tab}`} aria-labelledby={props.projectNavigation ? undefined : `${prefix}-tab-${tab}`} aria-label={props.projectNavigation ? labels[tab] : undefined} hidden={activeTab !== tab} data-hidden={activeTab !== tab || undefined} data-pm-brief-panel={brief ? tab : undefined} data-pm-detail-panel={!brief ? tab : undefined} tabIndex={0} className={`${styles.panel} ${variantStyles.panel}`}>{renderPanel(tab)}</div>)}
           </>}
         </DataRegion>
       </div>
