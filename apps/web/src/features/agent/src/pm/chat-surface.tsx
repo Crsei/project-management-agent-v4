@@ -15,6 +15,7 @@ import { Thread } from "@agent/components/assistant-ui/elements/thread.aui";
 import { useChatSettings } from "@agent/hooks/use-chat-settings";
 import { useIsMobile } from "@agent/hooks/use-mobile";
 import { ChatContinuity } from "../chat/continuity";
+import { providerSendIssue } from "../chat/provider-send-issue";
 import { UsageNavigationLink } from "../usage/navigation";
 import { initializeAgentThread, refreshThreadList } from "../chat/remote-adapter";
 import { PmToolCallsProvider } from "../chat/pm-tool-calls";
@@ -220,7 +221,15 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const currentThread = remoteId ? state.threads.get(remoteId) : undefined;
   const parentThreadId = typeof currentThread?.custom?.parentThreadId === "string" ? currentThread.custom.parentThreadId : undefined;
   const parentThread = parentThreadId ? state.threads.get(parentThreadId) : undefined;
-  const childThreads = remoteId ? [...state.threads.values()].filter(thread => thread.custom?.parentThreadId === remoteId).map(thread => ({ id: thread.remoteId, title: thread.title ?? t("未命名会话", "Untitled session") })) : [];
+  const childThreads = remoteId ? [...state.threads.values()].filter(thread => thread.custom?.parentThreadId === remoteId).map(thread => ({ id: thread.remoteId, title: thread.title ?? t("未命名会话", "Untitled session") })) : [];  const currentProvider = state.providers.find(provider => provider.instanceId === settings.providerInstanceId);
+  const providerIssueCode = providerSendIssue(currentProvider);
+  const providerIssue = providerIssueCode === "missing"
+    ? t("未找到当前 Provider 配置。", "The selected Provider configuration was not found.")
+    : providerIssueCode === "disabled"
+      ? t("当前 Provider 已停用。", "The selected Provider is disabled.")
+      : providerIssueCode === "not-installed"
+        ? t("当前 Provider 未检测到可执行文件。", "The selected Provider has no detected executable.")
+        : undefined;
   const currentExecutionSelection = threadExecutionSelection(localId, remoteId);
   const currentWorkspace = state.workspaces.find(item => item.id === currentExecutionSelection?.agentWorkspaceId);
   const selectedWorkspace = state.workspaces.find(item => item.id === selectedWorkspaceId) ?? currentWorkspace;
@@ -1070,6 +1079,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         saveError={settingsError}
         onRetry={retry}
         sendUnavailable={navigationBlocked || !currentExecutionSelection || !settingsReady || !!execution.error || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions)}
+        sendIssue={providerIssue}
         onOpenSessionSettings={() => setSessionSettingsOpen(true)}
         composerLeading={<PmComposerReferences />}
         composerActions={<><MessageContextSelector /><PmComposerReferenceAction /></>}
