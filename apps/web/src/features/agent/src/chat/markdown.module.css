@@ -313,3 +313,7 @@
     max-height: 20rem;
   }
 }
+
+.detailsBlock { margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.detailsSummary { cursor: pointer; font-weight: 600; }
+.detailsBlock[open] .detailsSummary { margin-bottom: 6px; }

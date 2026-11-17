@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { markdownFileReference, safeMarkdownUrl } from "./markdown-url.ts";
+import { markdownFileReference, markdownSessionLink, safeMarkdownUrl } from "./markdown-url.ts";
 import {
   markdownMediaCandidate,
   markdownMediaKind,
@@ -181,4 +181,15 @@ test("media filenames only offer actions and authorized MIME still controls rend
   assert.equal(markdownMediaKind("audio/ogg"), "audio");
   assert.equal(markdownMediaKind("video/mp4"), "video");
   for (const type of ["image/svg+xml", "text/html", "application/octet-stream", "application/pdf", "image/jpeg<script>"]) assert.equal(markdownMediaKind(type), undefined);
+});
+
+test("session links stay same-origin and require an explicit workspace thread id", () => {
+  const origin = "http://127.0.0.1:3224";
+  assert.equal(markdownSessionLink("/agent/workspace?thread=abc", origin), "abc");
+  assert.equal(markdownSessionLink("http://127.0.0.1:3224/agent/workspace?thread=abc&x=1", origin), "abc");
+  assert.equal(markdownSessionLink("https://example.com/agent/workspace?thread=abc", origin), undefined);
+  assert.equal(markdownSessionLink("/agent/runs?thread=abc", origin), undefined);
+  assert.equal(markdownSessionLink("/agent/workspace?thread=", origin), undefined);
+  assert.equal(markdownSessionLink("/agent/workspace", origin), undefined);
+  assert.equal(markdownSessionLink("javascript:alert(1)", origin), undefined);
 });

@@ -110,3 +110,19 @@ export function markdownFileReference(
   }
   return path ? { path, ...(line === undefined ? {} : { line }) } : undefined;
 }
+
+/**
+ * Only same-origin workspace links with an explicit thread id become session
+ * navigation. Attributes, query beyond thread and cross-origin hosts are ignored.
+ */
+export function markdownSessionLink(url: string, origin: string): string | undefined {
+  const value = url.trim();
+  // oxlint-disable-next-line no-control-regex -- reject ambiguous URLs before parsing.
+  if (!value || /[\u0000-\u0020\u007f\\]/.test(value)) return undefined;
+  try {
+    const parsed = new URL(value, origin);
+    if (parsed.origin !== origin || parsed.pathname !== "/agent/workspace") return undefined;
+    const thread = parsed.searchParams.get("thread");
+    return thread && thread.length <= 512 ? thread : undefined;
+  } catch { return undefined; }
+}

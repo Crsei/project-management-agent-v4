@@ -9,6 +9,7 @@ import { markdownFileReference, safeMarkdownUrl } from "./markdown-url";
 import { MarkdownCodeBlock, MarkdownTable } from "./markdown-blocks";
 import { MarkdownImage, MarkdownLink } from "./markdown-links";
 import { markdownNodeText } from "./markdown-rich-policy";
+import { splitDetailsBlocks } from "./markdown-details";
 import styles from "./markdown.module.css";
 
 export interface MarkdownProps {
@@ -32,6 +33,7 @@ export function Markdown({ content, locale = "en", streaming = false, className,
   // Streamdown 2.5 ignores components/urlTransform in its memo comparison. Reparse
   // unchanged content when authorization, session, source document or locale changes.
   const scopeKey = JSON.stringify([actions?.threadId, executionPath, documentPath, locale]);
+  const segments = useMemo(() => splitDetailsBlocks(content), [content]);
   const components = useMemo<NonNullable<StreamdownProps["components"]>>(() => ({
     a: ({ href, children, title }) => <MarkdownLink href={href} title={title} locale={locale} documentPath={documentPath}>{children}</MarkdownLink>,
     // Never emit an author-provided image URL. Preview requires a separate explicit authorized read.
@@ -46,22 +48,33 @@ export function Markdown({ content, locale = "en", streaming = false, className,
       return <MarkdownCodeBlock code={markdownNodeText(codeNode)} language={language} locale={locale} />;
     },
   }), [locale, documentPath]);
-  return <div className={cn(styles.markdown, className)}>
-    <Streamdown
-      key={scopeKey}
-      mode={streaming ? "streaming" : "static"}
-      isAnimating={streaming}
-      parseIncompleteMarkdown={streaming}
-      skipHtml
-      remarkRehypeOptions={remarkRehypeOptions}
-      remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
-      urlTransform={(url, key) => {
-        if (executionPath && markdownFileReference(url, executionPath, documentPath)) return url;
-        return key === "src" ? undefined : safeMarkdownUrl(url);
-      }}
-      components={components}
-      controls={false}
-    >{content}</Streamdown>
-  </div>;
+  const render = (value: string, key: string) => <Streamdown
+    key={key}
+    mode={streaming ? "streaming" : "static"}
+    isAnimating={streaming}
+    parseIncompleteMarkdown={streaming}
+    skipHtml
+    remarkRehypeOptions={remarkRehypeOptions}
+    remarkPlugins={remarkPlugins}
+    rehypePlugins={rehypePlugins}
+    urlTransform={(url, transformKey) => {
+      if (executionPath && markdownFileReference(url, executionPath, documentPath)) return url;
+      return transformKey === "src" ? undefined : safeMarkdownUrl(url);
+    }}
+    components={components}
+    controls={false}
+  >{value}</Streamdown>;
+  // Details are only interpreted after the block is complete, and only the two
+  // structural tags are recognized; the body still goes through the safe renderer.
+  if (!streaming && segments.some(segment => segment.kind === "details")) {
+    return <div className={cn(styles.markdown, className)}>
+      {segments.map((segment, index) => segment.kind === "markdown"
+        ? (segment.content.trim() ? render(segment.content, `${scopeKey}:${index}`) : null)
+        : <details key={`${scopeKey}:details:${index}`} className={styles.detailsBlock}>
+            <summary className={styles.detailsSummary}>{segment.summary}</summary>
+            <Markdown content={segment.body} locale={locale} documentPath={documentPath} />
+          </details>)}
+    </div>;
+  }
+  return <div className={cn(styles.markdown, className)}>{render(content, scopeKey)}</div>;
 }

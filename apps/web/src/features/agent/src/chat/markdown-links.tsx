@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useChatActions } from "./chat-actions";
 import { workspaceClient } from "../network";
 import { inspectUrl } from "../workspace/inspector/api";
-import { markdownFileReference, safeMarkdownUrl } from "./markdown-url";
+import { markdownFileReference, markdownSessionLink, safeMarkdownUrl } from "./markdown-url";
 import { markdownMediaCandidate, markdownMediaKind, type MarkdownMediaKind } from "./markdown-rich-policy";
 import styles from "./markdown.module.css";
 
@@ -60,7 +60,12 @@ export function MarkdownLink({ href, title, children, locale, documentPath }: { 
   const [error, setError] = useState<string | null>(null);
   const label = <InsideMarkdownLink.Provider value>{children}</InsideMarkdownLink.Provider>;
   const file = href && actions?.canOpenFiles && actions.executionPath ? markdownFileReference(href, actions.executionPath, documentPath) : undefined;
+  const session = href && actions ? markdownSessionLink(href, window.location.origin) : undefined;
   const safe = href ? safeMarkdownUrl(href) : undefined;
+  if (session && actions) return <button type="button" className={styles.fileLink} title={title ?? session} onClick={() => {
+    try { void actions.navigateSession(session).catch(cause => setError(cause instanceof Error ? cause.message : (locale === "zh-CN" ? "无法打开该会话。" : "Cannot open this session."))); setError(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : (locale === "zh-CN" ? "无法打开该会话。" : "Cannot open this session.")); }
+  }}>{label}</button>;
   if (file && actions) return <span>
     <button type="button" className={styles.fileLink} title={title ?? file.path} onClick={() => {
       try { actions.openFile(file.path, file.line); setError(null); }
