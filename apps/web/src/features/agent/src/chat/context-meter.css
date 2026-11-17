@@ -1,0 +1,12 @@
+.context-meter { display: inline-flex; align-items: center; gap: .3rem; height: 1.75rem; padding-inline: .35rem; border-radius: .45rem; color: var(--muted-foreground); }
+.context-meter:hover, .context-meter:focus-visible { background: var(--surface-hover); color: var(--foreground); }
+.context-meter-ring { width: 1.05rem; height: 1.05rem; flex: none; }
+.context-meter-track { fill: none; stroke: var(--border); stroke-width: 2.5; }
+.context-meter-value { fill: none; stroke: var(--info, #3b82f6); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dashoffset var(--motion-button, 160ms) ease-out; }
+.context-meter-ring[data-empty] .context-meter-value { display: none; }
+.context-meter-label { font-size: .68rem; font-variant-numeric: tabular-nums; }
+.context-meter-facts { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; }
+.context-meter-facts dt { color: var(--muted-foreground); }
+.context-meter-facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .context-meter-value { transition: none; } }
+@media (max-width: 480px) { .context-meter-label { display: none; } .context-meter { padding-inline: .2rem; } }

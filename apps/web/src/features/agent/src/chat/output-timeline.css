@@ -68,3 +68,16 @@
 .native-composer-request + .native-composer-request { padding-top: .55rem; border-top: 1px solid var(--border); }
 .native-request-location { display: inline-block; margin-block: .25rem; font-size: .8rem; }
 @media (max-width: 767px) { .native-plan-card { padding: .65rem; } .native-plan-actions > button { font-size: .72rem; } .native-composer-requests { max-height: 42vh; } }
+
+/* Long work groups stay bounded and follow provider output only while open. */
+.native-group-details { max-height: 20rem; overflow-y: auto; overscroll-behavior: contain; }
+.native-group-details[data-live] { scroll-behavior: smooth; }
+
+/* Active-turn line replaces the generic "processing" placeholder. */
+.native-working-row { display: flex; align-items: baseline; gap: .5rem; padding-block: .35rem .5rem; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: .85rem; }
+.native-working-label { display: inline-flex; align-items: baseline; gap: .35rem; font-variant-numeric: tabular-nums; }
+.native-working-elapsed { color: var(--text-secondary, var(--foreground)); }
+.native-shimmer { color: var(--muted-foreground); background-image: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 45%, var(--muted-foreground) 90%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; animation: native-working-shimmer 1.8s linear infinite; }
+@supports (background-clip: text) or (-webkit-background-clip: text) { .native-shimmer { color: transparent; } }
+@keyframes native-working-shimmer { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .native-shimmer { animation: none; background: none; color: var(--muted-foreground); } .native-group-details[data-live] { scroll-behavior: auto; } }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n-provider";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -18,7 +18,7 @@ import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
 import { McpAppFrame } from "./mcp-app-frame";
 import { CodeBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
-import { assistantMessageKind, canRespondToInteraction, commandText, createOutputDisclosureStore, generationIndicator, isCompletedAutoApproval, isGenerationActive, isItemActive, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, semanticToolSummary, type OutputPresentationRow, type ToolSummary } from "./output-presenter";
+import { assistantMessageKind, canRespondToInteraction, commandText, createOutputDisclosureStore, generationIndicator, generationWorkState, isCompletedAutoApproval, isGenerationActive, isItemActive, latestReasoning, presentOutputItems, reliableDurationMs, requiresVisibleDetails, semanticToolSummary, type GenerationWorkState, type OutputPresentationRow, type ToolSummary } from "./output-presenter";
 import { NativeInteraction } from "./native-interaction";
 import { useComposerRequestPanelMounted } from "./composer-pending-requests";
 import { ChangedFilesSummary, FileChanges } from "./native-file-changes";
@@ -49,6 +49,34 @@ function Duration({ item, generationStatus }: { item: NativeOutputItem; generati
   useEffect(() => { if (!running || !item.startedAt) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [running, item.startedAt]);
   const duration = reliableDurationMs(item, generationStatus, now);
   return duration === undefined ? null : <span>{duration < 100 ? "<0.1" : (duration / 1000).toFixed(1)}s</span>;
+}
+function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  if (minutes === 0) return `${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours === 0) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+/** Bottom-of-turn activity line. The ticking number is never used for provider claims. */
+function WorkingRow({ state }: { state: GenerationWorkState }) {
+  const t = useAgentText();
+  const [now, setNow] = useState(Date.now());
+  const startedAt = state.kind === "working" ? state.startedAt : undefined;
+  useEffect(() => {
+    if (!startedAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+  const elapsed = startedAt ? Math.max(0, now - Date.parse(startedAt)) : undefined;
+  const label = state.kind === "queued" ? t("等待运行…", "Queued…") : state.kind === "compacting" ? t("正在压缩上下文…", "Compacting…") : t("正在工作", "Working");
+  return <div className="native-working-row" data-state={state.kind}>
+    <span role="status" className="sr-only">{label}</span>
+    <span aria-hidden="true" className="native-working-label">
+      <span className="native-shimmer">{label}</span>
+      {elapsed !== undefined && <span className="native-working-elapsed"> · {formatElapsed(elapsed)}</span>}
+    </span>
+  </div>;
 }
 function CommandOutput({ generationId, item }: { generationId: string; item: NativeOutputItem }) {
   const t = useAgentText();
@@ -234,6 +262,15 @@ function OutputGroup({ row, generationId, generationStatus }: { row: Extract<Out
   const [open, change] = useOutputDisclosure(generationId, row.items, false, true);
   useNativeOutputContextSource(generationId, row.items.map(item => item.id), change, row.kind === "reasoning");
   const active = isGenerationActive(generationStatus) && row.items.some(isItemActive);
+  const thought = row.kind === "reasoning" ? latestReasoning(row.items) : undefined;
+  const detailsRef = useRef<HTMLDivElement>(null);
+  const followLive = useRef(true);
+  // Follow live provider output only while the group is open and the reader stays at the bottom.
+  useLayoutEffect(() => { if (open) followLive.current = true; }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !active || !followLive.current || !detailsRef.current) return;
+    detailsRef.current.scrollTop = detailsRef.current.scrollHeight;
+  }, [open, active, row.items]);
   if (row.kind === "tools" && row.items.length === 1) return <OutputRow item={row.items[0]!} generationId={generationId} generationStatus={generationStatus} />;
   const counts = {
     completed: row.items.filter(item => item.status === "completed").length,
@@ -242,13 +279,18 @@ function OutputGroup({ row, generationId, generationStatus }: { row: Extract<Out
     cancelled: row.items.filter(item => item.status === "cancelled").length,
   };
   const title = row.kind === "reasoning"
-    ? <span className="native-reasoning-summary"><span className="native-activity-label">{t("思考记录", "Reasoning")}</span><span className="native-reasoning-preview">{reasoningPreview(row.items)}</span></span>
+    ? <span className="native-reasoning-summary"><span className="native-activity-label">{thought?.streaming ? <span className="native-shimmer">{t("正在思考", "Thinking")}</span> : t("思考", "Thought")}</span>{thought?.preview && <span className="native-reasoning-preview">{thought.preview}</span>}</span>
     : toolGroupTitle(row.items, t);
   const summary = row.kind === "tools"
     ? [counts.running && t(`${counts.running} 进行中`, `${counts.running} running`), counts.pending && t(`${counts.pending} 待处理`, `${counts.pending} pending`), counts.completed && t(`${counts.completed} 已完成`, `${counts.completed} completed`), counts.cancelled && t(`${counts.cancelled} 已取消`, `${counts.cancelled} cancelled`)].filter(Boolean).join(" · ")
     : active ? t("进行中", "Running") : undefined;
   return <TraceRow className={`native-activity-group native-${row.kind}-group`} icon={row.kind === "reasoning" ? <Brain aria-hidden="true" /> : <Wrench aria-hidden="true" />} title={title} trailing={summary && <span className="native-group-counts">{summary}</span>} status={active ? "running" : undefined} open={open} onOpenChange={change}>
-    {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} id={nativeContextSourceAnchor(generationId, item.id)} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale={locale === "en" ? "en" : "zh-CN"} streaming={item.streaming === true && isGenerationActive(generationStatus)} /><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />)}</Trace>}
+    <div ref={detailsRef} className="native-group-details" data-live={active || undefined} onScroll={event => {
+      const node = event.currentTarget;
+      followLive.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    }}>
+      {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} id={nativeContextSourceAnchor(generationId, item.id)} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale={locale === "en" ? "en" : "zh-CN"} streaming={item.streaming === true && isGenerationActive(generationStatus)} /><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />)}</Trace>}
+    </div>
   </TraceRow>;
 }
 
@@ -259,6 +301,7 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
   const records = new Map(calls.map(call => [call.operationId, call]));
   const rendered = new Set(rows.filter(row => row.kind === "pm_tool").map(row => row.operationId));
   const indicator = snapshot && generationIndicator(snapshot.status, snapshot.items);
+  const work = snapshot ? generationWorkState(snapshot.status, snapshot.items) : undefined;
   const indicatorText = indicator === "queued" ? t("等待运行", "Queued") : indicator === "processing" ? t("正在处理…", "Processing…") : indicator === "failed" ? t("运行失败", "Run failed") : indicator === "cancelled" ? t("运行已取消", "Run cancelled") : t("运行已中断", "Run interrupted");
   return <div className="native-timeline" aria-label={t("运行输出时间线", "Run output timeline")}>
     {error && <p role="alert">{t("输出连接：", "Output connection: ")}{error}</p>}
@@ -273,7 +316,7 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
     })}
     {calls.filter(call => !rendered.has(call.operationId)).map(call => <PmToolCard key={`pm:${call.operationId}`} record={call} onUpdate={onUpdateCall} />)}
     {snapshot && <ChangedFilesSummary items={snapshot.items} />}
-    {indicator && <div className="native-generation-status" role={indicator === "failed" ? "alert" : "status"}>{indicatorText}</div>}
+    {work ? <WorkingRow state={work} /> : indicator && <div className="native-generation-status" role={indicator === "failed" ? "alert" : "status"}>{indicatorText}</div>}
   </div>;
 }
 

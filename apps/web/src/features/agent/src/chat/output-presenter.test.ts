@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NativeOutputItem } from "@agent-workspace/contracts/output";
-import { assistantMessageKind, canRespondToInteraction, changedFileSummary, createOutputDisclosureStore, generationIndicator, isCompletedAutoApproval, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, semanticToolSummary } from "./output-presenter.ts";
+import { assistantMessageKind, canRespondToInteraction, changedFileSummary, createOutputDisclosureStore, generationIndicator, generationWorkState, isCompletedAutoApproval, latestReasoning, presentOutputItems, reasoningPreview, reliableDurationMs, requiresVisibleDetails, semanticToolSummary } from "./output-presenter.ts";
 
 const item = (id: string, type: NativeOutputItem["type"], extra: Partial<NativeOutputItem> = {}): NativeOutputItem => ({ id, type, status: "completed", ...extra });
 const identities = (items: NativeOutputItem[]) => presentOutputItems(items).map(row => "items" in row ? [row.kind, row.items.map(entry => entry.id)] : [row.kind, row.item.id]);
@@ -201,4 +201,33 @@ test("changed files preserve observed order, deduplicate same-id updates, and ex
   assert.equal(files[1]!.partialCounts, undefined);
   assert.equal(changedFileSummary([item("unknown-count", "file_change", { fileName: "file.ts" })])[0]!.additions, undefined);
   assert.equal(changedFileSummary([item("binary", "file_change", { fileName: "image.png", diff: "Binary files differ" })])[0]!.additions, undefined);
+});
+
+test("active-turn state is provider-timed, compaction-aware, and never fabricated for finished generations", () => {
+  assert.equal(generationWorkState("completed", []), undefined);
+  assert.deepEqual(generationWorkState("queued", []), { kind: "queued" });
+  assert.deepEqual(generationWorkState("running", []), { kind: "working" });
+  const observed = item("observed", "reasoning", { status: "running", timing: { source: "observed" }, startedAt: "2026-01-01T00:00:00.000Z" });
+  assert.deepEqual(generationWorkState("running", [observed]), { kind: "working" });
+  const later = item("later", "reasoning", { status: "running", timing: { source: "provider" }, startedAt: "2026-01-01T00:00:05.000Z" });
+  const earlier = item("earlier", "file_search", { status: "completed", timing: { source: "provider" }, startedAt: "2026-01-01T00:00:02.000Z" });
+  assert.deepEqual(generationWorkState("running", [later, earlier]), { kind: "working", startedAt: "2026-01-01T00:00:02.000Z" });
+  assert.deepEqual(generationWorkState("running", [
+    item("compact", "compaction", { status: "running" }),
+  ]), { kind: "compacting" });
+  assert.deepEqual(generationWorkState("running", [
+    item("hidden-compact", "compaction", { visibility: "redacted", status: "running" }),
+    item("done-compact", "compaction", { status: "completed" }),
+  ]), { kind: "working" });
+});
+
+test("the live thought line uses the newest visible reasoning item only", () => {
+  assert.deepEqual(latestReasoning([]), { preview: "", streaming: false });
+  const old = item("old", "reasoning", { text: "## First thought", status: "completed" });
+  const live = item("live", "reasoning", { text: "**Second thought**", status: "running", streaming: true });
+  const hidden = item("hidden", "reasoning", { text: "private", visibility: "redacted", status: "running", streaming: true });
+  const noise = item("noise", "assistant_message", { text: "Answer", status: "running", streaming: true });
+  assert.deepEqual(latestReasoning([old, live, hidden, noise]), { preview: "Second thought", streaming: true });
+  assert.deepEqual(latestReasoning([old, { ...live, streaming: false }]), { preview: "Second thought", streaming: false });
+  assert.deepEqual(latestReasoning([old, { ...live, visibility: "unavailable" }]), { preview: "First thought", streaming: false });
 });

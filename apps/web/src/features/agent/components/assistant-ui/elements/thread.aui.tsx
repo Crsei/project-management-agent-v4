@@ -25,6 +25,7 @@ import { cn } from "@agent/lib/utils";
 import { useChatBrowserPreferences } from "@agent/src/settings/browser-preferences";
 import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
+import { ContextMeter } from "@agent/src/chat/context-meter";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
@@ -436,6 +437,7 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
       </div>
       <div className={styles.rightControls}>
         {composerActions}
+        <ContextMeter />
         <ComposerAddAttachment />
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>

@@ -204,6 +204,38 @@ export function reasoningPreview(items: readonly NativeOutputItem[]): string {
   return firstLine.replace(/^#{1,6}\s+/u, "").replace(/^(\*\*|__)(.+)\1$/u, "$2");
 }
 
+/** The newest visible reasoning item drives the live thought line. */
+export function latestReasoning(items: readonly NativeOutputItem[]): { preview: string; streaming: boolean } {
+  let latest: NativeOutputItem | undefined;
+  for (const item of items) {
+    if (item.type !== "reasoning" || !item.text?.trim()) continue;
+    if (item.visibility === "redacted" || item.visibility === "unavailable") continue;
+    latest = item;
+  }
+  if (!latest) return { preview: "", streaming: false };
+  return { preview: reasoningPreview([latest]), streaming: latest.streaming === true && isItemActive(latest) };
+}
+
+export type GenerationWorkState =
+  | { kind: "queued" }
+  | { kind: "working"; startedAt?: string }
+  | { kind: "compacting" };
+
+/** Active-generation label state. Timing is used only when the provider supplied it. */
+export function generationWorkState(status: GenerationOutputStatus, items: readonly NativeOutputItem[]): GenerationWorkState | undefined {
+  if (!isGenerationActive(status)) return undefined;
+  if (status === "queued") return { kind: "queued" };
+  const visible = items.filter(item => item.visibility !== "redacted" && item.visibility !== "unavailable");
+  if (visible.some(item => item.type === "compaction" && isItemActive(item))) return { kind: "compacting" };
+  let earliest: number | undefined;
+  for (const item of visible) {
+    if (item.timing?.source !== "provider" || !item.startedAt) continue;
+    const started = Date.parse(item.startedAt);
+    if (Number.isFinite(started) && (earliest === undefined || started < earliest)) earliest = started;
+  }
+  return earliest === undefined ? { kind: "working" } : { kind: "working", startedAt: new Date(earliest).toISOString() };
+}
+
 export function generationIndicator(status: GenerationOutputStatus, items: readonly NativeOutputItem[]): "queued" | "processing" | "failed" | "cancelled" | "interrupted" | undefined {
   if (status === "completed") return undefined;
   if (status !== "running") return status;
