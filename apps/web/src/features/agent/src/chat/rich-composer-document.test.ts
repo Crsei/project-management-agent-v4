@@ -191,3 +191,13 @@ test("flat headings round-trip and map source carets", () => {
     }
   }
 });
+
+test("nested lists round-trip and map source carets", () => {
+  const source = "- one\n  - child\n- two";
+  const doc = listSchema.nodeFromJSON(parseComposerDocument(source));
+  assert.equal(serializeComposerDocument(doc), source);
+  for (const offset of [2, 3, 4, 10, 11, 12, 13, 14, 17, 18, 19, 20]) {
+    assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+  }
+  assert.equal(serializeComposerDocument(listSchema.nodeFromJSON(parseComposerDocument("1. one\n   1. child\n2. two"))), "1. one\n  1. child\n2. two");
+});

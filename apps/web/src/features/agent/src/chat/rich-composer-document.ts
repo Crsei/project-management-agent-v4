@@ -40,6 +40,29 @@ const markNames = (node: DocumentNode): ComposerMark[] => node.isText
 const textSourceLength = (text: string, marks: readonly ComposerMark[], count = text.length): number =>
   serializedPrefixLength(text, count, marks);
 
+function parseListBlock(lines: readonly string[], start: number, baseIndent: number): { node: JSONContent; next: number } | undefined {
+  const pattern = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/u;
+  const first = pattern.exec(lines[start] ?? "");
+  if (!first || first[1]!.length !== baseIndent) return undefined;
+  const ordered = /^\d/u.test(first[2]!);
+  const startNumber = ordered ? Number.parseInt(first[2]!, 10) : undefined;
+  const items: JSONContent[] = [];
+  let index = start;
+  while (index < lines.length) {
+    const item = pattern.exec(lines[index]!);
+    if (!item || item[1]!.length !== baseIndent || /^\d/u.test(item[2]!) !== ordered) break;
+    const content: JSONContent[] = [{ type: "paragraph", content: inlineContent(item[3]!) }];
+    index++;
+    const nested = pattern.exec(lines[index] ?? "");
+    if (nested && nested[1]!.length > baseIndent) {
+      const child = parseListBlock(lines, index, nested[1]!.length);
+      if (child) { content.push(child.node); index = child.next; }
+    }
+    items.push({ type: "listItem", content });
+  }
+  return { node: { type: ordered ? "orderedList" : "bulletList", ...(ordered ? { attrs: { start: startNumber } } : {}), content: items }, next: index };
+}
+
 /** Source text, not editor HTML, remains the assistant-ui draft and wire format. */
 export function parseComposerDocument(source: string, citation?: QuoteInfo, contexts: readonly ComposerContextPayload[] = []): JSONContent {
   const lines = source.split("\n");
@@ -78,21 +101,14 @@ export function parseComposerDocument(source: string, citation?: QuoteInfo, cont
       index = quoteIndex - 1;
       continue;
     }
-    const listMatch = /^([-*+]|\d+[.)])\s+(.*)$/u.exec(line);
-    if (listMatch) {
-      const ordered = /^\d/u.test(listMatch[1]!);
-      const start = ordered ? Number.parseInt(listMatch[1]!, 10) : undefined;
-      const items: JSONContent[] = [];
-      let itemIndex = index;
-      while (itemIndex < lines.length) {
-        const item = /^([-*+]|\d+[.)])\s+(.*)$/u.exec(lines[itemIndex]!);
-        if (!item || /^\d/u.test(item[1]!) !== ordered) break;
-        items.push({ type: "listItem", content: [{ type: "paragraph", content: inlineContent(item[2]!) }] });
-        itemIndex++;
+    const listMatch = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/u.exec(line);
+    if (listMatch && listMatch[1]!.length === 0) {
+      const parsed = parseListBlock(lines, index, 0);
+      if (parsed) {
+        content.push(parsed.node);
+        index = parsed.next - 1;
+        continue;
       }
-      content.push({ type: ordered ? "orderedList" : "bulletList", ...(ordered ? { attrs: { start } } : {}), content: items });
-      index = itemIndex - 1;
-      continue;
     }
     if (opening && close >= 0) {
       const body = lines.slice(index + 1, close).join("\n");
@@ -176,18 +192,76 @@ export function composerInlineSource(node: DocumentNode): string {
   return text;
 }
 
-function listItemSource(item: DocumentNode, index: number, ordered: boolean, start: number): string {
-  const paragraph = item.firstChild;
-  const prefix = ordered ? `${start + index}. ` : "- ";
-  return prefix + (paragraph ? composerInlineSource(paragraph) : "");
-}
-
-function listSource(node: DocumentNode): string {
+function listSource(node: DocumentNode, depth = 0): string {
   const ordered = node.type.name === "orderedList";
   const start = ordered && Number.isFinite(Number(node.attrs.start)) ? Number(node.attrs.start) : 1;
+  const indent = "  ".repeat(depth);
   const lines: string[] = [];
-  node.forEach((item, _position, index) => { lines.push(listItemSource(item, index, ordered, start)); });
+  node.forEach((item, _position, index) => {
+    const prefix = ordered ? `${start + index}. ` : "- ";
+    const paragraph = item.firstChild?.type.name === "paragraph" ? item.firstChild : null;
+    lines.push(`${indent}${prefix}${paragraph ? composerInlineSource(paragraph) : ""}`);
+    item.forEach(child => {
+      if (child.type.name === "bulletList" || child.type.name === "orderedList") lines.push(listSource(child, depth + 1));
+    });
+  });
   return lines.join("\n");
+}
+
+function listSourceOffsetAt(node: DocumentNode, position: number, sourceBase: number, depth: number): number {
+  const ordered = node.type.name === "orderedList";
+  const start = ordered && Number.isFinite(Number(node.attrs.start)) ? Number(node.attrs.start) : 1;
+  const indent = 2 * depth;
+  let sourceCursor = sourceBase;
+  let answer: number | undefined;
+  node.forEach((item, itemPosition, index) => {
+    if (answer !== undefined) return;
+    const paragraph = item.firstChild?.type.name === "paragraph" ? item.firstChild : null;
+    const paragraphSource = paragraph ? composerInlineSource(paragraph) : "";
+    const prefix = ordered ? `${start + index}. ` : "- ";
+    const lineLength = indent + prefix.length + paragraphSource.length;
+    const paragraphStart = itemPosition + 2;
+    const paragraphEnd = paragraphStart + (paragraph?.content.size ?? 0);
+    const nested = item.childCount > 1 ? item.child(1) : null;
+    const nestedStart = itemPosition + 3 + (paragraph?.content.size ?? 0);
+    if (position <= paragraphEnd) {
+      const local = Math.max(0, position - paragraphStart);
+      answer = sourceCursor + indent + prefix.length + (paragraph ? inlineSourceOffset(paragraph, Math.min(local, paragraph.content.size)) : 0);
+    } else if (nested && position <= nestedStart + 1 + nested.content.size) {
+      answer = listSourceOffsetAt(nested, Math.max(0, position - nestedStart - 1), sourceCursor + lineLength + 1, depth + 1);
+    }
+    sourceCursor += lineLength + (nested ? 1 + listSource(nested, depth + 1).length : 0);
+  });
+  return answer ?? sourceCursor;
+}
+
+function listPositionAtSource(node: DocumentNode, sourceOffset: number, listPosition: number, depth: number): number {
+  const ordered = node.type.name === "orderedList";
+  const start = ordered && Number.isFinite(Number(node.attrs.start)) ? Number(node.attrs.start) : 1;
+  const indent = 2 * depth;
+  let sourceCursor = 0;
+  let answer: number | undefined;
+  node.forEach((item, itemPosition, index) => {
+    if (answer !== undefined) return;
+    const paragraph = item.firstChild?.type.name === "paragraph" ? item.firstChild : null;
+    const paragraphSource = paragraph ? composerInlineSource(paragraph) : "";
+    const prefix = ordered ? `${start + index}. ` : "- ";
+    const lineLength = indent + prefix.length + paragraphSource.length;
+    const nested = item.childCount > 1 ? item.child(1) : null;
+    const nestedLength = nested ? 1 + listSource(nested, depth + 1).length : 0;
+    const total = lineLength + nestedLength;
+    const local = sourceOffset - sourceCursor;
+    if (local <= lineLength) {
+      const relative = Math.max(0, local - indent - prefix.length);
+      const paragraphIndex = paragraph ? inlinePositionAtSource(paragraph, Math.min(relative, paragraph.content.size)) : 0;
+      answer = listPosition + 3 + itemPosition + paragraphIndex;
+    } else if (nested && local <= total) {
+      const nestedPosition = listPosition + 1 + itemPosition + 3 + (paragraph?.content.size ?? 0);
+      answer = listPositionAtSource(nested, local - lineLength - 1, nestedPosition, depth + 1);
+    }
+    sourceCursor += total;
+  });
+  return answer ?? listPosition + 1 + node.content.size;
 }
 
 function blockSource(node: DocumentNode): string {
@@ -297,22 +371,7 @@ export function composerSourceCursor(doc: DocumentNode, position: number): numbe
         });
         if (!done) answer = sourceOffset + Math.max(0, offset - 1);
       } else if (block.type.name === "bulletList" || block.type.name === "orderedList") {
-        let offset = 0;
-        let itemIndex = 0;
-        let done = false;
-        block.forEach((item, itemPosition) => {
-          if (done) return;
-          const prefix = listPrefix(block, itemIndex);
-          const paragraph = listItemParagraph(item);
-          const paragraphLocal = Math.max(0, local - itemPosition - 2);
-          if (local <= itemPosition + item.nodeSize) {
-            answer = sourceOffset + offset + prefix.length + (paragraph ? inlineSourceOffset(paragraph, paragraphLocal) : 0);
-            done = true;
-          }
-          offset += prefix.length + (paragraph ? composerInlineSource(paragraph).length : 0);
-          itemIndex++;
-        });
-        if (!done) answer = sourceOffset + offset;
+        answer = sourceOffset + listSourceOffsetAt(block, local, 0, 0);
       } else {
         let offset = 0;
         block.forEach((child, childPosition) => {
@@ -364,24 +423,7 @@ export function composerDocumentCursor(doc: DocumentNode, sourcePosition: number
         });
         if (!found) answer = blockPosition + block.nodeSize;
       } else if (block.type.name === "bulletList" || block.type.name === "orderedList") {
-        let offset = 0;
-        let itemIndex = 0;
-        let found = false;
-        block.forEach((item, itemPosition) => {
-          if (found) return;
-          const prefix = listPrefix(block, itemIndex);
-          const paragraph = listItemParagraph(item);
-          const paragraphSource = paragraph ? composerInlineSource(paragraph) : "";
-          const total = prefix.length + paragraphSource.length;
-          if (local <= offset + total) {
-            const relative = local - offset - prefix.length;
-            answer = blockPosition + 3 + itemPosition + (paragraph ? inlinePositionAtSource(paragraph, Math.max(0, relative)) : 0);
-            found = true;
-          }
-          offset += total;
-          itemIndex++;
-        });
-        if (!found) answer = blockPosition + block.nodeSize;
+        answer = listPositionAtSource(block, local, blockPosition, 0);
       } else {
         let offset = 0;
         let found = false;

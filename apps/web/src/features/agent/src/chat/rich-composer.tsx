@@ -135,7 +135,7 @@ function composerExtensions() {
     StarterKit.configure({
       codeBlock: false,
       dropcursor: false, horizontalRule: false, link: false,
-      listKeymap: false, paragraph: false, trailingNode: false, underline: false,
+      paragraph: false, trailingNode: false, underline: false,
     }),
     Node.create({
       name: "paragraph", group: "block", content: "inline*", priority: 1000,
