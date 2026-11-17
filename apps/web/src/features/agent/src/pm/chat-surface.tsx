@@ -1060,6 +1060,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         saveError={settingsError}
         onRetry={retry}
         sendUnavailable={navigationBlocked || !currentExecutionSelection || !settingsReady || !!execution.error || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions)}
+        onOpenSessionSettings={() => setSessionSettingsOpen(true)}
         composerLeading={<PmComposerReferences />}
         composerActions={<><MessageContextSelector /><PmComposerReferenceAction /></>}
         welcome={{
@@ -1177,7 +1178,7 @@ function SessionRow() {
   const provider = thread ? actions.provider(thread) : undefined;
   const modelName = thread ? actions.modelName(thread) : "";
   const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session" data-active={current} tabIndex={thread ? 0 : undefined}>
-    <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={title}>
+    <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={thread ? `${title}\n${actions.scopeName(thread)}${actions.path(thread) ? `\n${actions.path(thread)}` : ""}\n${actions.providerName(thread)}${modelName ? ` · ${modelName}` : ""}` : title}>
       <span className="pm-agent-session-top">
         <span className="pm-agent-session-scope" title={thread ? actions.path(thread) ?? undefined : undefined}>
           {thread?.sidebar.pinnedAt && <PinIcon aria-hidden="true" />}
@@ -1204,7 +1205,7 @@ function SessionRow() {
 function SessionSlimRow() {
   const { actions, t, id, title, thread, activity, running, current, timestamp } = useSessionRowState();
   const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session pm-agent-session-slim" data-active={current} tabIndex={thread ? 0 : undefined}>
-    <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={title}>
+    <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={thread ? `${title}\n${actions.scopeName(thread)}${actions.path(thread) ? `\n${actions.path(thread)}` : ""}\n${actions.providerName(thread)}` : title}>
       <span className="pm-agent-session-title">{title}</span>
       <span className="pm-agent-session-slim-meta">
         <SessionActivity activity={activity} timestamp={timestamp} />

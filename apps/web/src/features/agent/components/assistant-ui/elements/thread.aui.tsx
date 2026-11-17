@@ -129,6 +129,7 @@ export type ThreadProps = {
   composerActions?: ReactNode;
   welcome?: { title: string; alternateLabel?: string; onAlternate?: () => void; freshlyCreated?: boolean };
   sendUnavailable?: boolean;
+  onOpenSessionSettings?: () => void;
 };
 
 export const Thread: FC<ThreadProps> = (props) => {
@@ -169,10 +170,12 @@ export const Thread: FC<ThreadProps> = (props) => {
       }}
     >
       <ThreadHistoryNavigation />
-      {(props.saveError || props.catalog.error) && <div className="thread-notice-lane" role="alert">
+      {(props.saveError || props.catalog.error || (remoteId && props.sendUnavailable)) && <div className="thread-notice-lane" role="alert">
         <CircleAlertIcon aria-hidden="true" />
-        <span>{props.saveError || props.catalog.error}</span>
-        <button type="button" onClick={() => { if (props.saveError) void props.onRetry?.(); else void props.catalog.refresh(); }}>{props.saveError ? t("重试保存", "Retry save") : t("刷新模型目录", "Refresh models")}</button>
+        <span>{props.saveError || props.catalog.error || t("当前会话还不能发送；检查 Provider、模型与执行环境。", "This session cannot send yet; check the Provider, model and execution environment.")}</span>
+        {props.saveError ? <button type="button" onClick={() => void props.onRetry?.()}>{t("重试保存", "Retry save")}</button>
+          : props.catalog.error ? <button type="button" onClick={() => void props.catalog.refresh()}>{t("刷新模型目录", "Refresh models")}</button>
+            : props.onOpenSessionSettings ? <button type="button" onClick={props.onOpenSessionSettings}>{t("检查会话参数", "Check session settings")}</button> : null}
       </div>}
       <ThreadPrimitive.Viewport
         autoScroll
