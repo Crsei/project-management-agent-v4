@@ -36,6 +36,7 @@ export async function auditNotices(directory) {
   for (const item of index.packages) {
     const identity=item.name+'@'+(item.version??'');
     const valid=item.files.length>0 && item.files.every(path=>members.has(prefix+path)||[...members].some(name=>name.startsWith(prefix+path+'/')));
+    if ((item.nestedFiles ?? []).some(path=>!members.has(prefix+path))) throw new Error('Missing indexed nested legal material: '+identity);
     if (!item.license || !valid) gaps.push({name:item.name,version:item.version,missing:[...(!item.license?['license metadata']:[]),...(!valid?['nonempty notice in desktop-web index']:[])]});
     else covered.add(identity);
   }

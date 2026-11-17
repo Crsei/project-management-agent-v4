@@ -14,6 +14,12 @@ const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const safeName = name => typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
 
+export function selectTargets(windowsOnly, macosOnly = 'false') {
+  if (![windowsOnly, macosOnly].every(value => ['true','false'].includes(value)) || windowsOnly === 'true' && macosOnly === 'true')
+    throw new Error('Conflicting or invalid native target inputs');
+  return macosOnly === 'true' ? ['darwin-x64','darwin-arm64'] : windowsOnly === 'true' ? ['win32-x64'] : ['win32-x64','darwin-x64','darwin-arm64'];
+}
+
 export function assertReleaseRequest(request) {
   const { tag, sha, version, channel, distribution, targets, runId, attempt, ciRunId } = request;
   if (request.repository !== repository) throw new Error(`Desktop releases are restricted to ${repository}`);
@@ -378,7 +384,7 @@ async function requestFromEnvironment(env) {
   if (desktopVersion !== version) throw new Error('Root and desktop application versions differ');
   const request = { repository: env.GITHUB_REPOSITORY, tag: env.DESKTOP_RELEASE_TAG, sha: env.DESKTOP_RELEASE_SHA,
     version, channel: env.DESKTOP_RELEASE_CHANNEL, distribution: env.DESKTOP_DISTRIBUTION,
-    targets: env.DESKTOP_MACOS_ONLY === 'true' ? ['darwin-x64', 'darwin-arm64'] : env.DESKTOP_WINDOWS_ONLY === 'true' ? ['win32-x64'] : ['win32-x64', 'darwin-x64', 'darwin-arm64'],
+    targets: selectTargets(env.DESKTOP_WINDOWS_ONLY, env.DESKTOP_MACOS_ONLY),
     runId: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT, ciRunId: env.DESKTOP_CI_RUN_ID };
   assertReleaseRequest(request);
   const checked = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });

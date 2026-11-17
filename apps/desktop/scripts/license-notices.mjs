@@ -1,7 +1,28 @@
+import { createHash } from "node:crypto";
 import { loadNoticeSupplements } from "./supplement-notices.mjs";
 import { cp, lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, relative as pathRelative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repository = fileURLToPath(new URL('../../../', import.meta.url));
+const owned = new Map([
+  ['apps/desktop','@agent-workspace/desktop'], ['apps/web','@pm/web'],
+  ['packages/agent-contracts','@agent-workspace/contracts'], ['packages/agent-client-runtime','@agent-workspace/client-runtime'],
+]);
+async function ownerEvidence(root, name) {
+  const relative = pathRelative(repository, root).split(sep).join('/');
+  if (owned.get(relative) === name) return { label:'AGPL-3.0-only (host code; see separate third-party notices)', originals:['LICENSE','THIRD_PARTY_NOTICES.md','vendor/t3code/LICENSE'] };
+  const dir = relative.split('/').at(-1);
+  if (relative === 'vendor/t3code/packages/' + dir && (name === '@t3tools/' + dir || name === 'effect-acp' && dir === name))
+    return { label:'MIT (vendored t3code; local changes and nested dependencies retain their notices)', originals:['vendor/t3code/LICENSE','THIRD_PARTY_NOTICES.md'] };
+  return null; // Never apply a workspace grant to an npm package with a similar name.
+}
+const nestedByPackage = {
+  '@bufbuild/protobuf@1.10.0':['dist/cjs/google/varint.js'], // This file carries the actual Google BSD-3-Clause notice.
+  '@ai-sdk/provider-utils@5.0.68':['src/to-json-schema/zod3-to-json-schema/LICENSE'],
+  'victory-vendor@37.3.6': ['d3-array','d3-color','d3-ease','d3-format','d3-interpolate','d3-path','d3-scale','d3-shape','d3-time','d3-time-format','d3-timer','internmap','d3-voronoi'].map(dir=>'lib-vendor/'+dir+'/LICENSE'),
+};
 
 async function locate(name, from) {
   const require = createRequire(join(from, "package.json"));
@@ -50,7 +71,34 @@ export async function collectNotices(roots, output) {
       await cp(join(root, name), join(output, path), { recursive: true });
       files.push(path);
     }
-    let source;
+    let source, scopeLicense;
+    const nestedFiles = [];
+    const folder = String(index).padStart(4, "0");
+    const identity = metadata.name + "@" + metadata.version;
+    for (const relative of nestedByPackage[identity] ?? []) {
+      const original = join(root, relative);
+      if (!(await lstat(original)).isFile() || await realpath(original) !== original) throw new Error("Invalid nested notice: " + identity);
+      const dest = folder + "/nested/" + relative;
+      await mkdir(join(output, dest, ".."), { recursive: true });
+      await cp(original, join(output, dest));
+      nestedFiles.push(dest);
+    }
+    if (identity === "khroma@2.1.0" && !metadata.license && files.some(f => f.endsWith("/license"))) {
+      const bytes = await readFile(join(root, "license"));
+      if (createHash("sha256").update(bytes).digest("hex") !== "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49") throw new Error("Reviewed khroma license changed");
+      scopeLicense = "MIT"; source = "Exact MIT text shipped in khroma@2.1.0/license";
+    }
+    const owner = await ownerEvidence(root, metadata.name);
+    if (!metadata.license && owner) {
+      scopeLicense = owner.label;
+      for (const original of owner.originals) {
+        const dest = folder + "/scope/" + original;
+        await mkdir(join(output, dest, ".."), { recursive: true });
+        await cp(join(repository, original), join(output, dest));
+        files.push(dest);
+      }
+      source = "Enclosing project scope: " + pathRelative(repository, root).split(sep).join("/");
+    }
     if (!files.length) {
       const match = supplements.get(metadata.name + "@" + metadata.version);
       if (match) {
@@ -78,7 +126,7 @@ export async function collectNotices(roots, output) {
         }
       }
     }
-    notices.push({ ...(source ? { source } : {}), name: metadata.name, version: metadata.version ?? null, license: metadata.license ?? null, files });
+    notices.push({ ...(source ? { source } : {}), name: metadata.name, version: metadata.version ?? null, license: metadata.license ?? scopeLicense ?? null, ...(scopeLicense ? { packageLicenseField: null } : {}), ...(nestedFiles.length ? { nestedFiles } : {}), files });
   }
   await writeFile(join(output, "index.json"), JSON.stringify({ scope: "Installed root, Electron host and Web production dependency notices; Agent exact build-input notices are in ../bundled and ../provenance.", packages: notices }, null, 2) + "\n");
 }

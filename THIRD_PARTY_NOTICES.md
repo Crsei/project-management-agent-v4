@@ -55,7 +55,7 @@ npm 依赖（包括图标库）按**实际安装版本及实际进入产物的�
 | MISANS-GRANT | RESOLVED | 当前源码不含三份字体文件，Web 使用 Inter OFL + 系统字体；[旧素材指纹](scripts/retired-release-assets.json)供源码及静态产物复查。不溯及旧包，也不将移除记为小米授予许可。 |
 | ASSET-ORIGINS | RESOLVED | [Dovspace 权利人确认记录](apps/desktop/assets/brand-source.json)覆盖参考板重建图形公开分发；Inter／营销 OFL 原字节和许可仍有来源清单。已移除十张背景、六个品牌图标；旧 audio-playground 参考演示文字、生成器、录音及 conversation-8 媒体均不在当前分发树。保留[审计记录](docs/guides/distribution-audit.md)，不为历史资产补授权。 |
 | ARTIFACT-NOTICES | OPEN | 对最终源码、Web、Agent、营销站与各目标桌面安装包核对实际依赖/原生运行时/嵌套组件的许可及 notices，处理空 notice 或空 license 项，并保留本文件及适用的原始许可。现有部分 collector 不是法律兼容性或发布批准。 |
-| AGPL-SOURCE | OPEN | 已实现无需登录的法律声明及同源准确源码包；桌面最终展开验证绑定安装包内下载文件与公开材料。须完成本代本机构建/下载核验后审阅，其他部署不得用未绑定开发页替代。见[审计说明](docs/guides/distribution-audit.md)。 |
+| AGPL-SOURCE | RESOLVED | 公开源码、法律声明与无需登录的精确源码下载已接入正式 Web／营销构建和桌面发行。已从真实 arm64 DMG 网关下载并核对同一提交的 5255 份源文件；Web／营销站分别复测。每代桌面发行仍须按成品校验同一归档，其他部署需同样提供其本地修改，不豁免未来版本。见[可复核记录](docs/guides/distribution-audit.md)。 |
 
 ## Integrity check versus release authorization
 

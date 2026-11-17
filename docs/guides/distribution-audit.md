@@ -18,6 +18,10 @@ node scripts/build-public-site.mjs web /absolute/new/web-dist
 node scripts/build-public-site.mjs marketing /absolute/new/marketing-dist
 ```
 
+### 可复核的源码下载验收
+
+干净提交 `6c44fa8e6e4f23014f635bcdab68e7e6c65c7ec2`：两个独立 Web／营销站点通过无凭据 HTTP 下载同一 Git 源码归档，SHA-256 为 `544e6269c0a0186cd6b9b4930a0d6e97039e08f98eb550f6e681859dd8d614e6`。只读挂载该提交的真实 **unsigned arm64 DMG**，用项目网关从安装包内同源入口取得 HTTP 200，压缩包 SHA-256 为 `595941ca1039338cdbf09d92c2351811d6ad4da290e9660b7dd09e69058b0568`，反向核对源码清单的 5255 份文件成功。两类归档格式不同，均包括构建／安装脚本和同一提交的修改；不依赖后续 Release 是否已可见。该候选当次 OSV 网络失败，未据此签署或公开发行。日后每个候选需按自己的身份重新验包，不能复用上述摘要。
+
 ## 最终产物 notices（不能只数 LICENSE 文件）
 
 ```sh
@@ -26,7 +30,9 @@ node apps/desktop/scripts/audit-notices.mjs /absolute/verified-delivery
 
 该只读审计先对照桌面清单核验 legal tar 和 SBOM 的大小及哈希，再按 tar 内真实非空成员核对索引。2026-11-17 的旧 arm64 测试包（提交 `ef81c264`）含 887 个 SBOM 组件，desktop-web 索引共 790 项、63 项缺许可字段或非空原文；Node、PostgreSQL、Electron／Chromium 和根声明在归档中存在。未匹配项可能由 Agent bundled、宿主来源或单独的原生 notices 覆盖，不能一律称为无许可。OSV 与签名均不能替代这项审阅。
 
-[补件清单](../../apps/desktop/assets/dependency-notices/index.json)按准确 npm 版本的 registry gitHead 绑定上游原文。例如 Redis、Connect、Statsig、UIW；不同版本不共用一个未经核对的授权。收集器核验原文哈希，复用已审阅的 react-remove-scroll-bar 补件，也保留部分 npm README 中随版本实际发布的完整 MIT 声明。补件不推定依赖兼容或厂商签署批准。
+[补件清单](../../apps/desktop/assets/dependency-notices/index.json)按准确 npm 版本的 registry gitHead，或经同版本上游 package.json 核对的精确 tag 提交绑定上游原文。例如 Redis、Connect、Statsig、UIW；不同版本不共用一个未经核对的授权。收集器核验原文哈希，复用已审阅的 react-remove-scroll-bar 补件，也保留部分 npm README 中随版本实际发布的完整 MIT 声明。补件不推定依赖兼容或厂商签署批准。工作区级声明只绑定本仓实际工作区路径，不按 npm 同名前缀推定；Google varint、内嵌 d3 等单独保留嵌套原文。
+
+同一台 arm64 构建机重采 790 项，缺字段／缺全文记录从 63 降到 7。仍需审阅：`@aws-sdk/nested-clients`、`@cursor/sdk-darwin-arm64`、`abstract-logging`、`format`、`highlightjs-vue`、`lazy-val`、`use-composed-ref`。这是收集器层面的缺项，不能代替最终安装包 SBOM 中未被此索引覆盖的组件核验。其他架构不能照抄这个数。
 
 特别需要复核 Cursor 1.0.38：SDK 原许可指向 [Cursor 服务条款](https://cursor.com/terms-of-service)，并非 MIT；权利人材料须明确覆盖 SDK 及对应原生包随 Dovspace 安装包公开再分发。维护者已选择提供厂商依据，目前尚未取得。Anthropic 通信 SDK 也附其[专用条款](https://code.claude.com/docs/en/legal-and-compliance)，与已排除的 Claude CLI 二进制分开核对。不得用普通订阅、用户自己的 API Key 或其他组件的 MIT 补足此类授权。
 

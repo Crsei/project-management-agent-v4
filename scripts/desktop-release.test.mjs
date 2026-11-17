@@ -294,3 +294,11 @@ test('second updater build has a new immutable version tag and cannot replace it
   assert.equal((await lookupRelease(client, candidateIdentity)), null);
   assert.equal(state.writes.length, writes);
 });
+
+test('Mac-only requires both architectures and does not accept conflicting switches', async () => {
+  const { selectTargets } = await import('./desktop-release.mjs');
+  assert.deepEqual(selectTargets('false','true'), ['darwin-x64','darwin-arm64']);
+  assert.deepEqual(selectTargets('true'), ['win32-x64']);
+  assert.throws(() => selectTargets('true','true'));
+  assert.throws(() => selectTargets('false','unknown'));
+});

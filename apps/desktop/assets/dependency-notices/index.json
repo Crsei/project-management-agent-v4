@@ -1,12 +1,45 @@
 [
   {
-    "name": "@connectrpc/connect-web",
-    "version": "1.7.0",
+    "name": "@ai-sdk/provider-utils",
+    "version": "5.0.68",
     "license": "Apache-2.0",
-    "metadata": "https://registry.npmjs.org/%40connectrpc%2Fconnect-web/1.7.0",
-    "url": "https://raw.githubusercontent.com/connectrpc/connect-es/9e34d24373bb666c427510d774d4b8b13fd9aff3/LICENSE",
-    "sha256": "5780f83112ef0026ca40dd55d88535f4475962a2edc90f39410bf908502d7e62",
-    "bytes": 11354
+    "metadata": "https://registry.npmjs.org/%40ai-sdk%2Fprovider-utils/5.0.68",
+    "url": "https://raw.githubusercontent.com/vercel/ai/612be2311464804d1e4897afacbf8f3fc2f6d9e3/LICENSE",
+    "tag": "@ai-sdk/provider-utils@5.0.68",
+    "upstreamPackage": "https://raw.githubusercontent.com/vercel/ai/612be2311464804d1e4897afacbf8f3fc2f6d9e3/packages/provider-utils/package.json",
+    "sha256": "b4f9adb7c568904834d0dd6cc98d16c390d21ca32fc17ae7a267715269bd5529",
+    "bytes": 552
+  },
+  {
+    "name": "@aws-sdk/credential-provider-http",
+    "version": "3.972.78",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/%40aws-sdk%2Fcredential-provider-http/3.972.78",
+    "url": "https://raw.githubusercontent.com/aws/aws-sdk-js-v3/7c2f08900ba6f6ea424ac488694de80356541402/LICENSE",
+    "sha256": "edea91454b811f127fbdea3d86f378f6719bd372ed440abf82b232f6fca06c3d",
+    "bytes": 11352,
+    "tag": "v3.1155.0",
+    "upstreamPackage": "https://raw.githubusercontent.com/aws/aws-sdk-js-v3/7c2f08900ba6f6ea424ac488694de80356541402/packages-internal/credential-provider-http/package.json"
+  },
+  {
+    "name": "@aws-sdk/credential-provider-login",
+    "version": "3.972.83",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/%40aws-sdk%2Fcredential-provider-login/3.972.83",
+    "url": "https://raw.githubusercontent.com/aws/aws-sdk-js-v3/7c2f08900ba6f6ea424ac488694de80356541402/LICENSE",
+    "sha256": "edea91454b811f127fbdea3d86f378f6719bd372ed440abf82b232f6fca06c3d",
+    "bytes": 11352,
+    "tag": "v3.1155.0",
+    "upstreamPackage": "https://raw.githubusercontent.com/aws/aws-sdk-js-v3/7c2f08900ba6f6ea424ac488694de80356541402/packages-internal/credential-provider-login/package.json"
+  },
+  {
+    "name": "@bufbuild/protobuf",
+    "version": "1.10.0",
+    "license": "(Apache-2.0 AND BSD-3-Clause)",
+    "metadata": "https://registry.npmjs.org/%40bufbuild%2Fprotobuf/1.10.0",
+    "url": "https://raw.githubusercontent.com/bufbuild/protobuf-es/a4eb2e82e38a8e5a16c0cd789932007b12c7120c/LICENSE",
+    "sha256": "6da19f017fad6716cbc9c938972ebee29957c295b8a4d51060dfb03da51d8502",
+    "bytes": 11357
   },
   {
     "name": "@connectrpc/connect",
@@ -18,6 +51,26 @@
     "bytes": 11354
   },
   {
+    "name": "@connectrpc/connect-web",
+    "version": "1.7.0",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/%40connectrpc%2Fconnect-web/1.7.0",
+    "url": "https://raw.githubusercontent.com/connectrpc/connect-es/9e34d24373bb666c427510d774d4b8b13fd9aff3/LICENSE",
+    "sha256": "5780f83112ef0026ca40dd55d88535f4475962a2edc90f39410bf908502d7e62",
+    "bytes": 11354
+  },
+  {
+    "name": "@napi-rs/canvas-darwin-arm64",
+    "version": "1.0.12",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40napi-rs%2Fcanvas-darwin-arm64/1.0.12",
+    "url": "https://raw.githubusercontent.com/Brooooooklyn/canvas/a89b3c9d49145526046dd42603064ce267c5ed58/LICENSE",
+    "sha256": "0b8e3b4f0042f33677406344854c1dcce3a2878eb3a3f6baee58c6f5752655ce",
+    "bytes": 2705,
+    "tag": "v1.0.12",
+    "upstreamPackage": "https://raw.githubusercontent.com/Brooooooklyn/canvas/a89b3c9d49145526046dd42603064ce267c5ed58/npm/darwin-arm64/package.json"
+  },
+  {
     "name": "@napi-rs/keyring-darwin-arm64",
     "version": "1.3.0",
     "license": "MIT",
@@ -25,6 +78,50 @@
     "url": "https://raw.githubusercontent.com/Brooooooklyn/keyring-node/e46be75c3ba8d5fde6b88a17c6153b87ffe4b946/LICENSE",
     "sha256": "02965ed67e29f871a53f7a7afa593a0ddc8020f86ccce0faaf1aa59215b5269e",
     "bytes": 1071
+  },
+  {
+    "name": "@opencode-ai/sdk",
+    "version": "1.19.5",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40opencode-ai%2Fsdk/1.19.5",
+    "url": "https://raw.githubusercontent.com/anomalyco/opencode/810c0eba1a7348036f8bdf61e6632d0c36c6876c/LICENSE",
+    "tag": "v1.19.5",
+    "upstreamPackage": "https://raw.githubusercontent.com/anomalyco/opencode/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/sdk/js/package.json",
+    "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+    "bytes": 1065
+  },
+  {
+    "name": "@opencode/client",
+    "version": "2.0.28",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40opencode%2Fclient/2.0.28",
+    "url": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/LICENSE",
+    "tag": "v2.0.28",
+    "upstreamPackage": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/packages/client/package.json",
+    "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+    "bytes": 1065
+  },
+  {
+    "name": "@opencode/protocol",
+    "version": "2.0.28",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40opencode%2Fprotocol/2.0.28",
+    "url": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/LICENSE",
+    "tag": "v2.0.28",
+    "upstreamPackage": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/packages/protocol/package.json",
+    "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+    "bytes": 1065
+  },
+  {
+    "name": "@opencode/schema",
+    "version": "2.0.28",
+    "license": "MIT",
+    "metadata": "https://registry.npmjs.org/%40opencode%2Fschema/2.0.28",
+    "url": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/LICENSE",
+    "tag": "v2.0.28",
+    "upstreamPackage": "https://raw.githubusercontent.com/anomalyco/opencode/026b106bc5d41b679ffc413264229c340871e4d3/packages/schema/package.json",
+    "sha256": "625f0f619133f89bbbb2abe37369613dfa1885eba1e50d02170deb62bb42cb6b",
+    "bytes": 1065
   },
   {
     "name": "@redis/bloom",
@@ -144,6 +241,17 @@
     "bytes": 1060
   },
   {
+    "name": "drizzle-orm",
+    "version": "0.45.4",
+    "license": "Apache-2.0",
+    "metadata": "https://registry.npmjs.org/drizzle-orm/0.45.4",
+    "url": "https://raw.githubusercontent.com/drizzle-team/drizzle-orm/eab8bedbb65d5429c54e612ddbd88aa23091d398/LICENSE",
+    "tag": "0.45.4",
+    "upstreamPackage": "https://raw.githubusercontent.com/drizzle-team/drizzle-orm/eab8bedbb65d5429c54e612ddbd88aa23091d398/drizzle-orm/package.json",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "bytes": 11357
+  },
+  {
     "name": "redis",
     "version": "5.12.1",
     "license": "MIT",
@@ -178,5 +286,16 @@
     "url": "https://raw.githubusercontent.com/remarkjs/remark-math/d5d0660b150810a535bbb07eac6cc96a4510aa24/license",
     "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
     "bytes": 1098
+  },
+  {
+    "name": "victory-vendor",
+    "version": "37.3.6",
+    "license": "MIT AND ISC",
+    "metadata": "https://registry.npmjs.org/victory-vendor/37.3.6",
+    "url": "https://raw.githubusercontent.com/FormidableLabs/victory/d9d9ca2d5038d6ef9de91f2cef39e6fb2733baa6/LICENSE.txt",
+    "tag": "v37.3.6",
+    "upstreamPackage": "https://raw.githubusercontent.com/FormidableLabs/victory/d9d9ca2d5038d6ef9de91f2cef39e6fb2733baa6/packages/victory-vendor/package.json",
+    "sha256": "34dee5fd5e5cc756efb5ad4d64652bce719bdf5e900ca5d7538253e737930bc4",
+    "bytes": 1626
   }
 ]

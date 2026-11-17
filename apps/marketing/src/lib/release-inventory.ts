@@ -71,7 +71,7 @@ export const currentDesktopSource = {
     status: "unavailable",
     reason: "本快照未找到此声明版本的公开 Release 材料；当前安装器摘要、签名／公证与成品清单不可从历史包沿用。",
   },
-  openReleaseBlockers: ["ARTIFACT-NOTICES", "AGPL-SOURCE"],
+  openReleaseBlockers: ["ARTIFACT-NOTICES"],
 } as const;
 
 export const historicalDesktopRelease = {
