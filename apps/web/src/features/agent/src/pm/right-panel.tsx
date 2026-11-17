@@ -40,6 +40,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@agent/components/ui/sheet";
 import { InspectorScopeProvider, type InspectorScope } from "../workspace/inspector/scope";
 import { useAgentText, type AgentText } from "../i18n";
+import { parseStoredPanelWidth, RIGHT_PANEL_WIDTH_KEY } from "./right-panel-width";
 import {
   EMPTY_RIGHT_PANEL_STATE,
   pmRightPanelReducer,
@@ -304,7 +305,10 @@ export function PmRightPanel({
 }) {
   const t = useAgentText();
   const [state, dispatch] = useReducer(pmRightPanelReducer, EMPTY_RIGHT_PANEL_STATE);
-  const [width, setWidth] = useState(540);
+  const widthKey = `${RIGHT_PANEL_WIDTH_KEY}:${threadId ?? "none"}`;
+  const [width, setWidth] = useState(() => {
+    try { return parseStoredPanelWidth(localStorage.getItem(widthKey), MIN_WIDTH) ?? 540; } catch { return 540; }
+  });
   const [availableWidth, setAvailableWidth] = useState(() => typeof window === "undefined" ? 0 : window.innerWidth);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scroll, setScroll] = useState({ hasOverflow: false, canLeft: false, canRight: false });
@@ -318,6 +322,15 @@ export function PmRightPanel({
   const maxWidth = Math.floor(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, availableWidth * 0.45)));
   const visibleWidth = Math.max(MIN_WIDTH, Math.min(maxWidth, width));
   const clampWidth = (next: number) => Math.max(MIN_WIDTH, Math.min(maxWidth, next));
+  useEffect(() => {
+    try { const stored = parseStoredPanelWidth(localStorage.getItem(widthKey), MIN_WIDTH); if (stored !== undefined) setWidth(stored); } catch { /* Width memory is optional. */ }
+  }, [widthKey]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try { localStorage.setItem(widthKey, String(Math.round(visibleWidth))); } catch { /* Storage failure keeps the in-memory width. */ }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [widthKey, visibleWidth]);
   const actions = useMemo<AvailableSurfaceAction[]>(() => surfaceActions(t).map((action) => ({
     ...action,
     available: action.kind === "browser" ? true : action.kind === "terminal" ? terminalAvailable : !disabled,
