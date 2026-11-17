@@ -26,7 +26,7 @@ import { useChatBrowserPreferences } from "@agent/src/settings/browser-preferenc
 import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
-import { useMessageTimes } from "@agent/src/chat/generation-times";
+import { useGenerationRecords, useMessageTimes } from "@agent/src/chat/generation-times";
 import { ThreadFind } from "@agent/src/chat/thread-find";
 import "@agent/src/chat/composer-shell.css";
 import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
@@ -67,6 +67,7 @@ import {
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
+  ArrowLeftRightIcon,
   ArrowUpIcon,
   AudioLinesIcon,
   BrainIcon,
@@ -590,6 +591,7 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
   const messageId = useAuiState((state) => state.message.id);
   const threadId = useAuiState((state) => state.threadListItem.remoteId);
   const times = useMessageTimes(threadId);
+  const record = useGenerationRecords(threadId).get(messageId);
 
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="assistant">
@@ -603,6 +605,15 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
         data-slot="aui_assistant-message-content"
         className="aui-assistant-message-content-body text-foreground px-2 text-sm leading-6 wrap-break-word"
       >
+        {record?.handoff && <div className="native-lifecycle-row" data-kind="handoff" title={record.handoff.reason}>
+          <ArrowLeftRightIcon aria-hidden="true" />
+          <span>{t(`交接 · ${record.handoff.mode}`, `Handoff · ${record.handoff.mode}`)}</span>
+          {record.handoff.reason && <span className="native-lifecycle-detail">{record.handoff.reason}</span>}
+        </div>}
+        {record?.continuationOf && <div className="native-lifecycle-row" data-kind="continuation" title={record.continuationOf}>
+          <ArrowLeftRightIcon aria-hidden="true" />
+          <span>{t("续接上一轮执行", "Continued from a previous turn")}</span>
+        </div>}
         {generationId ? <OutputTimeline key={generationId} generationId={generationId} /> : <MessagePrimitive.Parts>
           {({ part }) => {
             if (part.type === "text") return <MarkdownText />;
@@ -774,6 +785,7 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   const messageId = useAuiState((state) => state.message.id);
   const threadId = useAuiState((state) => state.threadListItem.remoteId);
   const times = useMessageTimes(threadId);
+  const record = useGenerationRecords(threadId).get(messageId);
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="user">
     <MessagePrimitive.Root

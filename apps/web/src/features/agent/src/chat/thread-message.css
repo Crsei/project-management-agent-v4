@@ -8,3 +8,7 @@
 .thread-notice-lane span { min-width: 0; overflow-wrap: anywhere; }
 .thread-notice-lane button { margin-inline-start: auto; flex: none; border: 1px solid var(--border); border-radius: .35rem; padding: .15rem .45rem; background: transparent; color: inherit; font-size: .72rem; cursor: pointer; }
 .thread-notice-lane button:hover { background: var(--surface-hover); }
+
+.native-lifecycle-row { display: flex; align-items: baseline; gap: .35rem; margin: 0 0 .45rem; border-bottom: 1px dashed var(--border); padding-bottom: .3rem; color: var(--muted-foreground); font-size: .72rem; }
+.native-lifecycle-row svg { width: .85rem; height: .85rem; flex: none; }
+.native-lifecycle-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
