@@ -1,4 +1,5 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useBlocker, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAui, useAuiState, ThreadListPrimitive, type AssistantRuntime } from "@assistant-ui/react";
 import { ArchiveIcon, ArrowLeftIcon, ChartNoAxesCombinedIcon, ChevronDownIcon, CircleAlertIcon, FileTextIcon, FolderOpenIcon, FolderPlusIcon, KeyboardIcon, ListFilterIcon, Loader2Icon, Maximize2Icon, MessageSquareIcon, MoreHorizontalIcon, PanelBottomIcon, PencilIcon, PanelLeftIcon, PanelRightIcon, PinIcon, SearchIcon, SettingsIcon, SquarePenIcon, XIcon, ZapIcon } from "lucide-react";
@@ -1173,12 +1174,38 @@ export function SessionActivity({ activity, timestamp }: { activity?: ThreadActi
 }
 
 
+function SessionHoverCard({ title, scope, path, provider, model, timestamp, children }: {
+  title: string; scope?: string; path?: string; provider?: string; model?: string; timestamp?: string; children: ReactNode;
+}) {
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!position) return;
+    const close = () => setPosition(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [position]);
+  const show = (element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+    setPosition({ left: Math.min(rect.right + 8, Math.max(8, window.innerWidth - 300)), top: Math.max(8, Math.min(rect.top, window.innerHeight - 160)) });
+  };
+  return <div className="pm-session-hover-anchor" onMouseEnter={event => show(event.currentTarget)} onMouseLeave={() => setPosition(null)} onFocusCapture={event => show(event.currentTarget)} onBlurCapture={() => setPosition(null)}>
+    {children}
+    {position && createPortal(<div className="pm-session-hover-card" role="tooltip" style={{ left: position.left, top: position.top }}>
+      <strong>{title}</strong>
+      {scope && <span>{scope}{path ? ` · ${path}` : ""}</span>}
+      {provider && <span>{provider}{model ? ` · ${model}` : ""}</span>}
+      {timestamp && <span>{new Date(timestamp).toLocaleString()}</span>}
+    </div>, document.body)}
+  </div>;
+}
+
 function SessionRow() {
   const { actions, t, id, title, thread, activity, running, current, timestamp } = useSessionRowState();
   const provider = thread ? actions.provider(thread) : undefined;
   const modelName = thread ? actions.modelName(thread) : "";
-  const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session" data-active={current} tabIndex={thread ? 0 : undefined}>
-    <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={thread ? `${title}\n${actions.scopeName(thread)}${actions.path(thread) ? `\n${actions.path(thread)}` : ""}\n${actions.providerName(thread)}${modelName ? ` · ${modelName}` : ""}` : title}>
+  const renderRow = (ellipsis?: ReactNode) => {
+    const content = <><button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={thread ? `${title}\n${actions.scopeName(thread)}${actions.path(thread) ? `\n${actions.path(thread)}` : ""}\n${actions.providerName(thread)}${modelName ? ` · ${modelName}` : ""}` : title}>
       <span className="pm-agent-session-top">
         <span className="pm-agent-session-scope" title={thread ? actions.path(thread) ?? undefined : undefined}>
           {thread?.sidebar.pinnedAt && <PinIcon aria-hidden="true" />}
@@ -1196,9 +1223,11 @@ function SessionRow() {
         {modelName && <span className="pm-agent-session-model" title={thread?.settings.model}>{modelName}</span>}
       </span>
       {thread?.sidebar.section === "snoozed" && <span className="sr-only">{t(`稍后提醒至 ${thread.sidebar.snoozedUntil}`, `Snoozed until ${thread.sidebar.snoozedUntil}`)}</span>}
-    </button>
-    {ellipsis}
-  </div>;
+    </button>{ellipsis}</>;
+    return <div className="pm-agent-session" data-active={current} tabIndex={thread ? 0 : undefined}>
+      {thread ? <SessionHoverCard title={title} scope={actions.scopeName(thread)} path={actions.path(thread) ?? undefined} provider={actions.providerName(thread)} model={modelName || undefined} timestamp={timestamp}>{content}</SessionHoverCard> : content}
+    </div>;
+  };
   return thread ? <SessionMenuForThread thread={thread} id={id} title={title} running={running}>{renderRow}</SessionMenuForThread> : renderRow();
 }
 

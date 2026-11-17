@@ -268,3 +268,10 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .pm-agent-directory-dialog [data-slot="input"]:focus-visible { border-color: var(--border); }
 
 .pm-execution-field { min-width: 0; margin: 8px 0; font-size: 12px; overflow-wrap: anywhere; }
+
+.pm-agent-context-title .pm-agent-title-edit { width: 1.5rem; height: 1.5rem; margin-inline-start: .25rem; }
+
+.pm-session-hover-anchor { display: flex; flex: 1; min-width: 0; }
+.pm-session-hover-card { position: fixed; z-index: 60; display: grid; gap: 2px; width: 280px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 8px 10px; box-shadow: var(--shadow-floating); font-size: 12px; line-height: 1.45; pointer-events: none; }
+.pm-session-hover-card strong { font-size: 13px; }
+.pm-session-hover-card span { color: var(--muted-foreground); overflow-wrap: anywhere; }
