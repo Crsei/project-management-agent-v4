@@ -155,6 +155,23 @@ export const Thread: FC<ThreadProps> = (props) => {
     messagesEmpty && !historyError && history.status !== "error" &&
     (!threadLoading || isDraft);
   const historyMissing = history.status === "loaded" && history.messageCount > 0 && messagesEmpty && !threadLoading && !threadRunning;
+  const composerText = useAuiState((state) => state.composer.text);
+  const composerAttachmentCount = useAuiState((state) => state.composer.attachments.length);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [nearBottom, setNearBottom] = useState(true);
+  const [resting, setResting] = useState(false);
+  useEffect(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
+    if (!viewport) return;
+    const update = () => setNearBottom(viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 320);
+    update();
+    viewport.addEventListener("scroll", update, { passive: true });
+    const resize = new ResizeObserver(update);
+    resize.observe(viewport);
+    return () => { viewport.removeEventListener("scroll", update); resize.disconnect(); };
+  }, []);
+  const canRest = !messagesEmpty && !composerFocused && composerText.length === 0 && composerAttachmentCount === 0 && !nearBottom;
+  useEffect(() => { setResting(canRest); }, [canRest]);
   const [announcement, setAnnouncement] = useState("");
   const previousRunning = useRef(threadRunning);
   useEffect(() => {
@@ -226,6 +243,9 @@ export const Thread: FC<ThreadProps> = (props) => {
           </div>
 
           <ThreadPrimitive.ViewportFooter
+            data-resting={resting || undefined}
+            onFocusCapture={() => setComposerFocused(true)}
+            onBlurCapture={() => setComposerFocused(false)}
             className={cn(
               "aui-thread-viewport-footer bg-surface flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
               !isEmpty && "sticky bottom-0 mt-auto rounded-t-(--composer-radius)",
@@ -236,6 +256,10 @@ export const Thread: FC<ThreadProps> = (props) => {
               <ComposerPendingRequests />
               {remoteId && <QueuedMessages key={remoteId} threadId={remoteId} />}
             </div>
+            {resting && <button type="button" className="thread-resting-composer" onClick={() => {
+              setResting(false);
+              requestAnimationFrame(() => document.querySelector<HTMLElement>(".rich-composer-editor")?.focus());
+            }}><PencilIcon aria-hidden="true" /><span>{t("继续输入…", "Reply…")}</span></button>}
             <Composer {...props} historyBlocked={history.status === "error" || historyMissing} />
             {isEmpty && <AuiIf condition={(s) => s.composer.isEmpty}>
               <ThreadSuggestions />
