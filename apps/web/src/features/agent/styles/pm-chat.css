@@ -275,3 +275,12 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .pm-session-hover-card { position: fixed; z-index: 60; display: grid; gap: 2px; width: 280px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 8px 10px; box-shadow: var(--shadow-floating); font-size: 12px; line-height: 1.45; pointer-events: none; }
 .pm-session-hover-card strong { font-size: 13px; }
 .pm-session-hover-card span { color: var(--muted-foreground); overflow-wrap: anywhere; }
+
+.pm-execution-terminal-tabs { display: flex; gap: 2px; min-width: 0; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--surface); padding: 4px 6px 0; scrollbar-width: thin; }
+.pm-execution-terminal-tabs button { display: inline-flex; align-items: center; gap: .3rem; flex: none; max-width: 14rem; border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: .25rem .55rem; background: transparent; color: var(--muted-foreground); font-size: 12px; cursor: pointer; }
+.pm-execution-terminal-tabs button:hover { background: var(--surface-hover); color: var(--foreground); }
+.pm-execution-terminal-tabs button[data-active] { background: var(--card); border-color: var(--border); color: var(--foreground); }
+.pm-execution-terminal-tabs button > span:not(.pm-execution-terminal-status) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-execution-terminal-status { width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--success); }
+.pm-execution-terminal-status[data-status="exited"] { background: var(--muted-foreground); }
+.pm-execution-terminal-ended { color: var(--muted-foreground); font-size: 10px; }

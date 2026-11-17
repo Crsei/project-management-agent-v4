@@ -14,6 +14,7 @@ type TerminalCatalog = { serviceId: string; terminals: TerminalDescriptor[] };
 const PENDING_CREATION_KEY = "pm-v4:terminal-creation:pending";
 export type ExecutionTerminalController = {
   selectedId: string | null; selected: TerminalDescriptor | undefined;
+  terminals: TerminalDescriptor[]; select: (id: string) => void;
   enabled: boolean; create: (request: FolderTerminalRequest) => Promise<void>;
   openSession: (target: SessionTerminalTarget) => Promise<void>;
   busy: boolean; error?: string; retry: () => void;
@@ -243,7 +244,7 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
     setTerminals(current => current.map(terminal => terminal.id === id ? { ...terminal, status: "exited", exitCode, signal: signal ?? null } : terminal));
   };
   return {
-    selectedId: selected?.id ?? null, selected, enabled: enabled && (!!workspace || !!environment?.agentWorkspaceId || !!pendingCreation),
+    selectedId: selected?.id ?? null, selected, terminals: visibleTerminals, select: setSelectedId, enabled: enabled && (!!workspace || !!environment?.agentWorkspaceId || !!pendingCreation),
     create, openSession, busy, error, retry: () => { assertEnabled(); setError(undefined); void (pendingRef.current ? reconcileCreation(true) : refresh()).catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, acceptExit,
   };
 }
@@ -251,6 +252,17 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
 export function ExecutionTerminals({ controller: c }: { controller: ExecutionTerminalController }) {
   const selected = c.selected;
   return <div className="pm-execution-terminals">
+    {c.terminals.length > 0 && <div className="pm-execution-terminal-tabs" role="tablist" aria-label={agentText("终端标签", "Terminal tabs")}>
+      {c.terminals.map((terminal, index) => {
+        const base = terminal.startCwd.split(/[\\/]/).filter(Boolean).at(-1);
+        const label = terminal.scope === "session" ? agentText("会话终端", "Session terminal") : agentText(`文件夹终端 ${index + 1}`, `Folder terminal ${index + 1}`);
+        return <button key={terminal.id} type="button" role="tab" aria-selected={terminal.id === selected?.id} data-active={terminal.id === selected?.id || undefined} title={`${terminal.startCwd}${base ? ` · ${base}` : ""}`} onClick={() => c.select(terminal.id)}>
+          <span className="pm-execution-terminal-status" data-status={terminal.status} aria-hidden="true" />
+          <span>{label}</span>
+          {terminal.status === "exited" && <span className="pm-execution-terminal-ended">{agentText("已结束", "Ended")}</span>}
+        </button>;
+      })}
+    </div>}
     {c.busy && !selected && <p role="status">{agentText("正在核对会话终端…", "Resolving the Session terminal…")}</p>}
     {c.error && <p role="alert">{c.error} <button type="button" disabled={c.busy} onClick={c.retry}>{agentText("核对原请求", "Reconcile original request")}</button></p>}
     {!selected && !c.busy && !c.error && <p role="status">{agentText("尚未打开终端。请从运行面板明确打开会话终端，或在 Files 中选择目录创建。", "No terminal is open. Explicitly open the Session terminal from the run board, or create one for a folder in Files.")}</p>}
