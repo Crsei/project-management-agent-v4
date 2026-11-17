@@ -30,6 +30,7 @@ import { useMessageTimes } from "@agent/src/chat/generation-times";
 import { ThreadFind } from "@agent/src/chat/thread-find";
 import "@agent/src/chat/composer-shell.css";
 import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
+import { ThreadStatusLine } from "@agent/src/chat/thread-status-line";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
@@ -78,6 +79,7 @@ import {
   MicIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  CircleAlertIcon,
   RefreshCwIcon,
   SquareIcon,
   MessageSquareReplyIcon,
@@ -167,6 +169,11 @@ export const Thread: FC<ThreadProps> = (props) => {
       }}
     >
       <ThreadHistoryNavigation />
+      {(props.saveError || props.catalog.error) && <div className="thread-notice-lane" role="alert">
+        <CircleAlertIcon aria-hidden="true" />
+        <span>{props.saveError || props.catalog.error}</span>
+        <button type="button" onClick={() => { if (props.saveError) void props.onRetry?.(); else void props.catalog.refresh(); }}>{props.saveError ? t("重试保存", "Retry save") : t("刷新模型目录", "Refresh models")}</button>
+      </div>}
       <ThreadPrimitive.Viewport
         autoScroll
         turnAnchor="top"
@@ -193,6 +200,7 @@ export const Thread: FC<ThreadProps> = (props) => {
             <button type="button" onClick={() => window.location.reload()}>{t("刷新重试", "Refresh and retry")}</button>
           </div>}
 
+          {!isEmpty && <ThreadStatusLine />}
           <div data-slot="aui_message-group" className="mb-16 flex flex-col gap-y-7 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadHistoryMessage><ThreadMessage
               providerInstanceId={props.providerInstanceId}

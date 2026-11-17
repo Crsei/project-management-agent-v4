@@ -1,0 +1,6 @@
+.thread-status-line { display: flex; align-items: center; gap: .35rem; width: 100%; max-width: var(--thread-max-width, 720px); margin: 0 auto .5rem; padding-inline: 1.5rem; color: var(--muted-foreground); font-size: .75rem; }
+.thread-status-line svg { width: .9rem; height: .9rem; flex: none; }
+.thread-status-line > span:not(.thread-status-line-error) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-status-line button { flex: none; border: 0; padding: 0; background: transparent; color: var(--foreground); font-size: inherit; text-decoration: underline; cursor: pointer; }
+.thread-status-line button:disabled { opacity: .55; cursor: wait; }
+.thread-status-line-error { color: var(--destructive); overflow-wrap: anywhere; }

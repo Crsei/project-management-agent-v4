@@ -2,3 +2,9 @@
 .aui-user-message-fold-toggle { margin-top: .3rem; padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: .72rem; line-height: 1.4; cursor: pointer; }
 .aui-user-message-fold-toggle:hover { color: var(--foreground); text-decoration: underline; }
 @media (prefers-reduced-motion: no-preference) { .aui-user-message-fold[data-collapsed] { transition: max-height var(--motion-panel, 240ms) ease-out; } }
+
+.thread-notice-lane { display: flex; align-items: center; gap: .4rem; margin: .35rem .75rem 0; border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border)); border-radius: .55rem; background: var(--card); color: var(--foreground); padding: .4rem .55rem; font-size: .78rem; }
+.thread-notice-lane svg { width: .95rem; height: .95rem; flex: none; color: var(--warning); }
+.thread-notice-lane span { min-width: 0; overflow-wrap: anywhere; }
+.thread-notice-lane button { margin-inline-start: auto; flex: none; border: 1px solid var(--border); border-radius: .35rem; padding: .15rem .45rem; background: transparent; color: inherit; font-size: .72rem; cursor: pointer; }
+.thread-notice-lane button:hover { background: var(--surface-hover); }
