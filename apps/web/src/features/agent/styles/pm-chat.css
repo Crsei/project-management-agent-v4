@@ -291,3 +291,8 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .pm-execution-terminal-actions button { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.5rem; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 15px; line-height: 1; cursor: pointer; }
 .pm-execution-terminal-actions button:hover:not(:disabled) { background: var(--surface-hover); color: var(--foreground); }
 .pm-execution-terminal-actions button:disabled { opacity: .4; cursor: not-allowed; }
+
+.pm-execution-terminal-panes { display: flex; min-width: 0; min-height: 0; flex: 1; }
+.pm-execution-terminal-panes > * { min-width: 0; flex: 1; }
+.pm-execution-terminal-panes[data-split] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.pm-execution-terminal-actions button[data-active="true"] { background: var(--surface-hover); color: var(--foreground); }

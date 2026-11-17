@@ -263,6 +263,11 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
 
 export function ExecutionTerminals({ controller: c }: { controller: ExecutionTerminalController }) {
   const selected = c.selected;
+  const [splitId, setSplitId] = useState<string | null>(null);
+  const split = c.terminals.find(terminal => terminal.id === splitId && terminal.id !== selected?.id);
+  useEffect(() => {
+    if (splitId && !split) setSplitId(null);
+  }, [splitId, split]);
   // Ended PTYs stay visible only while selected; otherwise their tabs would
   // accumulate without a way to reattach from this surface.
   const tabs = c.terminals.filter(terminal => terminal.status === "running" || terminal.id === selected?.id);
@@ -281,12 +286,16 @@ export function ExecutionTerminals({ controller: c }: { controller: ExecutionTer
     </div>}
     <div className="pm-execution-terminal-actions">
       <button type="button" disabled={c.busy || !c.enabled} title={agentText("新建会话终端", "New session terminal")} aria-label={agentText("新建会话终端", "New session terminal")} onClick={() => void c.create({ scope: "session", relativePath: "" })}>+</button>
+      <button type="button" disabled={!selected || tabs.filter(terminal => terminal.id !== selected.id).length === 0} title={split ? agentText("取消分屏", "Close split") : agentText("并排显示另一个终端", "Show another terminal side by side")} aria-label={split ? agentText("取消分屏", "Close split") : agentText("终端分屏", "Split terminal")} aria-pressed={!!split} data-active={split ? "true" : undefined} onClick={() => setSplitId(current => current ? null : tabs.find(terminal => terminal.id !== selected?.id)?.id ?? null)}>▥</button>
       {selected && <button type="button" disabled={c.busy} title={agentText("结束当前终端", "End current terminal")} aria-label={agentText("结束当前终端", "End current terminal")} onClick={() => void c.close(selected.id)}>×</button>}
     </div>
     </div>
     {c.busy && !selected && <p role="status">{agentText("正在核对会话终端…", "Resolving the Session terminal…")}</p>}
     {c.error && <p role="alert">{c.error} <button type="button" disabled={c.busy} onClick={c.retry}>{agentText("核对原请求", "Reconcile original request")}</button></p>}
     {!selected && !c.busy && !c.error && <p role="status">{agentText("尚未打开终端。请从运行面板明确打开会话终端，或在 Files 中选择目录创建。", "No terminal is open. Explicitly open the Session terminal from the run board, or create one for a folder in Files.")}</p>}
-    {selected && <TerminalPanel key={selected.id} terminal={selected} onExit={(exitCode, signal) => c.acceptExit(selected.id, exitCode, signal)} />}
+    <div className="pm-execution-terminal-panes" data-split={split ? true : undefined}>
+      {selected && <TerminalPanel key={selected.id} terminal={selected} onExit={(exitCode, signal) => c.acceptExit(selected.id, exitCode, signal)} />}
+      {split && <TerminalPanel key={split.id} terminal={split} onExit={(exitCode, signal) => c.acceptExit(split.id, exitCode, signal)} />}
+    </div>
   </div>;
 }
