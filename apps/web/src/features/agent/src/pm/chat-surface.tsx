@@ -163,6 +163,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const visitedThread = useRef<string | undefined>(undefined);
   const [visiting, setVisiting] = useState(false);
   const currentRemote = useRef<string | undefined>(undefined);
+  const visitSequence = useRef(0);
   const wasRunning = useRef(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const sidebarToggle = useRef<HTMLButtonElement>(null);
@@ -312,15 +313,16 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   }, [threadRunning]);
   useEffect(() => {
     if (boardMode) return;
-    if (!remoteId) { visitedThread.current = undefined; setVisiting(false); return; }
+    if (!remoteId) { visitedThread.current = undefined; visitSequence.current += 1; setVisiting(false); return; }
     const thread = state.threads.get(remoteId);
     if (!thread || visitedThread.current === remoteId) return;
     visitedThread.current = remoteId;
+    const token = ++visitSequence.current;
     setVisiting(true);
-    void visitThread(remoteId).then((saved) => { if (currentRemote.current === remoteId) acceptRemoteThread(saved); }).catch((error: unknown) => {
+    void visitThread(remoteId).then((saved) => { if (visitSequence.current === token) acceptRemoteThread(saved); }).catch((error: unknown) => {
       setActionError(error instanceof Error ? error.message : String(error));
       void refreshThreadList().catch(() => {});
-    }).finally(() => { if (currentRemote.current === remoteId) setVisiting(false); });
+    }).finally(() => { if (visitSequence.current === token) setVisiting(false); });
   }, [boardMode, remoteId, state.threads]);
   useEffect(() => { if (automationsView) void refreshIdentity(); }, [automationsView]);
   useEffect(() => {
@@ -473,7 +475,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     });
   };
   const navigateChatSession = async (id: string) => {
-    if (pending || visiting) throw new Error(t("当前操作尚未结束，请稍后再打开会话。", "Another operation is in progress; open the session again when it finishes."));
+    if (pending) throw new Error(t("当前操作尚未结束，请稍后再打开会话。", "Another operation is in progress; open the session again when it finishes."));
     if (!canLeaveAutomation() || !protect()) throw new Error(t("已取消切换会话，草稿保持不变。", "Session navigation was cancelled; the draft is unchanged."));
     if (boardMode) {
       navigate(runBoardChatHref({ threadId: id, returnTo: boardReturn }));
@@ -729,6 +731,20 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     const local = threadItems.find(item => item.remoteId === id)?.id;
     if (!local) { setActionError(t("父会话尚未登记，请重新读取会话列表。", "The parent Session is not registered yet; reload the Session list.")); return; }
     switchSession(local);
+  };
+
+  const sessionListKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains("pm-agent-session-select")) return;
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button.pm-agent-session-select:not(:disabled)")];
+    const index = items.indexOf(target as HTMLButtonElement);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? items[0] : event.key === "End" ? items.at(-1) : items[index + (event.key === "ArrowDown" ? 1 : -1)];
+    next?.focus();
+    next?.scrollIntoView({ block: "nearest" });
   };
 
   const archiveThread = (id: string, thread: RemoteThread) => {
@@ -989,7 +1005,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         {actionError && <p role="alert" className="pm-agent-sidebar-error">{actionError}</p>}
       </div>
       <SessionActions.Provider value={{
-        disabled: pending || visiting, automationsView, sortByCreated: preferences.threadSortOrder === "created_at", onSwitch: switchSession, onAction: openAction,
+        disabled: pending, automationsView, sortByCreated: preferences.threadSortOrder === "created_at", onSwitch: switchSession, onAction: openAction,
         thread: (id) => state.threads.get(id),
         path: (thread) => thread.executionEnvironment?.executionPath,
         scopeName: threadScopeName, provider: threadProvider, providerName: threadProviderName, modelName: threadModelName,
@@ -1010,7 +1026,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
           archiveThread(id, thread);
         },
         onError: setActionError,
-      }}><nav className="pm-agent-catalog" aria-label={t("会话", "Sessions")}>
+      }}><nav className="pm-agent-catalog" aria-label={t("会话", "Sessions")} onKeyDown={sessionListKeyDown}>
         <div className="pm-agent-sessions-heading"><h2>{t("会话 · Sessions", "Sessions")}</h2><Link className="pm-agent-icon" data-automation-leave-guarded="true" aria-label={t("历史与归档", "History and archive")} title={t("历史与归档", "History and archive")} to="/agent/settings/history" state={{ settingsReturnTo }} onClick={(event) => { if (!protectNavigation()) event.preventDefault(); }}><ArchiveIcon /></Link></div>
         {state.loading && !state.workspaces.length && <p role="status" className="pm-agent-empty-group">{t("正在读取文件夹…", "Loading folders…")}</p>}
         {state.error && <div role="alert" className="pm-agent-sidebar-error">{state.error}<Button variant="outline" size="sm" onClick={() => void refreshAgentWorkspaces()}>{t("重新读取", "Reload")}</Button></div>}
