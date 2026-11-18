@@ -198,6 +198,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const [executionDialog, setExecutionDialog] = useState<{ create: boolean; initial: ExecutionSelection }>();
   const [workspaceRename, setWorkspaceRename] = useState<{ workspace: AgentWorkspace; name: string }>();
   const [sessionAction, setSessionAction] = useState<{ id: string; title: string; kind: "rename" | "delete" }>();
+  const [archiveTarget, setArchiveTarget] = useState<{ id: string; thread: RemoteThread }>();
   const [sessionTitle, setSessionTitle] = useState("");
   const localId = useAuiState((s) => s.threads.mainThreadId);
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
@@ -730,6 +731,18 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     switchSession(local);
   };
 
+  const archiveThread = (id: string, thread: RemoteThread) => {
+    void act(async () => {
+      try {
+        const current = (await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`)).thread;
+        const saved = current.status === "archived" ? current : (await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`, { method: "PUT", body: JSON.stringify({ status: "archived", lifecycleRevision: current.lifecycleRevision }) })).thread;
+        acceptRemoteThread(saved);
+        await refreshThreadList();
+        if (id === localId) { await runtime.threads.switchToNewThread(); setFreshThreadId(undefined); clearEntryObject(false, null); onThreadChange?.(null); }
+      } catch (error) { await refreshThreadList().catch(() => {}); throw error; }
+    });
+  };
+
   const sidebarAction = (thread: RemoteThread, action: "pin" | "unpin" | "settle" | "unsettle" | "snooze" | "wake" | "auto-settle" | "mark-unread" | "visit", options?: { snoozedUntil?: string; enabled?: boolean }) => {
     const parkingCurrent = thread.remoteId === remoteId && (action === "settle" || action === "snooze");
     if (parkingCurrent && (!canLeaveAutomation() || !protect())) return;
@@ -993,15 +1006,8 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         onSettings: (thread) => { const workspace = state.workspaces.find(item => item.id === thread.executionSelection?.agentWorkspaceId); if (workspace) manageWorkspace(workspace, "rename"); },
         onArchive: (id, thread) => {
           if (id === localId && (!canLeaveAutomation() || !protect())) return;
-          const name = thread.title || t("未命名会话", "Untitled session");
-          if (preferences.confirmThreadArchive && !window.confirm(t(`归档会话「${name}」？归档会将会话移出当前侧栏，可稍后在归档中恢复。`, `Archive session "${name}"? Archiving removes it from this sidebar; you can restore it from the archive later.`))) return;
-          void act(async () => {
-            const current = (await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`)).thread;
-            const saved = current.status === "archived" ? current : (await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(thread.remoteId)}`, { method: "PUT", body: JSON.stringify({ status: "archived", lifecycleRevision: current.lifecycleRevision }) })).thread;
-            acceptRemoteThread(saved);
-            await refreshThreadList();
-            if (id === localId) { await runtime.threads.switchToNewThread(); setFreshThreadId(undefined); clearEntryObject(false, null); onThreadChange?.(null); }
-          });
+          if (preferences.confirmThreadArchive) { setArchiveTarget({ id, thread }); return; }
+          archiveThread(id, thread);
         },
         onError: setActionError,
       }}><nav className="pm-agent-catalog" aria-label={t("会话", "Sessions")}>
@@ -1140,6 +1146,11 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
       <Input type="datetime-local" aria-label={t("唤醒时间", "Wake time")} value={snoozeTime} onChange={(event) => setSnoozeTime(event.target.value)} />
       {snoozeTime && (!Number.isFinite(new Date(snoozeTime).getTime()) || new Date(snoozeTime).getTime() <= Date.now()) && <p role="alert" className="text-destructive">{t("请选择未来的时间。", "Choose a time in the future.")}</p>}
       <DialogFooter><Button variant="outline" onClick={() => setSnoozeTarget(undefined)}>{t("取消", "Cancel")}</Button><Button disabled={pending || !snoozeTime || !Number.isFinite(new Date(snoozeTime).getTime()) || new Date(snoozeTime).getTime() <= Date.now()} onClick={() => { sidebarAction(snoozeTarget, "snooze", { snoozedUntil: new Date(snoozeTime).toISOString() }); setSnoozeTarget(undefined); }}>{t("稍后提醒", "Snooze")}</Button></DialogFooter>
+    </DialogContent></Dialog>}
+    {archiveTarget && <Dialog open onOpenChange={(open) => { if (!open && !pending) setArchiveTarget(undefined); }}><DialogContent className="pm-agent-chat-dialog">
+      <DialogHeader><DialogTitle>{t("归档会话", "Archive session")}</DialogTitle></DialogHeader>
+      <p className="text-muted-foreground text-sm">{t(`归档会话「${archiveTarget.thread.title || t("未命名会话", "Untitled session")}」？归档会将会话移出当前侧栏，可稍后在归档中恢复。`, `Archive session "${archiveTarget.thread.title || t("Untitled session", "Untitled session")}"? Archiving removes it from this sidebar; you can restore it from the archive later.`)}</p>
+      <DialogFooter><Button variant="outline" disabled={pending} onClick={() => setArchiveTarget(undefined)}>{t("取消", "Cancel")}</Button><Button disabled={pending} onClick={() => { const target = archiveTarget; setArchiveTarget(undefined); archiveThread(target.id, target.thread); }}>{pending ? t("正在归档…", "Archiving…") : t("归档", "Archive")}</Button></DialogFooter>
     </DialogContent></Dialog>}
     {sessionAction && <Dialog open onOpenChange={(open) => { if (!open && !pending) setSessionAction(undefined); }}><DialogContent className="pm-agent-chat-dialog">
       <DialogHeader><DialogTitle>{sessionAction.kind === "rename" ? t("重命名会话", "Rename session") : t("删除会话", "Delete session")}</DialogTitle></DialogHeader>
