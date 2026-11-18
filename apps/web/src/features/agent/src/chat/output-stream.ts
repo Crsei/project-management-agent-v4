@@ -50,6 +50,10 @@ export function useGenerationOutput(generationId: string) {
             current = frame.snapshot;
             setError(undefined);
             schedule(!active(current.status));
+            // Completed generations keep the stream open server-side; close it
+            // so long transcripts do not exhaust the browser's per-origin
+            // connection pool and starve sidebar/visit requests.
+            if (!active(current.status)) controller.abort();
             return;
           }
           if (frame.generationId !== generationId || !current || frame.sequence <= current.sequence) return;
@@ -61,6 +65,7 @@ export function useGenerationOutput(generationId: string) {
           } else {
             current = { ...current, sequence: frame.sequence, status: frame.status };
             schedule(!active(frame.status));
+            if (!active(frame.status)) controller.abort();
           }
         });
         if (current && !active(current.status)) return;
