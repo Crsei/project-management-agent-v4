@@ -1255,9 +1255,9 @@ function SessionRow() {
   const provider = thread ? actions.provider(thread) : undefined;
   const modelName = thread ? actions.modelName(thread) : "";
   const renderRow = (ellipsis?: ReactNode) => {
-    const content = <><button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={thread ? `${title}\n${actions.scopeName(thread)}${actions.path(thread) ? `\n${actions.path(thread)}` : ""}\n${actions.providerName(thread)}${modelName ? ` · ${modelName}` : ""}` : title}>
+    const content = <><button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined}>
       <span className="pm-agent-session-top">
-        <span className="pm-agent-session-scope" title={thread ? actions.path(thread) ?? undefined : undefined}>
+        <span className="pm-agent-session-scope">
           {thread?.sidebar.pinnedAt && <PinIcon aria-hidden="true" />}
           {thread?.executionSelection?.agentWorkspaceId ? <FolderOpenIcon aria-hidden="true" /> : <MessageSquareIcon aria-hidden="true" />}
           <span>{thread ? actions.scopeName(thread) : t("历史会话", "Past session")}</span>
@@ -1269,8 +1269,8 @@ function SessionRow() {
       </span>
       <span className="pm-agent-session-title">{title}</span>
       <span className="pm-agent-session-footer">
-        {thread ? <span className="pm-agent-session-provider" title={actions.providerName(thread)}>{provider && <ProviderGlyph driver={provider.driver} accentColor={provider.accentColor} iconUrl={provider.registryIconUrl} displayName={actions.providerName(thread)} />}<span className="pm-agent-session-provider-text">{actions.providerName(thread)}</span></span> : <span className="pm-agent-session-provider">{t("正在读取", "Loading")}</span>}
-        {modelName && <span className="pm-agent-session-model" title={thread?.settings.model}>{modelName}</span>}
+        {thread ? <span className="pm-agent-session-provider">{provider && <ProviderGlyph driver={provider.driver} accentColor={provider.accentColor} iconUrl={provider.registryIconUrl} displayName={actions.providerName(thread)} />}<span className="pm-agent-session-provider-text">{actions.providerName(thread)}</span></span> : <span className="pm-agent-session-provider">{t("正在读取", "Loading")}</span>}
+        {modelName && <span className="pm-agent-session-model">{modelName}</span>}
       </span>
       {thread?.sidebar.section === "snoozed" && <span className="sr-only">{t(`稍后提醒至 ${thread.sidebar.snoozedUntil}`, `Snoozed until ${thread.sidebar.snoozedUntil}`)}</span>}
     </button>{ellipsis}</>;
