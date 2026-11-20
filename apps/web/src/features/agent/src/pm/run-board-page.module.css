@@ -86,6 +86,17 @@
   gap: 16px;
 }
 
+.newFolderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.newFolderActions .newFolderLabel {
+  flex: 1 1 240px;
+}
+
 .newFolderLabel {
   display: flex;
   flex-direction: column;

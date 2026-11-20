@@ -89,18 +89,19 @@
 .provider-delete-confirm { width: 100%; padding: 12px; border: 1px solid var(--destructive); border-radius: var(--radius-popover-value); }
 .provider-delete-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .provider-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-right: 12px; }
-.provider-model-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; font-size: 12px; }
-.provider-model-row code { display: block; color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
+.provider-model-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; padding: 8px 12px; font-size: 12px; }
+.provider-model-row code { display: inline; margin-inline-start: 6px; color: var(--muted-foreground); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .provider-model-row > div { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
 .provider-model-capability { border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--muted-foreground); font-size: 10px; flex-shrink: 0; }
 .provider-models > p { padding-bottom: 12px; }
 .provider-model-row { flex-wrap: wrap; }
 .provider-model-row label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.provider-model-row small { color: var(--muted-foreground); }
-.provider-model-option { margin-top: 6px; font-size: 11px; }
+.provider-model-row small { margin-inline-start: 8px; color: var(--muted-foreground); line-height: 1.4; }
+.provider-model-options { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 3px; }
+.provider-model-row .provider-model-option { display: inline-flex; margin: 0; font-size: 11px; }
 .provider-model-option [data-slot="select-trigger"], .provider-custom-option [data-slot="select-trigger"] { border: 1px solid var(--input); border-radius: 6px; padding: 4px; background: var(--background); }
 .provider-model-option [data-slot="select-trigger"] { min-width: 0; max-width: 100%; }
-.provider-model-metadata { display: block; }
+.provider-model-metadata { display: inline; }
 .provider-model-invalid-option { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; color: var(--destructive); }
 .provider-model-invalid-option code { color: inherit; }
 .provider-custom-models { padding: 14px; border-top: 1px solid var(--border); }

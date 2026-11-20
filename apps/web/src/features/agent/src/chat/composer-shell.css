@@ -7,7 +7,54 @@
 .thread-resting-composer:hover { color: var(--foreground); border-color: var(--ring); }
 .thread-resting-composer svg { width: .9rem; height: .9rem; }
 
-.plan-ready-banner { display: flex; align-items: center; gap: .4rem; min-width: 0; border: 1px solid var(--border); border-radius: .55rem; background: var(--card); padding: .35rem .55rem; color: var(--muted-foreground); font-size: .78rem; }
-.plan-ready-banner svg { width: .9rem; height: .9rem; flex: none; color: var(--info); }
-.plan-ready-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); }
-.plan-ready-banner button { margin-inline-start: auto; flex: none; border: 0; padding: 0; background: transparent; color: var(--foreground); font-size: inherit; text-decoration: underline; cursor: pointer; }
+.composer-more-menu {
+  max-width: min(18rem, 84vw);
+}
+
+.composer-more-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-resume-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.composer-resume-confirm-label {
+  display: flex;
+  flex: 1 1 16rem;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composer-resume-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.composer-action-error {
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* Density only changes where controls render; no capability is removed. */
+.aui-composer-action-wrapper[data-density="compact"],
+.aui-composer-action-wrapper[data-density="narrow"] {
+  row-gap: 6px;
+}

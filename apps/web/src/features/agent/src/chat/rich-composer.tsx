@@ -1,11 +1,11 @@
 import { useAui, useAuiState, type QuoteInfo } from "@assistant-ui/react";
 import {
-  EditorContent, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer,
-  useEditor, useEditorState, type JSONContent, type NodeViewProps,
+  EditorContent, Mark, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer,
+  useEditor, useEditorState, type Editor, type NodeViewProps,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type AriaAttributes, type MutableRefObject } from "react";
-import { CodeIcon, FileIcon, QuoteIcon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type AriaAttributes, type MutableRefObject } from "react";
+import { CheckSquareIcon, FileIcon, LinkIcon, MessageCircleIcon, QuoteIcon, XIcon } from "lucide-react";
 import { useAgentText } from "../i18n";
 import {
   composerDocumentCursor, composerInlineSource, composerPasteSlice, composerSourceCursor, normalizeComposerReferences,
@@ -26,12 +26,48 @@ import { ComposerAttachmentStrip } from "./composer-attachment-strip";
 import { COMPOSER_PROMPT_LIMIT, composerPromptTooLong } from "./composer-limit";
 import { SkillContextIcon } from "./context-chip-parts";
 import { MESSAGE_CONTEXT_CLIPBOARD_TYPE as CONTEXT_CLIPBOARD_TYPE, contextClipboardPlainText } from "./message-context-clipboard";
+import { useChatBrowserPreferences } from "../settings/browser-preferences";
+import { isApplePlatform, matchComposerAction, resolveComposerKeymap } from "./composer-shortcuts";
+import { resolveBlockDirections } from "./composer-text-direction";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { COMPOSER_EDITABLE_SELECTOR, COMPOSER_FLOATING_LAYER_SELECTOR, COMPOSER_INTERACTIVE_SELECTOR, shouldFocusComposerForPaste } from "./composer-paste-focus";
+import { COMPOSER_CONTEXT_DRAG_TYPE } from "./composer-context-drag";
 
 
-function ContextView({ node, deleteNode }: NodeViewProps) {
+function ContextView({ node, updateAttributes, deleteNode }: NodeViewProps) {
+  const t = useAgentText();
+  const draft = useMessageContextDraft();
   const payload = node.attrs.payload as ComposerContextPayload | undefined;
+  const input = payload?.type === "native" ? payload.item.input : undefined;
+  const preview = input ? ("selectedText" in input ? String(input.selectedText ?? "") : "text" in input ? String(input.text ?? "") : "") : "";
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentError, setCommentError] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const comment = useRef<HTMLTextAreaElement>(null);
   return <NodeViewWrapper as="span" className="rich-composer-context inline-flex max-w-full items-center gap-0.5" contentEditable={false}>
     {payload?.type === "native" ? <MessageContextChip item={payload.item} /> : payload?.type === "pm" ? <PmContextChip reference={payload.reference} /> : payload?.type === "attachment" ? <span data-composer-attachment-anchor="" /> : <span role="status">Context unavailable</span>}
+    {payload?.type === "native" && input && draft.available && input.kind !== "response" && <Popover open={commentOpen} onOpenChange={setCommentOpen}>
+      <PopoverTrigger render={<ContextChipAction aria-label={input.comment ? t("编辑引文评论", "Edit citation comment") : t("添加引文评论", "Add citation comment")} title={input.comment || undefined}><MessageCircleIcon /></ContextChipAction>} />
+      <PopoverContent side="top" className="w-[min(30rem,90vw)] space-y-2">
+        <PopoverTitle className="text-sm font-medium">{t("这条上下文的评论", "Comment on this context")}</PopoverTitle>
+        <p className="max-h-24 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground" dir="auto">{preview}</p>
+        <textarea key={input.comment} ref={comment} defaultValue={input.comment || ""} maxLength={4000} rows={3} dir="auto" className="w-full rounded-md border bg-background p-2 text-sm" aria-label={t("引文评论", "Citation comment")} />
+        <div className="flex items-center gap-3">
+          <button type="button" disabled={saving} className="text-sm underline" onClick={() => {
+            if (!comment.current) return;
+            const value = comment.current.value.slice(0, 4000);
+            setSaving(true);
+            setCommentError(undefined);
+            void draft.add({ ...input, comment: value }).then(() => {
+              updateAttributes({ payload: { ...payload, item: { ...payload.item, input: { ...input, comment: value } } } });
+              setCommentOpen(false);
+            }).catch(cause => setCommentError(cause instanceof Error ? cause.message : String(cause))).finally(() => setSaving(false));
+          }}>{t("保存评论", "Save comment")}</button>
+          <span className="text-xs text-muted-foreground">{t("评论随这条上下文一起发送。", "The comment is sent with this context.")}</span>
+        </div>
+        {commentError && <p role="alert" className="text-xs text-destructive">{commentError}</p>}
+      </PopoverContent>
+    </Popover>}
     {payload?.type !== "attachment" && <ContextChipAction aria-label="Remove context" onClick={deleteNode}><XIcon /></ContextChipAction>}
   </NodeViewWrapper>;
 }
@@ -65,6 +101,9 @@ type Props = {
   suggestions?: RichComposerSuggestions;
   beforeSend?: () => boolean;
   editing?: boolean;
+  /** Wired by the thread shell; Shift+Tab falls back to a window event when absent. */
+  interactionMode?: "default" | "plan";
+  onInteractionModeChange?: (mode: "default" | "plan") => void | Promise<void>;
 };
 
 function ReferenceView({ node, deleteNode }: NodeViewProps) {
@@ -104,30 +143,58 @@ const ComposerCitation = Node.create({
   addNodeView: () => ReactNodeViewRenderer(CitationView),
 });
 
-function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
+function TaskItemView({ node, updateAttributes }: NodeViewProps) {
   const t = useAgentText();
-  const id = useId();
-  return <NodeViewWrapper className="rich-composer-code">
-    <div className="rich-composer-code-toolbar" contentEditable={false}>
-      <CodeIcon aria-hidden="true" />
-      <label htmlFor={id}>{t("语言", "Language")}</label>
-      <input id={id} value={String(node.attrs.language ?? "")} placeholder={t("纯文本", "Plain text")} spellCheck={false}
-        aria-label={t("代码块语言", "Code block language")} maxLength={80}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          // Node-view inputs bypass editor key handlers; never implicitly submit.
-          event.preventDefault();
-          event.stopPropagation();
-          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
-          const position = getPos();
-          if (typeof position === "number") editor.commands.setTextSelection(position + 1 + node.content.size);
-          editor.commands.focus();
-        }}
-        onChange={(event) => updateAttributes({ language: event.currentTarget.value.replace(/[^\w.+#-]/g, "") })} />
-      <span>{t("Ctrl / ⌘ + Enter 离开代码块", "Ctrl / ⌘ + Enter exits code")}</span>
-    </div>
-    <pre spellCheck={false}><NodeViewContent<"code"> as="code" /></pre>
+  const checked = node.attrs.checked === true;
+  return <NodeViewWrapper as="li" className="rich-composer-task-item" data-checked={checked ? "true" : undefined}>
+    <span className="rich-composer-task-check" contentEditable={false}>
+      <input type="checkbox" checked={checked} aria-label={t("标记任务完成", "Mark task complete")}
+        onChange={(event) => updateAttributes({ checked: event.currentTarget.checked })} />
+    </span>
+    <div className="rich-composer-task-content"><NodeViewContent /></div>
   </NodeViewWrapper>;
+}
+
+const ComposerTaskList = Node.create({
+  name: "taskList", group: "block", content: "taskItem+", defining: true,
+  parseHTML: () => [{ tag: "ul[data-type='taskList']" }],
+  renderHTML: () => ["ul", { "data-type": "taskList", class: "rich-composer-task-list" }, 0],
+});
+
+const ComposerTaskItem = Node.create({
+  name: "taskItem", content: "paragraph block*", defining: true,
+  // `space` keeps an empty checked line byte-identical when the draft is re-read.
+  addAttributes: () => ({ checked: { default: false }, space: { default: "" } }),
+  parseHTML: () => [{ tag: "li[data-type='taskItem']" }],
+  renderHTML: () => ["li", { "data-type": "taskItem" }, 0],
+  addNodeView: () => ReactNodeViewRenderer(TaskItemView),
+});
+
+/** Links stay Markdown; only absolute destinations are parsed into the mark. */
+const ComposerLink = Mark.create({
+  name: "link", inclusive: false, exitable: true,
+  addAttributes: () => ({ href: { default: null }, title: { default: null } }),
+  parseHTML: () => [{ tag: "a[href]" }],
+  renderHTML: ({ HTMLAttributes }) => ["a", { ...HTMLAttributes, target: "_blank", rel: "noopener noreferrer nofollow" }, 0],
+});
+
+/** Each top-level block carries its own base direction; the draft text never changes. */
+function applyComposerDirections(dom: HTMLElement): void {
+  const blocks = [...dom.children].map(element => {
+    const host = element as HTMLElement;
+    if (element.tagName === "PRE") return { element, text: "", code: true };
+    // Inline code is masked, not removed from the draft: a Latin identifier must
+    // not flip an Arabic line, and code itself renders left to right.
+    const copy = host.cloneNode(true) as HTMLElement;
+    for (const code of copy.querySelectorAll("code")) code.replaceWith(" ");
+    return { element, text: copy.textContent ?? "", code: false };
+  });
+  const directions = resolveBlockDirections(blocks);
+  blocks.forEach((block, index) => {
+    const direction = directions[index];
+    if (direction && block.element.getAttribute("dir") !== direction) block.element.setAttribute("dir", direction);
+    else if (!direction && block.element.hasAttribute("dir")) block.element.removeAttribute("dir");
+  });
 }
 
 function composerExtensions() {
@@ -149,7 +216,6 @@ function composerExtensions() {
         originalLanguage: { default: null }, closing: { default: "```" }, hasBodyLine: { default: true } }),
       parseHTML: () => [{ tag: "pre", preserveWhitespace: "full" }],
       renderHTML: () => ["pre", ["code", 0]],
-      addNodeView: () => ReactNodeViewRenderer(CodeBlockView),
       addKeyboardShortcuts() {
         return {
           Tab: () => this.editor.isActive("codeBlock") && this.editor.commands.insertContent("  "),
@@ -161,7 +227,7 @@ function composerExtensions() {
         };
       },
     }),
-    ComposerReference, ComposerCitation, ComposerContext,
+    ComposerReference, ComposerCitation, ComposerContext, ComposerTaskList, ComposerTaskItem, ComposerLink,
   ];
 }
 
@@ -221,11 +287,82 @@ function RichComposerEditor(props: Props) {
     })().catch(cause => { if (!cancelled && draft.isCurrent()) setContextError(`The selected text could not be verified. Remove or reselect the quote before sending. ${String(cause)}`); });
     return () => { cancelled = true; };
   }, [aui, quote, remoteId]);
+  const { preferences } = useChatBrowserPreferences();
+  const keymap = useMemo(() => resolveComposerKeymap(preferences.composerKeymap, props.submitMode), [preferences.composerKeymap, props.submitMode]);
+  const apple = useMemo(() => isApplePlatform(), []);
+  const [planNotice, setPlanNotice] = useState<string>();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
+  const [linkError, setLinkError] = useState<string>();
+  const linkRange = useRef<{ from: number; to: number } | undefined>(undefined);
+  const [dragActive, setDragActive] = useState(false);
+  const linkButton = useRef<HTMLButtonElement>(null);
+
+  function togglePlanMode() {
+    const current = live.current.props;
+    const next: "default" | "plan" = current.interactionMode === "plan" ? "default" : "plan";
+    if (current.onInteractionModeChange) {
+      setPlanNotice(undefined);
+      void Promise.resolve(current.onInteractionModeChange(next)).catch(cause => setPlanNotice(cause instanceof Error ? cause.message : String(cause)));
+      return;
+    }
+    // A host without the callback can claim this cancellable event and persist the mode itself.
+    const handled = !window.dispatchEvent(new CustomEvent("pm:composer-plan-toggle", { detail: { mode: next }, cancelable: true }));
+    setPlanNotice(handled ? undefined : t("此页面未连接会话的 Plan 模式切换；未更改任何会话参数。", "Plan mode switching is not connected in this view; no session setting changed."));
+  }
+
+  /** Paste and drop share one importer so both validate and resolve context identically. */
+  function importStructuredContext(view: Editor["view"], structured: string, plainText: string): void {
+    try {
+      const data = JSON.parse(structured) as { version?: unknown; contexts?: unknown; quote?: unknown; quoteThreadId?: unknown; text?: unknown };
+      if (data.version !== 1 || !Array.isArray(data.contexts)) throw new Error("Unsupported context clipboard record.");
+      const inputs = data.contexts.filter(value => value?.type === "native").map(value => chatContextInputSchema.parse(value.item?.input));
+      const pm: PmReference[] = data.contexts.filter(value => value?.type === "pm").map(value => {
+        const reference = value.reference as PmReference;
+        const parsed = pmReferenceInputSchema.parse({ workspaceId: reference.workspaceId, projectId: reference.projectId, kind: reference.kind, id: reference.id, revision: reference.revision });
+        return { ...parsed, title: typeof reference.title === "string" ? reference.title : parsed.id, availability: "unverified" };
+      });
+      const pastedAttachments = data.contexts.filter(value => value?.type === "attachment").map(value => clipboardAttachmentSchema.parse(value.attachment));
+      if (data.contexts.length !== inputs.length + pm.length + pastedAttachments.length || contextLive.current.draft.items.length + inputs.length > 20 || contextLive.current.references.length + pm.length > PM_REFERENCE_LIMIT) throw new Error("The pasted or dropped context exceeds the current limit or contains an unknown record.");
+      if (pastedAttachments.length && !aui.thread.getState().capabilities.attachments) throw new Error("Attachments are unavailable in this session.");
+      const existingAttachmentIds = new Set(aui.composer.getState().attachments.map(attachment => attachment.id));
+      if (new Set(pastedAttachments.map(attachment => attachment.id)).size !== pastedAttachments.length || pastedAttachments.some(attachment => existingAttachmentIds.has(attachment.id))) throw new Error("An attachment with this identity is already in the draft.");
+      const pastedQuote = data.quote;
+      if (pastedQuote !== undefined && (!pastedQuote || typeof pastedQuote !== "object" || !("text" in pastedQuote) || typeof pastedQuote.text !== "string" || !("messageId" in pastedQuote) || typeof pastedQuote.messageId !== "string")) throw new Error("Invalid quote clipboard record.");
+      if (pastedQuote) {
+        if (typeof data.quoteThreadId !== "string") throw new Error("The copied quote has no source session identity.");
+        const quote = pastedQuote as QuoteInfo;
+        inputs.push(chatContextInputSchema.parse({ contextId: crypto.randomUUID(), kind: "response", source: { type: "response", threadId: data.quoteThreadId, messageId: quote.messageId }, selectedText: quote.text }));
+        if (contextLive.current.draft.items.length + inputs.length > 20) throw new Error("The copied quote exceeds the context limit.");
+      }
+      const source = typeof data.text === "string" ? data.text : plainText;
+      const current = contextLive.current;
+      const originalDoc = view.state.doc;
+      const ids = new Set(current.draft.items.map(item => item.input.contextId));
+      if (inputs.some(input => ids.has(input.contextId))) throw new Error("This context is already selected. Remove it before pasting or dropping another copy.");
+      const pmKeys = new Set(current.references.map(reference => JSON.stringify([reference.workspaceId, reference.projectId, reference.kind, reference.id])));
+      const newPm = pm.filter(reference => !pmKeys.has(JSON.stringify([reference.workspaceId, reference.projectId, reference.kind, reference.id])));
+      setContextError("Checking dropped context; the draft has not changed.");
+      void current.draft.resolveInputs(inputs).then(resolved => {
+        if (!current.draft.isCurrent() || view.isDestroyed) return;
+        if (view.state.doc !== originalDoc) throw new Error("The draft changed during context resolution. Paste or drop again; nothing was replaced.");
+        const payloads: ComposerContextPayload[] = [...resolved.map(item => ({ type: "native" as const, item })), ...newPm.map(reference => ({ type: "pm" as const, reference })), ...pastedAttachments.map(attachment => ({ type: "attachment" as const, attachment: { ...attachment, status: { type: "complete" as const } } }))];
+        const doc = view.state.schema.nodeFromJSON(parseComposerDocument(source, undefined, payloads));
+        const from = doc.firstChild?.type.name === "paragraph" ? 1 : 0;
+        const to = doc.content.size - (doc.lastChild?.type.name === "paragraph" ? 1 : 0);
+        view.dispatch(view.state.tr.replaceSelection(doc.slice(from, to)).scrollIntoView());
+        setContextError(undefined);
+      }).catch(cause => { if (current.draft.isCurrent()) setContextError(String(cause)); });
+    } catch (cause) { setContextError(cause instanceof Error ? cause.message : String(cause)); }
+  }
+
   const runtimeDisabled = useAuiState((state) => state.thread.isLoading || state.thread.isDisabled || state.composer.dictation?.inputDisabled);
   const disabled = props.disabled || !!runtimeDisabled;
-  const live = useRef({ props, disabled });
-  live.current = { props, disabled };
+  const live = useRef({ props, disabled, keymap, isApple: apple });
+  live.current = { props, disabled, keymap, isApple: apple };
   const lastText = useRef(text);
+  // The keydown handler is created with the editor's first options, before `editor` exists.
+  const editorRef = useRef<Editor | null>(null);
   const composing = useRef(false);
   const compositionEnded = useRef(0);
   const normalizing = useRef(false);
@@ -276,26 +413,44 @@ function RichComposerEditor(props: Props) {
           requestAnimationFrame(() => document.querySelector<HTMLElement>(".aui-composer-root [contenteditable='true']")?.focus());
           return true;
         }
-        if (event.key !== "Enter") return false;
+        const action = matchComposerAction(live.current.keymap, event, live.current.isApple);
+        if (action === "togglePlan") {
+          event.preventDefault();
+          togglePlanMode();
+          return true;
+        }
         // Browsers may emit one final non-composing Enter for the same IME commit.
-        if (Date.now() - compositionEnded.current < 80) { event.preventDefault(); return true; }
+        if (event.key === "Enter" && Date.now() - compositionEnded.current < 80) { event.preventDefault(); return true; }
         const inCode = view.state.selection.$from.parent.type.name === "codeBlock";
-        if (inCode) return false;
-        const enclosing = view.state.selection.$from.node(view.state.selection.$from.depth - 1)?.type.name;
-        const inList = enclosing === "listItem";
-        const inQuote = enclosing === "blockquote";
-        const inHeading = view.state.selection.$from.parent.type.name === "heading";
-        // Inside a list, quote or heading, plain Enter continues the block;
-        // sending still works with Ctrl/Cmd+Enter or the send button.
-        if ((inList || inQuote || inHeading) && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) return false;
+        if (inCode || !action) return false;
         const thread = aui.thread.getState();
-        if (event.shiftKey && (event.ctrlKey || event.metaKey) && thread.capabilities.queue && aui.composer.getState().canSend) {
+        if (action === "steer") {
+          if (!thread.capabilities.queue || !aui.composer.getState().canSend) return false;
           event.preventDefault();
           if (!composerPromptTooLong(aui.composer.getState().text) && !live.current.props.beforeSend?.()) aui.composer.send({ steer: true });
           return true;
         }
-        if (event.shiftKey || event.altKey || (thread.isRunning && !thread.capabilities.queue && thread.voice === undefined)) return false;
-        if (live.current.props.submitMode === "ctrlEnter" && !event.ctrlKey && !event.metaKey) return false;
+        const $from = view.state.selection.$from;
+        const enclosing = $from.node($from.depth - 1)?.type.name;
+        const inList = enclosing === "listItem" || enclosing === "taskItem";
+        const inQuote = !inList && enclosing === "blockquote";
+        const inHeading = $from.parent.type.name === "heading";
+        const plainEnter = event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+        const shiftEnter = event.key === "Enter" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+        if (action === "newline") {
+          // The editor's own defaults already insert these two breaks.
+          if (plainEnter || shiftEnter) return false;
+          event.preventDefault();
+          view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.hardBreak!.create()));
+          return true;
+        }
+        // Inside a list, quote or heading, plain Enter continues the block;
+        // the same action with a modifier still sends.
+        if ((inList || inQuote || inHeading) && plainEnter) {
+          if (enclosing === "taskItem" && editorRef.current?.commands.splitListItem("taskItem")) { event.preventDefault(); return true; }
+          return false;
+        }
+        if (thread.isRunning && !thread.capabilities.queue && thread.voice === undefined) return false;
         event.preventDefault();
         view.dom.closest("form")?.requestSubmit();
         return true;
@@ -359,47 +514,7 @@ function RichComposerEditor(props: Props) {
         const structured = event.clipboardData?.getData(CONTEXT_CLIPBOARD_TYPE);
         if (structured) {
           event.preventDefault();
-          try {
-            const data = JSON.parse(structured) as { version?: unknown; contexts?: unknown; quote?: unknown; quoteThreadId?: unknown; text?: unknown };
-            if (data.version !== 1 || !Array.isArray(data.contexts)) throw new Error("Unsupported context clipboard record.");
-            const inputs = data.contexts.filter(value => value?.type === "native").map(value => chatContextInputSchema.parse(value.item?.input));
-            const pm: PmReference[] = data.contexts.filter(value => value?.type === "pm").map(value => {
-              const reference = value.reference as PmReference;
-              const parsed = pmReferenceInputSchema.parse({ workspaceId: reference.workspaceId, projectId: reference.projectId, kind: reference.kind, id: reference.id, revision: reference.revision });
-              return { ...parsed, title: typeof reference.title === "string" ? reference.title : parsed.id, availability: "unverified" };
-            });
-            const pastedAttachments = data.contexts.filter(value => value?.type === "attachment").map(value => clipboardAttachmentSchema.parse(value.attachment));
-            if (data.contexts.length !== inputs.length + pm.length + pastedAttachments.length || contextLive.current.draft.items.length + inputs.length > 20 || contextLive.current.references.length + pm.length > PM_REFERENCE_LIMIT) throw new Error("The pasted context exceeds the current limit or contains an unknown record.");
-            if (pastedAttachments.length && !aui.thread.getState().capabilities.attachments) throw new Error("Attachments are unavailable in this session.");
-            const existingAttachmentIds = new Set(aui.composer.getState().attachments.map(attachment => attachment.id));
-            if (new Set(pastedAttachments.map(attachment => attachment.id)).size !== pastedAttachments.length || pastedAttachments.some(attachment => existingAttachmentIds.has(attachment.id))) throw new Error("An attachment with this identity is already in the draft.");
-            const pastedQuote = data.quote;
-            if (pastedQuote !== undefined && (!pastedQuote || typeof pastedQuote !== "object" || !("text" in pastedQuote) || typeof pastedQuote.text !== "string" || !("messageId" in pastedQuote) || typeof pastedQuote.messageId !== "string")) throw new Error("Invalid quote clipboard record.");
-            if (pastedQuote) {
-              if (typeof data.quoteThreadId !== "string") throw new Error("The copied quote has no source session identity.");
-              const quote = pastedQuote as QuoteInfo;
-              inputs.push(chatContextInputSchema.parse({ contextId: crypto.randomUUID(), kind: "response", source: { type: "response", threadId: data.quoteThreadId, messageId: quote.messageId }, selectedText: quote.text }));
-              if (contextLive.current.draft.items.length + inputs.length > 20) throw new Error("The copied quote exceeds the context limit.");
-            }
-            const source = typeof data.text === "string" ? data.text : event.clipboardData?.getData("text/plain") ?? "";
-            const current = contextLive.current;
-            const originalDoc = view.state.doc;
-            const ids = new Set(current.draft.items.map(item => item.input.contextId));
-            if (inputs.some(input => ids.has(input.contextId))) throw new Error("This context is already selected. Remove it before pasting another copy.");
-            const pmKeys = new Set(current.references.map(reference => JSON.stringify([reference.workspaceId, reference.projectId, reference.kind, reference.id])));
-            const newPm = pm.filter(reference => !pmKeys.has(JSON.stringify([reference.workspaceId, reference.projectId, reference.kind, reference.id])));
-            setContextError("Checking pasted context; the draft has not changed.");
-            void current.draft.resolveInputs(inputs).then(resolved => {
-              if (!current.draft.isCurrent() || view.isDestroyed) return;
-              if (view.state.doc !== originalDoc) throw new Error("The draft changed during context resolution. Paste again; nothing was replaced.");
-              const payloads: ComposerContextPayload[] = [...resolved.map(item => ({ type: "native" as const, item })), ...newPm.map(reference => ({ type: "pm" as const, reference })), ...pastedAttachments.map(attachment => ({ type: "attachment" as const, attachment: { ...attachment, status: { type: "complete" as const } } }))];
-              const doc = view.state.schema.nodeFromJSON(parseComposerDocument(source, undefined, payloads));
-              const from = doc.firstChild?.type.name === "paragraph" ? 1 : 0;
-              const to = doc.content.size - (doc.lastChild?.type.name === "paragraph" ? 1 : 0);
-              view.dispatch(view.state.tr.replaceSelection(doc.slice(from, to)).scrollIntoView());
-              setContextError(undefined);
-            }).catch(cause => { if (current.draft.isCurrent()) setContextError(String(cause)); });
-          } catch (cause) { setContextError(cause instanceof Error ? cause.message : String(cause)); }
+          importStructuredContext(view, structured, event.clipboardData?.getData("text/plain") ?? "");
           return true;
         }
         const files = Array.from(event.clipboardData?.files ?? []);
@@ -490,13 +605,16 @@ function RichComposerEditor(props: Props) {
         normalizing.current = true;
         normalizeComposerReferences(current);
         normalizing.current = false;
+        applyComposerDirections(current.view.dom);
       });
     },
     onSelectionUpdate: ({ editor: current }) => {
       if (!composing.current) live.current.props.suggestions?.onInput(composerSourceCursor(current.state.doc, current.state.selection.head), current.isActive("codeBlock"));
     },
   });
-  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? { code: current.isActive("codeBlock") } : null });
+  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? {
+    link: current.isActive("link"), task: current.isActive("taskItem"),
+  } : null });
 
   useEffect(() => {
     if (!editor) return;
@@ -513,6 +631,53 @@ function RichComposerEditor(props: Props) {
     lastText.current = text;
     editor.commands.setTextSelection(composerDocumentCursor(editor.state.doc, text.length));
   }, [aui, editor, text, quote]);
+
+  // Direction is presentation only; the serialized draft keeps its exact text.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const pending = requestAnimationFrame(() => { if (!editor.isDestroyed) applyComposerDirections(editor.view.dom); });
+    return () => cancelAnimationFrame(pending);
+  }, [editor, text, quote, contextPayloads]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || disabled) return;
+    const handlePasteOutside = (event: ClipboardEvent) => {
+      if (!editor || editor.isDestroyed) return;
+      // Two mounted composers (thread and message edit) would both claim the paste.
+      if (document.querySelectorAll(".rich-composer").length > 1) return;
+      const path = event.composedPath();
+      const inside = (selector: string) => path.some(target => target instanceof Element && target.closest(selector));
+      if (!shouldFocusComposerForPaste({
+        eventDefaultPrevented: event.defaultPrevented,
+        insideEditable: inside(COMPOSER_EDITABLE_SELECTOR),
+        insideInteractive: inside(COMPOSER_INTERACTIVE_SELECTOR),
+        floatingLayerOpen: !!document.querySelector(COMPOSER_FLOATING_LAYER_SELECTOR),
+      })) return;
+      const data = event.clipboardData;
+      if (!data) return;
+      const structured = data.getData(CONTEXT_CLIPBOARD_TYPE);
+      const source = data.getData("text/plain");
+      const files = Array.from(data.files ?? []);
+      if (!structured && !source && !files.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (structured) {
+        editor.commands.focus("end");
+        importStructuredContext(editor.view, structured, source);
+        return;
+      }
+      if (files.length) {
+        if (aui.thread.getState().capabilities.attachments) for (const file of files) void aui.composer.addAttachment(file).catch(() => {});
+        return;
+      }
+      if (source.includes("\n")) {
+        const slice = composerPasteSlice(editor.state.schema, source);
+        editor.chain().focus("end").command(({ tr, dispatch }) => { if (dispatch) tr.replaceSelection(slice); return true; }).run();
+      } else editor.chain().focus("end").insertContent(source).run();
+    };
+    window.addEventListener("paste", handlePasteOutside, true);
+    return () => window.removeEventListener("paste", handlePasteOutside, true);
+  }, [aui, editor, disabled]);
 
   useEffect(() => {
     if (!editor) return;
@@ -572,44 +737,95 @@ function RichComposerEditor(props: Props) {
     };
     const ref = props.suggestions?.inputRef;
     if (ref) ref.current = handle;
+    editorRef.current = editor;
     if (!disabled) editor.commands.focus("end", { scrollIntoView: false });
-    return () => { if (ref?.current === handle) ref.current = null; };
+    return () => { if (ref?.current === handle) ref.current = null; if (editorRef.current === editor) editorRef.current = null; };
   }, [editor, disabled, props.suggestions?.inputRef]);
   useEffect(() => () => cancelAnimationFrame(frame.current ?? 0), []);
 
   const removeAttachment = (id: string) => {
     void aui.composer.attachment({ id }).remove().catch(cause => setContextError(cause instanceof Error ? cause.message : String(cause)));
   };
-  return <div className="rich-composer" data-editing={props.editing || undefined}>
+  const applyLink = () => {
+    if (!editor) return;
+    const href = linkValue.trim();
+    if (!/^(?:https?:\/\/|mailto:)[^\s]+$/iu.test(href)) {
+      setLinkError(t("请输入 http(s):// 或 mailto: 链接。", "Enter an http(s):// or mailto: link."));
+      return;
+    }
+    const range = linkRange.current ?? { from: editor.state.selection.from, to: editor.state.selection.to };
+    if (range.from === range.to) {
+      setLinkError(t("先选中要链接的文字。", "Select the text to link first."));
+      return;
+    }
+    editor.chain().focus().setTextSelection(range).setMark("link", { href }).run();
+    setLinkOpen(false);
+    setLinkValue("");
+    setLinkError(undefined);
+  };
+  const removeLink = () => {
+    if (!editor) return;
+    const range = linkRange.current ?? { from: editor.state.selection.from, to: editor.state.selection.to };
+    editor.chain().focus().setTextSelection(range).unsetMark("link").run();
+    setLinkOpen(false);
+    setLinkValue("");
+    setLinkError(undefined);
+  };
+  const acceptsContextDrop = (types: readonly string[]) => types.includes(COMPOSER_CONTEXT_DRAG_TYPE);
+  return <div className="rich-composer" data-editing={props.editing || undefined} data-drop-active={dragActive ? "true" : undefined}
+    onDragEnter={(event) => { if (acceptsContextDrop(event.dataTransfer.types)) { event.preventDefault(); setDragActive(true); } }}
+    onDragOver={(event) => { if (!acceptsContextDrop(event.dataTransfer.types)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDragActive(true); }}
+    onDragLeave={(event) => { const next = event.relatedTarget; if (!(next instanceof globalThis.Node) || !event.currentTarget.contains(next)) setDragActive(false); }}
+    onDrop={(event) => {
+      setDragActive(false);
+      // Foreign drags keep their own drop behaviour.
+      if (!acceptsContextDrop(event.dataTransfer.types)) return;
+      event.preventDefault();
+      const raw = event.dataTransfer.getData(COMPOSER_CONTEXT_DRAG_TYPE);
+      if (!raw || !editor) return;
+      editor.commands.focus("end");
+      importStructuredContext(editor.view, raw, event.dataTransfer.getData("text/plain"));
+    }}>
     <ComposerAttachmentStrip attachments={attachments} disabled={disabled} onRemove={removeAttachment} />
     <EditorContent editor={editor} />
     {composerPromptTooLong(text) && <p role="alert" className="px-2 text-xs text-destructive">{t(`消息超过 ${COMPOSER_PROMPT_LIMIT.toLocaleString()} 字符，请缩短后发送。`, `Message exceeds ${COMPOSER_PROMPT_LIMIT.toLocaleString()} characters; shorten it before sending.`)}</p>}
     {contextError && <p role="alert" className="px-2 text-xs text-destructive">{contextError}</p>}
+    {planNotice && <p role="status" className="px-2 text-xs text-muted-foreground">{planNotice}</p>}
     <div className="rich-composer-tools">
-      <button type="button" disabled={disabled || !editor} aria-pressed={!!state?.code} title={t("切换代码块；代码块内 Enter 换行", "Toggle code block; Enter inserts a line inside code")}
+      <button type="button" disabled={disabled || !editor} aria-pressed={!!state?.task} title={t("插入任务清单；勾选后序列化为 - [x]", "Insert a task list; checked items serialize as - [x]")}
         onClick={() => {
           if (!editor) return;
-          const { $from, $to } = editor.state.selection;
-          if (!$from.depth || !$to.depth) return;
-          const from = $from.before(1);
-          const to = $to.after(1);
-          const selected = editor.state.doc.slice(from, to).content;
-          const inCode = $from.parent.type.name === "codeBlock";
-          const body = inCode ? $from.parent.textContent : serializeComposerDocument(editor.schema.topNodeType.create(null, selected));
-          const replacement: JSONContent[] = inCode ? parseComposerDocument(body).content! : [{ type: "codeBlock", ...(body ? { content: [{ type: "text", text: body }] } : {}) }];
-          const citation = readComposerCitation(editor.schema.topNodeType.create(null, selected));
-          if (citation) replacement.unshift({ type: "paragraph", attrs: { citationOnly: true }, content: [{ type: "composerCitation", attrs: { quote: citation } }] });
-          const contexts = readComposerContexts(editor.schema.topNodeType.create(null, selected));
-          if (contexts.length) replacement.unshift({ type: "paragraph", attrs: { citationOnly: true }, content: contexts.map(payload => ({ type: "composerContext", attrs: { payload } })) });
-          editor.chain().focus().command(({ tr, state, dispatch }) => {
-            const content = state.schema.nodeFromJSON({ type: "doc", content: replacement }).content;
-            if (dispatch) dispatch(tr.replaceWith(from, to, content));
-            return true;
-          }).run();
+          if (editor.isActive("taskItem")) { editor.chain().focus().splitListItem("taskItem").run(); return; }
+          editor.chain().focus().insertContent({ type: "taskList", content: [{ type: "taskItem", attrs: { checked: false, space: "" }, content: [{ type: "paragraph" }] }] }).run();
         }}>
-        <CodeIcon aria-hidden="true" />{t("代码", "Code")}
+        <CheckSquareIcon aria-hidden="true" />{t("任务", "Task")}
       </button>
-      <span>{t("可粘贴代码、文件或截图", "Paste code, files, or screenshots")}</span>
+      <button ref={linkButton} type="button" disabled={disabled || !editor} aria-pressed={!!state?.link} aria-expanded={linkOpen} title={t("把选中的文字变成 Markdown 链接", "Turn the selected text into a Markdown link")}
+        onClick={() => {
+          if (!editor) return;
+          const { from, to } = editor.state.selection;
+          linkRange.current = { from, to };
+          const href = editor.getAttributes("link").href;
+          setLinkValue(typeof href === "string" ? href : "");
+          setLinkOpen(true);
+          setLinkError(from === to ? t("先选中要链接的文字。", "Select the text to link first.") : undefined);
+        }}>
+        <LinkIcon aria-hidden="true" />{t("链接", "Link")}
+      </button>
     </div>
+    {linkOpen && <div className="rich-composer-link">
+      <input autoFocus type="url" value={linkValue} maxLength={2048} spellCheck={false} aria-label={t("链接地址", "Link address")}
+        placeholder="https://…" onChange={(event) => { setLinkValue(event.currentTarget.value); setLinkError(undefined); }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+          if (event.key === "Enter") { event.preventDefault(); applyLink(); }
+          if (event.key === "Escape") { event.preventDefault(); setLinkOpen(false); setLinkError(undefined); linkButton.current?.focus(); }
+        }} />
+      <button type="button" className="text-xs underline" onClick={applyLink}>{t("应用", "Apply")}</button>
+      {state?.link && <button type="button" className="text-xs underline" onClick={removeLink}>{t("移除链接", "Remove link")}</button>}
+      <button type="button" className="text-xs underline" onClick={() => { setLinkOpen(false); setLinkError(undefined); linkButton.current?.focus(); }}>{t("取消", "Cancel")}</button>
+      {linkError && <p role="alert" className="text-xs text-destructive">{linkError}</p>}
+    </div>}
   </div>;
 }

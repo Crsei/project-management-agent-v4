@@ -2,7 +2,7 @@ import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useI
 import { createPortal } from "react-dom";
 import { Link, useBlocker, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAui, useAuiState, ThreadListPrimitive, type AssistantRuntime } from "@assistant-ui/react";
-import { ArchiveIcon, ArrowLeftIcon, ChartNoAxesCombinedIcon, ChevronDownIcon, CircleAlertIcon, FileTextIcon, FolderOpenIcon, FolderPlusIcon, KeyboardIcon, ListFilterIcon, Loader2Icon, Maximize2Icon, MessageSquareIcon, MoreHorizontalIcon, PanelBottomIcon, PencilIcon, PanelLeftIcon, PanelRightIcon, PinIcon, SearchIcon, SettingsIcon, SquarePenIcon, XIcon, ZapIcon } from "lucide-react";
+import { ArchiveIcon, ArrowLeftIcon, ChartNoAxesCombinedIcon, ChevronDownIcon, CircleAlertIcon, FileTextIcon, FolderOpenIcon, FolderPlusIcon, KeyboardIcon, ListFilterIcon, Loader2Icon, Maximize2Icon, MessageSquareIcon, MoreHorizontalIcon, PanelBottomIcon, PanelLeftIcon, PanelRightIcon, PinIcon, SearchIcon, SettingsIcon, SquarePenIcon, XIcon, ZapIcon } from "lucide-react";
 import { DovspaceBrandLink } from "@/components/dovspace-brand";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getProviderInstanceDisplayName, getProviderModelShortName } from "@agent-workspace/client-runtime/providers";
@@ -26,6 +26,8 @@ import { MessageContextSelector } from "../chat/message-context-selector";
 import { contextChipTheme } from "../chat/context-chip-parts";
 import { copySelectedMessageContexts } from "../chat/message-context-clipboard";
 import { PmRightPanel } from "./right-panel";
+import { ChatBreadcrumb } from "./chat-header";
+import { ChatStatusLane } from "./chat-status-banner";
 import { ThreadDetailsPanel } from "./thread-details-panel";
 import { threadActivityPresentation, type ThreadActivity } from "./thread-activity";
 import { TerminalDrawer, TERMINAL_DRAWER_MIN_HEIGHT } from "./terminal-drawer";
@@ -161,7 +163,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const [snoozeTarget, setSnoozeTarget] = useState<RemoteThread>();
   const [snoozeTime, setSnoozeTime] = useState("");
   const visitedThread = useRef<string | undefined>(undefined);
-  const [visiting, setVisiting] = useState(false);
+  const [_visiting, setVisiting] = useState(false);
   const currentRemote = useRef<string | undefined>(undefined);
   const visitSequence = useRef(0);
   const wasRunning = useRef(false);
@@ -194,6 +196,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   }, [t]);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [worktreeNotice, setWorktreeNotice] = useState<string>();
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>();
   const [openFolder, setOpenFolder] = useState(false);
   const [executionDialog, setExecutionDialog] = useState<{ create: boolean; initial: ExecutionSelection }>();
@@ -223,7 +226,13 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const currentThread = remoteId ? state.threads.get(remoteId) : undefined;
   const parentThreadId = typeof currentThread?.custom?.parentThreadId === "string" ? currentThread.custom.parentThreadId : undefined;
   const parentThread = parentThreadId ? state.threads.get(parentThreadId) : undefined;
-  const childThreads = remoteId ? [...state.threads.values()].filter(thread => thread.custom?.parentThreadId === remoteId).map(thread => ({ id: thread.remoteId, title: thread.title ?? t("未命名会话", "Untitled session") })) : [];
+  // PM owns the workspace mark; the Agent workspace itself carries no icon data.
+  const pmWorkspace = displayScope ? state.identity?.workspaces.find(workspace => workspace.id === displayScope.workspaceId) : undefined;
+  const relatedThreads = useMemo(() => [...state.threads.values()].map(thread => ({
+    id: thread.remoteId,
+    title: thread.title ?? t("未命名会话", "Untitled session"),
+    parentThreadId: typeof thread.custom?.parentThreadId === "string" ? thread.custom.parentThreadId : undefined,
+  })), [state.threads, t]);
   const currentExecutionSelection = threadExecutionSelection(localId, remoteId);
   const currentWorkspace = state.workspaces.find(item => item.id === currentExecutionSelection?.agentWorkspaceId);
   const selectedWorkspace = state.workspaces.find(item => item.id === selectedWorkspaceId) ?? currentWorkspace;
@@ -251,13 +260,23 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const { settings, setSettings, ready: settingsReady, settingsLoaded, loading: settingsLoading, saving: settingsSaving, error: settingsError, retry } = useChatSettings(remoteId, initialize, localId);
   const currentProvider = state.providers.find(provider => provider.instanceId === settings.providerInstanceId);
   const providerIssueCode = providerSendIssue(currentProvider);
-  const providerIssue = providerIssueCode === "missing"
-    ? t("未找到当前 Provider 配置。", "The selected Provider configuration was not found.")
-    : providerIssueCode === "disabled"
-      ? t("当前 Provider 已停用。", "The selected Provider is disabled.")
-      : providerIssueCode === "not-installed"
-        ? t("当前 Provider 未检测到可执行文件。", "The selected Provider has no detected executable.")
-        : undefined;
+  // Only a check bound to the current revision can explain a readiness failure.
+  const freshConnectionTest = currentProvider?.revision !== undefined
+    && currentProvider.lastConnectionTest?.instanceRevision === currentProvider.revision
+    ? currentProvider.lastConnectionTest
+    : undefined;
+  // Provider health parity: only authoritative catalog data can raise a banner.
+  const providerStatus = settingsLoaded && state.providersLoaded
+    ? {
+        instanceId: settings.providerInstanceId,
+        name: currentProvider ? getProviderInstanceDisplayName(currentProvider) : undefined,
+        issue: providerIssueCode,
+        authStatus: currentProvider?.authStatus,
+        nativeSessionReady: currentProvider?.nativeSessionReady,
+        modelCount: currentProvider?.models.length,
+        lastError: freshConnectionTest?.error,
+      }
+    : undefined;
 
   useEffect(() => {
     if (!drawerSidebar || !sidebarOpen) return;
@@ -325,6 +344,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     }).finally(() => { if (visitSequence.current === token) setVisiting(false); });
   }, [boardMode, remoteId, state.threads]);
   useEffect(() => { if (automationsView) void refreshIdentity(); }, [automationsView]);
+  useEffect(() => { setWorktreeNotice(undefined); }, [remoteId]);
   useEffect(() => {
     if (boardMode || entry || params.get("view") !== "automations") return;
     const next = new URLSearchParams(params);
@@ -363,6 +383,21 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   const exitAutomation = () => {
     if (!canLeaveAutomation()) return;
     setAutomationView(false);
+  };
+  /** The details panel links to existing automation routes; embedded chat keeps the host shell. */
+  const openAutomationHref = (href: string) => {
+    if (!protectNavigation()) return;
+    if (!entry) { navigate(href); return; }
+    const target = new URL(href, window.location.origin);
+    const route = target.pathname.replace(/^\/agent\/automations\/?/, "");
+    const next = new URLSearchParams(params);
+    if (route) next.set("automationPage", route); else next.delete("automationPage");
+    for (const key of ["workspace", "project", "run", "returnTo"]) {
+      const value = target.searchParams.get(key);
+      if (value) next.set(key, value); else next.delete(key);
+    }
+    setEmbeddedAutomationsView(true);
+    setParams(next);
   };
   const clearEntryObject = (exitView = false, selectedThreadId?: string | null) => {
     setEntryObject({ task: null, entity: null });
@@ -923,6 +958,10 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
   if (!entryObject.entity) handoffParams.delete("entity");
   if (automationsView) handoffParams.set("view", "automations"); else handoffParams.delete("view");
   const settingsReturnTo = boardMode ? boardReturn : `/agent/workspace?${handoffParams}`;
+  const openProviderSettings = () => {
+    if (!protectNavigation()) return;
+    navigate({ pathname: "/agent/settings/providers" }, { state: { settingsReturnTo } });
+  };
   const boardChatWorkspace = workspaceFilter ? filterWorkspace : selectedWorkspace;
   const boardChatHref = boardMode ? runBoardChatHref({ agentWorkspaceId: boardChatWorkspace && !boardChatWorkspace.archivedAt && boardChatWorkspace.status === "available" ? boardChatWorkspace.id : null, returnTo: boardReturn }) : undefined;
   const customizeParams = new URLSearchParams();
@@ -1047,7 +1086,15 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     <main className="pm-agent-main">
       {!boardMode && <header className="pm-agent-context-header desktop-titlebar desktop-titlebar-reserve-controls">
         {(drawerSidebar || sidebarCollapsed) && <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={() => { toggleSidebar(); if (!drawerSidebar) requestAnimationFrame(() => document.getElementById(sidebarId)?.querySelector<HTMLButtonElement>(".pm-agent-product button")?.focus()); }}><PanelLeftIcon /></button>}
-        <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{currentWorkspace && <><span title={currentWorkspace.path}>{currentWorkspace.name}</span><span aria-hidden> / </span></>}{parentThreadId && <><button type="button" className="pm-agent-parent-thread" title={parentThread?.title ?? parentThreadId} onClick={() => openThreadByRemoteId(parentThreadId)}>{parentThread?.title ?? t("父会话", "Parent session")}</button><span aria-hidden> / </span></>}<strong onDoubleClick={() => { if (remoteId && !automationsView) openAction(remoteId, title ?? "", "rename"); }} title={remoteId && !automationsView ? t("双击重命名会话", "Double-click to rename session") : undefined}>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}</strong></div>{remoteId && !automationsView && <button type="button" className="pm-agent-icon pm-agent-title-edit" aria-label={t("重命名会话", "Rename session")} title={t("重命名会话", "Rename session")} onClick={() => openAction(remoteId, title ?? "", "rename")}><PencilIcon /></button>}</nav>
+        <ChatBreadcrumb
+          workspace={currentWorkspace ? { name: currentWorkspace.name, path: currentWorkspace.path } : pmWorkspace ? { name: pmWorkspace.name } : undefined}
+          mark={pmWorkspace ? { icon: pmWorkspace.icon, color: pmWorkspace.color, name: pmWorkspace.name } : undefined}
+          parent={parentThreadId ? { id: parentThreadId, title: parentThread?.title } : undefined}
+          title={automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}
+          renamable={!!remoteId && !automationsView}
+          onRename={remoteId && !automationsView ? () => openAction(remoteId, title ?? "", "rename") : undefined}
+          onOpenParent={openThreadByRemoteId}
+        />
         {!entry && runReturn && <Link className="pm-agent-back" data-automation-leave-guarded="true" to={runReturn} onClick={(event) => { if (!protectNavigation()) event.preventDefault(); }}><ArrowLeftIcon /><span>{t("返回运行面板", "Back to run board")}</span></Link>}
         {!automationsView && <>
           {!entry && automationReturn && <Button variant="outline" size="sm" onClick={() => { if (protect()) navigate(automationReturn); }}><ZapIcon />{t("返回自动化配置", "Return to automation setup")}</Button>}
@@ -1086,11 +1133,22 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         aui.composer.setText(`${text}${text ? "\n\n" : ""}${t(`引用 PM 对象：${id}`, `Reference PM object: ${id}`)}`);
       }}>{t("加入消息", "Add to message")}</button></div>}
       {(actionError || storageError) && <p role="alert" className="pm-agent-notice pm-agent-error">{actionError ?? storageError}</p>}
+      {worktreeNotice && <div role="status" className="pm-agent-notice">{worktreeNotice}<Button size="sm" variant="outline" onClick={() => setWorktreeNotice(undefined)}>{t("关闭", "Dismiss")}</Button></div>}
       {switchError && <p role="alert" className="pm-agent-notice pm-agent-error">{t("无法恢复会话：", "Could not restore session: ")}{switchError.error instanceof Error ? switchError.error.message : String(switchError.error)}<Button size="sm" variant="outline" onClick={() => void act(() => runtime.threads.switchToThread(switchError.threadId, { unarchive: false }))}>{t("重试打开会话", "Retry opening session")}</Button></p>}
       <ChatContinuity runtime={runtime} canContinue={!navigationBlocked && settingsReady && !settingsSaving && !settingsError && !execution.loading && !execution.error && canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions)} />
       <div className="pm-agent-conversation" onClickCapture={(event) => {
         if (event.target instanceof Element && event.target.closest("a[href]") && !protect()) { event.preventDefault(); event.stopPropagation(); }
-      }}><ThreadHistoryNavigationProvider key={localId}><Thread
+      }}><ChatStatusLane
+        threadId={remoteId}
+        running={threadRunning}
+        provider={providerStatus}
+        catalogError={state.providerError}
+        environmentError={execution.error}
+        onRetryCatalog={() => void refreshProviders()}
+        onRetryEnvironment={() => execution.refresh()}
+        onOpenProviderSettings={openProviderSettings}
+        onOpenSessionSettings={() => setSessionSettingsOpen(true)}
+      /><ThreadHistoryNavigationProvider key={localId}><Thread
         providerInstanceId={settings.providerInstanceId}
         model={settings.model}
         modelOptions={settings.modelOptions}
@@ -1102,10 +1160,11 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
         saveError={settingsError}
         onRetry={retry}
         sendUnavailable={navigationBlocked || !currentExecutionSelection || !settingsReady || !!execution.error || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions)}
-        sendIssue={providerIssue}
-        onOpenSessionSettings={() => setSessionSettingsOpen(true)}
         composerLeading={<PmComposerReferences />}
         composerActions={<><MessageContextSelector /><PmComposerReferenceAction /></>}
+        createdAt={currentThread?.createdAt}
+        parentSession={parentThreadId ? { threadId: parentThreadId, title: parentThread?.title } : undefined}
+        onOpenParentSession={openThreadByRemoteId}
         welcome={{
           title: currentWorkspace ? t(`想在 ${currentWorkspace.name} 中做什么？`, `What do you want to do in ${currentWorkspace.name}?`) : t("你想做什么？", "What do you want to do?"),
           freshlyCreated: (!!remoteId && freshThreadId === remoteId) || draftOrigin.current.wasNew,
@@ -1125,6 +1184,7 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
     {!boardMode && !automationsView && <ThreadDetailsPanel
       open={detailsOpen}
       onClose={() => setDetailsOpen(false)}
+      embedded={!!entry}
       workspaceName={currentWorkspace?.name}
       threadId={remoteId}
       threadTitle={title ?? (remoteId ? t("未命名会话", "Untitled session") : t("新会话", "New session"))}
@@ -1133,7 +1193,26 @@ export function PmChatSurface({ runtime, entry, runBoard, onExpand, onClose, onT
       environmentPath={environment?.executionPath ?? currentWorkspace?.path}
       environmentStatus={execution.loading ? t("正在核验环境", "Validating environment") : undefined}
       environmentError={execution.error}
-      childThreads={childThreads}
+      relatedThreads={relatedThreads}
+      threadCustom={currentThread?.custom}
+      codeEnvironment={!!environment?.agentWorkspaceId && !!environment.executionPath && !execution.error}
+      activeTerminals={terminals.terminals.filter(terminal => terminal.status === "running").length}
+      terminalAvailable={terminals.enabled || !!terminals.selectedId}
+      automationWorkspaceId={displayScope?.workspaceId}
+      automationProjectId={displayScope?.projectId ?? undefined}
+      automationReturnTo={`${location.pathname}${location.search}`}
+      onOpenFiles={() => {
+        if (!remoteId || !environment?.executionPath) return;
+        try {
+          openChatInspector({ id: crypto.randomUUID(), threadId: remoteId, executionPath: environment.executionPath, kind: "files" });
+          setDetailsOpen(false);
+        } catch (error) {
+          setActionError(error instanceof Error ? error.message : String(error));
+        }
+      }}
+      onOpenTerminal={() => { setDetailsOpen(false); dockTerminal("right"); }}
+      onOpenAutomation={openAutomationHref}
+      onWorktreeChanged={(notice) => { if (notice) setWorktreeNotice(notice); execution.refresh(); void refreshThreadList().catch(() => {}); }}
       onOpenThread={openThreadByRemoteId}
       onConfigureFiles={configureExecution}
       onSessionSettings={() => setSessionSettingsOpen(true)}

@@ -1,0 +1,65 @@
+.model-fanout-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.5rem);
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+}
+
+.model-fanout-banner[data-status="partial"],
+.model-fanout-banner[data-status="failed"] {
+  border-color: color-mix(in oklab, var(--warning, #b45309) 45%, var(--border));
+}
+
+.model-fanout-banner header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.model-fanout-banner header svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+
+.model-fanout-banner header strong {
+  flex: 1;
+  font-weight: 600;
+}
+
+.model-fanout-banner ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-fanout-banner li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.model-fanout-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.model-fanout-error {
+  color: var(--destructive, #b91c1c);
+  overflow-wrap: anywhere;
+}
+
+.model-fanout-banner p {
+  margin: 0;
+  color: var(--muted-foreground);
+}

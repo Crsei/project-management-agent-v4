@@ -1,0 +1,48 @@
+.pm-quota-recovery {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  border-radius: 0.55rem;
+  background: var(--card);
+  color: var(--foreground);
+}
+
+.pm-quota-recovery[data-state="blocked"],
+.pm-quota-recovery[data-state="failed"],
+.pm-quota-recovery[data-state="skipped"] {
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
+}
+
+.pm-quota-recovery-headline,
+.pm-quota-recovery-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
+}
+
+.pm-quota-recovery-countdown {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.pm-quota-recovery-state {
+  color: var(--muted-foreground);
+}
+
+.pm-quota-recovery-note {
+  color: var(--muted-foreground);
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+
+.pm-quota-recovery-error {
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}

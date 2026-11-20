@@ -1,0 +1,52 @@
+.thread-lifecycle-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+
+.thread-lifecycle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.thread-lifecycle-row::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.thread-lifecycle-row svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+
+.thread-lifecycle-row time,
+.thread-lifecycle-parent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 18rem;
+}
+
+.thread-lifecycle-link {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.thread-lifecycle-link:hover {
+  color: var(--accent-foreground);
+}

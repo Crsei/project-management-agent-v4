@@ -1,0 +1,31 @@
+/* External Markdown links keep their icon inline so long labels still wrap. */
+.md-external-link > svg {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-inline-end: 0.2em;
+  vertical-align: -0.1em;
+  opacity: 0.7;
+}
+.md-external-link-host {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  margin-inline-start: 0;
+  font-size: 0.78em;
+  vertical-align: baseline;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--motion-hover, 120ms) ease-out, max-width var(--motion-hover, 120ms) ease-out;
+}
+.md-external-link:hover .md-external-link-host,
+.md-external-link:focus-visible .md-external-link-host {
+  max-width: 16em;
+  margin-inline-start: 0.2em;
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-external-link-host {
+    transition: none;
+  }
+}

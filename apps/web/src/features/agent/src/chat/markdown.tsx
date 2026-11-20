@@ -6,8 +6,10 @@ import "katex/dist/katex.min.css";
 import { cn } from "@agent/lib/utils";
 import { useChatActions } from "./chat-actions";
 import { markdownFileReference, safeMarkdownUrl } from "./markdown-url";
+import { markdownImageCopySource } from "./markdown-media-policy";
 import { MarkdownCodeBlock, MarkdownTable } from "./markdown-blocks";
 import { MarkdownImage, MarkdownLink } from "./markdown-links";
+import { MarkdownMediaProvider } from "./markdown-media-gallery";
 import { markdownNodeText } from "./markdown-rich-policy";
 import { splitDetailsBlocks } from "./markdown-details";
 import { remarkFenceTitle } from "./remark-fence-title";
@@ -37,7 +39,8 @@ export function Markdown({ content, locale = "en", streaming = false, className,
   const segments = useMemo(() => splitDetailsBlocks(content), [content]);
   const components = useMemo<NonNullable<StreamdownProps["components"]>>(() => ({
     a: ({ href, children, title }) => <MarkdownLink href={href} title={title} locale={locale} documentPath={documentPath}>{children}</MarkdownLink>,
-    // Never emit an author-provided image URL. Preview requires a separate explicit authorized read.
+    // The component below never renders an author-provided URL into an <img>.
+    // It only resolves session files, or offers a copy affordance for a rejected URL.
     img: ({ src, alt }) => <MarkdownImage src={src} alt={alt} locale={locale} documentPath={documentPath} />,
     table: ({ node, children }) => <MarkdownTable node={node} locale={locale}>{children}</MarkdownTable>,
     pre: ({ node, children }) => {
@@ -61,7 +64,9 @@ export function Markdown({ content, locale = "en", streaming = false, className,
     rehypePlugins={rehypePlugins}
     urlTransform={(url, transformKey) => {
       if (executionPath && markdownFileReference(url, executionPath, documentPath)) return url;
-      return transformKey === "src" ? undefined : safeMarkdownUrl(url);
+      // A rejected image URL survives only as inert data for a copy affordance;
+      // MarkdownImage is the sole img renderer and never forwards it to the DOM.
+      return transformKey === "src" ? markdownImageCopySource(url) : safeMarkdownUrl(url);
     }}
     components={components}
     controls={false}
@@ -70,13 +75,17 @@ export function Markdown({ content, locale = "en", streaming = false, className,
   // structural tags are recognized; the body still goes through the safe renderer.
   if (!streaming && segments.some(segment => segment.kind === "details")) {
     return <div className={cn(styles.markdown, className)}>
-      {segments.map((segment, index) => segment.kind === "markdown"
-        ? (segment.content.trim() ? render(segment.content, `${scopeKey}:${index}`) : null)
-        : <details key={`${scopeKey}:details:${index}`} className={styles.detailsBlock}>
-            <summary className={styles.detailsSummary}>{segment.summary}</summary>
-            <Markdown content={segment.body} locale={locale} documentPath={documentPath} />
-          </details>)}
+      <MarkdownMediaProvider key={scopeKey}>
+        {segments.map((segment, index) => segment.kind === "markdown"
+          ? (segment.content.trim() ? render(segment.content, `${scopeKey}:${index}`) : null)
+          : <details key={`${scopeKey}:details:${index}`} className={styles.detailsBlock}>
+              <summary className={styles.detailsSummary}>{segment.summary}</summary>
+              <Markdown content={segment.body} locale={locale} documentPath={documentPath} />
+            </details>)}
+      </MarkdownMediaProvider>
     </div>;
   }
-  return <div className={cn(styles.markdown, className)}>{render(content, scopeKey)}</div>;
+  return <div className={cn(styles.markdown, className)}>
+    <MarkdownMediaProvider key={scopeKey}>{render(content, scopeKey)}</MarkdownMediaProvider>
+  </div>;
 }

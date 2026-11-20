@@ -1,0 +1,125 @@
+.draft-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 8px;
+  text-align: center;
+  /* Lets a browser view transition animate the hero when the page can drive one. */
+  view-transition-name: agent-draft-hero;
+}
+
+.draft-hero-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.draft-hero-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  max-width: 100%;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.draft-hero-scope-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 24rem);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  padding: 3px 10px;
+  color: var(--foreground);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.draft-hero-scope-picker:hover {
+  border-color: var(--ring);
+}
+
+.draft-hero-scope-picker svg,
+.draft-hero-execution svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.draft-hero-scope-picker > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-hero-scope-action {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.draft-hero-execution {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: min(100%, 24rem);
+}
+
+.draft-hero-execution > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-hero-alternate {
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.draft-hero-alternate:hover {
+  color: var(--foreground);
+}
+
+/* An empty session centers its composer; the attribute is set by the thread. */
+.aui-thread-root[data-draft-empty] [data-slot="aui_composer-shell"] {
+  max-width: min(100%, 44rem);
+  margin-inline: auto;
+}
+
+/*
+ * Hero exit. When the browser supports view transitions the submit path wraps
+ * this attribute change in startViewTransition; otherwise the same class
+ * transition runs on its own. The composer's descent is animated separately by
+ * the thread with a FLIP animation, because sending is asynchronous and cannot
+ * be wrapped in a view-transition callback.
+ */
+.draft-hero[data-sending] {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-hero[data-sending] {
+    transition: none;
+    transform: none;
+  }
+}

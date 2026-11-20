@@ -8,6 +8,11 @@ export function providerSelectable(provider: ProviderInstance | undefined): bool
   return provider?.enabled === true && provider.nativeSessionReady === true;
 }
 
+/** Default-model settings persist a snapshot; they do not start a native session. */
+export function providerConfigurable(provider: ProviderInstance | undefined): boolean {
+  return provider?.enabled === true;
+}
+
 /** Catalog ordering and visibility are instance-scoped, not browser preferences. */
 export function visibleProviderModels(provider: ProviderInstance): ProviderModel[] {
   const preferences = provider.modelPreferences;

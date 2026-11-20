@@ -3,8 +3,8 @@ import { useI18n } from "@/lib/i18n-provider";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import {
-  Bell, Brain, Circle, CircleAlert, CircleCheck, CircleDot, CircleX,
-  Copy, FileCode, GitBranch, Globe, ListTodo, MessageSquare, RefreshCw,
+  Bell, Brain, ChevronsDown, Circle, CircleAlert, CircleCheck, CircleDot, CircleX,
+  Copy, FileCode, GitBranch, Globe, ListTodo, Maximize2, MessageSquare, Minimize2, RefreshCw,
   Route, Search, ShieldQuestion, Terminal as TerminalIcon, Wrench,
 } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
@@ -17,13 +17,14 @@ import { PmToolCard, type PmToolRecord } from "./pm-tool-card";
 import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
 import { McpAppFrame } from "./mcp-app-frame";
-import { CodeBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
+import { CodeBlock, ShellCommandBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
 import { assistantMessageKind, canRespondToInteraction, commandText, createOutputDisclosureStore, generationIndicator, generationWorkState, isCompletedAutoApproval, isGenerationActive, isItemActive, latestReasoning, presentOutputItems, reliableDurationMs, requiresVisibleDetails, semanticToolSummary, type GenerationWorkState, type OutputPresentationRow, type ToolSummary } from "./output-presenter";
 import { NativeInteraction } from "./native-interaction";
 import { useComposerRequestPanelMounted } from "./composer-pending-requests";
 import { ChangedFilesSummary, FileChanges } from "./native-file-changes";
 import { NativePlanCard } from "./native-plan-card";
 import { NativeSubagentLink } from "./native-subagent-link";
+import { ItemInspectorButton } from "./item-inspector";
 import "./output-timeline.css";
 import { useAuiState } from "@assistant-ui/react";
 import { useMessageContextDraft } from "./message-context";
@@ -81,18 +82,27 @@ function WorkingRow({ state }: { state: GenerationWorkState }) {
 function CommandOutput({ generationId, item }: { generationId: string; item: NativeOutputItem }) {
   const t = useAgentText();
   const node = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const [follow, setFollow] = useState(true);
+  const followRef = useRef(true);
+  followRef.current = follow;
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string>();
   const [truncated, setTruncated] = useState(!!item.outputTruncated);
   const [copyError, setCopyError] = useState<string>();
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const output = useRef(EMPTY_TERMINAL_OUTPUT);
+  useEffect(() => { if (follow) terminalRef.current?.scrollToBottom(); }, [follow]);
   useEffect(() => {
     if (!node.current) return;
     setReady(false);
     output.current = EMPTY_TERMINAL_OUTPUT;
     const terminal = new Terminal({ convertEol: true, disableStdin: true, scrollback: 4000, fontSize: 12, theme: { background: "#17191d", foreground: "#e9edf3" } });
     const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(node.current); fit.fit();
+    terminalRef.current = terminal;
+    // Scrolling up stops following new output; the explicit toggle turns it back on.
+    const scroll = terminal.onScroll(position => { if (position < terminal.buffer.active.baseY) setFollow(false); });
     const resize = new ResizeObserver(() => fit.fit()); resize.observe(node.current);
     const controller = new AbortController();
     let retry: number | undefined;
@@ -103,15 +113,15 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
           setError(undefined); setTruncated(frame.truncated); running = frame.running;
           if (frame.kind === "replace") terminal.reset();
           output.current = appendTerminalOutput(frame.kind === "replace" ? EMPTY_TERMINAL_OUTPUT : output.current, frame.text);
-          terminal.write(frame.text);
+          terminal.write(frame.text, () => { if (followRef.current) terminal.scrollToBottom(); });
           setReady(true);
         });
         if (running) throw new Error(t("命令输出流已断开，正在重新连接。", "Command output stream disconnected, reconnecting."));
       } catch (cause) { if (!controller.signal.aborted) { terminal.reset(); output.current = EMPTY_TERMINAL_OUTPUT; setReady(false); setError(cause instanceof Error ? cause.message : String(cause)); retry = window.setTimeout(() => void connect(), 1000); } }
     };
     void connect();
-    return () => { controller.abort(); clearTimeout(retry); resize.disconnect(); terminal.dispose(); };
-  }, [generationId, item.id]);
+    return () => { controller.abort(); clearTimeout(retry); scroll.dispose(); resize.disconnect(); terminal.dispose(); terminalRef.current = null; };
+  }, [generationId, item.id, t]);
   const copy = async () => {
     if (!ready) return;
     try {
@@ -122,12 +132,20 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
       window.setTimeout(() => setCopied(false), 1600);
     } catch (cause) { setCopyError(cause instanceof Error ? cause.message : String(cause)); }
   };
-  return <div className="native-command-output">
-    <Button className="native-command-copy" size="icon-xs" variant="ghost" aria-label={t("复制输出", "Copy output")} disabled={!ready} onClick={() => void copy()}>
-      {copied ? <CircleCheck aria-hidden="true" /> : <Copy aria-hidden="true" />}
-    </Button>
-    <div ref={node} aria-label={t("命令终端输出", "Command terminal output")} />
-    {(truncated || item.outputTruncated) && <p>{t("输出已截断，仅显示保留的尾部。", "Output truncated; only the retained tail is shown.")}</p>}
+  return <div className="native-command-output" data-expanded={expanded || undefined}>
+    <div className="native-command-toolbar">
+      <Button size="icon-xs" variant="ghost" aria-label={t("复制输出", "Copy output")} title={copied ? t("已复制", "Copied") : t("复制输出", "Copy output")} disabled={!ready} onClick={() => void copy()}>
+        {copied ? <CircleCheck aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      </Button>
+      <Button size="icon-xs" variant="ghost" aria-label={follow ? t("停止贴底跟随", "Stop following output") : t("贴底跟随输出", "Follow output")} title={follow ? t("正在贴底跟随", "Following output") : t("贴底跟随", "Follow output")} aria-pressed={follow} data-active={follow || undefined} onClick={() => setFollow(value => !value)}>
+        <ChevronsDown aria-hidden="true" />
+      </Button>
+      <Button size="icon-xs" variant="ghost" aria-label={expanded ? t("收起输出面板", "Collapse output panel") : t("展开输出面板", "Expand output panel")} title={expanded ? t("收起输出面板", "Collapse output panel") : t("展开输出面板", "Expand output panel")} aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>
+        {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+      </Button>
+    </div>
+    <div ref={node} className="native-terminal-viewport" aria-label={t("命令终端输出", "Command terminal output")} />
+    {(truncated || item.outputTruncated) && <p className="native-output-truncated">{t("更早的输出未显示。", "Earlier output not shown.")}</p>}
     {error && <p role="alert">{t("输出连接中断：", "Output connection interrupted: ")}{error}</p>}
     {copied && <span role="status" className="sr-only">{t("已复制", "Copied")}</span>}
     {copyError && <span role="alert">{t("复制失败：", "Copy failed: ")}{copyError}</span>}
@@ -189,7 +207,7 @@ function OutputInteraction({ generationId, item, generationStatus }: { generatio
     ? <a className="native-request-location" href={`#native-requests-${generationId}`}>{t("等待你的响应 — 在输入框上方回答", "Awaiting your response — answer above the composer")}</a>
     : <NativeInteraction key={item.request?.id ?? item.id} generationId={generationId} item={item} generationStatus={generationStatus} />;
 }
-const OutputRow = memo(function OutputRow({ item, generationId, generationStatus }: { item: NativeOutputItem; generationId: string; generationStatus: GenerationOutputStatus }) {
+const OutputRow = memo(function OutputRow({ item, generationId, generationStatus, parentIds }: { item: NativeOutputItem; generationId: string; generationStatus: GenerationOutputStatus; parentIds: ReadonlySet<string> }) {
   const t = useAgentText();
   const { locale } = useI18n();
   const markdownLocale = locale === "en" ? "en" : "zh-CN";
@@ -197,6 +215,9 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
   const [open, change] = useOutputDisclosure(generationId, [item], visible || (isGenerationActive(generationStatus) && isItemActive(item)));
   useNativeOutputContextSource(generationId, [item.id], change);
   const sourceId = nativeContextSourceAnchor(generationId, item.id);
+  // Child items carry provider parent references; indent only when that parent is rendered here.
+  const parented = !!item.parentItemId && item.parentItemId !== item.id && parentIds.has(item.parentItemId);
+  const inspector = <ItemInspectorButton item={item} generationId={generationId} generationStatus={generationStatus} />;
   if (item.visibility === "redacted" || item.visibility === "unavailable") {
     return <div id={sourceId} className="native-output-card" data-visibility={item.visibility} role="status">
       {item.visibility === "redacted" ? t("内容已不可访问。", "This content is no longer accessible.") : t("暂时无法核验内容访问权限。", "Content access cannot be verified right now.")}
@@ -207,7 +228,7 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
     return <div id={sourceId} className={`native-answer${kind === "progress" ? " native-progress" : ""}`} data-phase={item.phase ?? "unknown"}>
       {kind === "progress" && <span className="native-progress-label">{t("进度更新", "Progress update")}</span>}
       <Markdown content={item.text ?? ""} locale={markdownLocale} streaming={item.streaming === true && isGenerationActive(generationStatus)} />
-      <NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} />
+      <div className="native-answer-actions"><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} />{inspector}</div>
       {item.error && <p role="alert" className="native-error">{item.error}</p>}
     </div>;
   }
@@ -225,24 +246,24 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
     <NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} />
     {item.status === "unknown" && <p role="status">{t("业务结果尚未确认；只能核对原操作，不能重复执行。", "The business outcome is unconfirmed. Reconcile the original operation; do not execute it again.")}</p>}
     {item.type === "reasoning" && <div className="native-prose"><Markdown content={item.text ?? ""} locale={markdownLocale} streaming={item.streaming === true && isGenerationActive(generationStatus)} /></div>}
-    {item.type === "command_execution" && (open || visible) && <>{commandText(item) && <div className="native-command-input"><CodeBlock code={commandText(item)} wrap language="bash" /></div>}<CommandOutput generationId={generationId} item={item} /></>}
+    {item.type === "command_execution" && (open || visible) && <>{commandText(item) && <div className="native-command-input"><ShellCommandBlock command={commandText(item)!} /></div>}<CommandOutput generationId={generationId} item={item} /></>}
     {item.type === "file_change" && <FileChanges item={item} />}
     {(item.type === "file_search" || item.type === "web_search") && <>{item.text && <p>{item.text}</p>}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}{item.output && <CodeBlock code={item.output} wrap />}<ul>{item.results?.map((result, index) => { const url = safeUrl(result.url); return <li key={index}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.title || url}</a> : <strong>{result.title || result.path || result.url || t("结果", "Result")}</strong>}{result.path && <span> {result.path}{result.line !== undefined ? `:${result.line}` : ""}</span>}{result.text && <p>{result.text}</p>}</li>; })}</ul></>}
     {item.type === "dynamic_tool" && <>{item.input !== undefined && <><b>{t("输入", "Input")}</b><CodeBlock code={printable(item.input)} wrap /></>}{item.output !== undefined && <><b>{t("输出", "Output")}</b><CodeBlock code={item.output} wrap /></>}{item.text && <p>{item.text}</p>}</>}
     {item.type === "todo_list" && <>{item.text && <Markdown content={item.text} locale={markdownLocale} />}{item.steps && <Trace nested>{item.steps.map(step => <TraceLine key={step.id} icon={step.status === "completed" ? <CircleCheck aria-hidden="true" /> : step.status === "running" ? <CircleDot aria-hidden="true" /> : step.status === "cancelled" ? <CircleX aria-hidden="true" /> : <Circle aria-hidden="true" />} title={step.text} status={step.status === "completed" ? undefined : step.status === "running" ? "running" : "pending"} />)}</Trace>}</>}
     {item.type === "proposed_plan" && <NativePlanCard key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />}
-    {item.type === "subagent" && <>{item.model || item.childSessionId ? <Trace nested>{item.model && <TraceLine icon={<Wrench aria-hidden="true" />} title={t("模型", "Model")} description={item.model} />}{item.childSessionId && <TraceLine icon={<GitBranch aria-hidden="true" />} title={t("子会话", "Child session")} description={item.childSessionId} />}</Trace> : null}<NativeSubagentLink generationId={generationId} item={item} />{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}</>}
+    {item.type === "subagent" && <><NativeSubagentLink generationId={generationId} item={item} />{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}</>}
     {(item.type === "approval_request" || item.type === "user_input_request") && <OutputInteraction generationId={generationId} item={item} generationStatus={generationStatus} />}
     {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}</>}
     {item.error && <p role="alert" className="native-error">{item.error}</p>}
   </>;
   const badge = <TraceStatusBadge status={status} tone={tone}>{ended ? t("运行已结束", "Run ended") : statuses(t)[item.status]}</TraceStatusBadge>;
-  if (visible) return <section id={sourceId} className={`native-visible-details native-${item.type}`}>
-    <TraceLine icon={outputIcon(item.type)} title={title} description={meta} status={status} trailing={badge} />
+  if (visible) return <section id={sourceId} className={`native-visible-details native-${item.type}${parented ? " native-parented" : ""}`}>
+    <div className="native-visible-header"><TraceLine icon={outputIcon(item.type)} title={title} description={meta} status={status} trailing={badge} />{inspector}</div>
     {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
     <div className="native-card-body">{body}</div>
   </section>;
-  return <div id={sourceId}><TraceRow
+  return <div id={sourceId} className={parented ? "native-parented" : undefined}><TraceRow
     className={`native-${item.type}${isGenerationActive(generationStatus) && isItemActive(item) ? " native-active-tool" : ""}`}
     icon={outputIcon(item.type)}
     title={title}
@@ -251,12 +272,13 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
     trailing={badge}
     open={open}
     onOpenChange={change}
+    actions={inspector}
   >
     {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
     <div className="native-card-body">{body}</div>
   </TraceRow></div>;
 });
-function OutputGroup({ row, generationId, generationStatus }: { row: Extract<OutputPresentationRow, { kind: "reasoning" | "tools" }>; generationId: string; generationStatus: GenerationOutputStatus }) {
+function OutputGroup({ row, generationId, generationStatus, parentIds }: { row: Extract<OutputPresentationRow, { kind: "reasoning" | "tools" }>; generationId: string; generationStatus: GenerationOutputStatus; parentIds: ReadonlySet<string> }) {
   const t = useAgentText();
   const { locale } = useI18n();
   const [open, change] = useOutputDisclosure(generationId, row.items, false, true);
@@ -271,7 +293,7 @@ function OutputGroup({ row, generationId, generationStatus }: { row: Extract<Out
     if (!open || !active || !followLive.current || !detailsRef.current) return;
     detailsRef.current.scrollTop = detailsRef.current.scrollHeight;
   }, [open, active, row.items]);
-  if (row.kind === "tools" && row.items.length === 1) return <OutputRow item={row.items[0]!} generationId={generationId} generationStatus={generationStatus} />;
+  if (row.kind === "tools" && row.items.length === 1) return <OutputRow item={row.items[0]!} generationId={generationId} generationStatus={generationStatus} parentIds={parentIds} />;
   const counts = {
     completed: row.items.filter(item => item.status === "completed").length,
     running: isGenerationActive(generationStatus) ? row.items.filter(item => item.status === "running").length : 0,
@@ -289,7 +311,7 @@ function OutputGroup({ row, generationId, generationStatus }: { row: Extract<Out
       const node = event.currentTarget;
       followLive.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
     }}>
-      {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} id={nativeContextSourceAnchor(generationId, item.id)} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale={locale === "en" ? "en" : "zh-CN"} streaming={item.streaming === true && isGenerationActive(generationStatus)} /><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} />)}</Trace>}
+      {row.kind === "reasoning" ? row.items.map(item => <div key={item.id} id={nativeContextSourceAnchor(generationId, item.id)} className="native-prose native-reasoning-part"><Markdown content={item.text ?? ""} locale={locale === "en" ? "en" : "zh-CN"} streaming={item.streaming === true && isGenerationActive(generationStatus)} /><NativeOutputContextAction item={item} generationId={generationId} settled={!isGenerationActive(generationStatus)} /><Duration item={item} generationStatus={generationStatus} /></div>) : <Trace nested>{row.items.map(item => <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={generationStatus} parentIds={parentIds} />)}</Trace>}
     </div>
   </TraceRow>;
 }
@@ -299,6 +321,7 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
   const t = useAgentText();
   const rows = useMemo(() => presentOutputItems(snapshot?.items ?? [], calls.map(call => call.operationId)), [snapshot?.items, calls]);
   const records = new Map(calls.map(call => [call.operationId, call]));
+  const parentIds = useMemo(() => new Set((snapshot?.items ?? []).map(item => item.id)), [snapshot?.items]);
   const rendered = new Set(rows.filter(row => row.kind === "pm_tool").map(row => row.operationId));
   const indicator = snapshot && generationIndicator(snapshot.status, snapshot.items);
   const work = snapshot ? generationWorkState(snapshot.status, snapshot.items) : undefined;
@@ -312,10 +335,10 @@ export function OutputTimelineView({ snapshot, error, calls = [], callsError, on
         const record = records.get(row.operationId);
         return record ? <PmToolCard key={row.key} record={record} onUpdate={onUpdateCall} /> : <section key={row.key} className="native-output-card"><header><strong>{row.item.toolName || t("PM 工具", "PM tool")}</strong><span>{callsError ? t("记录不可用", "Records unavailable") : t("正在读取操作记录…", "Loading operation records…")}</span></header></section>;
       }
-      return row.kind === "item" ? <OutputRow key={row.key} item={row.item} generationId={snapshot.generationId} generationStatus={snapshot.status} /> : <OutputGroup key={row.key} row={row} generationId={snapshot.generationId} generationStatus={snapshot.status} />;
+      return row.kind === "item" ? <OutputRow key={row.key} item={row.item} generationId={snapshot.generationId} generationStatus={snapshot.status} parentIds={parentIds} /> : <OutputGroup key={row.key} row={row} generationId={snapshot.generationId} generationStatus={snapshot.status} parentIds={parentIds} />;
     })}
     {calls.filter(call => !rendered.has(call.operationId)).map(call => <PmToolCard key={`pm:${call.operationId}`} record={call} onUpdate={onUpdateCall} />)}
-    {snapshot && <ChangedFilesSummary items={snapshot.items} />}
+    {snapshot && <ChangedFilesSummary items={snapshot.items} storageKey={`${snapshot.threadId}:${snapshot.generationId}`} />}
     {work ? <WorkingRow state={work} /> : indicator && <div className="native-system-divider" data-tone={indicator === "failed" ? "error" : indicator === "interrupted" ? "warning" : undefined} role={indicator === "failed" ? "alert" : "status"}>
       <span aria-hidden="true" />
       <span>{indicatorText}</span>

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { Link, useLocation, useNavigationType, useSearchParams } from "react-router-dom"
-import { Columns3, MessageSquare, Plus, RefreshCw, Terminal } from "lucide-react"
+import { Columns3, FolderPlus, MessageSquare, Plus, RefreshCw, Terminal } from "lucide-react"
 import type { AgentWorkspace, ChatGenerationView, RemoteThread } from "@agent-workspace/contracts/chat"
 import type { ProviderInstance } from "@agent-workspace/contracts/provider"
 import { getProviderInstanceDisplayName, getProviderModelShortName } from "@agent-workspace/client-runtime"
@@ -22,6 +22,7 @@ import common from "@/views/pm/agent-run-board.module.css"
 import { useAgentText, type AgentText } from "../i18n"
 import { Assistant } from "../assistant"
 import { RunExecutionDock, useKeepRunCardVisible } from "./run-execution-dock"
+import { OpenFolderDialog } from "./execution-workspace"
 import { useRunBoard, useRunBoardAccessError, useRunBoardExecution, useRunBoardHistory } from "./run-board-data"
 import { readRunBoardSelection, runBoardActivity, runBoardGenerationFacts, runBoardTerminalWorkspace, updateRunBoardSelection, type RunBoardActivity, type RunBoardSelection } from "./run-board-model"
 import { runBoardChatHref, safeRunBoardReturn } from "./run-board-navigation"
@@ -147,6 +148,8 @@ function SessionRunBoardPage() {
     || "/agent/runs?view=sessions"
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [newFolder, setNewFolder] = useState("")
+  const [openedWorkspace, setOpenedWorkspace] = useState<AgentWorkspace | null>(null)
+  const [openingFolder, setOpeningFolder] = useState(false)
   const [outputRevision, setOutputRevision] = useState(0)
   const [detailView, setDetailView] = useState<{ threadId: string | null; tab: "output" | "history" | "diagnostics" }>({ threadId: null, tab: "output" })
   const detailTab = detailView.threadId === selectedId ? detailView.tab : "output"
@@ -206,10 +209,11 @@ function SessionRunBoardPage() {
     ? runBoardTerminalWorkspace(selected.thread, board.workspaces, execution.environment) : null
   const terminalHref = selected && terminalWorkspace
     ? runBoardChatHref({ threadId: selected.thread.remoteId, agentWorkspaceId: terminalWorkspace.id, terminal: true, returnTo }) : null
-  const newWorkspace = board.workspaces.find(workspace => `folder:${workspace.id}` === newFolder)
+  const newWorkspaceOptions = [...board.workspaces, ...(openedWorkspace && !board.workspaces.some(workspace => workspace.id === openedWorkspace.id) ? [openedWorkspace] : [])]
+  const newWorkspace = newWorkspaceOptions.find(workspace => `folder:${workspace.id}` === newFolder)
   const newChatOnly = newFolder === "chat-only"
   const newSelectionReady = newChatOnly || !!newWorkspace && newWorkspace.status === "available"
-    && !newWorkspace.archivedAt && !board.error && !board.metadataError && !board.loading
+    && !newWorkspace.archivedAt && (openedWorkspace?.id === newWorkspace.id || !board.error && !board.metadataError && !board.loading)
   const newChatHref = newSelectionReady ? runBoardChatHref({ agentWorkspaceId: newChatOnly ? null : newWorkspace!.id, returnTo }) : null
   const newTerminalHref = newSelectionReady && newWorkspace && !newChatOnly
     ? runBoardChatHref({ agentWorkspaceId: newWorkspace.id, terminal: true, returnTo }) : null
@@ -266,7 +270,7 @@ function SessionRunBoardPage() {
   return <div className={styles.workspace}>
     <div className={`${common.root} ${styles.page}`} data-testid="agent-run-board">
     <PmPage pageId="agent-run-board" className={boardStyles.root} contentClassName={common.content} title={t("运行面板", "Run board")}
-      actions={<div className={styles.pageActions}><Link className={styles.viewLink} to="/agent/runs?view=business">{t("业务执行（PM）", "Business Runs (PM)")}</Link><Button ref={refreshButton} size="sm" variant="outline" disabled={board.loading || board.refreshing} onClick={() => void refresh()}><RefreshCw className={board.refreshing ? styles.refreshing : undefined} aria-hidden="true" />{board.refreshing ? t("刷新中…", "Refreshing…") : t("刷新", "Refresh")}</Button><Button size="sm" onClick={() => { setNewFolder(""); setNewSessionOpen(true) }}><Plus aria-hidden="true" />{t("新建会话", "New session")}</Button></div>}
+      actions={<div className={styles.pageActions}><Link className={styles.viewLink} to="/agent/runs?view=business">{t("业务执行（PM）", "Business Runs (PM)")}</Link><Button ref={refreshButton} size="sm" variant="outline" disabled={board.loading || board.refreshing} onClick={() => void refresh()}><RefreshCw className={board.refreshing ? styles.refreshing : undefined} aria-hidden="true" />{board.refreshing ? t("刷新中…", "Refreshing…") : t("刷新", "Refresh")}</Button><Button size="sm" onClick={() => { setNewFolder(""); setOpenedWorkspace(null); setNewSessionOpen(true) }}><Plus aria-hidden="true" />{t("新建会话", "New session")}</Button></div>}
       toolbar={<FilterToolbar className={workItemStyles.toolbar} label={t("筛选会话运行", "Filter session runs")}
         search={<><Segmented value="board" aria-label={t("运行展示方式", "Run layout")}><SegmentedItem value="board" className={common.layoutLabel}><Columns3 size={14} aria-hidden="true" />{t("看板", "Board")}</SegmentedItem></Segmented><Input className={common.search} type="search" aria-label={t("搜索会话、文件夹或分支", "Search sessions, folders or branches")} placeholder={t("搜索会话、文件夹、分支…", "Search sessions, folders, branches…")} value={query} onChange={event => updateSelection({ query: event.target.value }, true)} /></>}
         filters={<><RadixSelect className={common.select} aria-label={t("筛选文件夹", "Filter folders")} value={folder} onChange={event => updateSelection({ folder: event.target.value }, true)}><option value="">{t("全部文件夹", "All folders")}</option>{folder && !folderOptions.some(([id]) => id === folder) && <option value={folder}>{folder} · {t("不在当前列表", "Not in current list")}</option>}{folderOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</RadixSelect><RadixSelect className={common.select} aria-label={t("筛选 Provider", "Filter providers")} value={provider} onChange={event => updateSelection({ provider: event.target.value }, true)}><option value="">{t("全部 Provider", "All providers")}</option>{provider && !providerOptions.some(([id]) => id === provider) && <option value={provider}>{provider} · {t("不在当前列表", "Not in current list")}</option>}{providerOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</RadixSelect><label className={common.attentionFilter}><Checkbox checked={attention} onCheckedChange={value => updateSelection({ attention: value }, true)} />{t("需要我处理", "Needs my attention")}</label></>}
@@ -340,12 +344,13 @@ function SessionRunBoardPage() {
     </RunExecutionDock>}
     <Dialog open={newSessionOpen} onOpenChange={setNewSessionOpen}>
       <DialogContent className={styles.newSession}>
-        <DialogHeader><DialogTitle>{t("新建会话", "New session")}</DialogTitle><DialogDescription>{t("明确选择已登记的 Agent 文件夹或仅对话。只打开新会话，不发送模型消息；终端仅在显式选择后打开，不执行命令。", "Explicitly choose a registered Agent folder or chat only. Opening a new session does not send a model message; terminal opens only by explicit choice and no commands are sent.")}</DialogDescription></DialogHeader>
-        <label className={styles.newFolderLabel}>{t("会话文件夹", "Session folder")}<RadixSelect aria-label={t("新会话的 Agent 文件夹", "Agent folder for the new session")} value={newFolder} onChange={event => setNewFolder(event.target.value)}><option value="">{t("请选择文件夹或仅对话", "Choose a folder or chat only")}</option><option value="chat-only">{t("仅对话 · 不使用代码目录", "Chat only · no code folder")}</option>{board.workspaces.filter(workspace => !workspace.archivedAt).map(workspace => <option key={workspace.id} value={`folder:${workspace.id}`} disabled={workspace.status !== "available"}>{workspace.name} · {workspace.path}{workspace.status !== "available" ? ` · ${workspace.reason || t("不可用", "Unavailable")}` : ""}</option>)}</RadixSelect></label>
+        <DialogHeader><DialogTitle>{t("新建会话", "New session")}</DialogTitle><DialogDescription>{t("明确选择已登记的 Agent 文件夹、打开服务器文件夹，或仅对话。只打开新会话，不发送模型消息；终端仅在显式选择后打开，不执行命令。", "Explicitly choose a registered Agent folder, open a server folder, or chat only. Opening a new session does not send a model message; terminal opens only by explicit choice and no commands are sent.")}</DialogDescription></DialogHeader>
+        {board.loading && <p className={common.detailNote} role="status">{t("正在读取已登记文件夹…", "Reading registered folders…")}</p>}
+        <div className={styles.newFolderActions}><label className={styles.newFolderLabel}>{t("会话文件夹", "Session folder")}<RadixSelect aria-label={t("新会话的 Agent 文件夹", "Agent folder for the new session")} value={newFolder} onChange={event => setNewFolder(event.target.value)}><option value="">{t("请选择文件夹或仅对话", "Choose a folder or chat only")}</option><option value="chat-only">{t("仅对话 · 不使用代码目录", "Chat only · no code folder")}</option>{newWorkspaceOptions.filter(workspace => !workspace.archivedAt).map(workspace => <option key={workspace.id} value={`folder:${workspace.id}`} disabled={workspace.status !== "available"}>{workspace.name} · {workspace.path}{workspace.status !== "available" ? ` · ${workspace.reason || t("不可用", "Unavailable")}` : ""}</option>)}</RadixSelect></label><Button type="button" variant="outline" disabled={openingFolder} onClick={() => { setNewSessionOpen(false); setOpeningFolder(true) }}><FolderPlus aria-hidden="true" />{t("打开其他文件夹", "Open another folder")}</Button></div>
         {newWorkspace && <p className={styles.newFolderPath}>{newWorkspace.path}</p>}
-        {!newChatOnly && (board.metadataError || board.error) && <p className={styles.warning} role="alert">{t("文件夹列表尚未取得最新可用状态，请刷新后重新核对；也可明确选择仅对话。", "The folder list has not been verified as current. Refresh and review it, or explicitly select chat only.")}</p>}
+        {!newChatOnly && (board.metadataError || board.error) && <p className={styles.warning} role="alert">{t("文件夹列表尚未取得最新可用状态，请刷新后重新核对；也可明确选择仅对话或打开服务器文件夹。", "The folder list has not been verified as current. Refresh and review it, or explicitly select chat only / open a server folder.")}</p>}
         {newChatOnly && <p className={common.detailNote}>{t("仅对话不提供代码终端。", "Chat-only sessions do not provide a code terminal.")}</p>}
-        {!board.loading && !board.workspaces.some(workspace => !workspace.archivedAt && workspace.status === "available") && <p className={common.detailNote}>{t("没有可用的已登记文件夹。可先选择仅对话，在 Chat 的“打开文件夹”登记真实目录。", "No registered folder is available. Start chat only, then use Open folder in Chat to register an actual directory.")}</p>}
+        {!board.loading && !newWorkspaceOptions.some(workspace => !workspace.archivedAt && workspace.status === "available") && <p className={common.detailNote}>{t("没有可用的已登记文件夹。可在此打开服务器文件夹，或先选择仅对话。", "No registered folder is available. Open a server folder here, or start chat only.")}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => setNewSessionOpen(false)}>{t("取消", "Cancel")}</Button>
           {newChatHref ? <Button render={<Link to={newChatHref} />}><MessageSquare aria-hidden="true" />{t("在 Chat 开始", "Start in Chat")}</Button> : <Button disabled><MessageSquare aria-hidden="true" />{t("在 Chat 开始", "Start in Chat")}</Button>}
@@ -353,5 +358,12 @@ function SessionRunBoardPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {openingFolder && <OpenFolderDialog onClose={() => { setOpeningFolder(false); setNewSessionOpen(true) }} onOpened={workspace => {
+      setOpenedWorkspace(workspace)
+      setNewFolder(`folder:${workspace.id}`)
+      setOpeningFolder(false)
+      setNewSessionOpen(true)
+      void board.refresh()
+    }} />}
   </div>
 }

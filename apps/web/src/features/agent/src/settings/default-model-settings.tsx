@@ -6,7 +6,7 @@ import { Button } from "@agent/components/ui/button";
 import { workspaceClient } from "../network";
 import { useAgentText } from "../i18n";
 import { SettingsNotice, SettingsSection, useSettingsGuard } from "./settings-layout";
-import { ModelOptionControls, modelOptionsValid, providerSelectable, visibleProviderModels } from "./model-option-controls";
+import { ModelOptionControls, modelOptionsValid, providerConfigurable, providerSelectable, visibleProviderModels } from "./model-option-controls";
 import { formatProviderUpdateRequiredNotice, getProviderInstanceDisplayName, getProviderModelShortName, resolveProviderModelSelection } from "@agent-workspace/client-runtime/providers";
 import { RadixSelect } from "@/components/ui/radix-select"
 
@@ -24,7 +24,7 @@ export default function DefaultModelSettings() {
   const selection = resolveProviderModelSelection(providers, draft?.providerInstanceId, draft?.model);
   const provider = "provider" in selection ? selection.provider : undefined;
   const model = selection.status === "selected" || selection.status === "disabled-model" ? selection.model : provider?.models.find((item) => item.id === draft?.model || item.aliases?.includes(draft?.model ?? ""));
-  const validDraft = draft === null || Boolean(selection.status === "selected" && providerSelectable(provider) && model && modelOptionsValid(model, draft.modelOptions ?? provider?.modelPreferences?.options[draft.model]));
+  const validDraft = draft === null || Boolean(selection.status === "selected" && providerConfigurable(provider) && model && modelOptionsValid(model, draft.modelOptions ?? provider?.modelPreferences?.options[draft.model]));
   const updateNotice = provider ? formatProviderUpdateRequiredNotice(provider) : null;
 
   useEffect(() => {
@@ -77,6 +77,8 @@ export default function DefaultModelSettings() {
       {providersError && <SettingsNotice kind="error" onRetry={() => { void refresh(); }}>{providersError}</SettingsNotice>}
       {saved?.availability.status === "unavailable" && <SettingsNotice kind="error">{t("原默认模型不可用：", "Previous default model is unavailable: ")}{saved.availability.reason}</SettingsNotice>}
       {saved?.availability.status === "unset" && <SettingsNotice kind="info">{t("尚未设置默认模型。", "No default model is set.")}</SettingsNotice>}
+      {draft && provider && !providerSelectable(provider) && <SettingsNotice kind="info">{t("该提供商的原生会话当前未就绪；默认模型仍可保存，但发送前需先在“提供商”中检查 Agent。", "This provider's native session is not ready. The default model can still be saved; check the Agent under Providers before sending.")}</SettingsNotice>}
+      {draft && provider && providerConfigurable(provider) && visibleProviderModels(provider).length === 0 && <SettingsNotice kind="info">{t("该提供商尚未返回模型目录；请先在“提供商”中检查 Agent。", "This provider has not returned a model catalog yet; check the Agent under Providers first.")}</SettingsNotice>}
       {success && <SettingsNotice kind="success">{t("已保存。", "Saved.")}</SettingsNotice>}
       <form onSubmit={save} className="flex flex-col gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -91,7 +93,7 @@ export default function DefaultModelSettings() {
             >
               <option value="">{t("不设置默认值", "No default")}</option>
               {draft && !provider && <option value={draft.providerInstanceId}>{draft.providerInstanceId}{t("（已不可用）", " (unavailable)")}</option>}
-              {providers.map((item) => <option key={item.instanceId} value={item.instanceId} disabled={!providerSelectable(item)}>{getProviderInstanceDisplayName(item)}{!item.enabled ? t("（已停用）", " (disabled)") : !providerSelectable(item) ? t("（原生会话未就绪）", " (native session not ready)") : item.authStatus === "unknown" ? t("（就绪，身份未知）", " (ready, identity unknown)") : ""}</option>)}
+              {providers.map((item) => <option key={item.instanceId} value={item.instanceId} disabled={!providerConfigurable(item)}>{getProviderInstanceDisplayName(item)}{!item.enabled ? t("（已停用）", " (disabled)") : !providerSelectable(item) ? t("（原生会话未就绪）", " (native session not ready)") : item.authStatus === "unknown" ? t("（就绪，身份未知）", " (ready, identity unknown)") : ""}</option>)}
             </RadixSelect>
           </label>
           <label className="flex min-w-0 flex-col gap-2 text-sm">
@@ -100,7 +102,7 @@ export default function DefaultModelSettings() {
               aria-label={t("新会话默认模型", "New session default model")}
               className="border-input bg-background min-w-0 rounded-md border px-3 py-2 text-sm"
               value={draft?.model ?? ""}
-              disabled={!draft || loading || saving || providersLoading || !providerSelectable(provider)}
+              disabled={!draft || loading || saving || providersLoading || !providerConfigurable(provider)}
               onChange={(event) => { if (draft) setDraft({ ...draft, model: event.target.value, modelOptions: (provider?.modelPreferences?.options[event.target.value] ?? []).map((option) => ({ ...option })) }); setSuccess(false); }}
             >
               <option value="">{t("请选择模型", "Select a model")}</option>

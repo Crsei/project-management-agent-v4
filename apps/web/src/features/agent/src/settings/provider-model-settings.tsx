@@ -3,6 +3,7 @@ import { Input } from "@agent/components/ui/input";
 import type { ProviderCustomModel, ProviderDriver, ProviderModel, ProviderModelPreferences, ProviderOptionDescriptor, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
 import { getProviderModelShortName, getProviderModelTraits, selectableProviderOptionChoices } from "@agent-workspace/client-runtime/providers";
 import { useAgentText } from "../i18n";
+import { providerDisplayText } from "./provider-display-text";
 import { RadixSelect } from "@/components/ui/radix-select"
 
 export const emptyModelPreferences = (): ProviderModelPreferences => ({ hidden: [], order: [], favorites: [], options: {} });
@@ -53,18 +54,19 @@ export function ProviderModelSettings({ driver, models, customModels, preference
         const shortName = getProviderModelShortName(driver, model);
         return <div className="provider-model-row" key={id}>
         <div><span>{model.label}</span>{model.badge === "new" && <span className="provider-model-capability">{t("新", "New")}</span>}<code>{id}</code>{(shortName || model.subProvider) && <small className="provider-model-metadata">{[shortName, model.subProvider].filter(Boolean).join(" · ")}</small>}<small>{model.disabledReason ?? (model.legacy ? t("旧版模型", "Legacy model") : model.source === "custom" ? t("自定义", "Custom") : model.source === "discovered" ? t("已发现", "Discovered") : t("内置", "Built-in"))}</small>
-          {traits.descriptors.map((option) => {
+          {traits.descriptors.length > 0 && <div className="provider-model-options">{traits.descriptors.map((option) => {
             const selection = preferences.options[id]?.find((entry) => entry.id === option.id);
             const choices = option.type === "select" ? selectableProviderOptionChoices(option) : [];
             const invalid = selection && (option.type === "boolean" ? typeof selection.value !== "boolean" : typeof selection.value !== "string" || !choices.some((choice) => choice.id === selection.value));
-            return <label className="provider-model-option" key={option.id}>{option.label}
-              <RadixSelect value={selection ? String(selection.value) : ""} aria-invalid={Boolean(invalid)} title={option.description} onChange={(event) => changeOption(id, option, event.target.value)}>
+            const translateOption = option.id === "reasoningEffort" || option.id === "variant" || option.id === "serviceTier";
+            return <label className="provider-model-option" key={option.id}>{translateOption ? providerDisplayText(t, option.label) : option.label}
+              <RadixSelect value={selection ? String(selection.value) : ""} aria-invalid={Boolean(invalid)} title={translateOption ? providerDisplayText(t, option.description) : option.description} onChange={(event) => changeOption(id, option, event.target.value)}>
                 <option value="">{t("原生默认", "Native default")}</option>
                 {invalid && <option value={String(selection.value)} disabled>{String(selection.value)}{t("（已失效）", " (invalid)")}</option>}
-                {option.type === "boolean" ? <><option value="true">{t("开", "On")}</option><option value="false">{t("关", "Off")}</option></> : choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+                {option.type === "boolean" ? <><option value="true">{t("开", "On")}</option><option value="false">{t("关", "Off")}</option></> : choices.map((choice) => <option key={choice.id} value={choice.id}>{translateOption ? providerDisplayText(t, choice.label) : choice.label}</option>)}
               </RadixSelect>
             </label>;
-          })}
+          })}</div>}
           {traits.invalidOptions.map((selection, optionIndex) => <div key={optionIndex} className="provider-model-invalid-option" role="alert"><span>{t("已保存选项失效：", "Saved option is invalid: ")}<code>{selection.id} = {String(selection.value)}</code></span><Button type="button" size="sm" variant="ghost" onClick={() => removeInvalidOption(id, selection)}>{t("移除此选项", "Remove this option")}</Button></div>)}
         </div>
         <label><input type="checkbox" checked={!preferences.hidden.includes(id)} onChange={() => toggle("hidden", id)} />{t("显示", "Show")}</label>

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentWorkspace, ExecutionEnvironment } from "@agent-workspace/contracts/chat";
-import type { TerminalDescriptor } from "@agent-workspace/contracts/inspector";
+import type { TerminalDescriptor, TerminalServerMessage } from "@agent-workspace/contracts/inspector";
 import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import { TerminalPanel } from "../workspace/inspector/terminal-panel";
 import { workspaceClient } from "../network";
 import { sessionTerminalMatches, sessionTerminalTarget, terminalBelongsToSessionView, type SessionTerminalTarget } from "./execution-terminal-selection";
 import { acceptTerminalDescriptor, terminalCreationReadback, type PendingTerminalCreation } from "./terminal-creation-state";
 import { agentText } from "../i18n-text";
+import { sanitizeTerminalCommand } from "../chat/output-detail-model";
+import { reportTerminalRun, setTerminalRunAvailable, TERMINAL_RUN_EVENT, type TerminalRunDetail } from "../chat/terminal-run";
 
 export type TerminalDock = "bottom" | "right";
 export type FolderTerminalRequest = { relativePath: string; scope: "workspace" | "session" };
@@ -16,10 +18,66 @@ export type ExecutionTerminalController = {
   selectedId: string | null; selected: TerminalDescriptor | undefined;
   terminals: TerminalDescriptor[]; select: (id: string) => void; close: (id: string) => Promise<void>;
   enabled: boolean; create: (request: FolderTerminalRequest) => Promise<void>;
-  openSession: (target: SessionTerminalTarget) => Promise<void>;
+  openSession: (target: SessionTerminalTarget) => Promise<TerminalDescriptor | undefined>;
   busy: boolean; error?: string; retry: () => void;
   acceptExit: (id: string, exitCode: number, signal?: number) => void;
 };
+
+const TERMINAL_RUN_TIMEOUT_MS = 8000;
+const RUNNER_CLIENT_KEY = "pm-v4:terminal-runner-client";
+let fallbackRunnerClient: string | undefined;
+
+/** One stable runner identity per browser tab; the server owns the accepted input sequence. */
+function runnerClientId(): string {
+  try {
+    const existing = sessionStorage.getItem(RUNNER_CLIENT_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    sessionStorage.setItem(RUNNER_CLIENT_KEY, created);
+    return created;
+  } catch {
+    fallbackRunnerClient ??= crypto.randomUUID();
+    return fallbackRunnerClient;
+  }
+}
+
+/** Writes one already-sanitized command through its own short-lived attachment.
+ * The visible terminal keeps its socket; the server broadcasts the resulting output to both. */
+async function writeTerminalCommand(terminal: TerminalDescriptor, command: string): Promise<void> {
+  const data = `${command}\r`;
+  if (new TextEncoder().encode(data).byteLength > 65536) throw new Error(agentText("命令过长，终端单次输入上限为 64 KiB。", "The command is too long; one terminal input is limited to 64 KiB."));
+  const query = new URLSearchParams({ terminalId: terminal.id, clientId: runnerClientId(), afterSeq: String(terminal.lastSeq) });
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const socket = new WebSocket(workspaceClient.webSocketUrl(`/api/inspector/terminal?${query}`));
+    let timer: number | undefined;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      socket.onopen = null; socket.onmessage = null; socket.onerror = null; socket.onclose = null;
+      try { socket.close(); } catch { /* The attachment is already closing. */ }
+      if (error) reject(error); else resolve();
+    };
+    timer = window.setTimeout(() => finish(new Error(agentText("终端未在限定时间内确认输入。", "The terminal did not acknowledge the input in time."))), TERMINAL_RUN_TIMEOUT_MS);
+    socket.onerror = () => finish(new Error(agentText("无法连接会话终端。", "Could not connect to the session terminal.")));
+    socket.onclose = () => finish(new Error(agentText("会话终端连接已关闭，命令未确认写入。", "The session terminal connection closed before the command was acknowledged.")));
+    socket.onmessage = event => {
+      let message: TerminalServerMessage;
+      try { message = JSON.parse(String(event.data)) as TerminalServerMessage; } catch { finish(new Error(agentText("终端响应无效。", "Invalid terminal response."))); return; }
+      switch (message.type) {
+        case "ready":
+          if (message.terminal.status !== "running") { finish(new Error(agentText("会话终端进程已结束，未写入命令。", "The session terminal has ended; the command was not written."))); return; }
+          socket.send(JSON.stringify({ type: "input", seq: message.acceptedInputSeq + 1, data }));
+          break;
+        case "ack": finish(); break;
+        case "error": finish(new Error(message.message)); break;
+        case "exit": finish(new Error(agentText("会话终端进程已结束，未写入命令。", "The session terminal has ended; the command was not written."))); break;
+        default: break;
+      }
+    };
+  });
+}
 
 export function useExecutionTerminals({ workspace, threadId, environment, onShow, enabled = true }: {
   workspace?: AgentWorkspace; threadId?: string; environment?: ExecutionEnvironment; onShow: () => void; enabled?: boolean;
@@ -230,9 +288,9 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
         if (pending.scope !== "session" || pending.threadId !== target.threadId || pending.agentWorkspaceId !== target.agentWorkspaceId || pending.agentWorkspaceRevision !== target.agentWorkspaceRevision)
           throw new Error(agentText("另一目录的终端创建结果未决，请先返回原目录核对请求。", "A terminal creation in another folder is unresolved. Return to that folder and reconcile the original request first."));
         assertCurrent();
-        await reconcileCreation(true);
+        const reconciled = await reconcileCreation(true);
         assertCurrent();
-        return;
+        return reconciled;
       }
       const query = new URLSearchParams({ threadId: target.threadId, agentWorkspaceId: target.agentWorkspaceId, agentWorkspaceRevision: String(target.agentWorkspaceRevision) });
       const catalog = await workspaceClient.json<TerminalCatalog>(`/api/inspector/terminals?${query}`);
@@ -244,10 +302,11 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
       if (existing) {
         setTerminals(current => [...current.filter(item => item.id !== existing.id), acceptTerminalDescriptor(current.find(item => item.id === existing.id), existing)]);
         setSelectedId(existing.id); onShow();
-      } else {
-        await sendCreation({ requestId: crypto.randomUUID(), expectedServiceId: catalog.serviceId, scope: "session", ...target, relativePath: "" });
-        assertCurrent();
+        return existing;
       }
+      const created = await sendCreation({ requestId: crypto.randomUUID(), expectedServiceId: catalog.serviceId, scope: "session", ...target, relativePath: "" });
+      assertCurrent();
+      return created;
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); throw cause; }
     finally { openingSession.current = false; setBusy(false); }
   };
@@ -255,6 +314,45 @@ export function useExecutionTerminals({ workspace, threadId, environment, onShow
     assertEnabled();
     setTerminals(current => current.map(terminal => terminal.id === id ? { ...terminal, status: "exited", exitCode, signal: signal ?? null } : terminal));
   };
+  // "Run in terminal" is a request from the chat timeline; this surface owns the real PTY.
+  const visibleRef = useRef(visibleTerminals);
+  visibleRef.current = visibleTerminals;
+  const openSessionRef = useRef(openSession);
+  openSessionRef.current = openSession;
+  const runningCommand = useRef(false);
+  const canRunCommand = enabled && !!environment?.agentWorkspaceId && !!threadId;
+  useEffect(() => {
+    setTerminalRunAvailable(canRunCommand);
+    if (!canRunCommand) return () => setTerminalRunAvailable(false);
+    const handle = (event: Event) => {
+      const detail = (event as CustomEvent<TerminalRunDetail>).detail;
+      if (!detail || typeof detail.requestId !== "string" || typeof detail.command !== "string") return;
+      event.preventDefault();
+      const fail = (message: string) => { setError(message); reportTerminalRun({ requestId: detail.requestId, ok: false, message }); };
+      if (runningCommand.current) { fail(agentText("上一条命令仍在写入终端，请稍后重试。", "The previous command is still being written. Retry shortly.")); return; }
+      const target = activeEnvironment.current;
+      if (!target) { fail(agentText("当前会话没有可运行命令的执行目录。", "This session has no verified execution folder for a command.")); return; }
+      const command = sanitizeTerminalCommand(detail.command);
+      if (!command) { fail(agentText("命令为空或只包含控制字符，未写入终端。", "The command is empty or contains only control characters; nothing was written.")); return; }
+      runningCommand.current = true;
+      void (async () => {
+        try {
+          const existing = visibleRef.current.find(terminal => terminal.scope === "session" && terminal.threadId === target.threadId && terminal.status === "running");
+          const terminal = existing ?? await openSessionRef.current(target);
+          if (!terminal) throw new Error(agentText("未找到可写入的会话终端。", "No session terminal was available to receive the command."));
+          onShow();
+          await writeTerminalCommand(terminal, command);
+          setError(undefined);
+          reportTerminalRun({ requestId: detail.requestId, ok: true });
+        } catch (cause) {
+          fail(cause instanceof Error ? cause.message : String(cause));
+          onShow();
+        } finally { runningCommand.current = false; }
+      })();
+    };
+    window.addEventListener(TERMINAL_RUN_EVENT, handle);
+    return () => { window.removeEventListener(TERMINAL_RUN_EVENT, handle); setTerminalRunAvailable(false); };
+  }, [canRunCommand, onShow, threadId]);
   return {
     selectedId: selected?.id ?? null, selected, terminals: visibleTerminals, select: setSelectedId, close, enabled: enabled && (!!workspace || !!environment?.agentWorkspaceId || !!pendingCreation),
     create, openSession, busy, error, retry: () => { assertEnabled(); setError(undefined); void (pendingRef.current ? reconcileCreation(true) : refresh()).catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, acceptExit,

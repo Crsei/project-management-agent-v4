@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "@agent/components/ui/tooltip";
+import { TitleHintLayer } from "@/components/ui/title-hint";
 import { App } from "@agent/src/app";
 import "@agent/styles/globals.css";
 
@@ -10,6 +11,7 @@ if (!container) throw new Error("#root not found");
 createRoot(container).render(
   <StrictMode>
     <TooltipProvider>
+      <TitleHintLayer />
       <App />
     </TooltipProvider>
   </StrictMode>,

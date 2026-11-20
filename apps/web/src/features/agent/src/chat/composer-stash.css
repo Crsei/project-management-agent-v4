@@ -1,0 +1,41 @@
+.composer-stash { position: relative; display: inline-flex; min-width: 0; align-items: center; gap: 4px; }
+.composer-stash-badge { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); color: var(--foreground); font-size: 11px; line-height: 1; cursor: pointer; }
+.composer-stash-badge:hover { border-color: var(--ring); }
+.composer-stash-badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.composer-stash-badge svg { width: 12px; height: 12px; flex: none; }
+.composer-stash-badge[data-saving] { border-color: var(--ring); }
+.composer-stash-badge[data-pulse] svg { animation: composer-stash-pulse 0.9s ease-out; }
+.composer-stash-badge[data-pulse] .composer-stash-count { animation: composer-stash-count-pop 0.9s ease-out; color: var(--primary); }
+.composer-stash-count { min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--background); color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: center; }
+@keyframes composer-stash-pulse { 0% { opacity: 0.35; transform: translateY(1px); } 100% { opacity: 1; transform: none; } }
+@keyframes composer-stash-count-pop { 0% { opacity: 0.3; transform: translateY(1px); } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .composer-stash-badge[data-pulse] svg, .composer-stash-badge[data-pulse] .composer-stash-count { animation: none; } }
+
+.composer-stash-drawer { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 40; display: flex; flex-direction: column; gap: 6px; width: min(420px, 92vw); max-height: min(320px, 50vh); overflow: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-popover-value, 10px); background: var(--card); color: var(--foreground); box-shadow: var(--shadow-floating); font-size: 12px; }
+.composer-stash-drawer:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.composer-stash-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
+.composer-stash-close { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.composer-stash-close:hover { background: var(--accent); color: var(--foreground); }
+.composer-stash-close svg { width: 13px; height: 13px; }
+.composer-stash-hint { margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.45; }
+.composer-stash-empty { margin: 2px 0; color: var(--muted-foreground); }
+.composer-stash-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.composer-stash-row { display: flex; align-items: stretch; gap: 2px; border-radius: 7px; }
+.composer-stash-row[data-highlighted] { background: var(--accent); color: var(--accent-foreground); }
+.composer-stash-restore { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; padding: 5px 6px; border: 0; border-radius: 7px; background: transparent; color: inherit; text-align: start; cursor: pointer; }
+.composer-stash-restore:disabled { cursor: default; opacity: 0.6; }
+.composer-stash-restore:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.composer-stash-summary { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.composer-stash-text { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; line-height: 1.4; }
+.composer-stash-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted-foreground); font-size: 10px; }
+.composer-stash-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 999px; }
+.composer-stash-chip svg { width: 10px; height: 10px; }
+.composer-stash-time { color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; }
+.composer-stash-row[data-highlighted] .composer-stash-time, .composer-stash-row[data-highlighted] .composer-stash-chips { color: inherit; opacity: 0.75; }
+.composer-stash-delete { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.composer-stash-delete:hover { background: color-mix(in oklab, var(--destructive) 12%, transparent); color: var(--destructive); }
+.composer-stash-delete svg { width: 13px; height: 13px; }
+.composer-stash-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; color: var(--foreground); font-size: 11px; }
+.composer-stash-confirm button { padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); color: inherit; font-size: 11px; cursor: pointer; }
+.composer-stash-confirm button:first-of-type { border-color: var(--destructive); color: var(--destructive); }
+.composer-stash-error { margin: 0; color: var(--destructive); white-space: pre-wrap; }

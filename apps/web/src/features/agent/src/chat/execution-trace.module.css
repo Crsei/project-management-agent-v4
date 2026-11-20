@@ -319,3 +319,57 @@
 
 .token { color: var(--code-token-light, inherit); }
 :global(.dark) .token { color: var(--code-token-dark, inherit); }
+
+/* Row-level controls stay outside the disclosure trigger. */
+.traceHeader {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.traceHeader .traceTrigger {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
+.traceActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-inline-end: 4px;
+}
+
+.shellCommand {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shellCommandActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 4px;
+}
+
+.shellCommandHint {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.shellCommandOk {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.shellCommandError {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--destructive);
+  font-size: 10px;
+}

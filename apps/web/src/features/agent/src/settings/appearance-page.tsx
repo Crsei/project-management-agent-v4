@@ -2,6 +2,7 @@ import { useTheme } from "@agent/hooks/use-theme";
 import { useAgentText } from "../i18n";
 import { SettingsNotice, SettingsSection } from "./settings-layout";
 import { setChatBrowserPreferences, useChatBrowserPreferences } from "./browser-preferences";
+import { CHAT_LANE_PANEL_MAX_WIDTH, CHAT_LANE_MIN_USABLE_WIDTH, preferredChatLaneWidth } from "./chat-lane";
 import { RadixSelect } from "@/components/ui/radix-select"
 
 const promptFontSizes = Array.from({ length: 9 }, (_, index) => 12 + index);
@@ -12,6 +13,8 @@ export default function AppearancePage() {
   const t = useAgentText();
   const shared = useTheme();
   const { preferences, storageError } = useChatBrowserPreferences();
+  const laneWidth = preferredChatLaneWidth(preferences.contentWidth);
+  const laneWidthLabel = laneWidth === null ? t("填满可用空间", "Fill available space") : `${laneWidth} px`;
   return <div className="agent-preferences-page">
     <SettingsSection title={t("共享外观", "Shared appearance")} scope="browser">
       <div className="agent-preference-row"><label htmlFor="agent-theme">{t("主题", "Theme")}</label><RadixSelect id="agent-theme" value={shared.preference} onChange={(event) => shared.setTheme(event.target.value as "light" | "dark" | "system")}><option value="light">{t("浅色", "Light")}</option><option value="dark">{t("深色", "Dark")}</option><option value="system">{t("跟随系统", "System")}</option></RadixSelect></div>
@@ -26,6 +29,14 @@ export default function AppearancePage() {
       <div className="agent-preference-row"><label htmlFor="agent-chat-code-font">{t("代码字号", "Code font size")}</label><RadixSelect id="agent-chat-code-font" value={preferences.codeFontSize} onChange={(event) => setChatBrowserPreferences({ codeFontSize: Number(event.target.value) })}>{codeFontSizes.map((size) => <option key={size} value={size}>{size} px{size === 13 ? ` · ${t("默认", "Default")}` : ""}</option>)}</RadixSelect></div>
       <div className="agent-preference-row"><label htmlFor="agent-chat-terminal-font">{t("终端字号", "Terminal font size")}</label><RadixSelect id="agent-chat-terminal-font" value={preferences.terminalFontSize} onChange={(event) => setChatBrowserPreferences({ terminalFontSize: Number(event.target.value) })}>{terminalFontSizes.map((size) => <option key={size} value={size}>{size} px{size === 12 ? ` · ${t("默认", "Default")}` : ""}</option>)}</RadixSelect></div>
       <div className="agent-preference-row"><label htmlFor="agent-chat-width">{t("对话宽度", "Chat width")}</label><RadixSelect id="agent-chat-width" value={preferences.contentWidth} onChange={(event) => setChatBrowserPreferences({ contentWidth: event.target.value as "standard" | "wide" | "full" })}><option value="standard">{t("标准", "Standard")} · 808 px</option><option value="wide">{t("宽", "Wide")} · 1040 px</option><option value="full">{t("填满可用空间", "Fill available space")}</option></RadixSelect></div>
+      <div className="agent-chat-lane-status">
+        <span>{t("当前有效宽度", "Effective width")}</span>
+        <output aria-live="polite">{laneWidthLabel}</output>
+      </div>
+      <p className="agent-chat-lane-hint">{t(
+        `会话详情或右侧面板展开时收窄至最多 ${CHAT_LANE_PANEL_MAX_WIDTH} px；可用宽度不足 ${CHAT_LANE_MIN_USABLE_WIDTH} px 时不再避让，改为占满剩余空间。`,
+        `Narrows to at most ${CHAT_LANE_PANEL_MAX_WIDTH} px while session details or the right panel is open. Below ${CHAT_LANE_MIN_USABLE_WIDTH} px of available width it stops avoiding and fills the remaining space.`,
+      )}</p>
       <div className="agent-preference-row"><label htmlFor="agent-chat-code-wrap">{t("代码自动换行", "Wrap code")}</label><input id="agent-chat-code-wrap" type="checkbox" checked={preferences.codeWrap} onChange={(event) => setChatBrowserPreferences({ codeWrap: event.target.checked })} /></div>
       <div className="agent-preference-row"><label htmlFor="agent-chat-diff-layout">{t("Diff 布局", "Diff layout")}</label><RadixSelect id="agent-chat-diff-layout" value={preferences.diffLayout} onChange={(event) => setChatBrowserPreferences({ diffLayout: event.target.value as "unified" | "split" })}><option value="unified">{t("统一视图", "Unified")} · {t("默认", "Default")}</option><option value="split">{t("左右分栏", "Split")}</option></RadixSelect></div>
       <div className="agent-appearance-preview" aria-label={t("对话显示预览", "Chat display preview")}><pre><code>const preview = &quot;code sample&quot;;</code></pre></div>

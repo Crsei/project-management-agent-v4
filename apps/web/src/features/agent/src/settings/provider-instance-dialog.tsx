@@ -13,6 +13,7 @@ import { useAgentText } from "../i18n";
 import { useSettingsGuard } from "./settings-layout";
 import { ProviderGlyph } from "./provider-card";
 import { ProviderModelSettings, emptyModelPreferences } from "./provider-model-settings";
+import { providerDisplayText } from "./provider-display-text";
 import { RadixSelect } from "@/components/ui/radix-select"
 
 type Operations = {
@@ -220,7 +221,7 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
         const field = schemaFields.find((entry) => entry.key === key);
         if (field?.type === "number" && value !== null) {
           const number = Number(value);
-          if (typeof value !== "string" || !value.trim() || !Number.isFinite(number) || (field.min !== undefined && number < field.min) || (field.max !== undefined && number > field.max)) throw new Error(t(`${field.label} 必须是有效数值。`, `${field.label} must be a valid number.`));
+          if (typeof value !== "string" || !value.trim() || !Number.isFinite(number) || (field.min !== undefined && number < field.min) || (field.max !== undefined && number > field.max)) throw new Error(t(`${providerDisplayText(t, field.label)} 必须是有效数值。`, `${field.label} must be a valid number.`));
           config[key] = number;
         } else config[key] = value;
       }
@@ -368,11 +369,11 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
         </div>
       </section>}
       {(!wizard || step === 3) && <>
-      {(setup || environmentFields.length > 0) ? <section className="provider-settings-section" aria-label="Setup">
-        <h3>Setup</h3>{!cursorKey && setup}<div className="provider-settings-group">{environmentFields.map((field) => {
+      {(setup || environmentFields.length > 0) ? <section className="provider-settings-section" aria-label={t("环境设置", "Setup")}>
+        <h3>{t("环境设置", "Setup")}</h3>{!cursorKey && setup}<div className="provider-settings-group">{environmentFields.map((field) => {
           const row = environment.find((item) => item.name === field.name);
           const inputId = `${id}-setup-${field.name}`;
-          return <SettingsRow key={field.name} title={field.label} description={field.description} inputId={inputId}><Input id={inputId} aria-describedby={field.description ? `${inputId}-help` : undefined} type={field.sensitive ? "password" : "text"} value={row?.value ?? ""} placeholder={row?.valueRedacted ? t("已保存 · 留空保留", "Saved · leave blank to keep") : field.placeholder} autoComplete="off" onChange={(event) => setEnvironment((rows) => {
+          return <SettingsRow key={field.name} title={providerDisplayText(t, field.label)} description={providerDisplayText(t, field.description)} inputId={inputId}><Input id={inputId} aria-describedby={field.description ? `${inputId}-help` : undefined} type={field.sensitive ? "password" : "text"} value={row?.value ?? ""} placeholder={row?.valueRedacted ? t("已保存 · 留空保留", "Saved · leave blank to keep") : providerDisplayText(t, field.placeholder)} autoComplete="off" onChange={(event) => setEnvironment((rows) => {
             const original = baseline?.environment?.find((item) => item.name === field.name);
             const value = event.target.value;
             if (!value) {
@@ -383,10 +384,10 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
             if (previous) return rows.map((item) => item === previous ? { ...item, value, valueRedacted: false } : item);
             return [...rows, { id: Math.max(-1, ...rows.map((item) => item.id)) + 1, name: field.name, value, sensitive: field.sensitive ?? false }];
           })} />{row && <Button type="button" variant="ghost" size="sm" onClick={() => setEnvironment((rows) => rows.filter((item) => item.name !== field.name))}>{t("清除", "Clear")}</Button>}</SettingsRow>;
-        })}</div>{!wizard && environmentDirty && <Button type="button" size="sm" variant="outline" onClick={() => void save("environment")}>{t("保存 Setup", "Save Setup")}</Button>}</section> : null}
-      {(!definition || fields.length > 0 || runtime) && <RuntimeSection className={`provider-settings-section${managedCodex ? " provider-runtime-fold" : ""}`} aria-label="Runtime">
-        {managedCodex ? <summary>Runtime</summary> : <h3>Runtime</h3>}
-        {managedCodex && <div className="provider-settings-group"><SettingsRow title="Codex runtime"><code>{baseline?.installation?.executablePath ?? t("尚未准备运行时", "Runtime not prepared yet")}</code></SettingsRow></div>}
+        })}</div>{!wizard && environmentDirty && <Button type="button" size="sm" variant="outline" onClick={() => void save("environment")}>{t("保存环境设置", "Save Setup")}</Button>}</section> : null}
+      {(!definition || fields.length > 0 || runtime) && <RuntimeSection className={`provider-settings-section${managedCodex ? " provider-runtime-fold" : ""}`} aria-label={t("运行时", "Runtime")}>
+        {managedCodex ? <summary>{t("运行时", "Runtime")}</summary> : <h3>{t("运行时", "Runtime")}</h3>}
+        {managedCodex && <div className="provider-settings-group"><SettingsRow title={t("Codex 运行时", "Codex runtime")}><code>{baseline?.installation?.executablePath ?? t("尚未准备运行时", "Runtime not prepared yet")}</code></SettingsRow></div>}
         {definition?.docsUrl && <p className="provider-section-note"><a href={definition.docsUrl} target="_blank" rel="noreferrer noopener" className="hover:text-primary">{t("配置文档", "Configuration docs")}</a></p>}
         {!definition && <p role="alert" className="provider-feedback provider-feedback-error">{t("驱动配置元数据不可用，请重新读取提供商。", "Driver configuration metadata is unavailable. Reload the providers.")}</p>}
         {!wizard && driver === "acpRegistry" && !localAcp && <div className="provider-registry-search">
@@ -404,15 +405,15 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
           const storedSecret = baseline?.secretConfigKeys.includes(entry.key) === true;
           const secret = entry.secret || entry.type === "password" || entry.control === "password";
           const helpId = entry.description ? `${inputId}-help` : undefined;
-          return <SettingsRow key={entry.key} title={entry.label} description={entry.description} inputId={inputId}>
+          return <SettingsRow key={entry.key} title={providerDisplayText(t, entry.label)} description={providerDisplayText(t, entry.description)} inputId={inputId}>
             {entry.type === "boolean" ? <input id={inputId} aria-describedby={helpId} type="checkbox" role="switch" checked={value === true} onChange={(event) => { const draft = changeField(entry, event.target.checked); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }} /> : entry.type === "select" ? <RadixSelect id={inputId} aria-describedby={helpId} value={String(value)} required={entry.required} onChange={(event) => { const draft = changeField(entry, event.target.value); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }}>
               {entry.defaultValue === undefined && <option value="">{entry.required ? t("请选择", "Select") : t("使用默认值", "Use default")}</option>}
               {String(value) && !entry.options?.some((option) => option.value === value) && <option value={String(value)}>{t(`${String(value)}（当前配置）`, `${String(value)} (current)`)}</option>}
-              {entry.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              {entry.options?.map((option) => <option key={option.value} value={option.value}>{providerDisplayText(t, option.label)}</option>)}
             </RadixSelect> : entry.type === "string-list" ? <div className="provider-string-list">
               {(Array.isArray(value) ? value : []).map((item, index, items) => <div key={index}><Input aria-label={`${entry.label} ${index + 1}`} value={item} autoComplete="off" onChange={(event) => changeField(entry, items.map((current, row) => row === index ? event.target.value : current))} /><Button type="button" size="icon-sm" variant="ghost" aria-label={t(`移除 ${entry.label} ${index + 1}`, `Remove ${entry.label} ${index + 1}`)} onClick={() => changeField(entry, items.filter((_, row) => row !== index))}><X aria-hidden="true" /></Button></div>)}
               <Button type="button" size="sm" variant="outline" onClick={() => changeField(entry, [...(Array.isArray(value) ? value : []), ""])}><Plus aria-hidden="true" />{t("添加", "Add")}</Button>
-            </div> : entry.control === "textarea" && !secret ? <textarea id={inputId} aria-describedby={helpId} value={String(value)} placeholder={entry.placeholder} required={entry.required} spellCheck={false} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} /> : <Input id={inputId} aria-describedby={helpId} type={secret ? "password" : entry.type === "number" ? "number" : "text"} required={entry.required && !(secret && storedSecret && configDraft[entry.key] !== null)} min={entry.min} max={entry.max} step={entry.type === "number" ? "any" : undefined} value={String(value)} autoComplete={secret ? "new-password" : "off"} spellCheck={false} placeholder={secret && storedSecret ? t("已保存 · 留空保留现有值", "Saved · leave blank to keep the current value") : entry.placeholder} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} />}
+            </div> : entry.control === "textarea" && !secret ? <textarea id={inputId} aria-describedby={helpId} value={String(value)} placeholder={entry.placeholder} required={entry.required} spellCheck={false} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} /> : <Input id={inputId} aria-describedby={helpId} type={secret ? "password" : entry.type === "number" ? "number" : "text"} required={entry.required && !(secret && storedSecret && configDraft[entry.key] !== null)} min={entry.min} max={entry.max} step={entry.type === "number" ? "any" : undefined} value={String(value)} autoComplete={secret ? "new-password" : "off"} spellCheck={false} placeholder={secret && storedSecret ? t("已保存 · 留空保留现有值", "Saved · leave blank to keep the current value") : providerDisplayText(t, entry.placeholder)} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} />}
             {secret && storedSecret && <label className="provider-secret-clear"><input type="checkbox" checked={configDraft[entry.key] === null} onChange={(event) => {
               if (event.target.checked) changeField(entry, null);
               else setConfigDraft((current) => { const next = { ...current }; delete next[entry.key]; return next; });
@@ -430,7 +431,7 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
         {runtime}
       </RuntimeSection>}
       <section className="provider-settings-section" aria-label={t("环境变量", "Environment variables")}>
-        <h3>Environment</h3>
+        <h3>{t("环境变量", "Environment")}</h3>
         <div className="provider-settings-group">
           <div className="provider-setting-row"><div><span className="provider-setting-label">{t("实例变量", "Instance variables")}</span></div><Button type="button" variant="outline" size="sm" onClick={() => setEnvironment((rows) => [...rows, { id: Math.max(-1, ...rows.map((item) => item.id)) + 1, name: "", value: "", sensitive: true }])}><Plus aria-hidden="true" />{t("添加变量", "Add variable")}</Button></div>
           {environment.filter((row) => !environmentFields.some((field) => field.name === row.name)).map((row, index) => <div className="provider-environment-draft" key={row.id}>

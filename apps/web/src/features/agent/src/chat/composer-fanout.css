@@ -1,0 +1,34 @@
+.composer-fanout-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, var(--border));
+  border-radius: var(--radius-md, 0.5rem);
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--destructive) 6%, var(--card));
+}
+
+.composer-fanout-status > svg {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.1rem;
+  color: var(--destructive);
+}
+
+.composer-fanout-status p {
+  flex: 1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer-fanout-status > button {
+  flex: none;
+}
+
+.composer-fanout-send[aria-busy="true"] {
+  cursor: progress;
+}

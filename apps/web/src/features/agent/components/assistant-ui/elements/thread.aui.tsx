@@ -8,7 +8,28 @@ import {
   SelectionToolbar,
 } from "@agent/components/assistant-ui/elements/quote.aui";
 import { ToolFallback } from "@agent/components/assistant-ui/elements/tool-fallback.aui";
-import { ComposerModelPicker, type ComposerModelPickerCatalog } from "@agent/components/assistant-ui/elements/composer-model-picker.aui";
+import type { ComposerModelPickerCatalog } from "@agent/components/assistant-ui/elements/composer-model-picker.aui";
+import { ModelFanoutPicker } from "@agent/src/chat/model-fanout-picker";
+import { ModelFanoutBanner } from "@agent/src/chat/model-fanout-banner";
+import {
+  forgetFanoutOperation,
+  readFanoutOperation,
+  rememberFanoutOperation,
+  submitFanout,
+} from "@agent/src/chat/model-fanout-client";
+import type { FanoutModelSelection, FanoutOutcome } from "@agent/src/chat/model-fanout";
+import {
+  buildFanoutUserMessage,
+  composerFanoutBlockerCopy,
+  composerFanoutGate,
+  fanoutReceiptSucceeded,
+  fanoutSelectionsAvailable,
+  firstFanoutChildThread,
+  resolveFanoutOperationId,
+  type ComposerFanoutCopy,
+  type FanoutAttempt,
+} from "@agent/src/chat/composer-fanout";
+import { ComposerFanoutStatus, FanoutSendButton } from "@agent/src/chat/composer-fanout-ui";
 import { ComposerTraitsPicker } from "@agent/components/assistant-ui/elements/composer-traits-picker.aui";
 import { TooltipIconButton } from "@agent/components/assistant-ui/elements/tooltip-icon-button";
 import { Button } from "@agent/components/ui/button";
@@ -28,12 +49,29 @@ import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { ContextMeter } from "@agent/src/chat/context-meter";
 import { useGenerationRecords, useMessageTimes } from "@agent/src/chat/generation-times";
 import { useGenerationOutput } from "@agent/src/chat/output-stream";
-import { nativeContextSourceAnchor } from "@agent/src/chat/context-source-navigation";
-import { COMPOSER_PROMPT_LIMIT, composerPromptTooLong } from "@agent/src/chat/composer-limit";
+import { ComposerBannerStack } from "@agent/src/chat/composer-banner";
+import { DraftHero } from "@agent/src/chat/draft-hero";
+import {
+  collapsedComposerControls,
+  isPlainTextDraft,
+  resolveComposerDensity,
+  resolveComposerPrimaryAction,
+  resolveComposerCompactionControls,
+  resolveComposerSubmissionRoute,
+  type ComposerOperationLock,
+  type ComposerDensity,
+} from "@agent/src/chat/composer-actions-model";
+import { getThreadActionCapabilities } from "@agent/src/chat/thread-actions";
+import { flushThreadSettings } from "@agent/hooks/use-chat-settings";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import type { GenerationOutputStatus } from "@agent-workspace/contracts/output";
+import { composerPromptTooLong } from "@agent/src/chat/composer-limit";
 import { ThreadFind } from "@agent/src/chat/thread-find";
+import { ComposerCompactionControls, ComposerCompactionStatus, useComposerCompaction } from "@agent/src/chat/composer-compaction-ui";
+import { ComposerQueueEditStatus, useComposerQueueEdit } from "@agent/src/chat/composer-queue-edit-ui";
 import "@agent/src/chat/composer-shell.css";
-import { ThreadMinimap } from "@agent/src/chat/thread-minimap";
 import { ThreadStatusLine } from "@agent/src/chat/thread-status-line";
+import { ThreadLifecycleRows, type ThreadLifecycleParent } from "@agent/src/chat/thread-lifecycle-rows";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
@@ -51,6 +89,8 @@ import { workspaceClient } from "@agent/src/network";
 import { MessageContextDraftStatus } from "@agent/src/chat/context-presentation";
 import { usePmIssueWorkspace } from "@agent/src/pm/pm-issue-workspace";
 import { UserContextText } from "@agent/src/chat/user-context-text";
+import { AssistantQuoteCitation } from "@agent/src/chat/markdown-citation-chip";
+import { formatMessageAuthorLabel } from "@agent/src/chat/message-accessibility";
 import { getEditedContextReferences, getMessageContextItems, prepareMessageContextDraftSubmission, prepareMessageContextEditSubmission, subscribeMessageContext } from "@agent/src/chat/message-context-store";
 import { getExternalStoreMessages } from "@assistant-ui/core";
 import type { UIMessage } from "ai";
@@ -83,7 +123,7 @@ import {
   MicIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  CircleAlertIcon,
+  ListTodoIcon,
   RefreshCwIcon,
   RouteIcon,
   SquareIcon,
@@ -134,22 +174,52 @@ export type ThreadProps = {
   composerActions?: ReactNode;
   welcome?: { title: string; alternateLabel?: string; onAlternate?: () => void; freshlyCreated?: boolean };
   sendUnavailable?: boolean;
-  sendIssue?: string;
-  onOpenSessionSettings?: () => void;
+  /** Persisted session metadata for t3code-style lifecycle dividers. */
+  createdAt?: string;
+  parentSession?: ThreadLifecycleParent;
+  onOpenParentSession?: (threadId: string) => void;
 };
 
-const PlanReadyBanner: FC<{ generationId: string }> = ({ generationId }) => {
-  const t = useAgentText();
-  const { snapshot } = useGenerationOutput(generationId);
-  const plan = snapshot?.items.find(item => item.type === "proposed_plan" && item.visibility !== "redacted" && item.visibility !== "unavailable");
-  if (!plan || snapshot?.status !== "completed") return null;
-  return <div className="plan-ready-banner" role="status">
-    <RouteIcon aria-hidden="true" />
-    <span>{t("计划已就绪", "Plan ready")}</span>
-    {plan.title && <span className="plan-ready-title" title={plan.title}>{plan.title}</span>}
-    <button type="button" onClick={() => document.getElementById(nativeContextSourceAnchor(generationId, plan.id))?.scrollIntoView({ block: "center", behavior: "smooth" })}>{t("查看计划", "View plan")}</button>
-  </div>;
+/** Multi-model state owned by the Thread so the picker, send path and result banner agree. */
+type ComposerFanoutProps = {
+  fanoutSelections: FanoutModelSelection[] | null;
+  fanoutActive: boolean;
+  fanoutPending: boolean;
+  /** Remount token: bumps when stacked selections are cleared after a successful receipt. */
+  fanoutEpoch: number;
+  fanoutBlocker?: ComposerFanoutCopy;
+  onFanoutChange: (selections: FanoutModelSelection[] | null) => void;
+  onFanoutSend: () => void;
 };
+
+/**
+ * Reads one generation's status for controls that need it. Rendered only when
+ * a generation id exists, so the output stream never attaches to a placeholder.
+ */
+const GenerationSlot: FC<{ generationId: string; render: (data: { status?: GenerationOutputStatus }) => ReactNode }> = ({ generationId, render }) => {
+  const { snapshot } = useGenerationOutput(generationId);
+  return <>{render({ status: snapshot?.status })}</>;
+};
+
+/**
+ * Hero exit when a session starts from the empty state. A view transition can
+ * capture this synchronous attribute change; without support the same CSS
+ * transition runs unchanged. The composer's own descent uses a FLIP animation
+ * below because sending is asynchronous and cannot be wrapped.
+ */
+function markDraftHeroSending(): void {
+  const hero = document.querySelector<HTMLElement>("[data-draft-hero]");
+  if (!hero) return;
+  const apply = () => {
+    hero.setAttribute("data-sending", "");
+    // A send that never leaves the empty state must not leave the hero hidden.
+    window.setTimeout(() => hero.removeAttribute("data-sending"), 600);
+  };
+  const transition = (document as Document & { startViewTransition?: unknown }).startViewTransition;
+  if (typeof transition === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    (transition as (callback: () => void) => unknown).call(document, apply);
+  else apply();
+}
 
 export const Thread: FC<ThreadProps> = (props) => {
   const t = useAgentText();
@@ -183,9 +253,138 @@ export const Thread: FC<ThreadProps> = (props) => {
   const historyMissing = history.status === "loaded" && history.messageCount > 0 && messagesEmpty && !threadLoading && !threadRunning;
   const composerText = useAuiState((state) => state.composer.text);
   const composerAttachmentCount = useAuiState((state) => state.composer.attachments.length);
+  const quotePending = useAuiState((state) => !!state.composer.quote);
   const [composerFocused, setComposerFocused] = useState(false);
   const [nearBottom, setNearBottom] = useState(true);
   const [resting, setResting] = useState(false);
+  // Multi-model stacking lives with the Thread: the picker, the send path and
+  // the receipt banner all read the same selections. A thread change resets it.
+  const aui = useAui();
+  const contextDraft = useMessageContextDraft();
+  const pmWorkspace = usePmIssueWorkspace();
+  const [fanoutSelections, setFanoutSelections] = useState<FanoutModelSelection[] | null>(null);
+  const [fanoutEpoch, setFanoutEpoch] = useState(0);
+  const [fanoutOutcome, setFanoutOutcome] = useState<FanoutOutcome>();
+  const [fanoutNotice, setFanoutNotice] = useState<string>();
+  const [fanoutPending, setFanoutPending] = useState(false);
+  const [fanoutRetry, setFanoutRetry] = useState<FanoutAttempt>();
+  // State is async; this ref makes Enter/click double-fire impossible before re-render.
+  const fanoutInFlight = useRef(false);
+  const fanoutThread = useRef(threadId);
+  fanoutThread.current = threadId;
+  useEffect(() => {
+    fanoutInFlight.current = false;
+    setFanoutSelections(null);
+    setFanoutOutcome(undefined);
+    setFanoutNotice(undefined);
+    setFanoutPending(false);
+    setFanoutRetry(undefined);
+  }, [threadId]);
+  const fanoutGate = composerFanoutGate({
+    selections: fanoutSelections,
+    hasText: composerText.trim().length > 0,
+    attachmentCount: composerAttachmentCount,
+    quote: quotePending,
+    contextItemCount: contextDraft.items.length,
+    pmReferenceCount: pmWorkspace.references.length,
+    running: threadRunning,
+    historyBlocked: history.status === "error" || historyMissing,
+    providerAvailable: fanoutSelectionsAvailable(props.catalog.providers, fanoutSelections ?? []),
+    remoteId,
+    composerUnavailable: !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable,
+  });
+  const fanoutBlocker = fanoutGate.blocker ? composerFanoutBlockerCopy(fanoutGate.blocker) : undefined;
+
+  const dispatchFanout = async (attempt: FanoutAttempt) => {
+    const sourceThreadId = remoteId;
+    const ownerThread = threadId;
+    if (!sourceThreadId) {
+      const copy = composerFanoutBlockerCopy("fanout_requires_remote_session");
+      setFanoutNotice(t(copy.zh, copy.en));
+      return;
+    }
+    if (fanoutInFlight.current) return;
+    fanoutInFlight.current = true;
+    rememberFanoutOperation(threadId, attempt.operationId);
+    setFanoutPending(true);
+    setFanoutNotice(undefined);
+    try {
+      const outcome = await submitFanout({
+        operationId: attempt.operationId,
+        sourceThreadId,
+        message: attempt.message,
+        selections: attempt.selections,
+      });
+      if (fanoutThread.current !== ownerThread) return;
+      setFanoutOutcome(outcome);
+      if (!fanoutReceiptSucceeded(outcome)) {
+        // The server receipt is final but empty. Keep the same operation id so a
+        // re-check re-posts it instead of creating another operation.
+        setFanoutRetry(attempt);
+        setFanoutNotice(t("服务端没有创建任何子会话；操作编号已保留。", "The server created no child sessions; the operation id is kept."));
+        return;
+      }
+      forgetFanoutOperation(threadId);
+      setFanoutRetry(undefined);
+      setFanoutSelections(null);
+      setFanoutEpoch((epoch) => epoch + 1);
+      aui.composer.setText("");
+      // Only a fully created receipt auto-opens; a partial one stays on the
+      // source so every failed child remains visible in the result banner.
+      const target = outcome.status === "created" ? firstFanoutChildThread(outcome) : undefined;
+      if (target) openFanoutThread(target);
+    } catch (cause) {
+      if (fanoutThread.current !== ownerThread) return;
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setFanoutRetry(attempt);
+      setFanoutNotice(t(`多模型发送失败：${message}。可重新核对同一操作。`, `Multi-model send failed: ${message}. You can re-check the same operation.`));
+    } finally {
+      fanoutInFlight.current = false;
+      if (fanoutThread.current === ownerThread) setFanoutPending(false);
+    }
+  };
+
+  const startFanout = () => {
+    if (fanoutInFlight.current || fanoutPending || !fanoutSelections) return;
+    if (fanoutGate.blocker) {
+      const copy = composerFanoutBlockerCopy(fanoutGate.blocker);
+      setFanoutNotice(t(copy.zh, copy.en));
+      return;
+    }
+    const resolved = resolveFanoutOperationId({
+      pending: fanoutRetry?.operationId,
+      stored: readFanoutOperation(threadId),
+      generate: () => crypto.randomUUID(),
+    });
+    const attempt: FanoutAttempt = {
+      operationId: resolved.operationId,
+      message: buildFanoutUserMessage({ id: crypto.randomUUID(), text: composerText }),
+      selections: [...fanoutSelections],
+    };
+    setFanoutOutcome(undefined);
+    void dispatchFanout(attempt);
+  };
+
+  const retryFanout = () => {
+    if (!fanoutRetry || fanoutPending || fanoutInFlight.current) return;
+    void dispatchFanout(fanoutRetry);
+  };
+
+  const openFanoutThread = (target: string) => {
+    // Fanout children are new remote sessions, so refresh the list first: the
+    // runtime can only switch to a remote id it has registered. Failures stay
+    // visible through the notice/banner while the source session is unchanged.
+    void (async () => {
+      try {
+        await aui.threads.reload();
+        await aui.threads.getLoadThreadsPromise();
+        aui.threads.switchToThread(target, { unarchive: false });
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setFanoutNotice(t(`无法打开多模型会话：${message}`, `Could not open the multi-model session: ${message}`));
+      }
+    })();
+  };
   useEffect(() => {
     const viewport = document.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]');
     if (!viewport) return;
@@ -198,6 +397,27 @@ export const Thread: FC<ThreadProps> = (props) => {
   }, []);
   const canRest = !messagesEmpty && !composerFocused && composerText.length === 0 && composerAttachmentCount === 0 && !nearBottom;
   useEffect(() => { setResting(canRest); }, [canRest]);
+  // Remember the centered hero composer so the first send can animate it down
+  // into the conversation position instead of jumping.
+  const draftComposerRect = useRef<DOMRect | null>(null);
+  useLayoutEffect(() => {
+    if (isEmpty) {
+      draftComposerRect.current = document.querySelector<HTMLElement>('[data-slot="aui_composer-shell"]')?.getBoundingClientRect() ?? null;
+      return;
+    }
+    const from = draftComposerRect.current;
+    draftComposerRect.current = null;
+    const element = document.querySelector<HTMLElement>('[data-slot="aui_composer-shell"]');
+    if (!from || !element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const to = element.getBoundingClientRect();
+    const scaleX = to.width > 0 ? from.width / to.width : 1;
+    if (Math.abs(from.top - to.top) < 2 && Math.abs(scaleX - 1) < 0.02) return;
+    element.animate([
+      { transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scaleX(${scaleX})`, transformOrigin: "top left" },
+      { transform: "none" },
+    ], { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+  }, [isEmpty, threadId]);
+  const [limitsRequest, setLimitsRequest] = useState(0);
   const [announcement, setAnnouncement] = useState("");
   const previousRunning = useRef(threadRunning);
   useEffect(() => {
@@ -212,6 +432,7 @@ export const Thread: FC<ThreadProps> = (props) => {
 
   return (
     <ThreadPrimitive.Root
+      data-draft-empty={isEmpty || undefined}
       className="aui-root aui-thread-root bg-surface @container relative flex h-full flex-col"
       style={{
         // Reading width follows the browser's chat appearance preference.
@@ -227,13 +448,6 @@ export const Thread: FC<ThreadProps> = (props) => {
     >
       <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       <ThreadHistoryNavigation />
-      {(props.saveError || props.catalog.error || (remoteId && props.sendUnavailable)) && <div className="thread-notice-lane" role="alert">
-        <CircleAlertIcon aria-hidden="true" />
-        <span>{props.saveError || props.catalog.error || props.sendIssue || t("当前会话还不能发送；检查 Provider、模型与执行环境。", "This session cannot send yet; check the Provider, model and execution environment.")}</span>
-        {props.saveError ? <button type="button" onClick={() => void props.onRetry?.()}>{t("重试保存", "Retry save")}</button>
-          : props.catalog.error ? <button type="button" onClick={() => void props.catalog.refresh()}>{t("刷新模型目录", "Refresh models")}</button>
-            : props.onOpenSessionSettings ? <button type="button" onClick={props.onOpenSessionSettings}>{t("检查会话参数", "Check session settings")}</button> : null}
-      </div>}
       <ThreadPrimitive.Viewport
         autoScroll
         turnAnchor="top"
@@ -261,6 +475,7 @@ export const Thread: FC<ThreadProps> = (props) => {
           </div>}
 
           {!isEmpty && <ThreadStatusLine />}
+          {!isEmpty && <ThreadLifecycleRows threadCreatedAt={props.createdAt} parent={props.parentSession} onOpenParent={props.onOpenParentSession} />}
           <div data-slot="aui_message-group" className="mb-16 flex flex-col gap-y-7 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadHistoryMessage><ThreadMessage
               providerInstanceId={props.providerInstanceId}
@@ -279,22 +494,59 @@ export const Thread: FC<ThreadProps> = (props) => {
           >
             <ThreadScrollToBottom />
             <div className={styles.contextPanels}>
-              {latestGenerationId && <PlanReadyBanner key={latestGenerationId} generationId={latestGenerationId} />}
               <ComposerPendingRequests />
               {remoteId && <QueuedMessages key={remoteId} threadId={remoteId} />}
             </div>
+            <ComposerBannerStack
+              scopeKey={remoteId ?? threadId}
+              threadId={remoteId}
+              providerInstanceId={props.providerInstanceId}
+              saveError={props.saveError}
+              onRetrySave={props.onRetry}
+              onOpenLimits={() => setLimitsRequest((request) => request || 1)}
+              latestGenerationId={latestGenerationId}
+            />
+            {/* Fanout receipts and failures sit in their own row above the
+                composer, after the shared banner stack, so nothing overlaps. */}
+            {fanoutOutcome && <ModelFanoutBanner
+              outcome={fanoutOutcome}
+              onOpenThread={openFanoutThread}
+              onDismiss={() => setFanoutOutcome(undefined)}
+            />}
+            {fanoutNotice && <ComposerFanoutStatus
+              message={fanoutNotice}
+              pending={fanoutPending}
+              canRetry={!!fanoutRetry}
+              onRetry={retryFanout}
+              onDismiss={() => setFanoutNotice(undefined)}
+            />}
             {resting && <button type="button" className="thread-resting-composer" onClick={() => {
               setResting(false);
               requestAnimationFrame(() => document.querySelector<HTMLElement>(".rich-composer-editor")?.focus());
             }}><PencilIcon aria-hidden="true" /><span>{t("继续输入…", "Reply…")}</span></button>}
-            <Composer {...props} historyBlocked={history.status === "error" || historyMissing} />
-            {isEmpty && <AuiIf condition={(s) => s.composer.isEmpty}>
-              <ThreadSuggestions />
-            </AuiIf>}
+            <Composer
+              {...props}
+              key={threadId}
+              historyBlocked={history.status === "error" || historyMissing}
+              latestGenerationId={latestGenerationId}
+              draftEmpty={isEmpty}
+              limitsRequest={limitsRequest}
+              onOpenLimits={() => setLimitsRequest((request) => request + 1)}
+              onCloseLimits={() => setLimitsRequest(0)}
+              fanoutSelections={fanoutSelections}
+              fanoutActive={fanoutGate.active}
+              fanoutPending={fanoutPending}
+              fanoutEpoch={fanoutEpoch}
+              fanoutBlocker={fanoutBlocker}
+              onFanoutChange={(selections) => {
+                setFanoutSelections(selections);
+                setFanoutNotice(undefined);
+              }}
+              onFanoutSend={startFanout}
+            />
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
-      <ThreadMinimap />
       <SelectionToolbar />
       <ThreadFind />
     </ThreadPrimitive.Root>
@@ -372,16 +624,11 @@ const ThreadScrollToBottom: FC = () => {
 
 const ThreadWelcome: FC<{ welcome?: ThreadProps["welcome"] }> = ({ welcome }) => {
   const t = useAgentText();
-  return (
-    <div className={cn("aui-thread-welcome-root", styles.welcome)}>
-      <p className={cn("aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-medium tracking-tight duration-200", styles.welcomeTitle)}>
-        {welcome?.title ?? t("今天想一起完成什么？", "What would you like to get done together today?")}
-      </p>
-      {welcome?.alternateLabel && welcome.onAlternate && <button type="button" className={styles.alternate} onClick={welcome.onAlternate}>
-        {welcome.alternateLabel}
-      </button>}
-    </div>
-  );
+  return <DraftHero
+    title={welcome?.title ?? t("今天想一起完成什么？", "What would you like to get done together today?")}
+    alternateLabel={welcome?.alternateLabel}
+    onAlternate={welcome?.onAlternate}
+  />;
 };
 
 const ThreadSuggestions: FC = () => {
@@ -416,20 +663,33 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
-const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
+const Composer: FC<ThreadProps & ComposerFanoutProps & {
+  historyBlocked: boolean;
+  latestGenerationId?: string;
+  draftEmpty?: boolean;
+  limitsRequest: number;
+  onOpenLimits: () => void;
+  onCloseLimits: () => void;
+}> = (props) => {
   const t = useAgentText();
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
   const threadId = useAuiState((state) => state.threads.mainThreadId);
+  const remoteId = useAuiState((state) => state.threads.threadItems.find((item) => item.id === state.threads.mainThreadId)?.remoteId);
+  const prompt = useAuiState((state) => state.composer.text);
+  const attachmentCount = useAuiState((state) => state.composer.attachments.length);
   const threadRunning = useAuiState((state) => state.thread.isRunning);
+  const threadBusy = useAuiState((state) => state.thread.isLoading || state.threads.isLoading);
   const quotePending = useAuiState(state => !!state.composer.quote);
   const submitting = useAuiState(state => state.composer.submission !== undefined);
   const contextDraft = useMessageContextDraft();
   const pmWorkspace = usePmIssueWorkspace();
-  const [limitsRequest, setLimitsRequest] = useState(0);
   const suggestions = useComposerSuggestions(props.providerInstanceId, !!props.disabled || props.historyBlocked);
-  const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
-  const handleSendCommand = () => {
+  const operation = useRef<ComposerOperationLock["current"]>(null);
+  const queueEdit = useComposerQueueEdit(remoteId, operation);
+  const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, props.onOpenLimits);
+  const handleSendCommand = (allowCompaction = false) => {
+    if (queueEdit.active || (operation.current && !(allowCompaction && operation.current.kind === "compaction"))) return true;
     const composer = aui.composer.getState();
     const thread = aui.thread.getState();
     if (composer.submission !== undefined || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled) return true;
@@ -437,11 +697,47 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
     prepareMessageContextDraftSubmission(threadId, composer.attachments);
     return false;
   };
-  const actionsBlocked = !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || suggestions.blocked || quotePending || contextDraft.blocked || submitting;
+  const sendBlocked = !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || suggestions.blocked || quotePending || contextDraft.blocked || submitting;
+  const compaction = useComposerCompaction({
+    remoteId,
+    operation,
+    running: threadRunning,
+    latestGenerationId: props.latestGenerationId,
+    blocked: !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || submitting || threadBusy || queueEdit.active || props.fanoutActive,
+    sendBlocked: sendBlocked || composerPromptTooLong(prompt),
+    beforeSend: () => handleSendCommand(true),
+  });
+  const actionsBlocked = sendBlocked || compaction.pending || queueEdit.pending;
+  const canUpdateQueued = !actionsBlocked && !composerPromptTooLong(prompt) && isPlainTextDraft({
+    hasText: !!prompt.trim(), attachmentCount, hasQuote: quotePending,
+    selectionCount: contextDraft.items.length + pmWorkspace.references.length,
+  });
+  const updateQueued = () => { void queueEdit.save(canUpdateQueued); };
+  const interceptAlternateSubmit = () => {
+    const route = resolveComposerSubmissionRoute({ editingQueue: queueEdit.active, operationPending: !!operation.current, fanoutActive: props.fanoutActive });
+    if (route === "send") return false;
+    if (route === "update-queued") updateQueued();
+    else if (route === "fanout") props.onFanoutSend();
+    return true;
+  };
+  const compactionControls = resolveComposerCompactionControls({
+    available: compaction.state.available,
+    phase: compaction.state.phase,
+    hasText: !!prompt.trim(),
+    running: threadRunning,
+    editingQueue: queueEdit.active,
+    fanoutActive: props.fanoutActive,
+    blocked: !!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || props.historyBlocked || submitting || threadBusy,
+    sendBlocked: sendBlocked || composerPromptTooLong(prompt),
+  });
   return (
+    <>
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col" onSubmit={(event) => {
+      // Enter and form submission share the same exclusive queue/fanout owner.
+      if (interceptAlternateSubmit()) { event.preventDefault(); return; }
       if (composerPromptTooLong(aui.composer.getState().text)) { event.preventDefault(); return; }
       if (actionsBlocked || threadRunning || handleSendCommand()) { event.preventDefault(); return; }
+      if (props.draftEmpty) markDraftHeroSending();
       const composer = aui.composer.getState();
       if (!composer.text.trim() && !composer.attachments.length && (contextDraft.items.length || pmWorkspace.references.length)) {
         event.preventDefault();
@@ -449,7 +745,9 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
         if (!thread.isDisabled && !thread.isLoading && !thread.isSendDisabled) aui.thread.append({ role: "user", content: [{ type: "text", text: composer.text }] });
       }
     }}>
-      <ComposerPrimitive.AttachmentDropzone asChild>
+      <ComposerQueueEditStatus state={queueEdit.state} onCancel={queueEdit.cancel} />
+      <ComposerCompactionStatus state={compaction.state} />
+      <ComposerPrimitive.AttachmentDropzone asChild disabled={compaction.pending || queueEdit.pending}>
         <div
           data-slot="aui_composer-shell"
           style={{ backdropFilter: "blur(12px) saturate(1.08)", WebkitBackdropFilter: "blur(12px) saturate(1.08)" }}
@@ -462,141 +760,365 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
             placeholder={t("输入消息… 使用 @ 引用文件、$ 引用 Skill、/ 调用命令", "Type a message… use @ for files, $ for skills, / for commands")}
             label={t("消息输入", "Message input")}
             submitMode={preferences.sendShortcut}
-            disabled={!!props.disabled}
-            beforeSend={() => actionsBlocked || threadRunning || handleSendCommand()}
+            disabled={!!props.disabled || compaction.pending || queueEdit.pending}
+            beforeSend={() => {
+              if (interceptAlternateSubmit()) return true;
+              return actionsBlocked || threadRunning || handleSendCommand();
+            }}
+            interactionMode={props.interactionMode}
+            onInteractionModeChange={(mode) => props.onSettingsChange?.({ interactionMode: mode })}
           />
-          <ComposerDraftActions key={threadId} disabled={actionsBlocked} />
-          <ComposerAction {...props} historyBlocked={actionsBlocked || threadRunning} onUsageCommand={handleSendCommand} />
-          <ComposerUsage providerInstanceId={props.providerInstanceId} limitsRequest={limitsRequest} onCloseLimits={() => setLimitsRequest(0)} />
+          <ComposerDraftActions key={threadId} disabled={actionsBlocked || queueEdit.active} />
+          <ComposerCompactionControls controls={compactionControls} onCompact={() => void compaction.start(false)} onCompactAndSend={() => void compaction.start(true)} />
+          <ComposerAction
+            {...props}
+            editingQueue={queueEdit.active}
+            queueUpdatePending={queueEdit.pending}
+            compactionPending={compaction.pending}
+            onUpdateQueued={updateQueued}
+            latestGenerationId={props.latestGenerationId}
+            historyBlocked={props.historyBlocked}
+            draftBlocked={quotePending || submitting || suggestions.blocked || contextDraft.blocked || compaction.pending || queueEdit.pending}
+            onUsageCommand={handleSendCommand}
+          />
+          <ComposerUsage providerInstanceId={props.providerInstanceId} limitsRequest={props.limitsRequest} onCloseLimits={props.onCloseLimits} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
+    {props.draftEmpty && !props.fanoutActive && !queueEdit.active && !compaction.pending && <AuiIf condition={(s) => s.composer.isEmpty}>
+      <ThreadSuggestions />
+    </AuiIf>}
+    </>
   );
 };
 
-const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand: () => boolean }> = ({ providerInstanceId, model, modelOptions, interactionMode, onSettingsChange, onModelChange, catalog, disabled, saving, saveError, onRetry, composerActions, historyBlocked, onUsageCommand }) => {
+type ComposerSessionActionProps = {
+  editingQueue: boolean;
+  queueUpdatePending: boolean;
+  compactionPending: boolean;
+  onUpdateQueued: () => void;
+};
+
+const ComposerAction: FC<ThreadProps & ComposerFanoutProps & ComposerSessionActionProps & { historyBlocked: boolean; draftBlocked?: boolean; onUsageCommand: () => boolean; latestGenerationId?: string }> = (props) => {
+  if (!props.latestGenerationId) return <ComposerActionBody {...props} />;
+  return <GenerationSlot
+    generationId={props.latestGenerationId}
+    render={(generation) => <ComposerActionBody {...props} generation={generation} />}
+  />;
+};
+
+const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSessionActionProps & { historyBlocked: boolean; draftBlocked?: boolean; onUsageCommand: () => boolean; latestGenerationId?: string; generation?: { status?: GenerationOutputStatus } }> = (props) => {
+  const { providerInstanceId, model, modelOptions, interactionMode, onSettingsChange, onModelChange, catalog, disabled, saving, saveError, onRetry, composerActions, historyBlocked, draftBlocked, onUsageCommand, sendUnavailable, generation, latestGenerationId,
+    fanoutActive, fanoutPending, fanoutEpoch, fanoutBlocker, onFanoutChange, onFanoutSend } = props;
   const t = useAgentText();
   const aui = useAui();
   const prompt = useAuiState((state) => state.composer.text);
-  const { preferences } = useChatBrowserPreferences();
-  const threadId = useAuiState((s) => s.threads.mainThreadId);
+  const attachmentCount = useAuiState((state) => state.composer.attachments.length);
+  const hasQuote = useAuiState((state) => !!state.composer.quote);
+  const threadRunning = useAuiState((state) => state.thread.isRunning);
   const threadBusy = useAuiState((s) => s.thread.isRunning || s.thread.isLoading || s.threads.isLoading);
+  const threadId = useAuiState((s) => s.threads.mainThreadId);
+  const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
+  const { preferences } = useChatBrowserPreferences();
   const contextDraft = useMessageContextDraft();
   const pmWorkspace = usePmIssueWorkspace();
-  const emptyComposer = useAuiState(state => !state.composer.text.trim() && !state.composer.attachments.length && !state.composer.quote);
-  const contextOnly = emptyComposer && (contextDraft.items.length > 0 || pmWorkspace.references.length > 0);
   const selection = resolveProviderModelSelection(catalog.providers, providerInstanceId, model);
   const provider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : undefined;
   const effectiveOptions = modelOptions ?? provider?.modelPreferences?.options[model];
   const tooLong = composerPromptTooLong(prompt);
-  const sendBlockedReason = historyBlocked
-    ? t("会话历史未恢复，发送已暂停。", "Session history is not restored; sending is paused.")
-    : tooLong
-      ? t(`消息超过 ${COMPOSER_PROMPT_LIMIT.toLocaleString()} 字符，请缩短后发送。`, `Message exceeds ${COMPOSER_PROMPT_LIMIT.toLocaleString()} characters; shorten it before sending.`)
-      : saveError
-      ? t("会话参数保存失败，先重试保存。", "Saving session settings failed; retry the save first.")
-      : saving
-        ? t("正在保存会话参数…", "Saving session settings…")
-        : disabled
-          ? t("当前会话不可发送。", "This session cannot send right now.")
-          : undefined;
+  const [steer, setSteer] = useState<{ supported: boolean; interruptsTools: boolean; generationId?: string }>({ supported: false, interruptsTools: false });
+  const [pending, setPending] = useState<"steer" | "queue" | "resume">();
+  const [actionError, setActionError] = useState<string>();
+  const [resumeOpen, setResumeOpen] = useState(false);
+  const [resumeConfirmed, setResumeConfirmed] = useState(false);
+  const steerAttempt = useRef<{ id: string; generationId: string } | null>(null);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const [density, setDensity] = useState<ComposerDensity>("wide");
 
-  return (
-    <div className={cn("aui-composer-action-wrapper", styles.controls)}>
+  // A different session or generation invalidates any in-flight follow-up review.
+  useEffect(() => {
+    steerAttempt.current = null;
+    setResumeOpen(false);
+    setResumeConfirmed(false);
+    setActionError(undefined);
+  }, [remoteId, latestGenerationId]);
+
+  // Steer/queue/continue only exist when the thread contracts say so.
+  useEffect(() => {
+    setSteer({ supported: false, interruptsTools: false });
+    if (!remoteId) return;
+    let alive = true;
+    void getThreadActionCapabilities(remoteId).then((capabilities) => {
+      if (alive) setSteer({ supported: capabilities.steer.supported, interruptsTools: !!capabilities.steer.interruptsTools, generationId: capabilities.steer.generationId });
+    }, () => { /* An unreadable capability map simply hides steer. */ });
+    return () => { alive = false; };
+  }, [remoteId, threadRunning, generation?.status]);
+
+  // The action bar measures itself; a narrow container folds secondary controls
+  // into a popover without deleting any of them.
+  useLayoutEffect(() => {
+    const element = wrapper.current;
+    if (!element) return;
+    const measure = () => setDensity(resolveComposerDensity(element.getBoundingClientRect().width));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const collapsed = new Set(collapsedComposerControls(density));
+
+  const action = resolveComposerPrimaryAction({
+    running: threadRunning,
+    draftBlocked: !!draftBlocked,
+    remoteThread: !!remoteId,
+    hasText: prompt.trim().length > 0,
+    attachmentCount,
+    hasQuote,
+    selectionCount: contextDraft.items.length + pmWorkspace.references.length,
+    historyBlocked,
+    tooLong,
+    saveError: !!saveError,
+    saving: !!saving,
+    sessionDisabled: !!disabled,
+    sendUnavailable: !!sendUnavailable,
+    steer: { supported: steer.supported, interruptsTools: steer.interruptsTools },
+    resumable: generation?.status === "failed" || generation?.status === "cancelled" || generation?.status === "interrupted",
+    editingQueue: props.editingQueue,
+    queueUpdatePending: props.queueUpdatePending,
+  });
+
+  const sendSteer = async () => {
+    if (!remoteId || !prompt.trim() || pending) return;
+    const generationId = steer.generationId ?? latestGenerationId;
+    if (!generationId) { setActionError(t("当前没有可引导的活动轮次。", "There is no active turn to steer.")); return; }
+    const attempt = steerAttempt.current ?? { id: crypto.randomUUID(), generationId };
+    steerAttempt.current = attempt;
+    setPending("steer");
+    setActionError(undefined);
+    try {
+      const result = await workspaceClient.json<{ status: "accepted" | "unknown" }>(`/api/chat/threads/${encodeURIComponent(remoteId)}/steer`, {
+        method: "POST",
+        body: JSON.stringify({ generationId: attempt.generationId, idempotencyKey: attempt.id, text: prompt, confirmToolInterruption: false }),
+      });
+      steerAttempt.current = null;
+      if (result.status === "unknown") {
+        setActionError(t("引导结果未明；不会重发。请核对原生输出。", "Steering result is unknown; it will not be resent. Inspect native output."));
+        return;
+      }
+      aui.composer.setText("");
+    } catch (cause) {
+      // Keep the idempotency key: a retry must not duplicate the same steer.
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(undefined);
+    }
+  };
+
+  const queueMessage = async () => {
+    if (!remoteId || !prompt.trim() || pending) return;
+    if (!isPlainTextDraft({ hasText: true, attachmentCount, hasQuote, selectionCount: contextDraft.items.length + pmWorkspace.references.length })) {
+      setActionError(t("队列按钮只接管纯文字；附件或引用请在“草稿与队列”中保存。", "The queue button takes plain text only; save attachments or references from “Draft and queue”."));
+      return;
+    }
+    setPending("queue");
+    setActionError(undefined);
+    try {
+      const settings = await flushThreadSettings(remoteId);
+      const id = crypto.randomUUID();
+      const draft = { message: { id: crypto.randomUUID(), role: "user" as const, parts: [{ type: "text" as const, text: prompt }] } };
+      await workspaceClient.json(`/api/chat/threads/${encodeURIComponent(remoteId)}/queue`, {
+        method: "POST",
+        body: JSON.stringify({ id, draft, threadSettingsRevision: settings.revision }),
+      });
+      aui.composer.setText("");
+      window.dispatchEvent(new CustomEvent("agent-message-actions-changed", { detail: { threadId: remoteId, armQueueId: id } }));
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(undefined);
+    }
+  };
+
+  const continueGeneration = async () => {
+    if (!remoteId || !latestGenerationId || !resumeConfirmed || pending) return;
+    setPending("resume");
+    setActionError(undefined);
+    try {
+      await workspaceClient.json(`/api/chat/generations/${encodeURIComponent(latestGenerationId)}/continue`, {
+        method: "POST",
+        body: JSON.stringify({ confirmSideEffects: true }),
+      });
+      window.dispatchEvent(new CustomEvent("agent-thread-action", { detail: { threadId: remoteId, generationId: latestGenerationId, reload: true } }));
+      setResumeOpen(false);
+      setResumeConfirmed(false);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(undefined);
+    }
+  };
+
+  const traitsPicker = onSettingsChange ? <ComposerTraitsPicker
+    key={`${threadId}:${providerInstanceId}:${model}`}
+    driver={provider?.driver}
+    prompt={prompt}
+    onPromptEdit={(edit) => aui.composer.setText(edit(aui.composer.getState().text))}
+    model={activeModel}
+    selections={effectiveOptions}
+    interactionMode={interactionMode}
+    onSettingsChange={onSettingsChange}
+    disabled={disabled || threadBusy || props.queueUpdatePending || props.compactionPending}
+    saving={saving}
+    saveError={saveError}
+    catalogLoading={catalog.loading}
+    catalogError={catalog.error}
+    onRetry={onRetry}
+  /> : null;
+  const dictation = <AuiIf condition={(s) => s.thread.capabilities.dictation}>
+    <AuiIf condition={(s) => s.composer.dictation == null}>
+      <ComposerPrimitive.Dictate asChild>
+        <TooltipIconButton
+          tooltip={t("语音输入", "Voice input")}
+          side="bottom"
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
+          aria-label={t("开始语音输入", "Start voice input")}
+        >
+          <MicIcon className="aui-composer-dictate-icon size-4" />
+        </TooltipIconButton>
+      </ComposerPrimitive.Dictate>
+    </AuiIf>
+    <AuiIf condition={(s) => s.composer.dictation != null}>
+      <ComposerPrimitive.StopDictation asChild>
+        <TooltipIconButton
+          tooltip={t("停止听写", "Stop dictation")}
+          side="bottom"
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="aui-composer-stop-dictation text-destructive size-7 rounded-full"
+          aria-label={t("停止听写", "Stop dictation")}
+        >
+          <SquareIcon className="aui-composer-stop-dictation-icon size-3.5 animate-pulse fill-current" />
+        </TooltipIconButton>
+      </ComposerPrimitive.StopDictation>
+    </AuiIf>
+  </AuiIf>;
+
+  const label = t(action.label.zh, action.label.en);
+  const reason = action.reason ? t(action.reason.zh, action.reason.en) : undefined;
+  const sendShortcut = t(
+    preferences.sendShortcut === "enter" ? "发送消息 · Enter" : "发送消息 · Ctrl / ⌘ + Enter",
+    preferences.sendShortcut === "enter" ? "Send message · Enter" : "Send message · Ctrl / ⌘ + Enter",
+  );
+  const primary = action.kind === "hidden" ? null
+    : action.kind === "update-queued" ? (
+      <Button type="button" size="sm" disabled={action.disabled} title={reason ?? label} onClick={props.onUpdateQueued}>
+        {props.queueUpdatePending ? t("正在更新…", "Updating…") : label}
+      </Button>
+    ) : action.kind === "submit" ? (
+      <ComposerPrimitive.Send asChild onClick={(event) => { if (historyBlocked || onUsageCommand()) event.preventDefault(); }}>
+        <TooltipIconButton
+          tooltip={reason ?? sendShortcut}
+          side="bottom"
+          type="button"
+          variant="default"
+          size="icon"
+          className="aui-composer-send size-7 rounded-full"
+          disabled={action.disabled}
+          aria-label={label}
+        >
+          <ArrowUpIcon className="aui-composer-send-icon size-4" />
+        </TooltipIconButton>
+      </ComposerPrimitive.Send>
+    ) : action.kind === "send-context" ? (
+      <TooltipIconButton type="button" tooltip={reason ?? label} aria-label={label} disabled={action.disabled} variant="default" className="aui-composer-send size-7 rounded-full" onClick={() => {
+        const thread = aui.thread.getState();
+        if (historyBlocked || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled || onUsageCommand()) return;
+        aui.thread.append({ role: "user", content: [{ type: "text", text: aui.composer.getState().text }] });
+      }}><ArrowUpIcon className="size-4" /></TooltipIconButton>
+    ) : (
+      <TooltipIconButton
+        type="button"
+        tooltip={reason ?? label}
+        aria-label={label}
+        disabled={action.disabled || !!pending}
+        variant="default"
+        size="icon"
+        className="aui-composer-send size-7 rounded-full"
+        onClick={() => {
+          if (action.kind === "steer") void sendSteer();
+          else if (action.kind === "queue") void queueMessage();
+          else if (action.kind === "resume") setResumeOpen(true);
+        }}
+      >
+        {action.kind === "steer" ? <RouteIcon className="size-4" />
+          : action.kind === "queue" ? <ListTodoIcon className="size-4" />
+            : <RefreshCwIcon className="size-4" />}
+      </TooltipIconButton>
+    );
+
+  return <>
+    <div ref={wrapper} className={cn("aui-composer-action-wrapper", styles.controls)} data-density={density}>
       <div className={styles.leftControls}>
-        <ComposerModelPicker
-          key={threadId}
+        <ModelFanoutPicker
+          key={`${threadId}:${fanoutEpoch}`}
           providerInstanceId={providerInstanceId}
           model={model}
           onChange={onModelChange}
           catalog={catalog}
-          disabled={disabled || threadBusy}
+          disabled={disabled || threadBusy || fanoutPending || props.editingQueue || props.compactionPending}
           saving={saving}
           saveError={saveError}
           onRetry={onRetry}
+          modelOptions={modelOptions}
+          onFanoutChange={onFanoutChange}
         />
-        {onSettingsChange && <ComposerTraitsPicker
-          key={`${threadId}:${providerInstanceId}:${model}`}
-          driver={provider?.driver}
-          prompt={prompt}
-          onPromptEdit={(edit) => aui.composer.setText(edit(aui.composer.getState().text))}
-          model={activeModel}
-          selections={effectiveOptions}
-          interactionMode={interactionMode}
-          onSettingsChange={onSettingsChange}
-          disabled={disabled || threadBusy}
-          saving={saving}
-          saveError={saveError}
-          catalogLoading={catalog.loading}
-          catalogError={catalog.error}
-          onRetry={onRetry}
-        />}
+        {!collapsed.has("traits") && traitsPicker}
       </div>
       <div className={styles.rightControls}>
-        {composerActions}
-        <ContextMeter />
-        <ComposerAddAttachment />
-        <AuiIf condition={(s) => s.thread.capabilities.dictation}>
-          <AuiIf condition={(s) => s.composer.dictation == null}>
-            <ComposerPrimitive.Dictate asChild>
-              <TooltipIconButton
-                tooltip={t("语音输入", "Voice input")}
-                side="bottom"
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
-                aria-label={t("开始语音输入", "Start voice input")}
-              >
-                <MicIcon className="aui-composer-dictate-icon size-4" />
-              </TooltipIconButton>
-            </ComposerPrimitive.Dictate>
-          </AuiIf>
-          <AuiIf condition={(s) => s.composer.dictation != null}>
-            <ComposerPrimitive.StopDictation asChild>
-              <TooltipIconButton
-                tooltip={t("停止听写", "Stop dictation")}
-                side="bottom"
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="aui-composer-stop-dictation text-destructive size-7 rounded-full"
-                aria-label={t("停止听写", "Stop dictation")}
-              >
-                <SquareIcon className="aui-composer-stop-dictation-icon size-3.5 animate-pulse fill-current" />
-              </TooltipIconButton>
-            </ComposerPrimitive.StopDictation>
-          </AuiIf>
-        </AuiIf>
-        <AuiIf
-          condition={(s) =>
-            !s.composer.canCancel ||
-            (s.thread.voice !== undefined && s.composer.submission === undefined)
-          }
-        >
-          {contextOnly ? <TooltipIconButton type="button" tooltip={sendBlockedReason ?? t("发送已选上下文", "Send selected context")} aria-label={t("发送已选上下文", "Send selected context")} disabled={historyBlocked || threadBusy} variant="default" className="aui-composer-send size-7 rounded-full" onClick={() => {
-            const thread = aui.thread.getState();
-            if (historyBlocked || thread.isRunning || thread.isDisabled || thread.isLoading || thread.isSendDisabled || onUsageCommand()) return;
-            aui.thread.append({ role: "user", content: [{ type: "text", text: aui.composer.getState().text }] });
-          }}><ArrowUpIcon className="size-4" /></TooltipIconButton> : <ComposerPrimitive.Send asChild onClick={(event) => { if (historyBlocked || onUsageCommand()) event.preventDefault(); }}>
-            <TooltipIconButton
-              tooltip={sendBlockedReason ?? t(
-                preferences.sendShortcut === "enter" ? "发送消息 · Enter" : "发送消息 · Ctrl / ⌘ + Enter",
-                preferences.sendShortcut === "enter" ? "Send message · Enter" : "Send message · Ctrl / ⌘ + Enter",
-              )}
-              side="bottom"
-              type="button"
-              variant="default"
-              size="icon"
-              className="aui-composer-send size-7 rounded-full"
-              disabled={historyBlocked || !!sendBlockedReason}
-              aria-label={t("发送消息", "Send message")}
+        {!collapsed.has("contextActions") && composerActions}
+        {!collapsed.has("contextMeter") && <ContextMeter />}
+        {!collapsed.has("attachment") && <ComposerAddAttachment />}
+        {!collapsed.has("dictation") && dictation}
+        {collapsed.size > 0 && <Popover>
+          <PopoverTrigger render={<TooltipIconButton
+            tooltip={t("更多控件", "More controls")}
+            aria-label={t("更多控件", "More controls")}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="aui-composer-more text-muted-foreground hover:text-foreground size-7 rounded-full"
+          />}>
+            <MoreHorizontalIcon className="size-4" />
+          </PopoverTrigger>
+          <PopoverContent side="top" align="end" className="composer-more-menu w-60 space-y-2 p-2 text-xs">
+            <PopoverTitle className="text-xs font-medium text-muted-foreground">{t("更多控件", "More controls")}</PopoverTitle>
+            {collapsed.has("traits") && traitsPicker}
+            {collapsed.has("contextActions") && composerActions && <div className="composer-more-row">{composerActions}</div>}
+            {collapsed.has("contextMeter") && <div className="composer-more-row"><ContextMeter /></div>}
+            {collapsed.has("attachment") && <div className="composer-more-row"><ComposerAddAttachment /></div>}
+            {collapsed.has("dictation") && <div className="composer-more-row">{dictation}</div>}
+          </PopoverContent>
+        </Popover>}
+        {/* A running turn hides plain submit behind its cancel control, but a
+            real follow-up capability (steer/queue) stays reachable. Stacked
+            models own the primary slot so no single-session send path leaks. */}
+        {fanoutActive && !props.editingQueue
+          ? <FanoutSendButton pending={fanoutPending} blocker={fanoutBlocker} onClick={onFanoutSend} />
+          : action.kind === "submit" || action.kind === "send-context"
+            ? <AuiIf
+              condition={(s) =>
+                !s.composer.canCancel ||
+                (s.thread.voice !== undefined && s.composer.submission === undefined)
+              }
             >
-              <ArrowUpIcon className="aui-composer-send-icon size-4" />
-            </TooltipIconButton>
-          </ComposerPrimitive.Send>}
-        </AuiIf>
+              {primary}
+            </AuiIf>
+            : primary}
         <AuiIf
           condition={(s) =>
             s.composer.canCancel &&
@@ -607,7 +1129,22 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
         </AuiIf>
       </div>
     </div>
-  );
+    {resumeOpen && action.kind === "resume" && !props.editingQueue && !props.compactionPending && <div className="composer-resume-confirm" role="group" aria-label={t("继续未完成部分前的核对", "Review before continuing")}>
+      <label className="composer-resume-confirm-label">
+        <input type="checkbox" checked={resumeConfirmed} onChange={(event) => setResumeConfirmed(event.target.checked)} />
+        {t("已核对可能发生的外部副作用，授权仅继续未完成部分。", "I reviewed possible external side effects and authorize continuing only the unfinished part.")}
+      </label>
+      <div className="composer-resume-confirm-actions">
+        <Button type="button" size="sm" variant="outline" disabled={!resumeConfirmed || !!pending} onClick={() => void continueGeneration()}>
+          {pending === "resume" ? t("正在继续…", "Continuing…") : t("继续未完成部分", "Continue unfinished part")}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={!!pending} onClick={() => { setResumeOpen(false); setResumeConfirmed(false); }}>
+          {t("取消", "Cancel")}
+        </Button>
+      </div>
+    </div>}
+    {actionError && <p role="alert" className="composer-action-error">{actionError}</p>}
+  </>;
 };
 
 const MessageError: FC = () => {
@@ -660,12 +1197,17 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
   const threadId = useAuiState((state) => state.threadListItem.remoteId);
   const times = useMessageTimes(threadId);
   const record = useGenerationRecords(threadId).get(messageId);
+  const { locale } = useI18n();
+  const messageLocale = locale === "en" ? "en" : "zh-CN";
+  const authorLabel = formatMessageAuthorLabel("assistant", times.get(messageId), messageLocale);
 
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="assistant">
     <MessagePrimitive.Root
       data-slot="aui_assistant-message-root"
       data-role="assistant"
+      role="article"
+      aria-label={authorLabel}
       tabIndex={0}
       className="fade-in slide-in-from-bottom-1 animate-in relative -mb-7.5 pb-7.5 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
@@ -673,6 +1215,10 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
         data-slot="aui_assistant-message-content"
         className="aui-assistant-message-content-body text-foreground px-2 text-sm leading-6 wrap-break-word"
       >
+        <h2 className="sr-only">{authorLabel}</h2>
+        <MessagePrimitive.Quote>
+          {quote => <AssistantQuoteCitation quote={quote} locale={messageLocale} />}
+        </MessagePrimitive.Quote>
         {record?.handoff && <div className="native-lifecycle-row" data-kind="handoff" title={record.handoff.reason}>
           <ArrowLeftRightIcon aria-hidden="true" />
           <span>{t(`交接 · ${record.handoff.mode}`, `Handoff · ${record.handoff.mode}`)}</span>
@@ -853,15 +1399,20 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   const messageId = useAuiState((state) => state.message.id);
   const threadId = useAuiState((state) => state.threadListItem.remoteId);
   const times = useMessageTimes(threadId);
-  const record = useGenerationRecords(threadId).get(messageId);
+  const { locale } = useI18n();
+  const messageLocale = locale === "en" ? "en" : "zh-CN";
+  const authorLabel = formatMessageAuthorLabel("user", times.get(messageId), messageLocale);
   return (
     <MessageContextMenu actionsDisabled={actionsDisabled} role="user">
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
       className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
       data-role="user"
+      role="article"
+      aria-label={authorLabel}
       tabIndex={0}
     >
+      <h2 className="sr-only">{authorLabel}</h2>
       <UserMessageAttachments />
 
       <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0 max-w-(--bubble-max-width)">
@@ -908,8 +1459,8 @@ const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ p
   const t = useAgentText();
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
-  const [limitsRequest, setLimitsRequest] = useState(0);
   const suggestions = useComposerSuggestions(providerInstanceId, disabled);
+  const [limitsRequest, setLimitsRequest] = useState(0);
   const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
   const handleSendCommand = () => handleUsageCommand() || !suggestions.beforeSend();
   const quotePending = useAuiState(state => !!state.composer.quote);
@@ -958,6 +1509,8 @@ const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ p
   return (
     <MessagePrimitive.Root
       data-slot="aui_edit-composer-wrapper"
+      role="article"
+      aria-label={t("编辑用户消息", "Editing user message")}
       className="flex flex-col px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
       <ComposerPrimitive.Root className="aui-edit-composer-root border-border ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] duration-[var(--motion-hover)] dark:shadow-none" onSubmit={(event) => { if (handleSubmit()) event.preventDefault(); }}>

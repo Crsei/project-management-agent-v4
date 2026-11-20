@@ -8,6 +8,8 @@ import { cn } from "@agent/lib/utils";
 import { ResponseContextCard } from "@agent/src/chat/context-presentation";
 import { requestContextSource } from "@agent/src/chat/context-source-navigation";
 import { bindClipboardContext } from "@agent/src/chat/message-context-clipboard";
+import { SelectionToolbarCite } from "@agent/src/chat/citation-selection-toolbar";
+import { useAgentText } from "@agent/src/i18n";
 
 function QuoteBlockRoot({ className, ...props }: ComponentProps<"div">) {
   return (
@@ -90,6 +92,7 @@ function SelectionToolbarQuote({
   children,
   ...props
 }: ComponentProps<typeof SelectionToolbarPrimitive.Quote>) {
+  const t = useAgentText();
   return (
     <SelectionToolbarPrimitive.Quote
       data-slot="selection-toolbar-quote"
@@ -102,7 +105,7 @@ function SelectionToolbarQuote({
       {children ?? (
         <>
           <QuoteIcon className="size-3.5" />
-          Quote
+          {t("引用", "Quote")}
         </>
       )}
     </SelectionToolbarPrimitive.Quote>
@@ -129,6 +132,7 @@ const SelectionToolbarImpl: FC<ComponentProps<typeof SelectionToolbarRoot>> = ({
   return (
     <SelectionToolbarRoot className={className} {...props}>
       <SelectionToolbarQuote />
+      <SelectionToolbarCite />
     </SelectionToolbarRoot>
   );
 };

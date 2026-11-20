@@ -1,9 +1,11 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { agentText } from "../i18n-text.ts";
+import { COMPOSER_SHORTCUT_ACTIONS, normalizeShortcutChord, type ComposerKeymapOverrides, type ComposerShortcutAction } from "../chat/composer-shortcuts.ts";
 import "./chat-preferences.css";
 
 export type ChatBrowserPreferences = {
   sendShortcut: "enter" | "ctrlEnter";
+  composerKeymap: ComposerKeymapOverrides;
   fontSize: "small" | "medium" | "large";
   promptFontSize: number;
   codeFontSize: number;
@@ -17,6 +19,7 @@ export type ChatBrowserPreferences = {
 const STORAGE_KEY = "pm-v3:agent-browser-preferences:v1";
 const defaults: ChatBrowserPreferences = {
   sendShortcut: "enter",
+  composerKeymap: {},
   fontSize: "medium",
   promptFontSize: 14,
   codeFontSize: 13,
@@ -33,9 +36,20 @@ const listeners = new Set<() => void>();
 function integer(value: unknown, min: number, max: number, fallback: number) {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
+/** Keep only known actions and chords the composer can actually match. */
+function normalizeKeymap(value: unknown): ComposerKeymapOverrides {
+  if (!value || typeof value !== "object") return {};
+  const keymap: ComposerKeymapOverrides = {};
+  for (const action of COMPOSER_SHORTCUT_ACTIONS) {
+    const chord = normalizeShortcutChord((value as Record<string, unknown>)[action]);
+    if (chord) keymap[action as ComposerShortcutAction] = chord;
+  }
+  return keymap;
+}
 function normalize(value: Partial<ChatBrowserPreferences> | null | undefined): ChatBrowserPreferences {
   return {
     sendShortcut: value?.sendShortcut === "ctrlEnter" ? "ctrlEnter" : "enter",
+    composerKeymap: normalizeKeymap(value?.composerKeymap),
     fontSize: value?.fontSize === "small" || value?.fontSize === "large" ? value.fontSize : "medium",
     promptFontSize: integer(value?.promptFontSize, 12, 20, defaults.promptFontSize),
     codeFontSize: integer(value?.codeFontSize, 10, 18, defaults.codeFontSize),

@@ -1,0 +1,31 @@
+/*
+ * Chat reading lane: the appearance width preference plus panel-aware avoidance.
+ *
+ * - `--pm-chat-lane-preferred` is the user preference (808 px / 1040 px / 100%).
+ * - `--pm-chat-lane-available` is the conversation width. `cqw` resolves against
+ *   the nearest size container (.pm-agent-main, then the thread root), so the
+ *   lane can never overflow while the details aside or the right panel takes
+ *   column space. Sizes change without JS: no observers, no relayout loops.
+ * - While an inline details aside or a docked right panel is open, the lane
+ *   stops at the 736 px reading measure instead of stretching under the new
+ *   whitespace. Avoidance only engages once 688 px remain (640 px text measure
+ *   + 48 px page padding); narrower layouts keep the full remaining width so
+ *   the composer is never squeezed below its comfortable size.
+ *   At <= 767 px and in compact layouts the panels render as overlays/sheets,
+ *   so the selectors below never match and the lane is not avoided.
+ *
+ * Keep the 688 px / 736 px values in sync with chat-lane.ts.
+ */
+.pm-agent-conversation {
+  --pm-chat-lane-preferred: var(--agent-chat-content-width, 808px);
+  --pm-chat-lane-available: 100cqw;
+  --pm-chat-lane-panel-max: 736px;
+  --pm-chat-lane-width: min(var(--pm-chat-lane-preferred), var(--pm-chat-lane-available));
+}
+
+@container pm-agent-main (min-width: 688px) {
+  .pm-agent-chat:has(> .pm-agent-thread-details[data-presentation="inline"]) .pm-agent-conversation,
+  .pm-agent-chat:has(> .pm-right-panel:not([data-maximized="true"])) .pm-agent-conversation {
+    --pm-chat-lane-width: min(var(--pm-chat-lane-preferred), var(--pm-chat-lane-available), var(--pm-chat-lane-panel-max));
+  }
+}

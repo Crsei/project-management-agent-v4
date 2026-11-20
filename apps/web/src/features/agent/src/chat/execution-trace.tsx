@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Check, ChevronDown, Copy, Play } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@agent/components/ui/collapsible";
 import { useAgentText } from "../i18n";
 import { useShikiTokens } from "./use-shiki-tokens";
+import { shellCommandLanguage, visibleCommandText } from "./output-detail-model";
+import { requestTerminalRun, TERMINAL_RUN_RESULT_EVENT, useTerminalRunAvailable, type TerminalRunResult } from "./terminal-run";
 import styles from "./execution-trace.module.css";
 
 export type TraceStatus = "running" | "error" | "pending";
@@ -32,7 +34,7 @@ export function TraceLine({ icon, title, description, status, trailing, classNam
   </span>;
 }
 
-export function TraceRow({ icon, title, description, status, trailing, defaultOpen = false, open: controlledOpen, onOpenChange, children, className }: {
+export function TraceRow({ icon, title, description, status, trailing, defaultOpen = false, open: controlledOpen, onOpenChange, children, className, actions }: {
   icon: ReactNode;
   title: ReactNode;
   description?: ReactNode;
@@ -43,6 +45,8 @@ export function TraceRow({ icon, title, description, status, trailing, defaultOp
   onOpenChange?: (open: boolean) => void;
   children: ReactNode;
   className?: string;
+  /** Controls kept outside the disclosure trigger so they never nest buttons. */
+  actions?: ReactNode;
 }) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const open = controlledOpen ?? internalOpen;
@@ -51,15 +55,18 @@ export function TraceRow({ icon, title, description, status, trailing, defaultOp
     onOpenChange?.(next);
   };
   return <Collapsible open={open} onOpenChange={change} className={`${styles.traceRow} ${className ?? ""}`}>
-    <CollapsibleTrigger className={styles.traceTrigger} title={typeof title === "string" ? title : undefined}>
-      <TraceLine
-        icon={icon}
-        title={title}
-        description={description}
-        status={status}
-        trailing={<>{trailing}<ChevronDown aria-hidden="true" className={styles.chevron} /></>}
-      />
-    </CollapsibleTrigger>
+    <div className={styles.traceHeader}>
+      <CollapsibleTrigger className={styles.traceTrigger} title={typeof title === "string" ? title : undefined}>
+        <TraceLine
+          icon={icon}
+          title={title}
+          description={description}
+          status={status}
+          trailing={<>{trailing}<ChevronDown aria-hidden="true" className={styles.chevron} /></>}
+        />
+      </CollapsibleTrigger>
+      {actions && <div className={styles.traceActions}>{actions}</div>}
+    </div>
     <CollapsibleContent className={styles.traceContent}>{children}</CollapsibleContent>
   </Collapsible>;
 }
@@ -114,5 +121,56 @@ export function CodeBlock({ code, rows, wrap = false, lineNumbers = false, maxHe
       })}{index < tokens.length - 1 ? "\n" : ""}</span>) : lines.map((line, index) => <span key={index} className={styles.codeLine} data-variant={line.kind} data-line={lineNumbers ? index + 1 : undefined}>{line.text || " "}</span>)}
     </code></pre>
     {error && <p role="status" className={styles.codeError}>{t("无法访问剪贴板；请手动选择内容。", "Clipboard unavailable; select the content manually.")}</p>}
+  </div>;
+}
+
+/** Command text with visible control characters, per-line layout and a real terminal action.
+ * The run button only exists while a mounted execution terminal publishes that capability. */
+export function ShellCommandBlock({ command, maxHeight = 260 }: { command: string; maxHeight?: number }) {
+  const t = useAgentText();
+  const visible = visibleCommandText(command.trim());
+  const language = shellCommandLanguage(visible);
+  const multiline = visible.includes("\n");
+  const runAvailable = useTerminalRunAvailable();
+  const [pending, setPending] = useState<string>();
+  const [result, setResult] = useState<TerminalRunResult>();
+  useEffect(() => {
+    if (!pending) return;
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<TerminalRunResult>).detail;
+      if (detail?.requestId !== pending) return;
+      setPending(undefined);
+      setResult(detail);
+    };
+    window.addEventListener(TERMINAL_RUN_RESULT_EVENT, listener);
+    // Only reconciliation is reported here; the terminal surface owns the real status.
+    const timer = window.setTimeout(() => {
+      setResult({ requestId: pending, ok: false, message: t("终端尚未确认执行结果，请核对终端面板。", "The terminal has not confirmed the result yet. Check the terminal panel.") });
+      setPending(current => current === pending ? undefined : current);
+    }, 12_000);
+    return () => { window.removeEventListener(TERMINAL_RUN_RESULT_EVENT, listener); window.clearTimeout(timer); };
+  }, [pending, t]);
+  const run = () => {
+    const requestId = requestTerminalRun(command);
+    if (!requestId) {
+      setResult({ requestId: "", ok: false, message: t("当前视图没有可用的会话终端。", "No session terminal is available in this view.") });
+      return;
+    }
+    setResult(undefined);
+    setPending(requestId);
+  };
+  if (!visible) return null;
+  return <div className={styles.shellCommand}>
+    <CodeBlock code={visible} language={language} wrap lineNumbers={multiline} maxHeight={maxHeight} />
+    {runAvailable && <div className={styles.shellCommandActions}>
+      <Button type="button" size="xs" variant="outline" disabled={pending !== undefined} onClick={run}>
+        <Play aria-hidden="true" />
+        {pending ? t("正在发送到终端…", "Sending to terminal…") : t("在终端运行", "Run in terminal")}
+      </Button>
+      <span className={styles.shellCommandHint}>{t("目标：当前会话终端", "Target: this session's terminal")}</span>
+    </div>}
+    {result && <p role={result.ok ? "status" : "alert"} className={result.ok ? styles.shellCommandOk : styles.shellCommandError}>
+      {result.ok ? t("命令已写入终端。", "Command sent to the terminal.") : t("未能运行：", "Could not run: ") + (result.message || t("未知原因", "unknown reason"))}
+    </p>}
   </div>;
 }

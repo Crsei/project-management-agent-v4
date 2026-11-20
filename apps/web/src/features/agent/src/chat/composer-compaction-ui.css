@@ -1,0 +1,17 @@
+.composer-compaction-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.composer-compaction-controls button { height: 1.75rem; font-size: 0.75rem; }
+.composer-compaction-controls svg { width: 0.875rem; height: 0.875rem; }
+.composer-compaction-status,
+.composer-compaction-error {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.composer-compaction-status { color: var(--color-muted-foreground); }
+.composer-compaction-error { color: var(--color-destructive); }

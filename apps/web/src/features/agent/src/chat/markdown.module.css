@@ -296,6 +296,72 @@
 .mediaHint {
   font-size: 11px;
 }
+.mediaFigure {
+  display: block;
+  max-width: 100%;
+  margin: 12px 0;
+}
+.mediaFigure:first-child {
+  margin-top: 0;
+}
+.mediaFigure:last-child {
+  margin-bottom: 0;
+}
+.mediaImageButton {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: zoom-in;
+}
+.mediaImageButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mediaInlineImage {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.mediaImage {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 32rem;
+  border-radius: 6px;
+  object-fit: contain;
+}
+.mediaLoading {
+  display: grid;
+  place-content: center;
+  width: min(100%, 20rem);
+  min-height: 6rem;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mediaFigureError {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mediaFigureActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
 @media (max-width: 600px) {
   .codeHeader {
     gap: 4px;
@@ -320,3 +386,15 @@
 
 .codeTitle { display: inline-flex; align-items: center; gap: .3rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-ibm-plex-mono); }
 .codeTitle svg { width: .8rem; height: .8rem; flex: none; }
+
+/* Two or more authorized images authored in one paragraph become a responsive
+   thumbnail grid; a lone image keeps its natural width. */
+.markdown :where(p):has(> figure[data-markdown-media="authorized"] + figure[data-markdown-media="authorized"]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  align-items: start;
+  gap: 8px;
+}
+.markdown :where(p):has(> figure[data-markdown-media="authorized"] + figure[data-markdown-media="authorized"]) > figure[data-markdown-media] {
+  margin: 0;
+}

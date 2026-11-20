@@ -158,8 +158,92 @@ const listSchema = getSchema([
   Node.create({ name: "blockquote", group: "block", content: "paragraph+" }),
   Node.create({ name: "heading", group: "block", content: "inline*", addAttributes: () => ({ level: { default: 1 } }) }),
   Node.create({ name: "horizontalRule", group: "block" }),
+  Node.create({ name: "taskList", group: "block", content: "taskItem+" }),
+  Node.create({ name: "taskItem", content: "paragraph block*", addAttributes: () => ({ checked: { default: false }, space: { default: "" } }) }),
   Mark.create({ name: "bold" }), Mark.create({ name: "italic" }), Mark.create({ name: "strike" }), Mark.create({ name: "code" }),
+  Mark.create({ name: "link", addAttributes: () => ({ href: { default: null }, title: { default: null } }) }),
 ]);
+
+const taskSchema = listSchema;
+
+test("task lists round-trip checked, unchecked and empty items", () => {
+  for (const source of ["- [ ] one\n- [x] two", "- [x]", "- [ ] ", "- [X] upper", "- [ ] **bold** task"]) {
+    const doc = taskSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source === "- [X] upper" ? "- [x] upper" : source, source);
+    assert.equal(serializeComposerDocument(taskSchema.nodeFromJSON(parseComposerDocument(serializeComposerDocument(doc)))), source === "- [X] upper" ? "- [x] upper" : source);
+  }
+  const mixed = taskSchema.nodeFromJSON(parseComposerDocument("- [ ] task\n- bullet"));
+  assert.equal(serializeComposerDocument(mixed), "- [ ] task\n- bullet");
+});
+
+test("a checked task item keeps its checkbox state through edits", () => {
+  const doc = taskSchema.nodeFromJSON(parseComposerDocument("- [ ] ship it"));
+  const list = doc.firstChild!;
+  const item = list.firstChild!;
+  const toggled = taskSchema.topNodeType.create(null, list.type.create({ ...list.attrs },
+    taskSchema.nodes.taskItem!.create({ ...item.attrs, checked: true }, item.content)));
+  assert.equal(serializeComposerDocument(toggled), "- [x] ship it");
+  assert.equal(taskSchema.nodeFromJSON(parseComposerDocument(serializeComposerDocument(toggled))).firstChild!.firstChild!.attrs.checked, true);
+});
+
+test("nested task items round-trip and map source carets", () => {
+  const source = "- [ ] parent\n  - [x] child\n- [ ] next";
+  const doc = taskSchema.nodeFromJSON(parseComposerDocument(source));
+  assert.equal(serializeComposerDocument(doc), source);
+  for (const offset of [6, 7, 8, 12, 21, 23, 26, 33, 35, 36]) {
+    assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+  }
+});
+
+test("absolute Markdown links round-trip while relative destinations stay literal", () => {
+  for (const source of [
+    "[docs](https://example.com/a?b=1)",
+    "read [the docs](http://example.com) first",
+    "[mail](mailto:ops@example.com)",
+    '[title](https://example.com "Reference")',
+    "[brackets \\[inner\\]](https://example.com/x)",
+    "before [link](https://example.com) after **bold**",
+  ]) {
+    const doc = taskSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source, source);
+  }
+  let links = 0;
+  taskSchema.nodeFromJSON(parseComposerDocument("[docs](https://example.com)")).descendants(node => { if (node.marks.some(mark => mark.type.name === "link")) links++; });
+  assert.equal(links, 1);
+});
+
+test("link carets map inside the label without counting the destination", () => {
+  const source = "open [docs](https://example.com/a) now";
+  const doc = taskSchema.nodeFromJSON(parseComposerDocument(source));
+  const labelStart = source.indexOf("[");
+  // `labelStart` itself is the same caret as the text start minus one bracket; links map to the label.
+  // Inside the destination the caret has no document counterpart, so only the label is mapped.
+  for (const offset of [0, 4, labelStart + 1, labelStart + 2, labelStart + 3, labelStart + 4, labelStart + 5, source.length]) {
+    assert.equal(composerSourceCursor(doc, composerDocumentCursor(doc, offset)), offset, `offset ${offset}`);
+  }
+});
+
+test("relative links and file mentions are never parsed as URL links", () => {
+  const relative = taskSchema.nodeFromJSON(parseComposerDocument("[readme](docs/readme.md)"));
+  let links = 0;
+  relative.descendants(node => { if (node.marks.some(mark => mark.type.name === "link")) links++; });
+  assert.equal(links, 0);
+  assert.equal(serializeComposerDocument(relative), "[readme](docs/readme.md)");
+});
+
+test("right-to-left drafts keep their exact text through serialization", () => {
+  for (const source of [
+    "اكتب الدالة",
+    "مرحبا **بالعالم** 👩🏽‍💻",
+    "- [ ] أكمل الاختبار\n- [x] راجع الكود",
+    "> اقتباس\n\nثم نص",
+    "[الوثائق](https://example.com/docs)",
+  ]) {
+    const doc = taskSchema.nodeFromJSON(parseComposerDocument(source));
+    assert.equal(serializeComposerDocument(doc), source, source);
+    assert.equal(serializeComposerDocument(taskSchema.nodeFromJSON(parseComposerDocument(serializeComposerDocument(doc)))), source);
+  }
+});
 
 test("flat bullet and ordered lists round-trip without changing literal lines", () => {
   for (const source of ["- one\n- two", "1. one\n2. two", "3. three\n4. four", "- **bold** item", "- one\n1. two", "  - indented stays literal"]) {

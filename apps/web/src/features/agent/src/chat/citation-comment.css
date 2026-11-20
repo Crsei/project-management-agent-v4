@@ -1,0 +1,9 @@
+.citation-comment-editor { display: flex; flex-direction: column; gap: 6px; }
+.citation-comment-field { width: 100%; min-height: 64px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--background); color: var(--foreground); font: inherit; resize: vertical; }
+.citation-comment-field:focus-visible { outline: 2px solid var(--ring); outline-offset: -1px; }
+.citation-comment-hint { margin: 0; color: var(--muted-foreground); font-size: 11px; }
+.citation-comment-error { margin: 0; color: var(--destructive); font-size: 11px; }
+.citation-comment-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; }
+.citation-comment-actions button { padding: 2px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); color: var(--foreground); font-size: 11px; cursor: pointer; }
+.citation-comment-actions button:disabled { opacity: 0.55; cursor: default; }
+.citation-comment-actions .citation-comment-clear { margin-inline-end: auto; border-color: transparent; background: transparent; color: var(--destructive); }

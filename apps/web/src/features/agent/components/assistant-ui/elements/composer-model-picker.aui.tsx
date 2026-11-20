@@ -14,6 +14,8 @@ import { ProviderGlyph } from "@agent/src/settings/provider-card";
 import { workspaceClient } from "@agent/src/network";
 import { providerSelectable, visibleProviderModels } from "@agent/src/settings/model-option-controls";
 import { useAgentText } from "@agent/src/i18n";
+import type { FanoutModelSelection } from "@agent/src/chat/model-fanout";
+import { fanoutModelAvailability, fanoutTriggerSummary } from "@agent/src/chat/model-fanout-picker-model";
 
 export type ComposerModelPickerCatalog = {
   providers: readonly ProviderInstance[];
@@ -34,6 +36,13 @@ export type ComposerModelPickerProps = {
   saving?: boolean;
   saveError?: string;
   onRetry?: () => void | Promise<void>;
+  /**
+   * Optional stacked selection. Pass together with `onToggleModel`; omitting both
+   * keeps the original single-select behavior unchanged.
+   */
+  selectedModels?: readonly FanoutModelSelection[];
+  /** Toggles one stacked model without closing the popover. */
+  onToggleModel?: (selection: FanoutModelSelection) => void;
 };
 
 type ModelItem = { provider: ProviderInstance; model: ProviderModel; key: string };
@@ -92,6 +101,7 @@ function Glyph({ provider, providers, small = false }: { provider: ProviderInsta
 
 export function ComposerModelPicker({
   providerInstanceId, model, onChange, catalog, className, disabled = false, saving = false, saveError, onRetry,
+  selectedModels, onToggleModel,
 }: ComposerModelPickerProps) {
   const location = useLocation();
   const t = useAgentText();
@@ -114,6 +124,26 @@ export function ComposerModelPicker({
   const activeProvider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : activeProvider?.models.find((option) => option.id === model || option.aliases?.includes(model));
   const validSelection = selection.status === "selected" && ready(selection.provider);
+  const multiSelect = selectedModels !== undefined && onToggleModel !== undefined;
+  const selectedKeys = useMemo(() => new Set((selectedModels ?? []).map((entry) => pairKey(entry.providerInstanceId, entry.model))), [selectedModels]);
+  const stacked = useMemo(() => (selectedModels ?? []).map((entry) => {
+    const provider = catalog.providers.find((candidate) => candidate.instanceId === entry.providerInstanceId);
+    const option = provider?.models.find((candidate) => candidate.id === entry.model || candidate.aliases?.includes(entry.model));
+    return {
+      provider,
+      model: option,
+      short: option && provider ? getProviderModelShortName(provider.driver, option) ?? option.label : entry.model,
+      full: provider ? `${getProviderInstanceDisplayName(provider)} · ${option?.label ?? entry.model}` : entry.model,
+    };
+  }), [catalog.providers, selectedModels]);
+  const stackedSummary = fanoutTriggerSummary(stacked.map((entry) => entry.short));
+  const firstStackedProvider = stacked[0]?.provider;
+  const multiTriggerLabel = stackedSummary.count
+    ? t(`已叠选 ${stackedSummary.count} 个模型：${stacked.map((entry) => entry.full).join("；")}。打开管理叠选模型。`, `${stackedSummary.count} models stacked: ${stacked.map((entry) => entry.full).join("; ")}. Open to manage stacked models.`)
+    : t("叠选多个模型", "Stack multiple models");
+  const multiTriggerTitle = stackedSummary.count
+    ? stacked.map((entry) => entry.full).join(" · ")
+    : t("叠选多个模型", "Stack multiple models");
   const favorites = useMemo(() => new Set(catalog.providers.flatMap((provider) => (provider.modelPreferences?.favorites ?? []).map((id) => pairKey(provider.instanceId, id)))), [catalog.providers]);
   const items = useMemo(() => catalog.providers.flatMap((provider) => visibleProviderModels(provider).map((option) => ({ provider, model: option, key: pairKey(provider.instanceId, option.id) }))), [catalog.providers]);
   // Browse a real provider even for an unset/stale selection; never save a fallback model.
@@ -137,7 +167,7 @@ export function ComposerModelPicker({
   const refreshing = catalog.loading || catalog.refreshing;
   const catalogError = catalog.error || refreshError;
   const actionError = saveError || localError;
-  const selectable = visible.filter((item) => ready(item.provider) && !item.model.disabledReason);
+  const selectable = visible.filter((item) => multiSelect ? fanoutModelAvailability(item.provider, item.model.id) === "available" : ready(item.provider) && !item.model.disabledReason);
   const highlightedItem = selectable.find((item) => item.key === highlighted) ?? selectable[0];
 
   useEffect(() => {
@@ -225,6 +255,11 @@ export function ComposerModelPicker({
       setPending(false);
     }
   };
+  const toggleStacked = (item: ModelItem) => {
+    if (!multiSelect || !onToggleModel || !canChoose) return;
+    if (fanoutModelAvailability(item.provider, item.model.id) !== "available") return;
+    onToggleModel({ providerInstanceId: item.provider.instanceId, model: item.model.id });
+  };
   const retrySave = () => {
     if (!onRetry || inFlight.current || saving || disabled) return;
     inFlight.current = true;
@@ -256,14 +291,22 @@ export function ComposerModelPicker({
       setHighlighted(selectable[next]!.key);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (highlightedItem && canChoose) void selectModel(highlightedItem);
+      if (highlightedItem && canChoose) {
+        if (multiSelect) toggleStacked(highlightedItem);
+        else void selectModel(highlightedItem);
+      }
     }
   };
 
   return <><Popover open={open} onOpenChange={changeOpen}>
-    <PopoverTrigger render={<button type="button" disabled={disabled} aria-label={t("切换模型和提供商", "Switch model and provider")} title={validSelection ? `${activeProvider && getProviderInstanceDisplayName(activeProvider)} · ${activeModel?.label}` : `${providerInstanceId} / ${model}`} className={cn("text-muted-foreground hover:text-foreground flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-xs outline-none transition-colors hover:bg-foreground/[0.04] disabled:opacity-50", className)} />}>
-      {activeProvider && <Glyph provider={activeProvider} providers={catalog.providers} small />}
-      <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel) ?? activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
+    <PopoverTrigger render={<button type="button" disabled={disabled} data-model-picker-multi={multiSelect ? "true" : undefined} aria-label={multiSelect ? multiTriggerLabel : t("切换模型和提供商", "Switch model and provider")} title={multiSelect ? multiTriggerTitle : validSelection ? `${activeProvider && getProviderInstanceDisplayName(activeProvider)} · ${activeModel?.label}` : `${providerInstanceId} / ${model}`} className={cn("text-muted-foreground hover:text-foreground flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-xs outline-none transition-colors hover:bg-foreground/[0.04] disabled:opacity-50", className)} />}>
+      {multiSelect ? <>
+        {firstStackedProvider && <Glyph provider={firstStackedProvider} providers={catalog.providers} small />}
+        <span className={cn("min-w-0 truncate", stackedSummary.count ? "text-foreground/80" : "text-muted-foreground")}>{stackedSummary.count ? stackedSummary.short : t("选择模型", "Select model")}</span>
+      </> : <>
+        {activeProvider && <Glyph provider={activeProvider} providers={catalog.providers} small />}
+        <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel) ?? activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
+      </>}
       {(saving || pending) && <Loader2Icon aria-label={t("保存中", "Saving")} className="size-3 shrink-0 animate-spin" />}
       <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
     </PopoverTrigger>
@@ -285,24 +328,30 @@ export function ComposerModelPicker({
         </div>}
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/40", !searching && "border-l border-border/70")}>
           <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3"><SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><input ref={searchRef} role="combobox" aria-label={t("搜索模型或提供商", "Search models or providers")} aria-expanded="true" aria-controls={listId} aria-activedescendant={highlightedItem ? `${listId}-option-${visible.indexOf(highlightedItem)}` : undefined} aria-autocomplete="list" value={query} onChange={(event) => { setQuery(event.target.value); setHighlighted(null); }} onKeyDown={onSearchKeyDown} placeholder={t("搜索模型…", "Search models…")} className="h-10 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60" /></div>
-          <div ref={listRef} id={listId} role="listbox" aria-label={t("模型列表", "Model list")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+          <div ref={listRef} id={listId} role="listbox" aria-multiselectable={multiSelect || undefined} aria-label={t("模型列表", "Model list")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
             {catalog.loading && <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{t("正在加载模型目录…", "Loading model catalog…")}</p>}
             {catalog.refreshing && <p role="status" className="px-2 py-2 text-xs text-muted-foreground">{t("正在后台刷新模型目录，仍可选择已有模型。", "Refreshing the model catalog; existing models remain selectable.")}</p>}
             {catalogError && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalogError}{catalog.loaded && t("；显示上次成功读取的目录，刷新成功前无法发送。", "; showing the last loaded catalog. Sending is blocked until refresh succeeds.")} <button type="button" disabled={refreshing} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50" onClick={() => void refresh()}>{t("重试", "Retry")}</button></div>}
             {catalog.loaded && !catalogError && visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{searching ? t("没有匹配的模型。", "No matching models.") : section.kind === "favorites" ? t("尚无收藏模型。", "No favorite models yet.") : t("没有可展示的模型。", "No models to show.")}</p>}
             {visible.map((item, index) => {
-              const selected = item.provider.instanceId === providerInstanceId && item.model.id === activeModel?.id;
-              const unavailable = !ready(item.provider) || !!item.model.disabledReason;
+              const availability = multiSelect ? fanoutModelAvailability(item.provider, item.model.id) : null;
+              const checked = multiSelect ? selectedKeys.has(item.key) : item.provider.instanceId === providerInstanceId && item.model.id === activeModel?.id;
+              const unavailable = availability ? availability !== "available" : !ready(item.provider) || !!item.model.disabledReason;
+              const unavailableLabel = availability === "provider-unauthenticated" ? t("（未认证）", " (not signed in)") : t("（不可用）", " (unavailable)");
+              const rowTitle = availability === "provider-unauthenticated" ? t("提供商未认证", "Provider is not signed in") : availability === "provider-not-ready" || availability === "provider-disabled" ? t("提供商不可用", "Provider unavailable") : item.model.disabledReason ?? item.model.id;
               const favorite = favorites.has(item.key);
               return <div key={item.key} data-model-index={index} className={cn("group flex min-w-0 items-center gap-1 rounded-md px-2 py-1.5", highlightedItem?.key === item.key && "bg-foreground/[0.07]", unavailable && "opacity-60")} onMouseEnter={() => { if (!unavailable) setHighlighted(item.key); }}>
-                <button type="button" id={`${listId}-option-${index}`} role="option" aria-selected={selected} aria-disabled={!canChoose || unavailable} title={item.model.disabledReason ?? item.model.id} tabIndex={-1} onClick={() => { if (canChoose && !unavailable) void selectModel(item); }} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs outline-none disabled:cursor-not-allowed">
-                  <span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5 font-medium leading-snug"><span className="truncate">{item.model.label}</span>{item.model.badge === "new" && <span className="shrink-0 rounded bg-primary/10 px-1 text-[10px] text-primary">{t("新", "New")}</span>}{unavailable && <span className="shrink-0 text-muted-foreground">{t("（不可用）", " (unavailable)")}</span>}</span><span className="mt-1 flex min-w-0 items-center gap-1.5 text-muted-foreground/70"><Glyph provider={item.provider} providers={catalog.providers} small /><span className="truncate">{getProviderInstanceDisplayName(item.provider)}{item.model.subProvider ? ` · ${item.model.subProvider}` : ""}</span></span></span>
-                  {selected && <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />}
+                <button type="button" id={`${listId}-option-${index}`} role="option" aria-selected={checked} aria-disabled={!canChoose || unavailable} title={rowTitle} tabIndex={-1} onClick={() => { if (!canChoose || unavailable) return; if (multiSelect) toggleStacked(item); else void selectModel(item); }} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs outline-none disabled:cursor-not-allowed">
+                  <span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5 font-medium leading-snug"><span className="truncate">{item.model.label}</span>{item.model.badge === "new" && <span className="shrink-0 rounded bg-primary/10 px-1 text-[10px] text-primary">{t("新", "New")}</span>}{unavailable && <span className="shrink-0 text-muted-foreground">{unavailableLabel}</span>}</span><span className="mt-1 flex min-w-0 items-center gap-1.5 text-muted-foreground/70"><Glyph provider={item.provider} providers={catalog.providers} small /><span className="truncate">{getProviderInstanceDisplayName(item.provider)}{item.model.subProvider ? ` · ${item.model.subProvider}` : ""}</span></span></span>
+                  {multiSelect
+                    ? <span aria-hidden="true" data-model-checkbox={checked ? "checked" : "unchecked"} className={cn("flex size-3.5 shrink-0 items-center justify-center rounded-[3px] border", checked ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{checked && <CheckIcon className="size-3" />}</span>
+                    : checked && <CheckIcon aria-hidden="true" className="size-3.5 shrink-0" />}
                 </button>
                 <button type="button" disabled={!canChoose} aria-label={`${favorite ? t("取消收藏", "Remove from favorites") : t("收藏", "Favorite")} ${item.model.label} · ${getProviderInstanceDisplayName(item.provider)}`} aria-pressed={favorite} title={favorite ? t("取消收藏", "Remove from favorites") : t("收藏", "Favorite")} onClick={() => void toggleFavorite(item)} onKeyDown={(event) => event.stopPropagation()} className="flex size-7 shrink-0 items-center justify-center rounded hover:bg-foreground/10 disabled:opacity-50"><StarIcon aria-hidden="true" className={cn("size-3.5", favorite && "fill-current text-warning")} /></button>
               </div>;
             })}
           </div>
+          {multiSelect && <p role="note" className="shrink-0 border-t border-border/70 px-3 py-2 text-[11px] text-muted-foreground">{t("点击模型可叠选，再次点击取消；弹层保持打开。", "Click models to stack; click again to remove. The panel stays open.")}</p>}
           {actionError && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{actionError}{saveError && onRetry && <> <button type="button" disabled={disabled || saving || pending} onClick={retrySave} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("重试保存", "Retry save")}</button></>}</div>}
           <div className="flex shrink-0 items-center justify-between border-t border-border/70 p-1"><Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"><Settings2Icon aria-hidden="true" className="size-3.5" />{t("管理模型提供商", "Manage model providers")}</Link><button type="button" disabled={refreshing} onClick={() => void refresh()} className="rounded-md px-2 py-1.5 text-xs text-muted-foreground enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("刷新目录", "Refresh catalog")}</button></div>
         </div>

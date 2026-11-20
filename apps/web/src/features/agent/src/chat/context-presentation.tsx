@@ -1,7 +1,7 @@
 // Native presentation adapted from t3code 7379f1969b0f4b579327cf81299ef8cc3ddf8e9c.
 // Inputs: composerContextPresentation.tsx, ThreadContextChip.tsx, EnvironmentContextChip.tsx,
 // chat/AssistantCitationChip.tsx. Copyright (c) 2026 T3 Tools Inc. MIT; LICENSE.t3code.
-import { useRef, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { useAui, useAuiState } from "@assistant-ui/react";
 import { getExternalStoreMessages } from "@assistant-ui/core";
 import type { UIMessage } from "ai";
@@ -21,6 +21,10 @@ import { ContextChipPopover, ContextChipShell, UnresolvedChip } from "./context-
 import { createContextPresentationRegistry } from "./context-presentation-registry";
 import { TerminalContextInlineChip } from "./terminal-context-chip";
 import { requestContextSource } from "./context-source-navigation";
+import { CitationCommentEditor } from "./citation-comment-editor";
+import { citationCommentSupported, citationCommentValue, withCitationComment } from "./citation-comment";
+import { composerContextDragPayload, writeComposerContextDrag } from "./composer-context-drag";
+import { useAgentText } from "../i18n";
 
 export function contextInputLabel(input: ChatContextInput): string {
   const source = input.source;
@@ -45,19 +49,29 @@ export function ResponseContextCard({ text, title, comment, onOpen, label }: { t
 }
 
 function ResponseDraftChip({ input, text, label, onOpen }: { input: Extract<ChatContextInput, { kind: "response" }>; text: string; label: string; onOpen: () => void }) {
+  const t = useAgentText();
   const draft = useMessageContextDraft();
-  const comment = useRef<HTMLTextAreaElement>(null);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const comment = citationCommentValue(input);
+  const save = (value: string) => {
+    setPending(true); setError(undefined);
+    // The comment is part of the existing input digest; re-resolving keeps the frozen source check.
+    void draft.add(withCitationComment(input, value)).then(() => { if (draft.isCurrent()) setOpen(false); })
+      .catch(cause => { if (draft.isCurrent()) setError(cause instanceof Error ? cause.message : String(cause)); })
+      .finally(() => { if (draft.isCurrent()) setPending(false); });
+  };
   return <ContextChip kind="citation" contentEditable={false}>
-    <button type="button" onClick={onOpen} aria-label={`View cited response: ${label}`} title={text} className="inline-flex min-w-0 items-center gap-[0.2em] rounded-sm text-inherit no-underline"><QuoteIcon /><ContextChipLabel className="max-w-[16em]">{input.selectedText || label}</ContextChipLabel></button>
-    <Popover open={open} onOpenChange={setOpen}><PopoverTrigger render={<ContextChipAction aria-label="Edit citation comment"><PencilIcon /></ContextChipAction>} />
-      <PopoverContent side="top" className="w-[min(30rem,90vw)] space-y-2"><PopoverTitle className="text-sm font-medium">Comment on this response</PopoverTitle><blockquote className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{text}</blockquote><textarea key={input.comment} ref={comment} defaultValue={input.comment || ""} maxLength={4000} className="w-full rounded-md border bg-background p-2 text-sm" aria-label="Citation comment" /><button type="button" disabled={pending || !draft.available} className="text-sm underline" onClick={() => {
-        setPending(true); setError(undefined);
-        void draft.add({ ...input, comment: comment.current?.value || "" }).then(() => { if (draft.isCurrent()) setOpen(false); }).catch(cause => { if (draft.isCurrent()) setError(String(cause)); }).finally(() => { if (draft.isCurrent()) setPending(false); });
-      }}>Save comment</button>{error && <p role="alert" className="text-xs text-destructive">{error}</p>}</PopoverContent>
-    </Popover>
+    <button type="button" onClick={onOpen} aria-label={t(`查看引用回复：${label}`, `View cited response: ${label}`)} title={comment ? `${text}\n\n${comment}` : text} className="inline-flex min-w-0 items-center gap-[0.2em] rounded-sm text-inherit no-underline"><QuoteIcon /><ContextChipLabel className="max-w-[16em]">{input.selectedText || label}</ContextChipLabel></button>
+    {/* The quote/context structure carries a comment only for response citations. */}
+    {citationCommentSupported(input) && <Popover open={open} onOpenChange={setOpen}><PopoverTrigger render={<ContextChipAction aria-label={comment ? t("编辑引用评论", "Edit citation comment") : t("添加引用评论", "Add citation comment")} title={comment ? t("编辑引用评论", "Edit citation comment") : t("添加引用评论", "Add citation comment")}><PencilIcon /></ContextChipAction>} />
+      <PopoverContent side="top" className="w-[min(30rem,90vw)] space-y-2"><PopoverTitle className="text-sm font-medium">{t("回复评论", "Comment on this response")}</PopoverTitle><blockquote className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{text}</blockquote>
+        {comment && <p className="citation-comment-saved whitespace-pre-wrap text-sm" dir="auto">{comment}</p>}
+        <CitationCommentEditor value={comment} disabled={pending || !draft.available} onSave={save} onCancel={() => setOpen(false)} />
+        {!draft.available && <p role="status" className="text-xs text-muted-foreground">{t("会话尚未就绪，评论未保存。", "The session is not ready; the comment was not saved.")}</p>}
+        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}</PopoverContent>
+    </Popover>}
   </ContextChip>;
 }
 
@@ -126,6 +140,9 @@ const registry = createContextPresentationRegistry<MessageContextDraftItem, { hi
   handlers: (["terminal", "review-comment", "preview-annotation", "element", "thread", "environment", "response"] as const).map(kind => ({ kind, canRender: item => item.input.kind === kind, render: (item, context) => <ContextRecord item={item} history={context.history} /> })),
   fallback: kind => <UnresolvedChip label={kind} tooltip="This context kind is missing or unsupported. Remove it or attach it again." />,
 });
-export function MessageContextChip({ item, history = false }: { item: MessageContextDraftItem; history?: boolean }) { return <span data-message-context-record ref={element => { bindClipboardContext(element, () => ({ type: "native", item: { input: item.input } })); }}>{registry.render(item.input.kind, item, { history })}{item.accepted?.visibility === "available" && item.accepted.reason && <span role="status" className="ml-1 whitespace-normal text-xs text-muted-foreground">{item.accepted.reason}</span>}</span>; }
+export function MessageContextChip({ item, history = false }: { item: MessageContextDraftItem; history?: boolean }) { return <span data-message-context-record draggable ref={element => { bindClipboardContext(element, () => ({ type: "native", item: { input: item.input } })); }} onDragStart={event => {
+  writeComposerContextDrag(event.dataTransfer, composerContextDragPayload("", [{ type: "native", item: { input: item.input } }]));
+  event.dataTransfer.setData("text/plain", contextInputLabel(item.input));
+}}>{registry.render(item.input.kind, item, { history })}{item.accepted?.visibility === "available" && item.accepted.reason && <span role="status" className="ml-1 whitespace-normal text-xs text-muted-foreground">{item.accepted.reason}</span>}</span>; }
 export function AcceptedMessageContexts({ items }: { items: readonly AcceptedChatContext[] }) { return <div className="flex flex-wrap items-start gap-2 py-1 text-sm">{items.map(accepted => <span className={accepted.kind === "response" ? "block w-full" : "inline-flex"} key={accepted.contextId}>{accepted.visibility === "available" ? <MessageContextChip item={{ input: accepted.input, accepted }} history /> : <ContextChipShell kind={accepted.kind === "response" ? "citation" : accepted.kind} state="invalid" icon={<MessageCircleIcon />} label="Context unavailable" tooltip={accepted.reason || "The saved context is no longer accessible."} />}</span>)}</div>; }
 export function MessageContextDraftStatus() { const draft = useMessageContextDraft(); return draft.error ? <p role="alert" className="px-2 text-xs text-destructive">{draft.error}</p> : null; }

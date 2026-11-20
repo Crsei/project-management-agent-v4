@@ -8,12 +8,17 @@ import styles from "./pm-reference-tray.module.css";
 import { ContextChipPopover } from "../chat/context-chip-parts";
 import { ContextChipAction } from "../chat/context-chip";
 import { bindClipboardContext } from "../chat/message-context-clipboard";
+import { composerContextDragPayload, writeComposerContextDrag } from "../chat/composer-context-drag";
 
 export function PmContextChip({ reference }: { reference: PmReference }) {
   const t = useAgentText();
   const availability = reference.availability ?? "unverified";
   const Icon = reference.kind === "issue" ? ClipboardList : reference.kind === "project" ? FolderKanban : FileText;
-  return <span data-message-context-record ref={element => { bindClipboardContext(element, () => ({ type: "pm", reference })); }}><ContextChipPopover kind="mention" state={availability === "unverified" ? "unresolved" : availability === "available" ? undefined : "invalid"} icon={<Icon />} label={`${reference.id} · ${reference.title}`} accessibleLabel={`${kindLabels(t)[reference.kind]} ${reference.id}`}>
+  return <span data-message-context-record draggable ref={element => { bindClipboardContext(element, () => ({ type: "pm", reference })); }} onDragStart={event => {
+    // Same MIME as native context chips; the composer resolves the PM reference on drop.
+    writeComposerContextDrag(event.dataTransfer, composerContextDragPayload("", [{ type: "pm", reference }]));
+    event.dataTransfer.setData("text/plain", `${reference.id} · ${reference.title}`);
+  }}><ContextChipPopover kind="mention" state={availability === "unverified" ? "unresolved" : availability === "available" ? undefined : "invalid"} icon={<Icon />} label={`${reference.id} · ${reference.title}`} accessibleLabel={`${kindLabels(t)[reference.kind]} ${reference.id}`}>
     <div className="space-y-2 text-sm"><strong>{reference.title || reference.id}</strong><p>{kindLabels(t)[reference.kind]} · {availabilityLabels(t)[availability]}</p><p className="break-all text-xs">{reference.workspaceId}{reference.projectId ? ` / ${reference.projectId}` : ""}</p><p className="break-all text-xs">revision {reference.revision ?? t("发送时核验", "Verified on send")}</p><p className="text-xs text-muted-foreground">{t("仅引用，不授予 PM 权限；发送时重新核验来源和版本。", "A reference is not PM permission; source and revision are checked again on send.")}</p></div>
   </ContextChipPopover></span>;
 }

@@ -1,0 +1,185 @@
+.composer-banner-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.composer-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 2px 8px;
+  border: 1px solid var(--border);
+  border-inline-start-width: 3px;
+  border-radius: 8px;
+  background: var(--card);
+  padding: 6px 8px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.composer-banner[data-severity="alert"] {
+  border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+  border-inline-start-color: var(--destructive);
+}
+
+.composer-banner[data-severity="warning"] {
+  border-color: color-mix(in oklab, var(--warning) 45%, var(--border));
+  border-inline-start-color: var(--warning);
+}
+
+.composer-banner[data-severity="info"] {
+  border-inline-start-color: var(--info);
+}
+
+.composer-banner-icon {
+  grid-row: 1 / -1;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.composer-banner[data-severity="alert"] .composer-banner-icon {
+  color: var(--destructive);
+}
+
+.composer-banner[data-severity="warning"] .composer-banner-icon {
+  color: var(--warning);
+}
+
+.composer-banner[data-severity="info"] .composer-banner-icon {
+  color: var(--info);
+}
+
+.composer-banner-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.composer-banner-title {
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.composer-banner-detail {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.composer-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  grid-column: 2 / -2;
+}
+
+.composer-banner-actions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Running to-do steps are full sentences; they wrap instead of stretching the row. */
+.composer-banner[data-kind="progress"] .composer-banner-actions button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.composer-banner-actions button.composer-banner-primary {
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 2px 9px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  text-decoration: none;
+}
+
+.composer-banner-actions button.composer-banner-primary:disabled {
+  border-color: var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.composer-banner-actions button:disabled {
+  color: var(--muted-foreground);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+.composer-banner-dismiss {
+  grid-column: 4;
+  grid-row: 1;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composer-banner-dismiss:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.composer-banner-hint {
+  grid-column: 2 / -1;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.composer-banner-error {
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+
+.composer-banner-peek {
+  align-self: flex-start;
+  border: 0;
+  padding: 1px 2px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.composer-banner-peek:hover {
+  color: var(--foreground);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .composer-banner {
+    animation: composer-banner-in 140ms ease-out;
+  }
+}
+
+@keyframes composer-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

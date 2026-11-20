@@ -53,6 +53,7 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const loading = loadingScope === scopeKey || (!current && !error);
   const context = !loading && !error ? current?.context : undefined;
   const id = context?.id;
+  const ompSelected = context?.apps.includes("omp") === true;
   const locked = transportBusy > 0 || panelBusy || nativeBusy || bundledBusy || dirty;
   useEffect(() => { setGuard(transportBusy > 0 || panelBusy || nativeBusy || bundledBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, nativeBusy, bundledBusy, dirty, setGuard]);
   const onBundledBusyChange = useCallback((busy: boolean) => {
@@ -199,6 +200,12 @@ function Management({ view }: { view: "mcp" | "skills" }) {
       {error && <SettingsNotice kind="error" onRetry={() => void load()}>{error}</SettingsNotice>}
       {context?.lastError && <SettingsNotice kind="error">{context.lastError.message}</SettingsNotice>}
     </section>
+    {ompSelected && <p className="settings-extension-scope-note" role="note">
+      {t(
+        "OMP 配置从当前 Agent 服务所在机器的真实用户 Home 读取，不需要隔离 Home 或重新认证：MCP 读取 OMP agent 目录的 mcp.json；Skills 观测 OMP agent 目录的 skills/ 与 Home/.agents/skills。MCP 主矩阵展示管理库定义，OMP 原生 mcp.json 条目可通过导入预览查看。本页只读取和管理配置，不启动 OMP，因此 OMP 原生会话因 ambient MCP/插件/dotenv 被拒绝时，这里的显示不受影响。OMP Skills 仍是原生目录观测，不代表运行中已加载或可在 Composer 调用；项目内 .agents/skills 属于会话范围，不并入本清单。",
+        "OMP configuration is read from the real user Home of the machine running this Agent service; no isolated Home or re-authentication is required. MCP reads the OMP agent directory's mcp.json; Skills observes the OMP agent directory's skills/ and Home/.agents/skills. The MCP matrix lists managed-library definitions; entries from OMP's native mcp.json are available through the import preview. This page only reads and manages configuration and never starts OMP, so an OMP native session refused for ambient MCP/plugin/dotenv sources does not affect what is shown here. OMP Skills remain native-directory observations, not a claim of runtime loading or Composer callability; project-local .agents/skills belong to a session scope and are not merged into this inventory.",
+      )}
+    </p>}
     {!loading && !error && requestedContext === null && requestedProvider === null && !projectScope && current && !current.context && current.targets.length === 0 && <OpenHandsProviderSetupSurface view={view} locale={locale} onConfigureProvider={() => navigate("/agent/settings/providers")} />}
     {context && streamError && <SettingsNotice kind="error" onRetry={() => setStreamVersion(version => version + 1)}>{streamError}</SettingsNotice>}
     {view === "skills" && <BundledSkillsPanel t={t} ownerKey={`${service.actor?.id ?? "anonymous"}:${service.actorEpoch}:${scopeKey}`} preferredProviderId={requestedProvider ?? undefined} disabled={transportBusy > 0 || panelBusy || nativeBusy || dirty || !!context && !!streamError} onBusyChange={onBundledBusyChange} />}

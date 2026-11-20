@@ -14,6 +14,8 @@ import { contextInputLabel } from "./context-presentation";
 import { InlineComposerAttachment } from "./composer-context-attachments";
 import { PmContextChip } from "../pm/pm-reference-tray";
 import { readContextAttachmentBindings, reindexContextAttachmentBindings } from "./context-attachments";
+import { ComposerStashPanel } from "./composer-stash-panel";
+import { ComposerQueueList } from "./composer-queue-list";
 import { ChevronDownIcon, QuoteIcon } from "lucide-react";
 
 export type DraftInput = ChatDraftInput;
@@ -38,6 +40,29 @@ function editSavedDraftText(draft: DraftInput, text: string): DraftInput {
   const contextAttachments = reindexContextAttachmentBindings(draft.message.parts, parts, bindings);
   return { ...draft, message: { ...draft.message, id: crypto.randomUUID(), parts, ...(draft.message.metadata ? { metadata: { ...draft.message.metadata, custom: { ...draft.message.metadata.custom, ...(bindings.length ? { contextAttachments } : {}) } } } : {}) } };
 }
+export const EDIT_QUEUED_IN_COMPOSER_EVENT = "pm-agent-edit-queued";
+
+/** Loads a plain-text queue row into the composer; the composer owns saving the same row. */
+export function requestEditQueuedInComposer(threadId: string, row: QueuedChatMessage): void {
+  window.dispatchEvent(new CustomEvent(EDIT_QUEUED_IN_COMPOSER_EVENT, { detail: { threadId, row } }));
+}
+
+/** Saves the composer text back to its original queue row without sending a new message. */
+export async function updateQueuedDraft(threadId: string, row: QueuedChatMessage, text: string): Promise<void> {
+  if (!row.draft) throw new Error("队列草稿不可用；请重新读取队列。");
+  const settings = await flushThreadSettings(threadId);
+  await workspaceClient.json(`/api/chat/threads/${encodeURIComponent(threadId)}/queue/${encodeURIComponent(row.id)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "edit",
+      revision: row.revision,
+      threadSettingsRevision: settings.revision,
+      draft: editSavedDraftText(row.draft, text),
+    }),
+  });
+  window.dispatchEvent(new CustomEvent(changed, { detail: { threadId } }));
+}
+
 export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clearDraft, disabled = false }: {
   threadId: string;
   readDraft: () => DraftInput | Promise<DraftInput>;
@@ -47,7 +72,8 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
 }) {
   const t = useAgentText();
   const [stashes, setStashes] = useState<StashedChatDraft[]>([]);
-  const [open, setOpen] = useState(false), [pending, setPending] = useState(false), [error, setError] = useState<string>();
+  const [stashOpen, setStashOpen] = useState(false), [stashSaving, setStashSaving] = useState(false);
+  const [pending, setPending] = useState(false), [error, setError] = useState<string>();
   const [unknown, setUnknown] = useState<{ id: string; kind: "queue" | "stash" }>();
   const [capabilities, setCapabilities] = useState<ThreadActionCapabilities>();
   const [steerOpen, setSteerOpen] = useState(false), [steerText, setSteerText] = useState("");
@@ -55,7 +81,16 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
   const steerAttempt = useRef<SteeringAttempt | null>(null);
   const target = useRef(threadId); target.current = threadId;
   const base = `/api/chat/threads/${encodeURIComponent(threadId)}`;
-  useEffect(() => { setStashes([]); setPending(false); setOpen(false); setUnknown(undefined); setError(undefined); setSteerOpen(false); setSteerText(""); setSteerConfirmed(false); setCapabilities(undefined); steerAttempt.current = null; }, [threadId]);
+  useEffect(() => {
+    setStashes([]); setPending(false); setStashOpen(false); setStashSaving(false);
+    setUnknown(undefined); setError(undefined); setSteerOpen(false); setSteerText(""); setSteerConfirmed(false); setCapabilities(undefined); steerAttempt.current = null;
+    // The badge count is a read-only projection; a failed probe stays silent until opened.
+    let alive = true;
+    void workspaceClient.json<{ drafts: StashedChatDraft[] }>(`/api/chat/threads/${encodeURIComponent(threadId)}/stash`)
+      .then(data => { if (alive && target.current === threadId) setStashes(data.drafts); })
+      .catch(() => { /* Opening the stash surfaces the real error. */ });
+    return () => { alive = false; };
+  }, [threadId]);
   const refresh = async () => {
     const data = await workspaceClient.json<{ drafts: StashedChatDraft[] }>(`${base}/stash`);
     if (target.current === threadId) setStashes(data.drafts);
@@ -63,6 +98,7 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
   };
   const save = async (kind: "queue" | "stash") => {
     setPending(true); setError(undefined);
+    if (kind === "stash") setStashSaving(true);
     let submitted = false;
     const id = crypto.randomUUID();
     try {
@@ -77,13 +113,13 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
       await clearDraft();
       if (target.current !== threadId) return;
       window.dispatchEvent(new CustomEvent(changed, { detail: { threadId, ...(kind === "queue" ? { armQueueId: id } : {}) } }));
-      if (kind === "stash") { await refresh(); if (target.current === threadId) setOpen(true); }
+      if (kind === "stash") { await refresh(); if (target.current === threadId) setStashOpen(true); }
     } catch (reason) {
       if (target.current !== threadId) return;
       const status = typeof reason === "object" && reason && "status" in reason ? Number(reason.status) : 0;
       if (submitted && (!status || status >= 500)) setUnknown({ id, kind });
       setError(reason instanceof Error ? reason.message : String(reason));
-    } finally { if (target.current === threadId) setPending(false); }
+    } finally { if (target.current === threadId) { setPending(false); if (kind === "stash") setStashSaving(false); } }
   };
   const reconcileSave = async () => {
     if (!unknown) return;
@@ -96,7 +132,7 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
         if (target.current !== threadId) return;
         setUnknown(undefined);
         window.dispatchEvent(new CustomEvent(changed, { detail: { threadId } }));
-        if (unknown.kind === "stash") { await refresh(); if (target.current === threadId) setOpen(true); }
+        if (unknown.kind === "stash") { await refresh(); if (target.current === threadId) setStashOpen(true); }
       } else {
         setUnknown(undefined);
         setError(t("已核对：服务端没有该保存记录，草稿仍保留，可重新显式保存。", "Confirmed: no server save exists. Your draft remains; explicitly save it again if wanted."));
@@ -128,6 +164,21 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
     }
     finally { if (target.current === threadId) setPending(false); }
   };
+  const restoreStash = async (entry: StashedChatDraft) => {
+    if (!entry.draft) return;
+    setPending(true); setError(undefined);
+    try { await restoreDraft(entry.draft); if (target.current === threadId) setStashOpen(false); }
+    catch (reason) { if (target.current === threadId) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (target.current === threadId) setPending(false); }
+  };
+  const deleteStash = async (entry: StashedChatDraft) => {
+    setPending(true); setError(undefined);
+    try {
+      await workspaceClient.json(`${base}/stash/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+      if (target.current === threadId) await refresh();
+    } catch (reason) { if (target.current === threadId) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (target.current === threadId) setPending(false); }
+  };
   return <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs" aria-label={t("排队和草稿暂存", "Queue and draft stash")}>
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button type="button" size="sm" variant="ghost" aria-label={t("草稿与队列", "Draft and queue")} />}>
@@ -136,7 +187,6 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
       <DropdownMenuContent align="start" side="top" sideOffset={4} className="w-48">
         <DropdownMenuItem disabled={disabled || pending || Boolean(unknown)} onSelect={() => void save("queue")}>{t("加入队列", "Queue draft")}</DropdownMenuItem>
         <DropdownMenuItem disabled={disabled || pending || Boolean(unknown)} onSelect={() => void save("stash")}>{t("暂存草稿", "Stash draft")}</DropdownMenuItem>
-        <DropdownMenuItem disabled={pending} onSelect={() => { setOpen(!open); if (!open) void refresh().catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("草稿库", "Draft stash")}</DropdownMenuItem>
         <DropdownMenuItem disabled={disabled || pending} onSelect={() => { setSteerOpen(!steerOpen); if (!steerOpen) void getThreadActionCapabilities(threadId).then(value => { if (target.current === threadId) setCapabilities(value); }).catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("引导当前执行", "Steer current turn")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -149,18 +199,11 @@ export function ComposerMessageActions({ threadId, readDraft, restoreDraft, clea
         <Button type="button" size="sm" disabled={pending || !steerText.trim() || Boolean(steerAttempt.current) || capabilities.steer.interruptsTools && !steerConfirmed} onClick={() => void sendSteer()}>{t("发送活动引导", "Send steering")}</Button>
       </>}
     </section>}
-    {open && <section className="border-border max-h-64 basis-full space-y-2 overflow-auto rounded border p-2" aria-label={t("显式多草稿暂存", "Explicit multi-draft stash")}>
-      <p>{t("暂存不会发送。恢复要求输入框为空；原暂存保留至手动删除。", "Stashing never sends. Restore requires an empty composer; the stash remains until explicitly deleted.")}</p>
-      {!stashes.length && <p>{t("没有暂存草稿。", "No stashed drafts.")}</p>}
-      {stashes.map(row => <div key={row.id} className="border-border space-y-1 border-t pt-2">
-        <p className="line-clamp-3 whitespace-pre-wrap">{row.draft ? textOf(row.draft) || t("附件或引用草稿", "Attachment or quote draft") : row.reason}</p>
-        {row.draft && <SavedDraftContexts draft={row.draft} />}
-        <span>{new Date(row.createdAt).toLocaleString()}</span>
-        <Button type="button" size="sm" variant="outline" disabled={pending || !row.draft} onClick={() => { setPending(true); void Promise.resolve().then(() => { if (target.current === threadId) return restoreDraft(row.draft!); }).catch(reason => { if (target.current === threadId) setError(String(reason)); }).finally(() => { if (target.current === threadId) setPending(false); }); }}>{t("恢复到输入框", "Restore to composer")}</Button>
-        <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => { setPending(true); void workspaceClient.json(`${base}/stash/${encodeURIComponent(row.id)}`, { method: "DELETE" }).then(() => { if (target.current === threadId) return refresh(); }).catch(reason => { if (target.current === threadId) setError(String(reason)); }).finally(() => { if (target.current === threadId) setPending(false); }); }}>{t("删除暂存", "Delete stash")}</Button>
-      </div>)}
-    </section>}
-    {error && <p role="alert" className="text-destructive basis-full whitespace-pre-wrap">{error}</p>}
+    <ComposerStashPanel entries={stashes} open={stashOpen} pending={pending} saving={stashSaving} disabled={disabled || Boolean(unknown)}
+      error={stashOpen ? error : undefined}
+      onOpenChange={next => { setStashOpen(next); if (next) void refresh().catch(reason => { if (target.current === threadId) setError(reason instanceof Error ? reason.message : String(reason)); }); }}
+      onRestore={entry => restoreStash(entry)} onDelete={entry => deleteStash(entry)} />
+    {error && !stashOpen && <p role="alert" className="text-destructive basis-full whitespace-pre-wrap">{error}</p>}
   </div>;
 }
 
@@ -238,7 +281,7 @@ export function QueuedMessages({ threadId }: { threadId: string }) {
   const busy = latest?.status === "running" || latest?.status === "queued";
   const needsConfirmation = latest && !busy && latest.status !== "completed";
   return <section className="border-border max-h-72 shrink-0 space-y-2 overflow-auto border-t px-3 py-2 text-xs" aria-label={t("持久消息队列", "Durable message queue")}>
-    <p>{t("队列已持久保存。当前页面保持可见且授权有效时，上一轮完成后自动发送下一条；离页、重启、失败或未知结果会暂停，不重放。", "Queued messages are durable. While this page is visible and authorized, the next message is sent automatically after completion. Leaving, restarting, failure or an unknown result pauses the queue without replay.")}</p>
+    <p>{t("队列已持久保存。当前页面保持可见且授权有效时，上一轮完成后自动发送下一条；离页、重启、失败或未知结果会暂停，不重放。拖拽左侧把手或用 Alt+↑/↓ 调整顺序；编辑沿用该条目的 revision 并在保存时核对当前设置。", "Queued messages are durable. While this page is visible and authorized, the next message is sent automatically after completion. Leaving, restarting, failure or an unknown result pauses the queue without replay. Drag the grip or press Alt+↑/↓ to reorder; editing keeps the row's revision and rechecks current settings on save.")}</p>
     <p role="status">{autoState.armed ? t("队列已启用，等待已核验的完成边界。", "Queue enabled; waiting for a verified completion boundary.") : `${t("队列已暂停：", "Queue paused: ")}${({
       "not-resumed": t("请明确恢复；不会自动恢复旧队列。", "Explicitly resume; old queues never restart automatically."),
       hidden: t("页面离开前台，请重新核对后恢复。", "Page left the foreground; inspect and resume."),
@@ -256,25 +299,25 @@ export function QueuedMessages({ threadId }: { threadId: string }) {
       else if (snapshot.current) { coordinator.current?.resume(snapshot.current, needsConfirmation && confirmed ? latest!.id : undefined); void coordinator.current?.advance(snapshot.current); }
     }}>{autoState.armed ? t("暂停队列", "Pause queue") : t("核对后恢复队列", "Resume queue after review")}</Button>
     {needsConfirmation && <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />{t("已核对上一执行的副作用；发送新消息不是重试上一执行。", "I checked the previous execution's side effects; sending a new message is not retrying it.")}</label>}
-    {rows.map((row, index) => <article key={row.id} className="border-border space-y-1 border-t pt-2">
-      <div className="flex flex-wrap items-center gap-1"><strong>{index + 1}. {row.status}</strong><time>{new Date(row.createdAt).toLocaleTimeString()}</time></div>
-      {editing === row.id ? <textarea className="border-border w-full rounded border p-2" value={editText} onChange={event => setEditText(event.target.value)} aria-label={t("编辑排队文本", "Edit queued text")} /> : <p className="line-clamp-3 whitespace-pre-wrap">{textOf(row.draft) || row.reason || t("附件或引用草稿", "Attachment or quote draft")}</p>}
-      {row.draft && <SavedDraftContexts draft={row.draft} />}
-      {row.reason && <p role="status">{row.reason}</p>}
-      {(row.status === "queued" || row.status === "blocked") && <div className="flex flex-wrap gap-1">
-        <Button type="button" size="sm" variant="outline" disabled={pending || busy || !row.draft || Boolean(needsConfirmation && !confirmed)} onClick={() => void action(row, { action: "send", ...(needsConfirmation ? { confirmAfterGenerationId: latest!.id } : {}) })}>{t("发送下一条 / 立即发送", "Send next / send now")}</Button>
-        <Button type="button" size="sm" variant="ghost" disabled={pending || !row.draft} onClick={() => { setEditing(row.id); setEditText(textOf(row.draft)); }}>{t("编辑", "Edit")}</Button>
-        {editing === row.id && <Button type="button" size="sm" disabled={pending} onClick={() => { void flushThreadSettings(threadId).then(settings => {
+    <ComposerQueueList rows={rows} latestStatus={latest?.status} pending={pending}
+      needsConfirmation={Boolean(needsConfirmation)} confirmed={confirmed}
+      editingId={editing} editText={editText} onEditTextChange={setEditText}
+      onBeginEdit={row => { setEditing(row.id); setEditText(textOf(row.draft)); }}
+      onEditInComposer={row => requestEditQueuedInComposer(threadId, row)}
+      onCancelEdit={() => setEditing(undefined)}
+      onSaveEdit={row => {
+        if (!row.draft) return;
+        // Saving keeps the row's revision and rechecks the current session settings; a failure keeps the row.
+        void flushThreadSettings(threadId).then(settings => {
           if (target.current !== threadId) return;
-          return action(row, { action: "edit", threadSettingsRevision: settings.revision,
-            draft: editSavedDraftText(row.draft!, editText) });
-        }).catch(reason => { if (target.current === threadId) setError(String(reason)); }); }}>{t("保存编辑并确认当前设置", "Save edit and confirm settings")}</Button>}
-        <Button type="button" size="sm" variant="ghost" disabled={pending || index === 0} onClick={() => void action(row, { action: "move", beforeId: rows[index - 1]!.id })}>{t("上移", "Move up")}</Button>
-        <Button type="button" size="sm" variant="ghost" disabled={pending || index === rows.length - 1} onClick={() => void action(row, { action: "move", beforeId: rows[index + 2]?.id ?? null })}>{t("下移", "Move down")}</Button>
-      </div>}
-      {(row.status === "unknown" || row.status === "dispatching") && <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => void action(row, { action: "reconcile" })}>{t("只核对派发结果", "Check dispatch only")}</Button>}
-      {!["unknown", "dispatching"].includes(row.status) && <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => void action(row, { action: "remove" })}>{row.status === "sent" ? t("移除队列收据", "Dismiss queue receipt") : t("移除", "Remove")}</Button>}
-    </article>)}
+          return action(row, { action: "edit", threadSettingsRevision: settings.revision, draft: editSavedDraftText(row.draft!, editText) });
+        }).catch(reason => { if (target.current === threadId) setError(reason instanceof Error ? reason.message : String(reason)); });
+      }}
+      onSend={row => void action(row, { action: "send", ...(needsConfirmation ? { confirmAfterGenerationId: latest!.id } : {}) })}
+      onMove={(row, beforeId) => void action(row, { action: "move", beforeId })}
+      onRemove={row => void action(row, { action: "remove" })}
+      onReconcile={row => void action(row, { action: "reconcile" })}
+      renderDraftDetails={row => row.draft ? <SavedDraftContexts draft={row.draft} /> : null} />
     {error && <p role="alert" className="text-destructive whitespace-pre-wrap">{error}</p>}
   </section>;
 }
