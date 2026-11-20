@@ -31,6 +31,8 @@ import {
   getActiveChat,
   getChatGeneration,
   isChatActive,
+  compactThreadNow,
+  threadCompactionState,
   listChatGenerations,
   submitChat,
   subscribeChat,
@@ -61,9 +63,11 @@ import { terminateSessionTerminals } from "./inspector/terminal.ts";
 import { createPmVisibilityProjector, type PmVisibilityProjector } from "./pm-visibility.ts";
 import { chatActionRoutes } from "./chat-actions.ts";
 import { paginateHistory } from "./durable/history-page.ts";
-import { beginThreadDeletion, blockThreadDeletion, commitThreadDeletion, readThreadLifecycleOperation } from "./durable/thread-lifecycle.ts";
+import { beginThreadDeletion, blockThreadDeletion, commitThreadDeletion, readChatGenerationLifecycle, readThreadLifecycleOperation } from "./durable/thread-lifecycle.ts";
 import { chatContextResolveRequestSchema } from "@agent-workspace/contracts/message-context";
 import { resolveChatContextItems } from "./durable/message-context.ts";
+import { assertNoChatWorktree, createChatWorktree, getChatWorktreeState, removeChatWorktree } from "./chat-worktrees.ts";
+import { fanoutChat } from "./chat-fanout.ts";
 
 export const chatRoutes = new Hono();
 export const publicThread = (thread: ThreadMetadata) => ({
@@ -188,6 +192,46 @@ chatRoutes.get("/chat/threads/:id/execution", async c => {
   const snapshot = await resolveChatExecutionScope(thread, c.req.raw.headers, "inspect", c.req.raw.signal);
   return c.json({ environment: snapshot.environment, executionPolicy: defaultChatExecutionPolicy });
 });
+const worktreeMutationSchema = z.strictObject({
+  revision: z.number().int().nonnegative().optional(),
+  lifecycleRevision: z.number().int().nonnegative().optional(),
+});
+chatRoutes.get("/chat/threads/:id/compaction", async c => {
+  const thread = getThread(c.req.param("id"));
+  if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+  await publicAuthorizedThread(thread, c.req.raw.headers);
+  c.header("Cache-Control", "private, no-store");
+  return c.json(threadCompactionState(thread.remoteId));
+});
+chatRoutes.post("/chat/threads/:id/compact", async c => {
+  z.strictObject({}).parse(await c.req.json().catch(() => ({})));
+  const thread = assertThreadWritable(c.req.param("id"));
+  assertChatLifecycleMutationAllowed(thread.remoteId);
+  await publicAuthorizedThread(thread, c.req.raw.headers);
+  const generation = await compactThreadNow(thread.remoteId, c.req.raw.headers);
+  return c.json({ generation: publicChatGeneration(generation) });
+});
+chatRoutes.get("/chat/threads/:id/worktree", async c => {
+  const thread = getThread(c.req.param("id"));
+  if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+  await publicAuthorizedThread(thread, c.req.raw.headers);
+  c.header("Cache-Control", "private, no-store");
+  return c.json(await getChatWorktreeState(thread));
+});
+chatRoutes.post("/chat/threads/:id/worktree", async c => {
+  const input = worktreeMutationSchema.parse(await c.req.json());
+  const thread = assertThreadWritable(c.req.param("id"));
+  assertChatLifecycleMutationAllowed(thread.remoteId);
+  await publicAuthorizedThread(thread, c.req.raw.headers);
+  return c.json(await createChatWorktree(thread, input));
+});
+chatRoutes.delete("/chat/threads/:id/worktree", async c => {
+  const { confirm: _confirm, ...input } = worktreeMutationSchema.extend({ confirm: z.literal(true) }).parse(await c.req.json());
+  const thread = assertThreadWritable(c.req.param("id"));
+  assertChatLifecycleMutationAllowed(thread.remoteId);
+  await publicAuthorizedThread(thread, c.req.raw.headers);
+  return c.json(await removeChatWorktree(thread, input));
+});
 chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
   z.strictObject({}).parse(await c.req.json());
   const id = c.req.param("id");
@@ -220,6 +264,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
   if (patch.settings && patch.revision === undefined)
     return c.json({ error: "保存设置必须提供 revision。", code: "invalid_request" }, 400);
   if (patch.executionSelection) {
+    assertNoChatWorktree(id);
     if (Object.keys(patch).some(key => !["executionSelection", "revision"].includes(key)))
       throw new DurableError(400, "invalid_request", "Save execution selection separately from other Session changes.");
     const thread = getThread(id);
@@ -232,6 +277,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     const snapshot = await resolveAgentExecution(patch.executionSelection, id, c.req.raw.signal);
     await closeMcpAppSession(id);
     const latest = getThread(id);
+    assertNoChatWorktree(id);
     if (!latest || latest.revision !== thread.revision || latest.executionEnvironment?.frozen || listChatGenerations(id).length ||
         listRuns(id).some(run => run.status === "queued" || run.status === "running"))
       throw new ThreadConflictError("Session execution changed while saving its directory.", "execution_frozen");
@@ -243,6 +289,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     assertChatLifecycleMutationAllowed(id);
     const thread = getThread(id);
     if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+    if (patch.status === "archived") assertNoChatWorktree(id);
     if (patch.status === "archived" && getActiveChat(id))
       throw new DurableError(409, "chat_busy", "请等待后台生成结束或在聊天中显式停止后再归档；归档不会自动取消生成。");
   }
@@ -265,6 +312,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     const latest = getThread(id);
     if (!latest || latest.revision !== thread.revision)
       throw new ThreadConflictError("会话已更改，请重新载入。");
+    if (patch.status === "archived") assertNoChatWorktree(id);
     if (patch.status === "archived" && getActiveChat(id))
       throw new DurableError(409, "chat_busy", "会话仍在运行，请先停止生成。");
   }
@@ -407,6 +455,10 @@ chatRoutes.get("/chat/threads/:id/generations", async (c) => {
   const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
   return c.json({ generations: listChatGenerations(id).map(generation => projector.generation(publicChatGeneration(generation))) });
 });
+chatRoutes.get("/chat/threads/:id/generations/:generationId/lifecycle", (c) => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json({ generation: readChatGenerationLifecycle(c.req.param("id"), c.req.param("generationId")) });
+});
 chatRoutes.post("/chat/threads/:id/cancel", async (c) => {
   const body = z
     .object({ generationId: z.string().optional(), messageId: z.string().max(256).optional() })
@@ -470,6 +522,11 @@ chatRoutes.get("/chat/streams/:id", async (c) => {
       (projector, frame: UIMessageChunk) => projector.uiChunk(frame, generation.id)),
     headers: { "x-resumable-stream-id": generation.id, "cache-control": "no-store" },
   });
+});
+chatRoutes.post("/chat/fanout", async c => {
+  const result = await fanoutChat(await c.req.json(), c.req.raw.headers);
+  c.header("cache-control", "no-store");
+  return c.json(result, 200);
 });
 chatRoutes.post("/chat", async (c) => {
   const body = chatBodySchema.parse(await c.req.json());

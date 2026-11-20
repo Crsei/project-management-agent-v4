@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { getDatabase, readRecord, transaction, writeRecord } from "./store.ts";
 import { getThread, ThreadConflictError, deleteThread } from "./threads.ts";
 import { inspectThreadRetention } from "./thread-retention.ts";
+import type { ChatGenerationLifecycle } from "@agent-workspace/contracts/chat";
+import type { ChatGeneration } from "./chat-runtime.ts";
+import { assertNoChatWorktree } from "../chat-worktrees.ts";
 
 const OPERATIONS = "chat:lifecycle-operations";
 export type DeleteThreadInput = { lifecycleRevision: number; confirm: true; expectedGenerationId: string | null; stopActive: boolean };
@@ -13,6 +16,23 @@ export type ThreadLifecycleOperation = {
 };
 const operationKey = (threadId: string, operationId: string) => JSON.stringify([threadId, operationId]);
 const liveDeletes = new Set<string>();
+
+/** Select one original generation without reading PM calls, history or content authority. */
+export function readChatGenerationLifecycle(threadId: string, generationId: string): ChatGenerationLifecycle {
+  if (!getThread(threadId)) throw new ThreadConflictError("Session is unavailable.", "not_found");
+  const generation = readRecord<ChatGeneration>("chat:generations", generationId);
+  if (!generation || generation.id !== generationId || generation.threadId !== threadId)
+    throw new ThreadConflictError("The original generation is not in this Session.", "not_found");
+  return {
+    id: generation.id,
+    threadId: generation.threadId,
+    messageId: generation.messageId,
+    ...(generation.inputMessageId === undefined ? {} : { inputMessageId: generation.inputMessageId }),
+    status: generation.status,
+    createdAt: generation.createdAt,
+    ...(generation.endedAt === undefined ? {} : { endedAt: generation.endedAt }),
+  };
+}
 export function readThreadLifecycleOperation(threadId: string, operationId: string): ThreadLifecycleOperation | null {
   const operation = readRecord<ThreadLifecycleOperation>(OPERATIONS, operationKey(threadId, operationId));
   if (!operation) return null;
@@ -28,6 +48,7 @@ export function beginThreadDeletion(threadId: string, operationId: string, input
     if (prior) {
       if (prior.fingerprint !== fingerprint) throw new ThreadConflictError("Deletion key belongs to a different request.", "idempotency_conflict");
       if (prior.state === "committed") return prior;
+      assertNoChatWorktree(threadId);
       if (liveDeletes.has(key)) throw new ThreadConflictError("The original deletion is still stopping; query its receipt instead of dispatching again.", "deletion_in_progress");
       const thread = getThread(threadId);
       if (!thread || thread.deletionOperationId !== operationId) return prior;
@@ -38,6 +59,7 @@ export function beginThreadDeletion(threadId: string, operationId: string, input
     }
     const thread = getThread(threadId);
     if (!thread) throw new ThreadConflictError("Session is unavailable; only the original deletion receipt can be queried.", "not_found");
+    assertNoChatWorktree(threadId);
     if (thread.deletionState || (thread.lifecycleRevision ?? 0) !== input.lifecycleRevision)
       throw new ThreadConflictError("Session lifecycle changed; reload before deletion.", "lifecycle_conflict");
     if (activeGenerationId !== input.expectedGenerationId || activeGenerationId !== null && !input.stopActive)
@@ -68,6 +90,7 @@ export function commitThreadDeletion(threadId: string, operationId: string): Thr
     const thread = getThread(threadId);
     if (!thread || thread.deletionOperationId !== operationId || thread.deletionState !== "closing" || (thread.lifecycleRevision ?? 0) !== operation.lifecycleRevision)
       throw new ThreadConflictError("Deletion lifecycle ownership changed.", "lifecycle_conflict");
+    assertNoChatWorktree(threadId);
     const retention = inspectThreadRetention(getDatabase(), threadId);
     if (retention.blockers.length) throw new ThreadConflictError(`Deletion is not safe: ${retention.blockers.join(", ")}`, "deletion_blocked");
     deleteThread(threadId, operationId);

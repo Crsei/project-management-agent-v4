@@ -15,6 +15,7 @@ import { DurableError } from "../durable/errors.ts";
 import { authorizeHeaders, sameOrigin } from "../access.ts";
 import { InspectorPathError, resolveInsideRoot } from "./paths.ts";
 import { nativeEnvironment } from "../native-environment.ts";
+import { assertChatWorktreeStable } from "../chat-worktrees.ts";
 
 const MAX_REPLAY_BYTES = 1024 * 1024;
 const MAX_RUNNING = 32;
@@ -41,6 +42,7 @@ type ManagedTerminal = {
 };
 const terminals = new Map<string, ManagedTerminal>();
 const creations = new Map<string, { fingerprint: string; terminalId: string }>();
+const pendingAdmissions = new Map<string, number>();
 const attachedServers = new WeakSet<Server>();
 let stopping = false;
 let revalidationTimer: NodeJS.Timeout | undefined;
@@ -189,6 +191,12 @@ terminalRoutes.onError((error, c) => {
 });
 terminalRoutes.post("/terminals", async c => {
   const binding = createSchema.parse(await c.req.json());
+  const admission = binding.scope === "session" ? binding.threadId : undefined;
+  if (admission) {
+    assertChatWorktreeStable(admission);
+    pendingAdmissions.set(admission, (pendingAdmissions.get(admission) ?? 0) + 1);
+  }
+  try {
   if (stopping) throw new DurableError(503, "terminal_unavailable", "Service is stopping.");
   if (binding.expectedServiceId !== serviceId) throw new DurableError(409, "terminal_service_changed", "Service lifetime changed; the original process is unavailable and creation was not replayed.");
   const current = await resolveBinding(binding, c.req.raw.headers);
@@ -203,6 +211,10 @@ terminalRoutes.post("/terminals", async c => {
   const cwd = await resolveInsideRoot(binding.relativePath, current.root);
   const startInfo = await stat(cwd.absolute, { bigint: true });
   if (!startInfo.isDirectory()) throw new DurableError(400, "invalid_terminal_directory", "Terminal cwd must be an existing directory.");
+  const confirmed = await resolveBinding(binding, c.req.raw.headers);
+  if (current.signature !== confirmed.signature || current.root !== confirmed.root)
+    throw new DurableError(409, "worktree_changed", "Terminal execution directory changed during admission; no process was started.");
+  if (admission) assertChatWorktreeStable(admission);
   if (binding.scope === "session") assertThreadWritable(binding.threadId!);
   const raced = creations.get(creationKey);
   if (raced) {
@@ -234,6 +246,13 @@ terminalRoutes.post("/terminals", async c => {
   terminal.child.onExit(({ exitCode, signal }) => finish(terminal, exitCode, signal));
   ensureLifecycle();
   return c.json({ terminal: terminal.descriptor });
+  } finally {
+    if (admission) {
+      const count = (pendingAdmissions.get(admission) ?? 1) - 1;
+      if (count) pendingAdmissions.set(admission, count);
+      else pendingAdmissions.delete(admission);
+    }
+  }
 });
 terminalRoutes.get("/terminals", async c => {
   const query = new URL(c.req.url).searchParams;
@@ -342,6 +361,18 @@ export function attachTerminalUpgrade(server: Server): void {
       socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status] ?? "Error"}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
     });
   });
+}
+/** Explicit directory transitions never kill a user-owned terminal. */
+export function assertSessionTerminalsIdle(threadId: string, directory?: string): void {
+  if (pendingAdmissions.has(threadId))
+    throw new DurableError(409, "terminal_active", "Session 终端正在创建；请等待原请求结束后再切换工作树。");
+  for (const terminal of terminals.values()) {
+    const live = terminal.child !== null || terminal.descriptor.status === "running" || terminal.clients.size > 0;
+    const cwd = terminal.descriptor.startCwd;
+    const inside = directory !== undefined && (cwd === directory || cwd.startsWith(`${directory}/`));
+    if (live && (terminal.descriptor.threadId === threadId || inside))
+      throw new DurableError(409, "terminal_active", "请先显式关闭 Session 或工作树内的终端，再切换或结束工作树；不会自动终止终端。");
+  }
 }
 export async function terminateSessionTerminals(threadId: string): Promise<void> {
   const owned = [...terminals.values()].filter(terminal => terminal.descriptor.threadId === threadId && terminal.child);

@@ -227,7 +227,13 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
           commandIds: authorized.commandIds ?? call.record.commandIds };
       } catch (error) {
         const status = object(error) && "status" in error ? Number(error.status) : 0;
-        state = [401, 403, 404].includes(status) ? "redacted" : "unavailable";
+        const code = object(error) && "code" in error && typeof error.code === "string" ? error.code : "";
+        // PM runs the original read again only after the current actor, scope and
+        // result sources pass. `read_stale` therefore means the business record
+        // changed since this run, not that the run became private: keep its own
+        // saved receipt as historical output instead of hiding the generation.
+        if (code === "agent_tool_read_stale") record = call.record;
+        else state = [401, 403, 404].includes(status) ? "redacted" : "unavailable";
       }
     }
     // Unconfirmed dispatches have no currently authorized result snapshot to justify retained payloads.

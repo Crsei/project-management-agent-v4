@@ -8,6 +8,15 @@ export { agentWorkspaceSchema, executionSelectionSchema, executionEnvironmentSch
 export type { AgentWorkspace, ExecutionSelection, ExecutionEnvironment } from "./execution.ts";
 import { executionSelectionSchema, type ExecutionSelection, type ExecutionEnvironment } from "./execution.ts";
 
+/**
+ * Agent HTTP API identity shared by the server and the bundled UI. Bump it only
+ * when a UI build can no longer speak to an older Agent service; both sides ship
+ * from this repository, so a mismatch means one half was not restarted/updated.
+ */
+export const AGENT_API_VERSION = "2026-11-18.1";
+/** Read-only runtime identity; never contains paths, tokens or configuration. */
+export type AgentRuntimeInfo = { apiVersion: string; buildMode?: string };
+
 export const providerOptionSelectionSchema = z.object({
   id: z.string().trim().min(1).max(256),
   value: z.union([z.string(), z.boolean()]),
@@ -142,6 +151,35 @@ export type RemoteSettings = {
   modelOptions?: ProviderOptionSelection[];
   interactionMode?: "default" | "plan";
 };
+
+export type ChatFanoutSelection = Pick<RemoteSettings, "providerInstanceId" | "model" | "modelOptions">;
+/** Fanout intentionally excludes PM/context bindings, quotes and all message metadata. */
+export type ChatFanoutRequest = {
+  operationId: string;
+  sourceThreadId: string;
+  message: {
+    id: string;
+    role: "user";
+    parts: ({ type: "text"; text: string } | { type: "file"; mediaType: string; url: string; filename?: string })[];
+    metadata?: never;
+  };
+  selections: ChatFanoutSelection[];
+  /** Optional source-side correlation only; every child receives a fresh input message ID. */
+  messageId?: string;
+};
+export type ChatFanoutResult = {
+  operationId: string;
+  sourceThreadId: string;
+  /** Admission outcome, not proof that Provider execution completed successfully. */
+  status: "created" | "partial" | "failed";
+  children: {
+    selection: ChatFanoutSelection;
+    threadId: string;
+    generationId?: string;
+    error?: { code: string; message: string };
+  }[];
+  createdAt: string;
+};
 export type RemoteThread = {
   remoteId: string;
   executionSelection?: ExecutionSelection;
@@ -159,6 +197,18 @@ export type RemoteThread = {
   defaultsRevision?: number;
   lastMessageAt?: string;
 };
+/** Content-free exact-generation control-plane view; never a PM visibility projection. */
+export const chatGenerationLifecycleSchema = z.strictObject({
+  id: z.string().min(1).max(256),
+  threadId: z.string().min(1).max(256),
+  messageId: z.string().min(1).max(256),
+  inputMessageId: z.string().min(1).max(256).optional(),
+  status: z.enum(["queued", "running", "completed", "failed", "cancelled", "interrupted"]),
+  createdAt: z.string(),
+  endedAt: z.string().optional(),
+});
+export type ChatGenerationLifecycle = z.infer<typeof chatGenerationLifecycleSchema>;
+
 export type ChatGenerationView = {
   id: string;
   threadId: string;

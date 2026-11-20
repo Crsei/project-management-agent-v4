@@ -1,6 +1,7 @@
 import { acquireChatDirectoryWriter, assertCollaborationThreadLifecycleMutation } from "../collaboration/coordinator.ts";
 import { assertCollaborationChatAdmission, assertCollaborationModelInput, assertCollaborationThreadExecution, getCollaborationGenerationContext, recordCollaborationOutput } from "../collaboration/runs.ts";
 import { getStoreIdentity, inventoryPersistence } from "./persistence-schema.ts";
+import { observeEvaluationAcceptance, observeEvaluationConfiguration, observeEvaluationTerminal, observeEvaluationRejection, recoverEvaluationObservations } from "../evaluation-feedback/service.ts";
 import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -580,6 +581,30 @@ async function compactIdleThread(threadId: string, expectedId: string, mode: "on
     throw new ThreadConflictError("会话压缩未完成，请检查后重试。", "compaction_failed");
 }
 
+export type ThreadCompactionState = { available: boolean; expiresAt?: string };
+
+/** Explicit request from the composer; only the existing idle-compaction policy may run. */
+export function threadCompactionState(threadId: string): ThreadCompactionState {
+  const candidate = idleCompactionCandidate(threadId, "onReturn");
+  return candidate ? { available: true, expiresAt: new Date(candidate.expires).toISOString() } : { available: false };
+}
+
+export async function compactThreadNow(threadId: string, headers?: Headers): Promise<ChatGeneration> {
+  await startChatRuntime();
+  const latest = listChatGenerations(threadId)[0];
+  if (!latest) throw new ThreadConflictError("找不到可压缩的回复。", "not_found");
+  if (getActiveChat(threadId)) throw new ThreadConflictError("会话仍在执行；请先结束当前运行。", "chat_busy");
+  if (!idleCompactionCandidate(threadId, "onReturn"))
+    throw new ThreadConflictError("当前 Provider、上下文用量或会话状态不满足服务端压缩条件。", "compaction_unavailable");
+  await compactIdleThread(threadId, latest.id, "onReturn", headers);
+  const compacted = listChatGenerations(threadId)[0];
+  if (!compacted || compacted.id === latest.id)
+    throw new ThreadConflictError("服务端尚未到允许压缩的时间，未创建压缩回合。", "compaction_not_due");
+  if (compacted.status !== "completed")
+    throw new ThreadConflictError("会话压缩未完成，请检查后重试。", "compaction_failed");
+  return compacted;
+}
+
 function scheduleIdleCompaction(generation: ChatGeneration, headers?: Headers): void {
   clearTimeout(compactionTimers.get(generation.threadId));
   compactionTimers.delete(generation.threadId);
@@ -807,6 +832,7 @@ export async function submitChat(
       restoreEpoch: reservationStore.restoreEpoch, updatedAt: new Date().toISOString(),
     });
     admissionHooks?.onAccepted(next);
+    observeEvaluationAcceptance(next, resolved.driver);
     updateThread(request.id, {});
     if (cancelled) settleChat(next.id, "cancelled");
     return getChatGeneration(next.id)!;
@@ -825,6 +851,7 @@ export async function submitChat(
         updatedAt: new Date().toISOString(),
       });
     });
+    observeEvaluationRejection(request.id);
     throw error;
   }
   } finally { releaseAdmission(); }
@@ -1116,6 +1143,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           modelInputContext: { system: modelGeneration.request.system, transferContext: modelGeneration.request.transferContext },
           nativeSession: plan.session?.resume,
         });
+        observeEvaluationConfiguration(generation.id, modelGeneration.request.system);
         beginThreadUsage({ threadId: generation.threadId, generationId: generation.id,
           instanceId: runtime.providerInstanceId, model: runtime.modelId, session: plan.session?.resume });
         if (!plan.session?.resume) setThreadNativeSession(generation.threadId, undefined);
@@ -1472,6 +1500,7 @@ function settleChat(id: string, status: ChatGeneration["status"], error?: unknow
       appendChunk(id, { type: "abort", reason: message ?? "用户已取消。" });
     // Terminal notification follows the final event and saved output.
     saveGeneration({ ...next, seq: getChatGeneration(id)!.seq });
+    observeEvaluationTerminal(getChatGeneration(id)!);
     if (getNativeOutput(id) && !isChatActive(next))
       endNativeOutput(id, status as "completed" | "failed" | "cancelled" | "interrupted");
     queuePmAgentTerminal(getChatGeneration(id)!);
@@ -1646,6 +1675,7 @@ export async function continueChat(
       continuationIdempotencyKey: idempotencyKey,
     });
     writeRecord(REQUESTS, identity, { id: next.id, fingerprint: chatRequestFingerprint(request) });
+    observeEvaluationAcceptance(next, runtime.driver);
     return next;
   });
   if (!workers.has(generation.id) && isChatActive(generation)) launchChat(generation, runtime, requestHeaders);
@@ -1697,6 +1727,7 @@ export async function startChatRuntime(): Promise<void> {
       );
     settleChat(generation.id, "interrupted");
   }
+  recoverEvaluationObservations();
   startPmAgentSignals();
 }
 export async function stopChatRuntime(): Promise<void> {
