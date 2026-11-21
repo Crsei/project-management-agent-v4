@@ -1,0 +1,97 @@
+[
+  {
+    "path": "apps/web/src/assets/fonts/MiSans-Medium.woff2",
+    "bytes": 4942368,
+    "sha256": "44e28ca6c2f0ca79829f192831ef87b5eec7c464f5cfb7a83467f57bb6e58114"
+  },
+  {
+    "path": "apps/web/src/assets/fonts/MiSans-Regular.woff2",
+    "bytes": 4858624,
+    "sha256": "d704c1a932c0bd7e8a071d276cd81c0ed0c9fecfa26ac234f4bed0559fe1cb2d"
+  },
+  {
+    "path": "apps/web/src/assets/fonts/MiSans-Semibold.woff2",
+    "bytes": 5034212,
+    "sha256": "78227c6ec59566785c65ac0b5312328bfa2f879918f3d7403725785615a9a8f6"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/1.webp",
+    "bytes": 76670,
+    "sha256": "00e59e115cb78add80ff3e2372f025bbbbab6f161eb5886e1e876f5883a2c31d"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/10.webp",
+    "bytes": 53360,
+    "sha256": "2f1ae04d561df1f743579ca18ab5d55133e914c7a7f0bba35314816a405387c6"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/2.webp",
+    "bytes": 67454,
+    "sha256": "bb57b369ab2e107828c5ecc09a6a2bcc7c586d719081f119924b5b762bb59664"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/3.webp",
+    "bytes": 62590,
+    "sha256": "f157816f39140a0f8dcdc9afc9e2a3c6ee2c04c3944c7ae55ed60bbfe85ffc85"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/4.webp",
+    "bytes": 72944,
+    "sha256": "dd6b83c80f7c1d9e414b53802b8b7302253fb02087e5370511738371b694202c"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/5.webp",
+    "bytes": 93738,
+    "sha256": "d88a60bef1323812fc7db451c6407337c12276e51df789b497b0ab79f40c7178"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/6.webp",
+    "bytes": 62202,
+    "sha256": "283a3c8941fa0ccd34e3c58bda83e519022dd86d041b474b61f6864a0f874be1"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/7.webp",
+    "bytes": 81098,
+    "sha256": "cdd81d13f6bba93b94ea549e20b7bd1d78e100866dcb178a302719e30afbaad2"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/8.webp",
+    "bytes": 88720,
+    "sha256": "dbad70f194df41b3740342de06bb1244957fea7ac9784e5ef55215c8354a3ff1"
+  },
+  {
+    "path": "apps/web/public/images/project-backgrounds/9.webp",
+    "bytes": 63282,
+    "sha256": "c93949c00adfdac2f43d000784b7257c0d15858551fc99c9542f9fdf5b77f0f0"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/antigravity.svg",
+    "bytes": 7577,
+    "sha256": "a407bd965b3ebf72a818296cb8de82a9efd96bf28e2bac459615cc870f5e8bc0"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/claude-ai-icon.svg",
+    "bytes": 2005,
+    "sha256": "36d216f45d3c8adb8c409f9f183c1656927b6abf2441482afc619f62e2a0e233"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/cursor_light.svg",
+    "bytes": 665,
+    "sha256": "3a53e9fa27424b01f49cb960af8e3d4f5d13c8477837d20bf4bf65abbae7ef24"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/grok-dark.svg",
+    "bytes": 948,
+    "sha256": "d94521ab4bd62ce3e43d4f4e3b954e07e657370949d7a9007db6d6dc5ce9fc9e"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/openai_dark.svg",
+    "bytes": 2455,
+    "sha256": "6e3ba71f36714eaa7ce57c89454ed4a36bc2e70ba124fd33ea28ce53a7991dcc"
+  },
+  {
+    "path": "apps/marketing/public/harnesses/opencode-dark.svg",
+    "bytes": 585,
+    "sha256": "cf3e950c408e197bc7da17496fa329ac1f7b08b7c13fa0524d3d4ea39b3018d9"
+  }
+]

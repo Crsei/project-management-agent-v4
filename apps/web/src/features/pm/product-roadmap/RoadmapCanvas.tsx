@@ -2,13 +2,14 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { RoadmapNode, RoadmapPlan, RoadmapTask } from '../../../../../../packages/contracts/src/product-roadmap';
-export function RoadmapCanvas({ plan, selected, onSelect, onInspect, onMove, tasks, onEdit, onRemove, onAdd, onLayout, taskHref }: {
+export function RoadmapCanvas({ plan, selected, onSelect, onInspect, onMove, tasks, statuses, onEdit, onRemove, onAdd, onLayout, taskHref }: {
   plan: RoadmapPlan;
   selected: string | null;
   onSelect: (id: string) => void;
   onInspect?: (id: string) => void;
   onMove?: (id: string, x: number, y: number) => void;
-  tasks?: RoadmapTask[];
+  tasks?: RoadmapTask[] | undefined;
+  statuses?: Record<string,string> | undefined;
   onEdit?: (id: string, section: 'outcome' | 'dependencies') => void;
   onRemove?: (id: string) => void;
   onAdd?: () => void;
@@ -34,7 +35,7 @@ export function RoadmapCanvas({ plan, selected, onSelect, onInspect, onMove, tas
             <article className="roadmap-node" data-selected={selected === n.id} style={{ left: n.x, top: n.y }} tabIndex={0} aria-label={`${tasks ? '发布节点' : '候选任务'}：${n.title || '未命名'}`}>
               <div className="roadmap-node-grip" draggable={!!onMove} onDragStart={e => { const rect = e.currentTarget.parentElement!.getBoundingClientRect(); drag.current = { id: n.id, dx: (e.clientX - rect.left) / zoom, dy: (e.clientY - rect.top) / zoom }; e.dataTransfer.setData('text/plain', n.id); }} onDragEnd={() => { drag.current = null; }}><span>{n.stage || '未分阶段'}</span><span>{onMove ? '⠿' : `#${index + 1}`}</span></div>
               <button type="button" className="roadmap-node-select" aria-label={`选择任务：${n.title || '未命名'}`} onClick={() => onSelect(n.id)}><strong>{n.title || '未命名任务'}</strong><span>{n.outcome || '请明确要交付的成果'}</span></button>
-              <footer>{matches.length > 1 ? '关联冲突' : task ? `${task.taskId} · ${task.archived ? '已归档' : task.status}${task.drifted ? ' · 需求已变更' : ''}` : tasks ? '候选 · 未创建' : '规划草稿'}<span>{n.dependsOn.length ? `${n.dependsOn.length} 个前置` : '起点'}</span></footer>
+              <footer>{statuses?.[n.id] ?? (matches.length > 1 ? '关联冲突' : task ? `${task.taskId} · ${task.archived ? '已归档' : task.status}${task.drifted ? ' · 需求已变更' : ''}` : tasks ? '候选 · 未创建' : '规划草稿')}<span>{n.dependsOn.length ? `${n.dependsOn.length} 个前置` : '起点'}</span></footer>
             </article>
           </ContextMenuTrigger>
           <ContextMenuContent>

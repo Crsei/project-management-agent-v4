@@ -8,17 +8,12 @@ also satisfy applicable corresponding-source and legal-notice obligations.
 
 T3 Code visual/source adaptations
   The repository README and marketing stylesheet identify t3code/apps/marketing
-  as the reference/source of visual adaptations and local harness icons.
+  as the reference/source of visual adaptations.
   Upstream: https://github.com/pingdotgg/t3code
   Retained full notice: /LICENSE.t3code
   MIT License; Copyright (c) 2026 T3 Tools Inc.
-  The six retained harness SVGs match the exact files at upstream commit
-  d53873b6a4799e87afd63c8d288ef0089f5a3748. Their paths, Git blobs, byte lengths,
-  SHA256 fingerprints and retained original notice are recorded in
-  /fonts/SOURCE.json. The Provider source-manifest does not inventory these
-  marketing assets, and this record does not cover other marketing adaptations.
-  The direct source and MIT notice do not establish all third-party artwork
-  rights or trademark permissions.
+  Marketing uses plain product names instead of third-party harness artwork.
+  The exact font source commit is d53873b6a4799e87afd63c8d288ef0089f5a3748.
 
 DM Sans
   Copyright 2014 The DM Sans Project Authors
@@ -44,13 +39,11 @@ Dovspace product artwork
   board and visually approved on 2026-11-15 after removal of the extra wing fold.
   The approved SVG is retained at /dovspace.svg and /favicon.svg; its embedded
   description records the reconstruction and visual approval scope.
-  This record does not establish original artwork ownership, trademark
-  registration or public distribution rights.
+  On 2026-11-17 the rights holder confirmed ownership and authorized public
+  distribution of the board-derived mark in source and installers.
 
 Names, logos and trademarks identify their respective products. No sponsorship,
-endorsement or trademark license is claimed. The six local harness SVGs still
-require review of third-party artwork rights and applicable brand-use conditions;
-their direct byte source is recorded, not assumed to grant those rights.
+endorsement or trademark license is claimed.
 
 Release review remains blocked. The application's source repository is public:
   https://github.com/Crsei/project-management-agent-v4

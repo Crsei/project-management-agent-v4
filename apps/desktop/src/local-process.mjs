@@ -121,14 +121,16 @@ export function spawnOwned(executable, args, { cwd, env }) {
   } else if (process.platform === "darwin") {
     // Capture birth identity while stopped, then exec in-place (same PID). A
     // short runtime probe must not outrun macOS's native identity inspection.
-    command = "/bin/sh";
+    // /bin/sh may exec /bin/bash on macOS; use the exact native image
+    // for the stopped handshake. Privileged mode ignores startup environment.
+    command = "/bin/bash";
     executable = realpathSync(executable);
-    arguments_ = ["-c", 'kill -STOP "$$"; exec "$@"', "desktop-owned-process", executable, ...args];
+    arguments_ = ["--noprofile", "--norc", "-p", "-c", 'kill -STOP "$$"; exec "$@"', "desktop-owned-process", executable, ...args];
   }
   const child = spawn(command, arguments_, {
     cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
   });
-  rememberOwnedProcess(child, process.platform === "darwin" ? { suspendedExecutable: "/bin/sh", executable } : {});
+  rememberOwnedProcess(child, process.platform === "darwin" ? { suspendedExecutable: command, executable } : {});
   // Failure to deliver shutdown to an already-exited process is not a stream error.
   child.stdin.on("error", () => {});
   child.desktopSpawned = false;

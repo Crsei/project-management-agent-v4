@@ -77,7 +77,7 @@ function useActiveProjectView(base: string) {
     return issueViewKeys[params.get("view") || configuredView] || ""
   }
   if (pathname === `${base}/overview`) return "overview"
-  if (pathname === `${base}/roadmap`) return "roadmap"
+  if ((pathname === `${base}/roadmap` || pathname === `${base}/roadmap/canvas`)) return "roadmap"
   if (pathname === `${base}/documents`) return "documents"
   if (pathname === `${base}/files`) return "files"
   if (pathname === `${base}/activity`) return "activity"

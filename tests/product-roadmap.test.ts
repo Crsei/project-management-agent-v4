@@ -1,3 +1,4 @@
+import { addIntegrationTask } from '../apps/web/src/features/pm/product-roadmap/model.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
@@ -14,6 +15,8 @@ test('guided roadmap keeps assumptions explicit, creates outcome candidates and 
   assert.equal(new Set(plan.nodes.map(n => n.id)).size, 5);
   assert.deepEqual(roadmapProblems(layoutRoadmap(plan)), []);
   assert.equal(suggestRoadmap(emptyRoadmap().brief, randomUUID).nodes.length, 0);
+  assert.ok(plan.nodes.every(n=>!n.outcome.includes('复用已有项目') && n.nonGoals === ''));
+  assert.ok(plan.brief.nonGoals.includes('不做支付'));
 });
 test('graph validation rejects cycles, self edges, duplicates and missing prerequisites', () => {
   for (const mode of ['cycle', 'self', 'missing', 'duplicate']) {
@@ -54,4 +57,10 @@ test('large guided inputs and 24-node layouts stay persistable without overlappi
     assert.ok(roadmapPlanSchema.safeParse(plan).success);
     assert.equal(new Set(plan.nodes.map(n => `${n.x}:${n.y}`)).size, 24);
   }
+});
+
+
+test('integration task depends on current graph leaves and preserves existing requirements and coordinates',()=>{
+  const plan=feedbackScenario(()=>crypto.randomUUID()), before=JSON.stringify(plan), result=addIntegrationTask(plan,crypto.randomUUID());
+  assert.equal(result.nodes.length,plan.nodes.length+1);assert.equal(JSON.stringify(plan),before);assert.deepEqual(result.nodes.slice(0,-1),plan.nodes);assert.deepEqual(result.nodes.at(-1)!.dependsOn,[plan.nodes.at(-1)!.id]);assert.match(result.nodes.at(-1)!.acceptance,/已有功能回归/);assert.equal(roadmapProblems(result).length,0);
 });

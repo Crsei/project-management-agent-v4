@@ -15,6 +15,10 @@ on:
         type: boolean
         default: true
         required: true
+      macos_only:
+        description: Build both Mac architectures only (set windows_only=false; incompatible with Windows install_e2e)
+        type: boolean
+        default: false
       install_e2e:
         description: Explicitly authorize real installer lifecycle in a new isolated Windows account (never enabled by default)
         type: boolean
@@ -100,6 +104,7 @@ env:
   DESKTOP_RELEASE_SHA: ${{ inputs.expected_sha }}
   DESKTOP_CI_RUN_ID: ${{ inputs.ci_run_id }}
   DESKTOP_DISTRIBUTION: ${{ inputs.distribution }}
+  DESKTOP_MACOS_ONLY: ${{ inputs.macos_only }}
   DESKTOP_WINDOWS_ONLY: ${{ inputs.windows_only }}
   DESKTOP_NATIVE_RUN_ID: ${{ inputs.native_run_id }}
   DESKTOP_NATIVE_RUN_ATTEMPT: ${{ inputs.native_run_attempt }}
@@ -156,6 +161,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
+      - name: Reject conflicting target/lifecycle inputs
+        if: inputs.macos_only && (inputs.windows_only || inputs.install_e2e)
+        run: exit 1
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -193,7 +201,9 @@ jobs:
       fail-fast: false
       matrix:
         include: >-
-          ${{ fromJSON(inputs.windows_only
+          ${{ fromJSON(inputs.macos_only
+            && '[{"os":"macos-15-intel","platform":"darwin","arch":"x64"},{"os":"macos-15","platform":"darwin","arch":"arm64"}]'
+            || inputs.windows_only
             && '[{"os":"windows-2025","platform":"win32","arch":"x64"}]'
             || '[{"os":"windows-2025","platform":"win32","arch":"x64"},{"os":"macos-15-intel","platform":"darwin","arch":"x64"},{"os":"macos-15","platform":"darwin","arch":"arm64"}]') }}
     steps:
@@ -344,7 +354,9 @@ jobs:
       fail-fast: false
       matrix:
         include: >-
-          ${{ fromJSON(inputs.windows_only
+          ${{ fromJSON(inputs.macos_only
+            && '[{"os":"macos-15-intel","platform":"darwin","arch":"x64"},{"os":"macos-15","platform":"darwin","arch":"arm64"}]'
+            || inputs.windows_only
             && '[{"os":"windows-2025","platform":"win32","arch":"x64"}]'
             || '[{"os":"windows-2025","platform":"win32","arch":"x64"},{"os":"macos-15-intel","platform":"darwin","arch":"x64"},{"os":"macos-15","platform":"darwin","arch":"arm64"}]') }}
     steps:
@@ -614,7 +626,7 @@ jobs:
           DESKTOP_EVALUATION_PRIVATE: ${{ runner.temp }}/desktop-evaluation-private
         run: node --conditions=development scripts/desktop-release-private-material.mjs
       - name: Download exact previously built Windows native delivery
-        if: needs.release-preflight.outputs.staged_draft != 'true'
+        if: inputs.macos_only != true && needs.release-preflight.outputs.staged_draft != 'true'
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}

@@ -1,3 +1,4 @@
+import { startProductCanvases, stopProductCanvases } from "./product-canvas/index.ts";
 import { startTaskWorkflows, stopTaskWorkflows } from "./task-workflows/runner.ts";
 import { startExecution, stopExecution } from "./durable/engine.ts";
 import { startChatRuntime, stopChatRuntime } from "./durable/chat-runtime.ts";
@@ -41,13 +42,15 @@ export function startRuntime(): Promise<void> {
       await startAutomationExecutionRuntime();
       if (stopping) return;
       startTaskWorkflows();
+      startProductCanvases();
       startMcpServer();
     } catch (error) {
       stopEvaluationMaintenance();
       const protocols = Promise.allSettled([closeMcpServer()]);
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
       const collaboration = Promise.allSettled([stopCollaborationRuntime()]);
-      const workflows = await Promise.allSettled([stopTaskWorkflows()]);
+      const canvas = await Promise.allSettled([stopProductCanvases()]);
+      const workflows = [...canvas, ...await Promise.allSettled([stopTaskWorkflows()])];
       const automationExecutions = await Promise.allSettled([stopAutomationExecutionRuntime()]);
       const collaborationResults = await collaboration;
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
@@ -74,7 +77,8 @@ export function stopRuntime(): Promise<void> {
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
-      const workflows = await Promise.allSettled([stopTaskWorkflows()]);
+      const canvas = await Promise.allSettled([stopProductCanvases()]);
+      const workflows = [...canvas, ...await Promise.allSettled([stopTaskWorkflows()])];
       const automation = await Promise.allSettled([stopAutomation(), stopAutomationExecutionRuntime()]);
       const collaborationResults = await collaboration;
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);

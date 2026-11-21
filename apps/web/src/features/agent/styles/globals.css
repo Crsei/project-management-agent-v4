@@ -183,7 +183,7 @@ html[data-product="agent"].dark {
 
 /* 字体族由 src/styles/fonts.css 自托管加载；这里只暴露 Agent 视图使用的别名。 */
 html[data-product="agent"] {
-  --font-inter: "Inter", "MiSans", sans-serif;
+  --font-inter: "Inter", system-ui, sans-serif;
   --font-ibm-plex-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 

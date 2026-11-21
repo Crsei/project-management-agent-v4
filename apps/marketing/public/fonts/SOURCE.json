@@ -1,18 +1,17 @@
 {
   "schemaVersion": 1,
   "pathBase": "repository-root",
-  "scope": "Exact retained marketing font and harness SVG bytes, their direct redistribution source and original notices; not a trademark grant or release authorization.",
+  "scope": "Exact retained marketing fonts and original notices.",
   "reviewedOn": "2026-11-14",
   "evidenceMethod": "Local byte lengths and Git blob SHA1 identities matched the official immutable-commit GitHub Contents API; SHA256 fingerprints identify the retained local bytes.",
   "upstreams": {
     "t3code-marketing": {
       "repository": "https://github.com/pingdotgg/t3code",
       "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
-      "role": "Direct redistribution source for the exact marketing font subsets, harness SVGs and retained notices; distinct from the Provider source-manifest pin",
+      "role": "Direct source of font subsets and retained notices.",
       "evidenceUrls": [
         "https://api.github.com/repos/pingdotgg/t3code/contents/apps/marketing/src/assets/fonts?ref=d53873b6a4799e87afd63c8d288ef0089f5a3748",
         "https://api.github.com/repos/pingdotgg/t3code/contents/apps/marketing/public/fonts?ref=d53873b6a4799e87afd63c8d288ef0089f5a3748",
-        "https://api.github.com/repos/pingdotgg/t3code/contents/apps/marketing/public/harnesses?ref=d53873b6a4799e87afd63c8d288ef0089f5a3748",
         "https://api.github.com/repos/pingdotgg/t3code/contents/LICENSE?ref=d53873b6a4799e87afd63c8d288ef0089f5a3748"
       ]
     }
@@ -97,85 +96,11 @@
       },
       "licenseRef": "jetbrains-mono-ofl",
       "relationship": "Byte-identical to the recorded redistributed subset; no local font conversion is claimed."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/antigravity.svg",
-      "bytes": 7577,
-      "sha256": "a407bd965b3ebf72a818296cb8de82a9efd96bf28e2bac459615cc870f5e8bc0",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/antigravity.svg",
-        "gitBlobSha1": "13e1ec9e984980ee25dc72230ce38b40d45cb98a"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/claude-ai-icon.svg",
-      "bytes": 2005,
-      "sha256": "36d216f45d3c8adb8c409f9f183c1656927b6abf2441482afc619f62e2a0e233",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/claude-ai-icon.svg",
-        "gitBlobSha1": "324389017b5b01b98fa7c450dcec41ed2deea7fa"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/cursor_light.svg",
-      "bytes": 665,
-      "sha256": "3a53e9fa27424b01f49cb960af8e3d4f5d13c8477837d20bf4bf65abbae7ef24",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/cursor_light.svg",
-        "gitBlobSha1": "089d4676370b99ddd81a4eefec5d6219eda80d1a"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/grok-dark.svg",
-      "bytes": 948,
-      "sha256": "d94521ab4bd62ce3e43d4f4e3b954e07e657370949d7a9007db6d6dc5ce9fc9e",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/grok-dark.svg",
-        "gitBlobSha1": "d094fcc6f8539235ad332c09bb985258b3aac14b"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/openai_dark.svg",
-      "bytes": 2455,
-      "sha256": "6e3ba71f36714eaa7ce57c89454ed4a36bc2e70ba124fd33ea28ce53a7991dcc",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/openai_dark.svg",
-        "gitBlobSha1": "956f87c99f60cb317aa178f2bc0698a52cd9a204"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
-    },
-    {
-      "path": "apps/marketing/public/harnesses/opencode-dark.svg",
-      "bytes": 585,
-      "sha256": "cf3e950c408e197bc7da17496fa329ac1f7b08b7c13fa0524d3d4ea39b3018d9",
-      "source": {
-        "upstream": "t3code-marketing",
-        "path": "apps/marketing/public/harnesses/opencode-dark.svg",
-        "gitBlobSha1": "8c5e734ece6c7c5ad0e9485cd21ce3ec2eba9e92"
-      },
-      "retainedSourceNoticeRef": "t3code-mit",
-      "rightsStatus": "Third-party brand artwork and trademark use remain subject to the ASSET-ORIGINS review."
     }
   ],
   "limitations": [
     "This record establishes a direct immutable redistribution source for the exact retained files, not the first Google Fonts download or font-subsetting history.",
     "The four OFL font files across the Web and marketing source records retain their original OFL notices; the application's AGPL and t3code's MIT do not replace those font licenses.",
-    "The marketing adaptation's other source files are not inventoried here, and the Provider source-manifest does not cover these marketing assets.",
-    "The SVG source and retained MIT notice do not independently prove all third-party artwork rights, trademark permission, sponsorship or endorsement.",
-    "Unknown background, favicon and product-brand artwork, MiSans redistribution, final-artifact notices and corresponding-source obligations remain governed by the OPEN release blockers in THIRD_PARTY_NOTICES.md."
+    "The marketing adaptation's other source files are not inventoried here, and the Provider source-manifest does not cover these marketing assets."
   ]
 }

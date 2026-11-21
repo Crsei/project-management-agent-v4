@@ -56,6 +56,12 @@
   background: var(--surface-raised);
   isolation: isolate;
 }
+.decorativeCover {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(ellipse at 80% 0%, var(--cover-marker, #fbbf24), transparent 68%), linear-gradient(125deg, #182337, #334155);
+}
 .coverImage {
   position: absolute;
   z-index: -2;

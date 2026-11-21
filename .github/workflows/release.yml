@@ -221,7 +221,11 @@ jobs:
       - name: Build PM, Agent and unified Web products
         env:
           PM_ENABLE_LAB: 'false'
-        run: pnpm build:v4
+        run: |
+          pnpm build:v4
+          node scripts/build-public-site.mjs web "$RUNNER_TEMP/source-bound-web"
+          mv apps/web/dist "$RUNNER_TEMP/development-web"
+          mv "$RUNNER_TEMP/source-bound-web" apps/web/dist
       - name: Package source and build evidence with checksums
         run: node scripts/release-package.mjs prepare --tag "$RELEASE_TAG" --sha "$RELEASE_SHA" --output "$RUNNER_TEMP/release"
       - name: Verify the produced directory before upload

@@ -40,10 +40,16 @@ export async function scanSBOM(sbom, { fetcher = globalThis.fetch, now = () => n
   let failureKind = "feed-error";
   async function request(path, body) {
     let response;
-    try {
-      response = await fetcher(`${OSV_ENDPOINT}${path}`, { method: body ? "POST" : "GET", headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-        ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(60_000), redirect: "error" });
-    } catch (cause) { failureKind = "network-error"; throw new Error(`OSV network request failed; this is not a clean scan: ${cause.message}`); }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await fetcher(`${OSV_ENDPOINT}${path}`, { method: body ? "POST" : "GET", headers: { Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
+          ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(60_000), redirect: "error" });
+        break;
+      } catch (cause) {
+        if (attempt === 2) { failureKind = "network-error"; throw new Error(`OSV network request failed; this is not a clean scan: ${cause.message}`); }
+        await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+      }
+    }
     if (!response.ok) throw new Error(`OSV feed request failed with HTTP ${response.status}; no clean result is available.`);
     const result = await response.json();
     if (!result || typeof result !== "object" || result.error || result.code || result.message) throw new Error("OSV feed returned an API error or unsupported query.");

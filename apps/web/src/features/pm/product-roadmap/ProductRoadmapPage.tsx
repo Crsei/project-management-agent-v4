@@ -119,7 +119,7 @@ function RoadmapWorkbench({ workspaceId, projectId, actorId, canEdit }: { worksp
     catch { setError('无法复制，请从右侧 PRD 手动复制；未向 Agent 发送内容。'); }
   }
   return <main className="product-roadmap" aria-label="产品规划工作台">
-    <header className="roadmap-header"><div><h1>产品规划</h1><p>明确需求、规划路线，并把计划连接到真实任务与验收。</p></div><button onClick={() => void coach()} disabled={!data || busy}>请 Agent 帮我审阅 ↗</button></header>
+    <header className="roadmap-header"><div><h1>产品规划</h1><Link to={base + "/roadmap/canvas"}>打开产品画布</Link><p>明确需求、规划路线，并把计划连接到真实任务与验收。</p></div><button onClick={() => void coach()} disabled={!data || busy}>请 Agent 帮我审阅 ↗</button></header>
     <nav className="roadmap-tabs" aria-label="产品规划步骤">{([['brief', '01', '明确产品'], ['roadmap', '02', '规划路线'], ['delivery', '03', '交付与验收']] as const).map(([id, number, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><span>{number}</span>{label}</button>)}</nav>
     <div className="roadmap-toolbar"><span>{busy ? '正在核对 / 保存…' : dirty ? '本机草稿 · 尚未保存到项目' : data ? '项目内容已读取' : '尚未读取项目'}{data?.archived ? ' · 项目已归档' : ''}</span><button disabled={busy} onClick={() => void load()}>刷新核对</button><button disabled={busy || !data} onClick={() => setConfirm('reload')}>载入服务端版本</button><button className="primary" disabled={!editable || !dirty} onClick={() => void act({ action: 'save', commandId: crypto.randomUUID(), revision, plan })}>保存草稿</button></div>
     {notice && <p role="status" className="roadmap-notice">{notice}</p>}{error && <p role="alert" className="roadmap-error">{error}</p>}

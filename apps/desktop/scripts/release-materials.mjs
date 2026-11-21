@@ -476,9 +476,13 @@ export async function refreshVerification(output, manifest, verification) {
   await observePackagingPhase("checksumDelivery", () => checksumDelivery(output, manifest));
 }
 
-export async function writeReleaseMaterials({ output, resources, platform, sourceRoot, source, legalRoot, legalCollected = false, manifest, verification }) {
+export function archiveDesktopSource(sourceRoot, source, file) {
+  return createTar({ cwd: sourceRoot, gzip: true, portable: true, file }, [...source.files.map((entry) => entry.path), "desktop-source.json"]);
+}
+
+export async function writeReleaseMaterials({ output, resources, platform, sourceRoot, source, sourceArchive, legalRoot, legalCollected = false, manifest, verification }) {
   await mkdir(output, { recursive: true });
-  await observePackagingPhase("archiveSource", () => createTar({ cwd: sourceRoot, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]));
+  await observePackagingPhase("archiveSource", () => sourceArchive ? copyFile(sourceArchive, join(output, "desktop-source.tar.gz")) : archiveDesktopSource(sourceRoot, source, join(output, "desktop-source.tar.gz")));
   await writeFile(join(output, "desktop-source.json"), json(source));
   if (!legalCollected) await observePackagingPhase("collectLegal", () => collectLegal(resources, platform, legalRoot));
   await observePackagingPhase("archiveLegal", () => createTar({ cwd: legalRoot, gzip: true, portable: true, file: join(output, "desktop-legal.tar.gz") }, ["."]));

@@ -57,7 +57,7 @@ const runtimeNotes: Record<string, string> = {
     <ul class="provider-strip" aria-label="部分 Provider 配置入口与运行方式">
       {agents.map((agent) => (
         <li>
-          <span class="provider-icon"><img src={`/harnesses/${agent.icon}`} alt="" width="26" height="26" loading="lazy" /></span>
+          <span class="provider-icon" aria-hidden="true">{agent.name.charAt(0)}</span>
           <div><h3>{agent.name}</h3><p>{runtimeNotes[agent.name]}</p></div>
         </li>
       ))}
@@ -109,7 +109,7 @@ const runtimeNotes: Record<string, string> = {
   .provider-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0; padding: 12px 0; margin-block: 36px 24px; list-style: none; border-block: 1px solid var(--border); }
   .provider-strip li { display: flex; align-items: center; min-width: 0; gap: 14px; padding: 18px 22px; }
   .provider-icon { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: var(--radius-control); background: var(--dark); }
-  .provider-icon img { width: 26px; height: 26px; object-fit: contain; }
+  .provider-icon { color: white; font-weight: 600; }
   .provider-strip h3 { margin: 0 0 3px; font-size: 15px; letter-spacing: -.01em; }
   .provider-strip p { color: var(--muted); font-size: 12px; }
   .provider-status { display: flex; align-items: start; gap: 20px; }

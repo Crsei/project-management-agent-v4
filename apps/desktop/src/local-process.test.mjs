@@ -254,3 +254,19 @@ if (process.platform === "win32") test("a missing native inspection helper is no
     else process.env.SystemRoot = systemRoot;
   }
 });
+
+test("macOS stopped launcher uses the verified shell image and ignores shell startup input", { skip: process.platform !== "darwin", timeout: 15000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "desktop-darwin-shell-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const startup = join(directory, "startup.sh");
+  await writeFile(startup, 'echo unexpected-startup; exit 91\n');
+  const child = spawnOwned(process.execPath, ["-e", 'console.log("clean-start")'], {
+    cwd: directory, env: { ...environment(), BASH_ENV: startup },
+  });
+  const identity = ownedProcessIdentity(child);
+  assert.equal(identity?.pid, child.pid);
+  let output = "";
+  child.stdout.on("data", chunk => { output += chunk; });
+  assert.deepEqual(await once(child, "close"), [0, null]);
+  assert.equal(output.trim(), "clean-start");
+});

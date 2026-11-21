@@ -479,7 +479,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
         executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
       createDashboardToolFamily({ readDashboard: applicationRead, coreAccessFor,
         executeCommand: executeToolCommand, readCommandReceipt: readToolCommandReceipt }),
-      createPlanningRecordsToolFamily({ database, coreWorkspaces, executeCommand: executeToolCommand }),
+      createPlanningRecordsToolFamily({ database, coreWorkspaces, blobs, executeCommand: executeToolCommand }),
       createAutomationToolFamily({ database, core: notificationCore, runtime: automationRuntime,
         definitionResolver: automationDefinitions, workspaceExecution: automationWorkspaceExecution,
         // Native candidate application uses the final shared tool set, initialized below.
@@ -506,7 +506,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAgentPreviewRoutes(app, { database, actor, coreWorkspaces });
   registerWorkflowTaskTransitionRoutes(app, { database, actor, coreWorkspaces });
   registerTaskBriefRoutes(app, { database, actor, coreWorkspaces });
-  registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces });
+  registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces, blobs });
   registerNotificationRoutes(app, { database, actor, core: notificationCore });
   registerWebhookRoutes(app, { database, actor, ...(options.webhooks ? { config: options.webhooks } : {}) });
   app.get('/api/v1/workspaces/:workspaceId/dashboard/personal', async request => dashboard(request, readPersonalDashboard));

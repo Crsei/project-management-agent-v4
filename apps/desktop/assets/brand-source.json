@@ -18,7 +18,8 @@
     "resolution": "Existing locked Astro dependency from apps/marketing; requires the installed native Sharp/libvips package for the host platform."
   },
   "rights": {
-    "status": "OPEN",
-    "note": "Visual approval is not proof of original vector authorship, legal ownership, trademark registration or permission for public distribution. See THIRD_PARTY_NOTICES.md."
+    "status": "CONFIRMED",
+    "date": "2026-11-17",
+    "scope": "The rights holder of the supplied validation board and reconstructed Dovspace marks expressly authorizes public distribution in the source repository and installers. This is not a claim of trademark registration or a grant for other brands."
   }
 }

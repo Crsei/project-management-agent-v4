@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import test from "node:test";
 
-const startupStages = ["migration", "providers", "chat", "collaboration", "connector-recovery", "execution", "automation", "studio", "workflows", "mcp"] as const;
+const startupStages = ["migration", "providers", "chat", "collaboration", "connector-recovery", "execution", "automation", "studio", "workflows", "canvas", "mcp"] as const;
 
 function runRuntimeScenario(scenario: string): void {
   // An isolated process enables Node's module seam without changing the suite's loader.
@@ -47,6 +47,7 @@ function runRuntimeScenario(scenario: string): void {
     replace("automation-execution/connectors.ts", { recoverAutomationGenerationConnectors: () => start("connector-recovery") });
     replace("automation-execution/index.ts", { startAutomationExecutionRuntime: () => start("studio"), stopAutomationExecutionRuntime: () => stop("studio") });
     replace("task-workflows/runner.ts", { startTaskWorkflows: () => start("workflows"), stopTaskWorkflows: () => stop("workflows") });
+    replace("product-canvas/index.ts", { startProductCanvases: () => start("canvas"), stopProductCanvases: () => stop("canvas") });
     replace("mcp/server.ts", { startMcpServer: () => start("mcp"), closeMcpServer: () => stop("mcp") });
     replace("durable/store.ts", { getDatabase: () => ({}), closeStore: () => events.push("close:store") });
     replace("providers/instances.ts", { migrateProviderStartupState: () => start("migration") });
@@ -62,8 +63,9 @@ function runRuntimeScenario(scenario: string): void {
       assert.ok(events.indexOf(earlier) < events.indexOf(later), earlier + " must precede " + later);
     };
     const assertDrained = () => {
-      const components = ["maintenance", "collaboration", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"];
+      const components = ["canvas", "maintenance", "collaboration", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"];
       assert.deepEqual(events.filter(event => event.startsWith("stop:")).map(event => event.slice(5)).sort(), [...components].sort());
+      assertBefore("stopped:canvas", "stop:workflows");
       assertBefore("stop:maintenance", "stop:workflows");
       for (const name of ["automation", "studio", "execution", "chat"]) assertBefore("stopped:workflows", "stop:" + name);
       for (const name of ["execution", "chat"]) assertBefore("stopped:studio", "stop:" + name);
@@ -80,7 +82,7 @@ function runRuntimeScenario(scenario: string): void {
   });
 }
 
-for (const held of startupStages.filter(stage => stage !== "workflows" && stage !== "mcp")) {
+for (const held of startupStages.filter(stage => stage !== "workflows" && stage !== "canvas" && stage !== "mcp")) {
   test(`shutdown during ${held} startup prevents later workers from admitting work`, () => {
     runRuntimeScenario(`
       const held = ${JSON.stringify(held)};
@@ -148,8 +150,8 @@ for (const failedStartup of [null, "collaboration", "connector-recovery", "studi
       const failedStartup = ${JSON.stringify(failedStartup)};
       const startupFailure = new Error("startup failed");
       const cleanupOrder = failedStartup
-        ? ["workflows", "studio", "collaboration", "automation", "execution", "chat", "maintenance", "providers"]
-        : ["workflows", "automation", "studio", "collaboration", "execution", "chat", "maintenance", "providers"];
+        ? ["canvas", "workflows", "studio", "collaboration", "automation", "execution", "chat", "maintenance", "providers"]
+        : ["canvas", "workflows", "automation", "studio", "collaboration", "execution", "chat", "maintenance", "providers"];
       for (const name of cleanupOrder) stopFailures.set(name, new Error(name + " cleanup failed"));
       if (failedStartup) startFailures.set(failedStartup, startupFailure);
       else await startRuntime();

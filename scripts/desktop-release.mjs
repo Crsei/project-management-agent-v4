@@ -15,6 +15,12 @@ const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const safeName = name => typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
 
+export function selectTargets(windowsOnly, macosOnly = 'false') {
+  if (![windowsOnly, macosOnly].every(value => ['true','false'].includes(value)) || windowsOnly === 'true' && macosOnly === 'true')
+    throw new Error('Conflicting or invalid native target inputs');
+  return macosOnly === 'true' ? ['darwin-x64','darwin-arm64'] : windowsOnly === 'true' ? ['win32-x64'] : ['win32-x64','darwin-x64','darwin-arm64'];
+}
+
 export function assertReleaseRequest(request) {
   const { tag, sha, version, channel, distribution, targets, runId, attempt, ciRunId } = request;
   if (request.repository !== repository) throw new Error(`Desktop releases are restricted to ${repository}`);
@@ -24,9 +30,9 @@ export function assertReleaseRequest(request) {
   if (!['preview', 'stable'].includes(channel) || (channel === 'preview') !== version.includes('-preview.'))
     throw new Error('Release channel must match the exact stable or preview application version');
   if (!['unsigned', 'signed'].includes(distribution)) throw new Error('Unknown desktop distribution');
-  if (!same(targets, ['win32-x64']) && !same(targets, ['win32-x64', 'darwin-x64', 'darwin-arm64']))
-    throw new Error('Release requires the exact Windows-only or complete native target set');
-  if (distribution === 'unsigned' && (channel !== 'preview' || targets.length !== 1))
+  if (!same(targets, ['win32-x64']) && !same(targets, ['darwin-x64', 'darwin-arm64']) && !same(targets, ['win32-x64', 'darwin-x64', 'darwin-arm64']))
+    throw new Error('Release requires Windows-only, both macOS architectures, or the complete native target set');
+  if (distribution === 'unsigned' && (channel !== 'preview' || !same(targets, ['win32-x64'])))
     throw new Error('Unsigned release is supported only for explicitly labeled Windows preview tests');
   for (const [label, value] of Object.entries({ runId, attempt, ciRunId })) {
     if (!/^[1-9]\d*$/.test(String(value ?? ''))) throw new Error(`${label} must identify an exact workflow run/attempt`);
@@ -400,7 +406,7 @@ async function requestFromEnvironment(env) {
   }
   const request = { repository: env.GITHUB_REPOSITORY, tag: env.DESKTOP_RELEASE_TAG, sha: env.DESKTOP_RELEASE_SHA,
     version, channel: env.DESKTOP_RELEASE_CHANNEL, distribution: env.DESKTOP_DISTRIBUTION,
-    targets: env.DESKTOP_WINDOWS_ONLY === 'true' ? ['win32-x64'] : ['win32-x64', 'darwin-x64', 'darwin-arm64'],
+    targets: selectTargets(env.DESKTOP_WINDOWS_ONLY, env.DESKTOP_MACOS_ONLY),
     runId: env.DESKTOP_NATIVE_RUN_ID || env.GITHUB_RUN_ID, attempt: env.DESKTOP_NATIVE_RUN_ATTEMPT || env.GITHUB_RUN_ATTEMPT, ciRunId: env.DESKTOP_CI_RUN_ID };
   assertReleaseRequest(request);
   const checked = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });

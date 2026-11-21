@@ -1,3 +1,4 @@
+import { checkRetiredAssets } from "./retired-release-assets.mjs";
 import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -131,7 +132,10 @@ async function main(mode) {
     "apps/marketing/public/fonts/dm-sans-OFL.txt",
     "apps/marketing/public/fonts/jetbrains-mono-OFL.txt",
   ]) await check(`OFL text ${relative}`, () => contains(relative, ["SIL OPEN FONT LICENSE Version 1.1", "Permission is hereby granted, free of charge", "TERMINATION", "DISCLAIMER"]));
-  await check("MiSans retained agreement", () => contains("apps/web/public/fonts/MiSans-LICENSE.txt", ["https://hyperos.mi.com/font/en/download/", "MiSans Fonts Intellectual Property License Agreement", "You may not adapt or redevelop", "nor may you redistribute or sell the font software"]));
+  await check("Retired font and artwork bytes absent", async () => {
+    for (const directory of ["apps/web/src/assets", "apps/web/public", "apps/marketing/public"]) await checkRetiredAssets(path.join(root, directory));
+  });
+  await check("MiSans historical agreement", () => contains("apps/web/public/fonts/MiSans-LICENSE.txt", ["https://hyperos.mi.com/font/en/download/", "MiSans Fonts Intellectual Property License Agreement", "You may not adapt or redevelop", "nor may you redistribute or sell the font software"]));
   await check("Retained shadcn public notice", async () => {
     await contains("apps/web/public/licenses/shadcn/LICENSE", ["MIT License", "Copyright (c) 2023 shadcn", "Permission is hereby granted, free of charge", "THE SOFTWARE IS PROVIDED \"AS IS\""]);
   });
@@ -151,6 +155,11 @@ async function main(mode) {
   ]) await check(`Existing legal/provenance record ${relative}`, () => file(relative));
 
   let records;
+  await check("Matching Web and marketing legal pages", () => equalCopy("apps/web/public/legal.html", "apps/marketing/public/legal.html"));
+  await check("Dovspace rights confirmation bound to approved master", async () => {
+    const brand = await json("apps/desktop/assets/brand-source.json");
+    if (brand.rights?.status !== "CONFIRMED" || createHash("sha256").update(await file("apps/web/public/dovspace.svg")).digest("hex") !== brand.masterSha256) throw new Error("Missing confirmation or modified artwork");
+  });
   await check("Release review records", async () => {
     records = releaseRows((await file("THIRD_PARTY_NOTICES.md")).toString("utf8"));
   });

@@ -1,3 +1,5 @@
+import { runLocalVerification } from './local-verification.ts';
+import { canvasDevelopmentContext } from './canvas-context.ts';
 import { checkRoadmapBase, inspectRoadmapDelivery } from './roadmap.ts';
 import { roadmapDeliveryScopeSchema } from '../../../../../packages/contracts/src/product-roadmap.ts';
 import { appPreviews } from './app-preview.ts';
@@ -49,7 +51,9 @@ export function deliveryService(headers: Headers) {
       const binding = await prepareWorktree(value, root, base);
       await checkRoadmapBase({ ...value, root, revision: value.taskRevision }, base, headers, binding.baseSha);
       return binding;
-    }, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
+    }, verify: verifyWorktree, tree: v => readTree(v),
+    test: (v, command) => workflowStore.readRun(v.id)?.graph.nodes.some(n => n.kind === 'test' && n.config.verification === 'local') ? runLocalVerification(v, command) : testTree(v, command),
+    verifyLocal: v => runLocalVerification(v), commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
     findPr: v => github.find(v), createPr: v => github.create(v), feedback: v => github.feedback(v),
     busy: v => !!getActiveChat(v.threadId),
     generation: deliveryGeneration,
@@ -61,7 +65,7 @@ export function deliveryService(headers: Headers) {
       const next = updateThread(v.threadId, { revision: thread.revision, settings: { ...thread.settings, providerInstanceId, model, modelOptions: [] } });
       const input = inputs.get(v.id);
       if (!input) throw new DeliveryError('task_brief_missing', '没有派发前已核验的完整阶段简报。');
-      const message = taskExecutionInput(input.brief, input.text);
+      const message = taskExecutionInput(input.brief, input.text + await canvasDevelopmentContext(v, headers));
       await recordTaskExecutionInputProvenance(input.brief, message.id, headers);
       const request = await submitChat({ id: v.threadId, idempotencyKey: v.generationKey!, trigger: 'submit-message', messages: [
         ...getThreadBranch(v.threadId).map(entry => ({ id: entry.id, ...entry.content }) as UIMessage),
