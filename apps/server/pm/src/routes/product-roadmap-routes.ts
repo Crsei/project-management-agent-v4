@@ -6,7 +6,7 @@ import type { Actor } from '../../../../../packages/domain/src/core.ts';
 import type { CoreWorkspacePool } from './core-routes.ts';
 import { createProductRoadmapService } from '../product-roadmap-service.ts';
 
-import type { BlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
+import type { BlobStore } from '../../../../../packages/infrastructure/src/blobs.ts';
 
 type Options = { blobs?: BlobStore; database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };
 export function registerProductRoadmapRoutes(app: FastifyInstance, options: Options) {

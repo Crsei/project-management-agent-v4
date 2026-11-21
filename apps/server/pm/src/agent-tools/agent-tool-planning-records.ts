@@ -18,7 +18,7 @@ import { WorkspaceError } from '../../../../../packages/pm-core/index.ts';
 import { CoreCommandJournal } from '../core-journal.ts';
 import type { AgentChatToolFamily, AgentToolRecoveryIdentity } from './agent-chat-tools.ts';
 
-import type { BlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
+import type { BlobStore } from '../../../../../packages/infrastructure/src/blobs.ts';
 
 export type PlanningRecordsToolDependencies = {
   blobs?: BlobStore;
