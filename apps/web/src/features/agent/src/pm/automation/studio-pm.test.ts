@@ -13,22 +13,20 @@ const source: PmAutomationSourceRef = { refId: "task:TASK-001:r1", kind: "task",
 const task: PmAutomationTask = { id: "TASK-001", sourceRefId: source.refId, revision: "r1", projectId: "PRJ-001", title: "Original title", description: "Original scope", status: "custom-open", statusCategory: "unstarted", archived: false, acceptanceCriteria: ["Real criterion"], labels: [], assigneeIds: [], dependsOn: [], relatedTaskIds: [], goalIds: [], allowedPaths: [], milestoneId: null, createdAt: null, updatedAt: null, lastActivityAt: null, progressNote: "" };
 const candidate: PmAutomationCandidate = { id: "proposal-1", kind: "task-update", title: "Review requirement", rationale: "Scope is incomplete", sourceRefs: [source], evidence: [{ sourceRefId: source.refId, quote: "Original scope" }], status: "pending", revision: 1, taskId: "TASK-001", expectedRevision: "r1", before: { description: "Original scope" }, after: { description: "Reviewed scope" } };
 const preview: PmAutomationCandidatePreview = { candidate, currentSources: [source], currentTask: task, canApply: true, conflicts: [], previewToken: "exact-preview", selectedItemIds: [] };
-const blankFilters = { query: "", source: "", category: "", integration: "", trigger: "" };
+const blankFilters = { query: "", category: "", trigger: "" };
 function installStorage(t: TestContext) {
   const entries = new Map<string, string>(); const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: { get length() { return entries.size; }, key: (index: number) => [...entries.keys()][index] ?? null, getItem: (key: string) => entries.get(key) ?? null, setItem: (key: string, value: string) => { entries.set(key, value); }, removeItem: (key: string) => { entries.delete(key); } } });
   t.after(() => { if (previous) Object.defineProperty(globalThis, "sessionStorage", previous); else Reflect.deleteProperty(globalThis, "sessionStorage"); }); return entries;
 }
 
-test("all native PM scenarios are browsable alongside the pinned source, with independent source/category/manual filters", () => {
-  const pm = filterStudioTemplates(automationCatalog, { ...blankFilters, source: "pm", trigger: "manual" });
+test("all native PM scenarios are browsable with category and manual filters", () => {
+  const pm = filterStudioTemplates(automationCatalog, { ...blankFilters, trigger: "manual" });
   assert.deepEqual(new Set(pm.map(template => template.id)), new Set(pmAutomationTemplateIds));
-  assert.equal(filterStudioTemplates(automationCatalog, { ...blankFilters, source: "openhands" }).length, 23);
   assert.equal(new Set(pm.map(template => template.category)).size, 4);
-  assert.equal(filterStudioTemplates(automationCatalog, { ...blankFilters, source: "pm", category: "knowledge/changes", query: "15" })[0]?.id, "pm-requirement-change-impact");
+  assert.equal(filterStudioTemplates(automationCatalog, { ...blankFilters, category: "knowledge/changes", query: "15" })[0]?.id, "pm-requirement-change-impact");
   assert.deepEqual(pm.filter(automationTemplateRecommended).map(template => template.scenario), ["02", "03", "19"]);
   assert.ok(pm.every(template => automationTemplateMaturity(template) === "stable"));
-  assert.equal(filterStudioTemplates(automationCatalog, { ...blankFilters, source: "pm", integration: "github" }).length, 0, "PM provenance is not an integration requirement");
 });
 
 test("native setup freezes schema-valid exact scope/version and does not turn empty selectors into project scope", () => {

@@ -156,7 +156,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   });
   schemas.MemberDirectory = object({
     serverNow: timestamp, presenceTtlMs: nonnegativeInteger,
-    capabilities: object({ canReadDirectory: { const: true }, canManageMembers: boolean, canEditSelfProfile: boolean, twoFactor: object({ supported: { const: false } }) }),
+    capabilities: object({ canReadDirectory: { const: true }, canManageMembers: boolean, canInviteMembers: boolean, canEditSelfProfile: boolean, twoFactor: object({ supported: { const: false } }) }),
     selfProfile: ref('SelfProfile'), members: array(ref('MemberDirectoryMember')),
   });
   schemas.InvitationDelivery = object({

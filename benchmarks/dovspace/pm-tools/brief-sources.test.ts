@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { agentChatContextSourceSchema, type AgentChatContextSource } from '../../../packages/agent-contracts/src/pm-tool-result.ts';
-import { deduplicateBriefContextSources } from '../../../apps/server/pm/src/agent-chat-tools.ts';
+import { deduplicateBriefContextSources } from '../../../apps/server/pm/src/agent-tools/agent-chat-tools.ts';
 
 const source = agentChatContextSourceSchema.parse({ kind: 'task', workspaceId: '33333333-3333-4333-8333-333333333333', projectId: 'PRJ-001', entityId: 'TASK-001', title: 'Migration decision', revision: 'a'.repeat(64), truncated: false });
 

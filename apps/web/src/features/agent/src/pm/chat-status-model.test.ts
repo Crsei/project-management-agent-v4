@@ -54,6 +54,11 @@ test("provider issues keep their explicit configuration state", () => {
   assert.equal(providerStatusItem({ instanceId: "codex", name: "Codex", issue: "not-installed" }, english).title, "Codex is not installed");
   assert.equal(providerStatusItem({ instanceId: "codex", issue: "missing" }, english).title, "Provider configuration not found");
   assert.deepEqual(providerStatusItem({ instanceId: "codex", name: "Codex", issue: "missing" }, english).actions, ["provider-settings"]);
+  const unselected = providerStatusItem({ instanceId: "", issue: "unselected" }, english);
+  assert.equal(unselected.tone, "warning");
+  assert.equal(unselected.title, "No model selected");
+  assert.deepEqual(unselected.actions, ["session-settings"]);
+  assert.equal(unselected.id, "provider:unselected");
 });
 
 test("provider auth banner needs a checked, not-ready runtime", () => {

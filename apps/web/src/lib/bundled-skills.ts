@@ -25,6 +25,12 @@ export function bundledSkillProviderIdentity(provider: BundledSkillProvider): st
 export function bundledSkillProviderReady(provider: BundledSkillProvider): boolean {
   return provider.enabled && provider.configured && provider.nativeSessionReady;
 }
+/** Installation writes files into an already authorized native target; a live
+ * session is useful evidence but is not required to copy the bundled bytes.
+ * The panel still requires an authoritative target fingerprint from the server. */
+export function bundledSkillProviderWritable(provider: BundledSkillProvider): boolean {
+  return provider.enabled;
+}
 
 export class BundledSkillsError extends Error {
   readonly code: string;

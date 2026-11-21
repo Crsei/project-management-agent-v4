@@ -317,6 +317,55 @@ describe("OMP supervised adapter lifecycle", () => {
     const terminal = yield* h.takeEvent("turn.terminal");
     assert.equal(terminal.type === "turn.terminal" && terminal.status, "failed");
     assert.equal(terminal.type === "turn.terminal" && terminal.threadDisposition, "broken");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.code, "omp_rpc_unknown");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.class, "transport_error");
+  }).pipe(Effect.scoped, Effect.provide(layer)));
+
+  it.effect("does not call a handler protocol failure a transport outage or expose its payload", () => Effect.gen(function* () {
+    const h = yield* harness(); yield* h.start();
+    yield* h.emit({ type: "tool_execution_start", toolName: "read", args: { secret: "never-public" } });
+    const terminal = yield* h.takeEvent("turn.terminal");
+    assert.equal(terminal.type === "turn.terminal" && terminal.status, "failed");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.class, "validation_error");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.code, "omp_event_processing_failed");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.message, "OMP event handling failed before a settled prompt result");
+  }).pipe(Effect.scoped, Effect.provide(layer)));
+
+  it.effect("keeps an aborted unsettled result interrupted when stdout then closes", () => Effect.gen(function* () {
+    const h = yield* harness(); const prompt = yield* h.start();
+    yield* h.emit({ type: "prompt_result", id: prompt.id, status: "aborted", sessionSettled: false });
+    yield* h.disconnect;
+    const terminal = yield* h.takeEvent("turn.terminal");
+    assert.equal(terminal.type === "turn.terminal" && terminal.status, "interrupted");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure, null);
+    assert.equal(terminal.type === "turn.terminal" && terminal.threadDisposition, "broken");
+  }).pipe(Effect.scoped, Effect.provide(layer)));
+
+  it.effect("does not promote a completed but unsettled result to success on EOF", () => Effect.gen(function* () {
+    const h = yield* harness(); const prompt = yield* h.start();
+    yield* h.emit({ type: "message_start", message: { role: "assistant", content: [] } });
+    yield* h.emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Partial answer" }],
+      stopReason: "stop", usage: { input: 9, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 12 } } });
+    yield* h.emit({ type: "prompt_result", id: prompt.id, status: "completed", sessionSettled: false });
+    yield* h.disconnect;
+    let updated = yield* h.takeEvent("provider_turn.updated");
+    while (updated.type === "provider_turn.updated" && updated.providerTurn.status === "running") updated = yield* h.takeEvent("provider_turn.updated");
+    assert.equal(updated.type === "provider_turn.updated" && updated.providerTurn.turnTokenUsage?.usageStatus, "partial");
+    assert.equal(updated.type === "provider_turn.updated" && updated.providerTurn.turnTokenUsage?.outputTokens, 3);
+    const terminal = yield* h.takeEvent("turn.terminal");
+    assert.equal(terminal.type === "turn.terminal" && terminal.status, "failed");
+    assert.equal(terminal.type === "turn.terminal" && terminal.threadDisposition, "broken");
+  }).pipe(Effect.scoped, Effect.provide(layer)));
+
+  it.effect("retains the original provider failure and redaction when EOF interrupts settlement", () => Effect.gen(function* () {
+    const h = yield* harness(); const prompt = yield* h.start();
+    yield* h.emit({ type: "prompt_result", id: prompt.id, status: "error", sessionSettled: false,
+      error: { message: "Provider rejected; token=never-public", code: "original-provider-code" } });
+    yield* h.disconnect;
+    const terminal = yield* h.takeEvent("turn.terminal");
+    assert.equal(terminal.type === "turn.terminal" && terminal.status, "failed");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.code, "original-provider-code");
+    assert.equal(terminal.type === "turn.terminal" && terminal.failure?.message, "Provider rejected; token=[REDACTED]");
   }).pipe(Effect.scoped, Effect.provide(layer)));
 
   it.effect("abort ACK does not become completed; waits for native aborted settlement", () => Effect.gen(function* () {

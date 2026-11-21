@@ -5,8 +5,8 @@ import { assertAgentToolRecord, assertAgentToolOrdinaryMutation, type AgentChatT
 import type { PmAutomationMutationPort } from '../../../../packages/application/src/automation-pm.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
-import type { AgentChatTools } from './agent-chat-tools.ts';
-import { CoreWorkspacePool, authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation } from './core-routes.ts';
+import type { AgentChatTools } from './agent-tools/agent-chat-tools.ts';
+import { CoreWorkspacePool, authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation } from './routes/core-routes.ts';
 import { patchMarkdown } from '../../../../packages/pm-markdown/index.ts';
 import { coreRecordToEntity, updateWorkItemRaw } from './core-adapter.ts';
 import { assertTaskCreationProject } from '../../../../packages/application/src/core-task-creation.ts';

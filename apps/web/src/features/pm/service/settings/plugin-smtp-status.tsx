@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useMemberInvitations } from "../pm-member-hooks"
 import { pmErrorMessage, usePmService } from "../pm-service"
 import { allowed, useText } from "../pm-ui"
-import { SettingsNotice, type SettingsPageProps } from "./settings-shared"
+import { type SettingsPageProps } from "./settings-shared"
 
 function InvitationServiceStatus({ membersHref }: { membersHref: string }) {
   const t = useText()
@@ -21,7 +21,7 @@ function InvitationServiceStatus({ membersHref }: { membersHref: string }) {
         <p className="text-muted-foreground">{t("无法确认当前邀请服务状态；旧快照不作为可用依据。读取或配置错误不等于未配置。", "The current invitation service status cannot be confirmed; an old snapshot is not evidence of availability. A read or configuration error does not mean the service is unconfigured.")}</p>
       </div> : query.isPaused ? <p role="status">{t("读取已暂停，等待网络恢复；当前配置状态尚未确认。", "The read is paused until the network recovers; the current configuration is not confirmed.")}</p> : busy ? <p role="status">{query.data ? t("正在刷新邀请服务状态…旧快照暂不作为可用依据。", "Refreshing invitation service status… The previous snapshot is not evidence of current availability.") : t("正在读取邀请服务状态…", "Loading invitation service status…")}</p> : data ? <>
         <p className="font-medium">{data.enabled ? t("邀请服务已配置 / 启用", "Invitation service configured / enabled") : t("邀请服务未配置 / 未启用", "Invitation service unconfigured / disabled")}</p>
-        <p className="text-muted-foreground">{data.enabled ? t("状态来自现有管理员邀请接口的 enabled 字段，仅表示邀请服务已配置 / 启用，不证明 SMTP 可达、Worker 健康或公网送达。", "This status comes from the existing administrator invitation API's enabled field. It only indicates invitation service configuration / enablement, not SMTP reachability, Worker health, or public email delivery.") : t("不能新建或重发邮件邀请。仍可到成员页面查看原有邀请记录并按权限撤销；给已有账号授权不依赖 SMTP。", "New email invitations and resends are unavailable. Existing invitation records remain accessible on the members page, with revocation subject to permission. Granting access to an existing account does not require SMTP.")}</p>
+        <p className="text-muted-foreground">{data.enabled ? t("状态来自现有邀请接口的 enabled 字段，仅表示邀请服务已配置 / 启用，不证明 SMTP 可达、Worker 健康或公网送达。", "This status comes from the existing invitation API's enabled field. It only indicates invitation service configuration / enablement, not SMTP reachability, Worker health, or public email delivery.") : t("不能新建或重发邮件邀请。仍可到成员页面查看原有邀请记录并按权限撤销；给已有账号授权不依赖 SMTP。", "New email invitations and resends are unavailable. Existing invitation records remain accessible on the members page, with revocation subject to permission. Granting access to an existing account does not require SMTP.")}</p>
       </> : <p role="alert">{t("未取得邀请服务状态，不能判定为已配置或未配置。请重试读取。", "No invitation service status is available; it cannot be classified as configured or unconfigured. Retry the read.")}</p>}
     </div>
     <div className="flex min-w-0 flex-wrap gap-2">
@@ -63,7 +63,7 @@ function ServiceSmtpStatus() {
       <Button variant="outline" size="sm" render={<Link to="/pm?pick=1" />} className="h-auto min-h-9 w-full whitespace-normal py-2 sm:w-auto">{t("登录 / 选择工作区", "Sign in / choose workspace")}</Button>
     </div>
   </div>
-  if (!allowed(service.workspace, "access.manage")) return <SettingsNotice>{t("无权查看：仅具有当前工作区 access.manage 的工作区管理员可读取邀请服务配置状态与邀请记录。本区域不会请求邀请列表，也不展示旧的私有快照。", "No access: only workspace administrators with access.manage for the current workspace may read invitation service configuration status and invitation records. This area does not request the invitation list or display old private snapshots.")}</SettingsNotice>
+  if (!allowed(service.workspace, "access.manage")) return <p className="text-sm text-muted-foreground">{t("仅工作区管理员可查看邀请服务状态。", "Only workspace administrators can view invitation service status.")}</p>
 
   return <InvitationServiceStatus membersHref={`/pm/${encodeURIComponent(service.workspace.id)}/members?tab=members&panel=invitations`} />
 }
@@ -91,8 +91,8 @@ function SmtpDeploymentGuide() {
 export function PluginSmtpStatus({ mode }: SettingsPageProps) {
   const t = useText()
   return <div className="min-w-0 space-y-4 border-t pt-4">
-    {mode === "service" ? <ServiceSmtpStatus /> : <SettingsNotice>{t("Lab · 仅只读能力说明。不调用真实会话或邀请 hooks，不查询部署状态，不模拟已配置，也不能发送邀请。请在正式工作区由管理员读取实际状态。", "Lab · Read-only capability information. No real session or invitation hooks are called, deployment status is not queried, configuration is not simulated, and invitations cannot be sent. An administrator can read the actual status in a real workspace.")}</SettingsNotice>}
-    <p className="text-xs leading-5 text-muted-foreground">{t("仅成员邀请，不含收信 / 任务通知。SMTP 接收 ≠ 送达；SMTP 接收邮件不代表收件人收到，服务启用也不证明 SMTP 可达或公网送达。", "Member invitations only; no incoming mail or task notifications. SMTP acceptance ≠ delivery: server acceptance does not mean the recipient received the message, and service enablement does not prove SMTP reachability or public delivery.")}</p>
+    {mode === "service" ? <ServiceSmtpStatus /> : <p className="text-sm text-muted-foreground">{t("Lab 不读取真实部署状态。", "Lab does not read real deployment status.")}</p>}
+    <p className="text-xs leading-5 text-muted-foreground">{t("仅成员邀请；SMTP 接受不代表收件人收到。", "Member invitations only; SMTP acceptance does not mean delivery.")}</p>
     <SmtpDeploymentGuide />
   </div>
 }

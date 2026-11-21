@@ -56,7 +56,7 @@ export function DocumentCollection({ files, projects, workspaceId, sources, scop
     {visible.length > 0 ? <div className="pm-view document-collection-table">
       <div className="table-scroll">
         <table className="work-table">
-          <thead><tr><th>{en ? 'Document' : '文档名称'}</th><th>{en ? 'Type' : '类型'}</th><th>{en ? 'Project' : '项目'}</th>{showActions && <th aria-label={en ? 'Actions' : '操作'} />}</tr></thead>
+          <thead><tr><th>{en ? 'Document' : '文档名称'}</th><th className="document-type-cell">{en ? 'Type' : '类型'}</th><th className="document-project-cell">{en ? 'Project' : '项目'}</th><th className="document-updated-cell">{en ? 'Updated' : '最近更新'}</th>{showActions && <th aria-label={en ? 'Actions' : '操作'} />}</tr></thead>
           <tbody>{visible.map(row => {
             const updated = row.updatedAt === null ? (en ? 'Update time unavailable' : '更新时间不可用') : new Date(row.updatedAt).toLocaleString(en ? 'en-US' : 'zh-CN');
             const secondary = row.source === 'native' ? row.file.id : `${row.sourceName} · ${row.entry.path.includes('/') ? row.entry.path.slice(0, row.entry.path.lastIndexOf('/')) : '.'}`;
@@ -64,8 +64,9 @@ export function DocumentCollection({ files, projects, workspaceId, sources, scop
             const captured = menuRow?.key === row.key ? menuRow : row;
             return <ContextMenu key={row.key} onOpenChange={open => { if (open) setMenuRow(row); }}><ContextMenuTrigger asChild><tr tabIndex={0} className={row.source === 'native' ? '' : undefined} aria-label={`${row.title} · ${row.typeLabel}`}>
               <td><button type="button" className="table-title" title={title} aria-label={`${row.title} · ${row.typeLabel} · ${row.projectLabel}`} onClick={() => openRow(row)}><strong>{row.title}</strong>{secondary && <span className="mono">{secondary}</span>}</button></td>
-              <td><span className="muted">{row.typeLabel}</span></td>
-              <td><span className="muted" title={row.projectLabel}>{row.projectLabel}</span></td>
+              <td className="document-type-cell"><span className="muted">{row.typeLabel}</span></td>
+              <td className="document-project-cell"><span className="muted" title={row.projectLabel}>{row.projectLabel}</span></td>
+              <td className="document-updated-cell"><span className="muted" title={updated}>{row.updatedAt === null ? '—' : updated}</span></td>
               {showActions && <td><div className="document-source-row-actions">
                 <button type="button" className="icon-button" title={en ? 'Open' : '打开'} aria-label={`${en ? 'Open' : '打开'} ${row.title}`} onClick={() => openRow(row)}><ArrowUpRight size={14} aria-hidden="true" /></button>
                 {row.source === 'external' && row.canWrite && rowActions.map(({ action, label, Icon }) => <button type="button" className="icon-button" key={action} title={`${label} ${row.title}`} aria-label={`${label} ${row.title}`} onClick={() => manageRow(row, action)}><Icon size={14} aria-hidden="true" /></button>)}

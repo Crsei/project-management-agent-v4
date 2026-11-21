@@ -13,6 +13,8 @@ export interface ManagedSkillInfo extends SkillInfo {
 }
 
 export const agentName = (app: string) => APP_DISPLAY_NAME[app as AppId] ?? app;
+/** Native scans report app IDs plus the shared `agents` root. */
+export const foundInLabel = (found: string) => found === "agents" ? "~/.agents/skills" : agentName(found);
 export const isNativeDiscoveryAgent = (app: AppId) => app === "pi" || app === "omp";
 
 export function installedSkillInfo(skill: InstalledSkill, appIds: readonly AppId[]): ManagedSkillInfo {

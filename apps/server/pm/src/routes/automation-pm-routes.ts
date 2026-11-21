@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { pmAutomationApplyRequestSchema, pmAutomationCandidateEditSchema, pmAutomationEventSchema, pmAutomationPreviewRequestSchema, pmAutomationPublishSchema, pmAutomationReviewRequestSchema, pmAutomationSnapshotInputSchema, pmAutomationVisitRequestSchema } from '../../../../packages/contracts/src/automation-pm.ts';
-import { createPmAutomationService, type PmAutomationMutationPort } from '../../../../packages/application/src/automation-pm.ts';
-import { receivePmAutomationSignal, recordPmAutomationVisit } from '../../../../packages/application/src/automation-pm-signals.ts';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { verifyAutomationServiceRequest } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
+import { pmAutomationApplyRequestSchema, pmAutomationCandidateEditSchema, pmAutomationEventSchema, pmAutomationPreviewRequestSchema, pmAutomationPublishSchema, pmAutomationReviewRequestSchema, pmAutomationSnapshotInputSchema, pmAutomationVisitRequestSchema } from '../../../../../packages/contracts/src/automation-pm.ts';
+import { createPmAutomationService, type PmAutomationMutationPort } from '../../../../../packages/application/src/automation-pm.ts';
+import { receivePmAutomationSignal, recordPmAutomationVisit } from '../../../../../packages/application/src/automation-pm-signals.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { verifyAutomationServiceRequest } from '../../../../../packages/infrastructure/src/automation-execution-client.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
 
 /** Service analysis ingress and human review are deliberately separate authorities. */
 export function registerPmAutomationRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; core: NotificationCorePort; mutations?: PmAutomationMutationPort }): void {

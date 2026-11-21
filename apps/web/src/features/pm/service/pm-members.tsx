@@ -21,7 +21,7 @@ export function ServiceMembers() {
   const { workspace, actor } = usePmService()
   const t = useText()
   const query = useMemberDirectory()
-  const invitationQuery = useMemberInvitations()
+  const invitationQuery = useMemberInvitations(true)
   const command = usePmCommand()
   const [searchParams, setSearchParams] = useSearchParams()
   const variant = resolveVariant(searchParams.get("view"), "member1", memberViews)
@@ -45,10 +45,12 @@ export function ServiceMembers() {
     selectedId: null, detailOpen: false, conditions: [],
   })
   const canManage = allowed(workspace, "access.manage") && !!query.data?.capabilities.canManageMembers
+  const canInvite = !!query.data?.capabilities.canInviteMembers
+  const canReadInvitations = canManage || canInvite
   const canEditProfile = !!query.data?.capabilities.canEditSelfProfile
   const readBlocked = !query.data || !!query.error
   const locked = readBlocked || command.pending || !!command.unknownCommand
-  const invitationBlocked = !canManage || !invitationQuery.data || !!invitationQuery.error
+  const invitationBlocked = !canReadInvitations || !invitationQuery.data || !!invitationQuery.error
   const smtpEnabled = invitationQuery.data?.enabled === true
   const all = (query.data?.members ?? []).map(member => directoryMemberRecord(member, workspace?.ownerId, query.estimatedServerNow, query.data!.presenceTtlMs))
   const membersById = new Map(all.map(member => [member.membershipId, member]))
@@ -101,8 +103,8 @@ export function ServiceMembers() {
     const invitation = invitationItems.find(item => item.id === row.id)
     if (invitation && !invitationBlocked && !locked) setOperation({ kind, invitation })
   }
-  const invitationNotice = !canManage
-    ? t("目录可读，但仅整个工作区的管理员可查看和管理邀请。", "You can read the directory; only workspace-wide administrators can view or manage invitations.")
+  const invitationNotice = !canInvite
+    ? t("目录可读，但没有邀请权限；邀请需要成员规划编辑能力或工作区管理员。", "You can read the directory but cannot invite; inviting requires member planning edit or workspace administration.")
     : !smtpEnabled && invitationQuery.data
       ? t("SMTP 未配置：不能新建或重发邀请；已有邀请的状态与撤销仍可查看。", "SMTP is not configured: creating and resending invitations are disabled. Existing statuses and revocation remain available.")
       : undefined
@@ -115,9 +117,9 @@ export function ServiceMembers() {
     }}><option value="member1">{t("目录表格", "Directory table")}</option><option value="member2">{t("联系卡片", "Contact cards")}</option><option value="member3">{t("管理表格", "Management table")}</option></RadixSelect>
     <Button variant="outline" disabled={!query.data} onClick={() => setPanel("profile", "me")}><UserPen aria-hidden="true" />{t("本人资料", "My profile")}</Button>
     {canManage && <Button variant="outline" disabled={locked} onClick={() => setEditor({ userId: null, mode: "capabilities" })} title={t("直接授权已存在账号，不发送邮件", "Grant an existing account access without sending email")}><UserPlus aria-hidden="true" />{t("授权已有账号", "Grant existing account")}</Button>}
-    {canManage && <Button variant="outline" onClick={() => setPanel("panel", "invitations")}><Mail aria-hidden="true" />{t("邀请记录", "Invitations")}</Button>}
-    {canManage && variant !== "member3" && <Button disabled={locked || invitationBlocked || !smtpEnabled} onClick={() => setPanel("panel", "invitations")}><UserPlus aria-hidden="true" />{t("邀请成员", "Invite member")}</Button>}
-    <Button size="icon" variant="ghost" aria-label={t("刷新成员与邀请", "Refresh members and invitations")} disabled={query.isFetching || canManage && invitationQuery.isFetching} onClick={() => { void query.refetch(); if (canManage) void invitationQuery.refetch() }}><RefreshCw aria-hidden="true" /></Button>
+    {canReadInvitations && <Button variant="outline" onClick={() => setPanel("panel", "invitations")}><Mail aria-hidden="true" />{canManage ? t("邀请记录", "Invitations") : t("我的邀请", "My invitations")}</Button>}
+    {canInvite && variant !== "member3" && <Button disabled={locked || invitationBlocked || !smtpEnabled} onClick={() => setPanel("panel", "invitations")}><UserPlus aria-hidden="true" />{t("邀请成员", "Invite member")}</Button>}
+    <Button size="icon" variant="ghost" aria-label={t("刷新成员与邀请", "Refresh members and invitations")} disabled={query.isFetching || canReadInvitations && invitationQuery.isFetching} onClick={() => { void query.refetch(); if (canReadInvitations) void invitationQuery.refetch() }}><RefreshCw aria-hidden="true" /></Button>
   </div>
   return <ServiceGuard>
     <CommandNotice />
@@ -131,7 +133,7 @@ export function ServiceMembers() {
       readModel={{
         members: filtered, selectedMember: all.find(member => member.membershipId === interaction.selectedId) ?? null,
         teams: [], teamsAvailable: true, roles,
-        invitations, invitationsData: canManage ? queryData({ ...invitationQuery, data: invitationQuery.data?.items }, invitations.length) : { state: "empty" },
+        invitations, invitationsData: canReadInvitations ? queryData({ ...invitationQuery, data: invitationQuery.data?.items }, invitations.length) : { state: "empty" },
         invitationsNotice: invitationNotice, suggestedContacts: null, totalMemberCount: all.length,
         sortOptions, teamOptions, copyReceipt: copyReceipt && all.some(member => member.membershipId === copyReceipt.membershipId) ? copyReceipt : null,
         data: filtersActive ? { ...memberData, emptyTitle: t("没有匹配的成员", "No matching members"), emptyDescription: t("当前搜索和筛选下没有成员。清除条件以查看全部可见成员。", "No members match the current search and filters. Clear conditions to see all visible members.") } : memberData,
@@ -139,7 +141,7 @@ export function ServiceMembers() {
       }}
       interaction={effectiveState}
       capabilities={{
-        invite: canManage && !locked && !invitationBlocked && smtpEnabled,
+        invite: canInvite && !locked && !invitationBlocked && smtpEnabled,
         editRole: canEditMemberRole,
         memberOpen: canOpenMember, reconcileInvitation: !command.pending,
         manageAccess: member => canManage && !locked && !!currentMember(member), filterPresence: !!query.data, filterSecurity: false, filterRole: roleAvailable,
@@ -185,12 +187,12 @@ export function ServiceMembers() {
           })()
         },
       }}
-      inviteEditor={variant === "member3" ? <div id="pm-member-invitation-editor" className="p-6 max-sm:p-5">{canManage
+      inviteEditor={variant === "member3" ? <div id="pm-member-invitation-editor" className="p-6 max-sm:p-5">{canInvite
         ? inviteOpen ? <p role="status">{t("邀请草稿在邀请面板中继续编辑。", "Continue editing the invitation draft in the invitations panel.")}</p> : <MemberInvitationForm disabled={locked || invitationBlocked} enabled={smtpEnabled} />
-        : <p role="status">{t("当前可读取成员目录，但没有邀请与授权管理权限。", "You can read the member directory but cannot manage invitations or access.")}</p>}</div> : undefined}
+        : <p role="status">{t("当前可读取成员目录，但没有邀请权限。", "You can read the member directory but cannot invite members.")}</p>}</div> : undefined}
       inviteDialog={<Dialog open={inviteOpen} onOpenChange={open => setPanel("panel", open ? "invitations" : null)}><DialogContent className="max-w-3xl">
         <DialogTitle>{t("成员邀请", "Member invitations")}</DialogTitle><DialogDescription>{t("真实邮件邀请与投递状态；SMTP 接受不代表送达。", "Real email invitations and delivery status; SMTP acceptance is not delivery.")}</DialogDescription>
-        <DialogBody className="space-y-6"><CommandNotice />{query.error && <p role="alert">{query.error.message}<Button variant="outline" onClick={() => { void query.refetch() }}>{t("重试成员读取", "Retry member read")}</Button></p>}{!query.data && !query.error ? <p role="status">{t("正在读取成员权限…", "Reading member permissions…")}</p> : canManage ? <><MemberInvitationForm disabled={locked || invitationBlocked} enabled={smtpEnabled} />
+        <DialogBody className="space-y-6"><CommandNotice />{query.error && <p role="alert">{query.error.message}<Button variant="outline" onClick={() => { void query.refetch() }}>{t("重试成员读取", "Retry member read")}</Button></p>}{!query.data && !query.error ? <p role="status">{t("正在读取成员权限…", "Reading member permissions…")}</p> : canInvite ? <><MemberInvitationForm disabled={locked || invitationBlocked} enabled={smtpEnabled} />
           <InvitationRecords items={invitationItems} loading={invitationQuery.isPending} error={invitationQuery.error} refresh={() => { void invitationQuery.refetch() }} disabled={locked || invitationBlocked} enabled={smtpEnabled} onOperation={(invitation, kind) => setOperation({ invitation, kind })} />
         </> : <p role="status">{invitationNotice}</p>}</DialogBody>
       </DialogContent></Dialog>}
@@ -211,7 +213,7 @@ export function ServiceMembers() {
         {query.data && <>{!canEditProfile && <p role="status">{t("当前授权只能读取本人资料，不能修改。", "Your current access allows reading, but not editing, your profile.")}</p>}<MemberSelfProfileEditor key={`${actor?.id}:${workspace?.id}`} profile={query.data.selfProfile} disabled={!canEditProfile || readBlocked} /></>}
       </DialogBody>
     </DialogContent></Dialog>
-    <MemberInvitationOperationDialog operation={canManage ? operation : null} current={invitationItems} disabled={locked || invitationBlocked} enabled={smtpEnabled} onClose={() => setOperation(null)} />
+    <MemberInvitationOperationDialog operation={canReadInvitations ? operation : null} current={invitationItems} disabled={locked || invitationBlocked} enabled={smtpEnabled} onClose={() => setOperation(null)} />
   </ServiceGuard>
 }
 

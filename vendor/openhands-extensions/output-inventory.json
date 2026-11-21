@@ -4,13 +4,13 @@
   "sourceManifestSha256": "38e687390e239aa6b41628928ef0f35149d618e15504e79aa7a52eb8cb0e9bed",
   "supplementalSha256": "9bcf6d052c337b028ff86bd80790f4f5a4f23914946a64bd7b1e112b2aed728c",
   "policySha256": "1974b1c7545fb43b65e27511d5527e97eb22227c2fe734f81af20d3877c9742e",
-  "closureSha256": "b812d5037b432b7cb3ff2c01cb3fa85b4cb61d2f2c215b97f6f383bab4aaaa32",
+  "closureSha256": "6569341146455a0d6887ee32fb9d6ba70558e5d19f431428cd3de4485426da54",
   "modePolicy": "Canonical 0644/0755 executable class, regular nonlinked files; original modes fixed. Exact pre/postimage and exclusive nonoverwriting replay.",
   "hostBuildInputs": [
     {
       "path": "package.json",
-      "sha256": "37c1c60a3abd1539e57f5aaa43d1289c1614681f711d5334adf442927dec5b71",
-      "bytes": 7038,
+      "sha256": "07f0cf860b1ff1d90be2a49d46d2e1e79741fca7525e2c98b74431e47d40a11e",
+      "bytes": 7097,
       "mode": 420
     },
     {
@@ -27,8 +27,8 @@
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "1aa6c90dd7426aceae9779327968b78619d609fea330b9189b42d2f18870237d",
-      "bytes": 4136,
+      "sha256": "d4a48ea66d8d007196523fe909080e8b0dc5fee2cb49fccfc6b3165b788994ef",
+      "bytes": 4108,
       "mode": 420
     },
     {
@@ -45,8 +45,8 @@
     },
     {
       "path": "tsconfig.check.json",
-      "sha256": "0b15f92466ca12614e64bfbb829368d93db5b9db51554a7ae0489d3163e8e675",
-      "bytes": 926,
+      "sha256": "59bdac8ccf8462289d2efd16674e8380c50e5a51c64d6b0f8de9339246932848",
+      "bytes": 941,
       "mode": 420
     },
     {
@@ -63,8 +63,8 @@
     },
     {
       "path": "apps/desktop/scripts/stage-workspace.mjs",
-      "sha256": "8f75a3b7841663f1ca62e8bbb37bb9deab06a016cb378fbdcb4069e71b7bc58f",
-      "bytes": 14346,
+      "sha256": "a44b17ebe1d570ba072e3334a5b6d387c2052e219d59ff9b3846df9b9b871617",
+      "bytes": 14213,
       "mode": 420
     }
   ],
@@ -3311,11 +3311,11 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "sha256": "7fb6a4238ee5bed642956ec5445718832a0198d5ed4afb4c25b98e9921622938",
-      "bytes": 9607,
+      "sha256": "0f1708adb6ed9c5fc31353cbf7d3236d0c9bb076a71c1b76dbc6dc6a8ebc74e1",
+      "bytes": 15474,
       "mode": 420,
       "provenance": "adapted-original",
-      "reason": "Reviewed concise MCP/Skills copy and Add MCP label",
+      "reason": "Allow direct per-entry native MCP import or skip and reuse the existing preview in conflict review",
       "source": "src/routes/mcp.tsx",
       "sourcePath": "src/routes/mcp.tsx",
       "origin": "agent-canvas-git",
@@ -3323,7 +3323,7 @@
       "blob": "155826f07ad708875658ec50067c7a0d48fed3d8",
       "patch": {
         "path": "vendor/openhands-extensions/integration-patches/original/src/routes/mcp.tsx.json",
-        "sha256": "a094be64bbae81c18541ba2235c0ca9fcb9d1692145185eeee6ed2ce588dc087"
+        "sha256": "9c0ca2472af858724f77d11547bdf4ef0be75db6ea3a6a2a22e8c6c70fb56986"
       }
     },
     {
@@ -3341,11 +3341,11 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
-      "sha256": "1a24a98f59abacd241689653e36dd7b86084023b9b901218ddf7a7f0be2ac8dc",
-      "bytes": 2154,
+      "sha256": "9e1e3449e17b1bd82d84d3150a81712a8635091bb6f07f66dca2fc5a430bf53f",
+      "bytes": 2422,
       "mode": 420,
       "provenance": "adapted-original",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Move host bundled PM Skills inventory into the Skills Discover view",
       "source": "src/routes/skills-settings.tsx",
       "sourcePath": "src/routes/skills-settings.tsx",
       "origin": "agent-canvas-git",
@@ -3353,7 +3353,7 @@
       "blob": "096b480eeb335c02da05c6cbb3f808df86bec6b5",
       "patch": {
         "path": "vendor/openhands-extensions/integration-patches/original/src/routes/skills-settings.tsx.json",
-        "sha256": "0fcc9c474fa746b1f6b6a9cd28bde1f616f6f29eb2434a0d2fa4987f64be8133"
+        "sha256": "34d82a714cadfe1433d8f26c57736118d0234cbfb0b1e756b49cf95c9d53cec8"
       }
     },
     {
@@ -3696,14 +3696,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/index.tsx",
-      "sha256": "eae805d60189fbea2acf85ec91e324366fd9c559bb7e205566ee311ef92bd6bf",
-      "bytes": 2884,
+      "sha256": "83c0c04f167f5a0931e877f5c837be9c0365373b0615d6d249846ef87eb0551e",
+      "bytes": 3206,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Move host bundled PM Skills inventory into the Skills Discover view",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/index.tsx.json",
-        "sha256": "fed0cce3d5816ae2ebeae2a36dcb836283a595484309d63ce5cc60ce09a2ffd7"
+        "sha256": "c0b4d0a98eebdde7af19c627c24cbacad16dd6f8060868562772c8a7a68859eb"
       }
     },
     {
@@ -3756,26 +3756,26 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "sha256": "fcbb679f520ff853df3eaf94b55207de10a72a59b4de3b63f5db82d56bbb0c1b",
-      "bytes": 5270,
+      "sha256": "7f8cea86aa937292f5d15ccb36d51cd59bd400224eae39393a6a5189ef6333ab",
+      "bytes": 5574,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Adapt operator MCP and Skills rebuild to existing theme and real scoped CC lifecycle; retain immutable upstream identity",
+      "reason": "Allow direct per-entry native MCP import or skip and reuse the existing preview in conflict review",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/import-preview-dialog.tsx.json",
-        "sha256": "5c456b0b7636be8dfa6213d6fd01fe07dc20cd8264b98a260690d8e3a391f5cc"
+        "sha256": "de83754570408df5b3bfcba96b1c72ff5d85a872205417eb984c78f7d5c4f437"
       }
     },
     {
       "destination": "vendor/openhands-extensions/src/web/mcp/management.css",
-      "sha256": "ce0d97591ee3f639bff3c7fedefbe0b52f91af14d9678f17da606ef6ca3163e2",
-      "bytes": 25851,
+      "sha256": "74db5194cb4b74c178846629b1bb04b63c90ea0f42c305053958dc975bbef44a",
+      "bytes": 28505,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Allow direct per-entry native MCP import or skip and reuse the existing preview in conflict review",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/management.css.json",
-        "sha256": "236abbbe930e53f3f4e23f7dcf722842a5d8d86b4830743e1f5b166925ff58d3"
+        "sha256": "0c6f26e286dc7228db6ab4ab702bc1604aca9a59c7c9727ee3c1d83f84ad51f9"
       }
     },
     {
@@ -3792,14 +3792,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/mcp/messages.ts",
-      "sha256": "901f7badfcaaeeaba0b2b4b8c3391e0b9f991947e147593213bdbff994823ae2",
-      "bytes": 40391,
+      "sha256": "e4a22389ea0a8b354d758a724eab4355273d2a7aadf260a52a00cc138d4fd981",
+      "bytes": 44858,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed concise MCP/Skills copy and Add MCP label",
+      "reason": "Allow direct per-entry native MCP import or skip and reuse the existing preview in conflict review",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/messages.ts.json",
-        "sha256": "1628ecabdbaac56aee457461b259dea4073521182e070bb0ec2804b91270a988"
+        "sha256": "0dd5e2e3f90d35011dac173d53fc3a5a581f452692b040fb7a1a0e2887d3acb5"
       }
     },
     {
@@ -3816,14 +3816,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
-      "sha256": "260c11ae94d9d426c1152d3afb645ed291493aaf1b2de29e23849d452874f3d9",
-      "bytes": 3170,
+      "sha256": "2566e70d124209be75f326010e7fe3e185f4eb21e6c297bee4b68fff9d257a0e",
+      "bytes": 3420,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Show native installed MCP and Skills in the managed views and use provider brand avatars",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/shared/agent-avatar.tsx.json",
-        "sha256": "7ee19f79d3d9736ecf2331ada7de4e4b8d00fdf31cbd90c7041a56f28fab579b"
+        "sha256": "18470ee467250b1641ef77a9e8603e9511f659dafe70fce4d1caefa8b2bba45b"
       }
     },
     {
@@ -3852,14 +3852,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/shared/shared.css",
-      "sha256": "a303464105bb08aba84be76220ea6807970070518645f2f76614b33e7063cd1d",
-      "bytes": 15580,
+      "sha256": "88324572a4fa16613eae6ec8a77163fc0831a4c77602ceb3b0c39d498f0abd47",
+      "bytes": 15779,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Show native installed MCP and Skills in the managed views and use provider brand avatars",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/shared/shared.css.json",
-        "sha256": "c0cf818e3a74faa56bcfb98a6918db6058bf4479c33c236cdbf76785af65c43c"
+        "sha256": "c6908ef708153a5c55e80bb34b4aa9c8dcd8786beb6b05762c163d293c7cb4af"
       }
     },
     {
@@ -3888,38 +3888,38 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "sha256": "a750d11ff508296c15df266b274f2931241ccb27a5aaac831995944cbbba3032",
-      "bytes": 7623,
+      "sha256": "17e4c0d8cc0ed43d9414d53e25f5e96d819466908a1f977f2030796b84dc9cd0",
+      "bytes": 9197,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed installed-Skills presentation and marketplace transport filtering, plus independently authenticated CC provenance helper ownership transition; pinned inputs unchanged.",
+      "reason": "Clarify managed library count while native observations are present",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/installed-skills.tsx.json",
-        "sha256": "4fe271ae5203eccf712e5d5b85ad6ffa8a6b6f50a9f5402210b8f61b8a968519"
+        "sha256": "a8cf658232b7971a8a8d79b93fd3bf08ae8b91670cc3a90acc3211ab87640170"
       }
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/messages.ts",
-      "sha256": "9cede1c68310494ee2d63b0b03c95ad10af2a00844396eae9318c8f100a09027",
-      "bytes": 15724,
+      "sha256": "a710b47fddaf077c3244862d5aed75d208628393d3fc994771a313992f39b045",
+      "bytes": 17811,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed concise MCP/Skills copy and Add MCP label",
+      "reason": "Clarify managed library count while native observations are present",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/messages.ts.json",
-        "sha256": "96ae6ccace232f8f210dc65c04c9442334ffeda6ff26c9c8235701737fb49b5e"
+        "sha256": "e1d22dbbf79be613cc702b8ed446e5768c7855f15cde77b3b10fed6bac035744"
       }
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
-      "sha256": "19bd63ca164ead72d02893852b248739edae3bd555ab0a5eff50b007a9e8078c",
-      "bytes": 4440,
+      "sha256": "719c35a6fb57472335f5b0c87d94b0e567e99c0fed146c2499afc89416674e51",
+      "bytes": 4443,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Show native installed MCP and Skills in the managed views and use provider brand avatars",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-agent-drawer.tsx.json",
-        "sha256": "d2ce1ed41eee17f1dadfd9c8a5a3bc7d7a94ae3346ded187b457a770d3b96f67"
+        "sha256": "7493e9d9cb9c76f7b2638ee745fdf97029cb694e9047a75560487c20b3e1e408"
       }
     },
     {
@@ -3936,26 +3936,26 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
-      "sha256": "67ec3edf185672cd0e39207aec1ce0277c08cff0e4d48d572100dfc639349add",
-      "bytes": 1890,
+      "sha256": "015abef063e107a30bb56569711df79241802512e9176d1426a2eb7244d113d4",
+      "bytes": 2063,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed existing CC public-entry consumption and internal-source bypass rejection; unchanged OpenHands inputs and runtime implementations.",
+      "reason": "Show native installed MCP and Skills in the managed views and use provider brand avatars",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-presentation.ts.json",
-        "sha256": "ad1bb85ccbabddd34d338ae37ecd8b36d4a46a705f0db7b165aca755504a7407"
+        "sha256": "9f0b304133a386c42b97101bfebbd7de7f35ee2a3da4f1855bd12f50059aeedb"
       }
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/skills.css",
-      "sha256": "dc37a55d676e407ecc2237b30139a1d6821453aa3a66d38c29dabd283f9c492f",
-      "bytes": 26150,
+      "sha256": "8d3eca2ac084f6fb872dd8674c99aca69ac1dd71e078f21cd9b94e6d9752497e",
+      "bytes": 27969,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Show native installed MCP and Skills in managed views with provider brand avatars",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skills.css.json",
-        "sha256": "e3abed7e242170743cd16a77256619b33a3b70ad44d116743b50ab9ba721441c"
+        "sha256": "db4a891294e932440fc31c66dddbfd16b463eca6dc33d9aa3f0aefa4d4ef279d"
       }
     },
     {
@@ -4076,8 +4076,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/index.tsx.json",
-      "sha256": "fed0cce3d5816ae2ebeae2a36dcb836283a595484309d63ce5cc60ce09a2ffd7",
-      "bytes": 4069,
+      "sha256": "c0b4d0a98eebdde7af19c627c24cbacad16dd6f8060868562772c8a7a68859eb",
+      "bytes": 4497,
       "mode": 420
     },
     {
@@ -4106,14 +4106,14 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/import-preview-dialog.tsx.json",
-      "sha256": "5c456b0b7636be8dfa6213d6fd01fe07dc20cd8264b98a260690d8e3a391f5cc",
-      "bytes": 7269,
+      "sha256": "de83754570408df5b3bfcba96b1c72ff5d85a872205417eb984c78f7d5c4f437",
+      "bytes": 7673,
       "mode": 420
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/management.css.json",
-      "sha256": "236abbbe930e53f3f4e23f7dcf722842a5d8d86b4830743e1f5b166925ff58d3",
-      "bytes": 34698,
+      "sha256": "0c6f26e286dc7228db6ab4ab702bc1604aca9a59c7c9727ee3c1d83f84ad51f9",
+      "bytes": 38238,
       "mode": 420
     },
     {
@@ -4124,8 +4124,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/mcp/messages.ts.json",
-      "sha256": "1628ecabdbaac56aee457461b259dea4073521182e070bb0ec2804b91270a988",
-      "bytes": 54083,
+      "sha256": "0dd5e2e3f90d35011dac173d53fc3a5a581f452692b040fb7a1a0e2887d3acb5",
+      "bytes": 60039,
       "mode": 420
     },
     {
@@ -4136,8 +4136,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/shared/agent-avatar.tsx.json",
-      "sha256": "7ee19f79d3d9736ecf2331ada7de4e4b8d00fdf31cbd90c7041a56f28fab579b",
-      "bytes": 4463,
+      "sha256": "18470ee467250b1641ef77a9e8603e9511f659dafe70fce4d1caefa8b2bba45b",
+      "bytes": 4795,
       "mode": 420
     },
     {
@@ -4154,8 +4154,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/shared/shared.css.json",
-      "sha256": "c0cf818e3a74faa56bcfb98a6918db6058bf4479c33c236cdbf76785af65c43c",
-      "bytes": 21005,
+      "sha256": "c6908ef708153a5c55e80bb34b4aa9c8dcd8786beb6b05762c163d293c7cb4af",
+      "bytes": 21269,
       "mode": 420
     },
     {
@@ -4172,20 +4172,20 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/installed-skills.tsx.json",
-      "sha256": "4fe271ae5203eccf712e5d5b85ad6ffa8a6b6f50a9f5402210b8f61b8a968519",
-      "bytes": 10403,
+      "sha256": "a8cf658232b7971a8a8d79b93fd3bf08ae8b91670cc3a90acc3211ab87640170",
+      "bytes": 12503,
       "mode": 420
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/messages.ts.json",
-      "sha256": "96ae6ccace232f8f210dc65c04c9442334ffeda6ff26c9c8235701737fb49b5e",
-      "bytes": 21198,
+      "sha256": "e1d22dbbf79be613cc702b8ed446e5768c7855f15cde77b3b10fed6bac035744",
+      "bytes": 23978,
       "mode": 420
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-agent-drawer.tsx.json",
-      "sha256": "d2ce1ed41eee17f1dadfd9c8a5a3bc7d7a94ae3346ded187b457a770d3b96f67",
-      "bytes": 6161,
+      "sha256": "7493e9d9cb9c76f7b2638ee745fdf97029cb694e9047a75560487c20b3e1e408",
+      "bytes": 6165,
       "mode": 420
     },
     {
@@ -4196,14 +4196,14 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-presentation.ts.json",
-      "sha256": "ad1bb85ccbabddd34d338ae37ecd8b36d4a46a705f0db7b165aca755504a7407",
-      "bytes": 2760,
+      "sha256": "9f0b304133a386c42b97101bfebbd7de7f35ee2a3da4f1855bd12f50059aeedb",
+      "bytes": 2992,
       "mode": 420
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skills.css.json",
-      "sha256": "e3abed7e242170743cd16a77256619b33a3b70ad44d116743b50ab9ba721441c",
-      "bytes": 35097,
+      "sha256": "db4a891294e932440fc31c66dddbfd16b463eca6dc33d9aa3f0aefa4d4ef279d",
+      "bytes": 37521,
       "mode": 420
     },
     {
@@ -4388,14 +4388,14 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/original/src/routes/mcp.tsx.json",
-      "sha256": "a094be64bbae81c18541ba2235c0ca9fcb9d1692145185eeee6ed2ce588dc087",
-      "bytes": 22350,
+      "sha256": "9c0ca2472af858724f77d11547bdf4ef0be75db6ea3a6a2a22e8c6c70fb56986",
+      "bytes": 30174,
       "mode": 420
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/original/src/routes/skills-settings.tsx.json",
-      "sha256": "0fcc9c474fa746b1f6b6a9cd28bde1f616f6f29eb2434a0d2fa4987f64be8133",
-      "bytes": 19334,
+      "sha256": "34d82a714cadfe1433d8f26c57736118d0234cbfb0b1e756b49cf95c9d53cec8",
+      "bytes": 19690,
       "mode": 420
     },
     {

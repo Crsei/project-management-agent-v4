@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { createAutomationStudioService, type AutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
-import { studioActionKindSchema, studioCancelSchema, studioConfigSchema, studioCreateSchema, studioDispatchSchema, studioRevisionSchema, studioStatusSchema, studioUpdateSchema, type StudioExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { createAutomationStudioService, type AutomationStudioService } from '../../../../../packages/application/src/automation-studio.ts';
+import { studioActionKindSchema, studioCancelSchema, studioConfigSchema, studioCreateSchema, studioDispatchSchema, studioRevisionSchema, studioStatusSchema, studioUpdateSchema, type StudioExecutionPort } from '../../../../../packages/contracts/src/automation-studio.ts';
 
 export function registerAutomationStudioRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; core: NotificationCorePort; runtime: StudioExecutionPort; studio?: AutomationStudioService }): AutomationStudioService {
   const service = options.studio ?? createAutomationStudioService(options);

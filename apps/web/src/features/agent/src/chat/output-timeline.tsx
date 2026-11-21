@@ -1,23 +1,21 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n-provider";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
 import {
   Bell, Brain, ChevronsDown, Circle, CircleAlert, CircleCheck, CircleDot, CircleX,
   Copy, FileCode, GitBranch, Globe, ListTodo, Maximize2, MessageSquare, Minimize2, RefreshCw,
   Route, Search, ShieldQuestion, Terminal as TerminalIcon, Wrench,
 } from "lucide-react";
-import "@xterm/xterm/css/xterm.css";
 import { Button } from "@agent/components/ui/button";
+import { useTheme } from "@agent/hooks/use-theme";
 import { Markdown } from "./markdown";
 import type { AgentOutputSnapshot, GenerationOutputStatus, NativeOutputItem } from "@agent-workspace/contracts/output";
-import { appendTerminalOutput, EMPTY_TERMINAL_OUTPUT, terminalOutputPlainText } from "@agent-workspace/contracts/terminal-output";
+import { appendTerminalOutput, EMPTY_TERMINAL_OUTPUT, TERMINAL_PALETTES, terminalOutputPlainText, terminalOutputSpans } from "@agent-workspace/contracts/terminal-output";
 import { subscribeCommand, useGenerationOutput } from "./output-stream";
 import { PmToolCard, type PmToolRecord } from "./pm-tool-card";
 import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
 import { McpAppFrame } from "./mcp-app-frame";
-import { CodeBlock, ShellCommandBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
+import { CodeBlock, ShellCommandBlock, Trace, TraceLine, TraceRow } from "./execution-trace";
 import { assistantMessageKind, canRespondToInteraction, commandText, createOutputDisclosureStore, generationIndicator, generationWorkState, isCompletedAutoApproval, isGenerationActive, isItemActive, latestReasoning, presentOutputItems, reliableDurationMs, requiresVisibleDetails, semanticToolSummary, type GenerationWorkState, type OutputPresentationRow, type ToolSummary } from "./output-presenter";
 import { NativeInteraction } from "./native-interaction";
 import { useComposerRequestPanelMounted } from "./composer-pending-requests";
@@ -34,7 +32,6 @@ import { nativeContextSourceAnchor } from "./context-source-navigation";
 const labels = (t: AgentText): Record<NativeOutputItem["type"], string> => ({
   assistant_message: t("回复", "Reply"), reasoning: t("思考", "Thinking"), command_execution: t("命令", "Command"), file_change: t("文件变更", "File change"), file_search: t("文件搜索", "File search"), web_search: t("网页搜索", "Web search"), dynamic_tool: t("工具", "Tool"), todo_list: t("待办", "To-do"), proposed_plan: t("计划", "Plan"), subagent: t("子代理", "Subagent"), approval_request: t("审批", "Approval"), user_input_request: t("需要回答", "Input needed"), notification: t("通知", "Notification"), error: t("错误", "Error"), compaction: t("上下文压缩", "Compaction"),
 });
-const statuses = (t: AgentText): Record<NativeOutputItem["status"], string> => ({ pending: t("待处理", "Pending"), running: t("进行中", "Running"), waiting: t("等待中", "Waiting"), completed: t("已完成", "Completed"), failed: t("失败", "Failed"), cancelled: t("已取消", "Cancelled"), interrupted: t("已中断", "Interrupted"), unknown: t("待核实", "Awaiting reconciliation") });
 function safeUrl(value?: string) {
   // oxlint-disable-next-line no-control-regex -- reject ambiguous/control-bearing provider URLs before URL parsing.
   if (!value || /[\u0000-\u0020\u007f\\]/.test(value)) return undefined;
@@ -81,8 +78,9 @@ function WorkingRow({ state }: { state: GenerationWorkState }) {
 }
 function CommandOutput({ generationId, item }: { generationId: string; item: NativeOutputItem }) {
   const t = useAgentText();
-  const node = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
+  const { theme } = useTheme();
+  const viewport = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState("");
   const [follow, setFollow] = useState(true);
   const followRef = useRef(true);
   followRef.current = follow;
@@ -93,17 +91,14 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const output = useRef(EMPTY_TERMINAL_OUTPUT);
-  useEffect(() => { if (follow) terminalRef.current?.scrollToBottom(); }, [follow]);
+  useLayoutEffect(() => {
+    const element = viewport.current;
+    if (element && followRef.current) element.scrollTop = element.scrollHeight;
+  }, [follow, text]);
   useEffect(() => {
-    if (!node.current) return;
     setReady(false);
+    setText("");
     output.current = EMPTY_TERMINAL_OUTPUT;
-    const terminal = new Terminal({ convertEol: true, disableStdin: true, scrollback: 4000, fontSize: 12, theme: { background: "#17191d", foreground: "#e9edf3" } });
-    const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(node.current); fit.fit();
-    terminalRef.current = terminal;
-    // Scrolling up stops following new output; the explicit toggle turns it back on.
-    const scroll = terminal.onScroll(position => { if (position < terminal.buffer.active.baseY) setFollow(false); });
-    const resize = new ResizeObserver(() => fit.fit()); resize.observe(node.current);
     const controller = new AbortController();
     let retry: number | undefined;
     let running = true;
@@ -111,16 +106,22 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
       try {
         await subscribeCommand(generationId, item.id, controller.signal, (frame) => {
           setError(undefined); setTruncated(frame.truncated); running = frame.running;
-          if (frame.kind === "replace") terminal.reset();
           output.current = appendTerminalOutput(frame.kind === "replace" ? EMPTY_TERMINAL_OUTPUT : output.current, frame.text);
-          terminal.write(frame.text, () => { if (followRef.current) terminal.scrollToBottom(); });
+          setText(output.current.text);
           setReady(true);
         });
         if (running) throw new Error(t("命令输出流已断开，正在重新连接。", "Command output stream disconnected, reconnecting."));
-      } catch (cause) { if (!controller.signal.aborted) { terminal.reset(); output.current = EMPTY_TERMINAL_OUTPUT; setReady(false); setError(cause instanceof Error ? cause.message : String(cause)); retry = window.setTimeout(() => void connect(), 1000); } }
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          output.current = EMPTY_TERMINAL_OUTPUT;
+          setText(""); setReady(false);
+          setError(cause instanceof Error ? cause.message : String(cause));
+          retry = window.setTimeout(() => void connect(), 1000);
+        }
+      }
     };
     void connect();
-    return () => { controller.abort(); clearTimeout(retry); scroll.dispose(); resize.disconnect(); terminal.dispose(); terminalRef.current = null; };
+    return () => { controller.abort(); clearTimeout(retry); };
   }, [generationId, item.id, t]);
   const copy = async () => {
     if (!ready) return;
@@ -144,7 +145,16 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
         {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
       </Button>
     </div>
-    <div ref={node} className="native-terminal-viewport" aria-label={t("命令终端输出", "Command terminal output")} />
+    <div ref={viewport} className="native-terminal-viewport" aria-label={t("命令终端输出", "Command terminal output")}
+      onScroll={event => {
+        const element = event.currentTarget;
+        setFollow(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
+      }}>
+      {text
+        ? terminalOutputSpans(text, TERMINAL_PALETTES[theme]).map((span, index) =>
+          span.style === null ? span.text : <span key={index} style={span.style}>{span.text}</span>)
+        : !ready && !error && <span className="native-output-placeholder">{t("等待输出…", "Waiting for output…")}</span>}
+    </div>
     {(truncated || item.outputTruncated) && <p className="native-output-truncated">{t("更早的输出未显示。", "Earlier output not shown.")}</p>}
     {error && <p role="alert">{t("输出连接中断：", "Output connection interrupted: ")}{error}</p>}
     {copied && <span role="status" className="sr-only">{t("已复制", "Copied")}</span>}
@@ -236,7 +246,6 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
   const title = semantic ? toolTitle(item, t) : item.title || item.request?.title || item.toolName || labels(t)[item.type];
   const ended = !isGenerationActive(generationStatus) && isItemActive(item);
   const status = ended ? undefined : traceStatusFor(item.status);
-  const tone = ended ? "neutral" : item.status === "completed" ? "success" : item.status === "failed" || item.status === "interrupted" ? "error" : item.status === "running" ? "running" : item.status === "waiting" || item.status === "unknown" ? "warning" : item.status === "pending" ? "pending" : "neutral";
   const meta = <>
     <Duration item={item} generationStatus={generationStatus} />
     {item.exitCode !== undefined && <span> · exit {item.exitCode}</span>}
@@ -257,9 +266,8 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
     {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}</>}
     {item.error && <p role="alert" className="native-error">{item.error}</p>}
   </>;
-  const badge = <TraceStatusBadge status={status} tone={tone}>{ended ? t("运行已结束", "Run ended") : statuses(t)[item.status]}</TraceStatusBadge>;
   if (visible) return <section id={sourceId} className={`native-visible-details native-${item.type}${parented ? " native-parented" : ""}`}>
-    <div className="native-visible-header"><TraceLine icon={outputIcon(item.type)} title={title} description={meta} status={status} trailing={badge} />{inspector}</div>
+    <div className="native-visible-header"><TraceLine icon={outputIcon(item.type)} title={title} description={meta} status={status} />{inspector}</div>
     {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
     <div className="native-card-body">{body}</div>
   </section>;
@@ -269,7 +277,6 @@ const OutputRow = memo(function OutputRow({ item, generationId, generationStatus
     title={title}
     description={meta}
     status={status}
-    trailing={badge}
     open={open}
     onOpenChange={change}
     actions={inspector}

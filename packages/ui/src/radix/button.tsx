@@ -18,16 +18,16 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
+          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80 shadow-[inset_0_1px_0_var(--primary-rim),inset_0_-1px_0_var(--primary-under)]",
         primary:
-          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
+          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80 shadow-[inset_0_1px_0_var(--primary-rim),inset_0_-1px_0_var(--primary-under)]",
         outline:
-          "border-border bg-surface hover:border-border-hover hover:bg-surface-hover active:bg-surface-pressed",
+          "border-border bg-surface hover:border-border-hover hover:bg-surface-hover active:bg-surface-pressed shadow-[inset_0_1px_0_var(--glass-rim),0_1px_2px_var(--glass-contact)]",
         secondary:
-          "border-border bg-surface hover:border-border-hover hover:bg-surface-hover active:bg-surface-pressed",
+          "border-border bg-surface hover:border-border-hover hover:bg-surface-hover active:bg-surface-pressed shadow-[inset_0_1px_0_var(--glass-rim),0_1px_2px_var(--glass-contact)]",
         ghost: "hover:bg-surface-hover active:bg-surface-pressed",
         destructive:
-          "bg-destructive text-background hover:bg-destructive/90 active:bg-destructive/80",
+          "bg-destructive text-background hover:bg-destructive/90 active:bg-destructive/80 shadow-[inset_0_1px_0_var(--primary-rim),inset_0_-1px_0_var(--primary-under)]",
       },
       size: {
         sm: "h-control-sm min-w-14 px-2 text-xs leading-4",

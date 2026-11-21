@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { configureDocumentSources, listDocumentSourceDirectories, listDocumentSourceFiles, listDocumentSources, mutateDocumentSource, queryDocumentSourceMutation, readDocumentSourceContent, type DocumentSourceContext } from '../../../../packages/application/src/document-sources.ts';
-import type { AgentDirectoryConfiguration } from '../../../../packages/application/src/agent-storage.ts';
-import type { ExternalDocumentHistorySink } from '../../../../packages/application/src/external-document-history.ts';
-import { documentSourceConfigurationInputSchema, documentSourceContentQuerySchema, documentSourceDirectoriesQuerySchema, documentSourceFilesQuerySchema, documentSourceIdSchema, documentSourceMutationSchema } from '../../../../packages/contracts/src/document-sources.ts';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
+import { configureDocumentSources, listDocumentSourceDirectories, listDocumentSourceFiles, listDocumentSources, mutateDocumentSource, queryDocumentSourceMutation, readDocumentSourceContent, type DocumentSourceContext } from '../../../../../packages/application/src/document-sources.ts';
+import type { AgentDirectoryConfiguration } from '../../../../../packages/application/src/agent-storage.ts';
+import type { ExternalDocumentHistorySink } from '../../../../../packages/application/src/external-document-history.ts';
+import { documentSourceConfigurationInputSchema, documentSourceContentQuerySchema, documentSourceDirectoriesQuerySchema, documentSourceFilesQuerySchema, documentSourceIdSchema, documentSourceMutationSchema } from '../../../../../packages/contracts/src/document-sources.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: DocumentSourceContext['workspace']; history?: ExternalDocumentHistorySink };
 const workspaceParams = z.strictObject({ workspaceId: z.uuid().toLowerCase() });

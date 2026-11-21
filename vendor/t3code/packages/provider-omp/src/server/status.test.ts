@@ -81,16 +81,27 @@ const model = { provider: "local", id: "model", name: "Native model", reasoning:
     assert.include(launches[0]!.args, "--version");
   }).pipe(Effect.scoped));
 
-  it.effect("refuses unsafe native startup before even a version process is spawned", () => Effect.gen(function* () {
+  it.effect("spawns native discovery even when the home contains ambient startup sources", () => Effect.gen(function* () {
     const root = yield* Effect.acquireRelease(
-      Effect.sync(() => Fs.mkdtempSync(Path.join(Os.tmpdir(), "omp-status-deny-"))),
+      Effect.sync(() => Fs.mkdtempSync(Path.join(Os.tmpdir(), "omp-status-ambient-"))),
       (path) => Effect.sync(() => Fs.rmSync(path, { recursive: true, force: true })),
     );
-    Fs.writeFileSync(Path.join(root, "mcp.json"), "must not be read");
-    const process = yield* makeOmpTestProcess();
+    Fs.writeFileSync(Path.join(root, "mcp.json"), "ambient source");
+    Fs.mkdirSync(Path.join(root, ".codex"), { recursive: true });
+    Fs.writeFileSync(Path.join(root, ".codex", "config.toml"), "ambient source");
+    Fs.mkdirSync(Path.join(root, ".omp"), { recursive: true });
+    Fs.writeFileSync(Path.join(root, ".omp", ".env"), "AMBIENT_KEY=1");
+    const process = yield* makeOmpTestProcess({ onRequest: (request, controls) => controls.reply(request,
+      request.type === "get_available_models" ? { models: [model] }
+        : request.type === "get_state" ? { model, thinkingLevel: "xhigh" }
+        : request.type === "get_available_thinking_levels" ? { levels: ["off", "low", "high", "xhigh"] }
+        : request.type === "get_available_commands" ? { commands: [{ name: "compact", source: "builtin" }] }
+        : request.type === "get_login_providers" ? { providers: [] } : {},
+    ) });
     const snapshot = yield* checkOmpProviderStatus(settings, { HOME: root }, root).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, process.spawner));
-    assert.equal(snapshot.status, "error");
-    assert.include(snapshot.message ?? "", "startup refused");
-    assert.lengthOf(process.launches, 0);
+    assert.equal(snapshot.status, "ready");
+    assert.deepEqual(snapshot.models.map((entry) => entry.slug), ["local/model"]);
+    assert.lengthOf(process.launches, 2);
+    assert.notInclude(snapshot.message ?? "", "startup refused");
   }).pipe(Effect.scoped));
 });

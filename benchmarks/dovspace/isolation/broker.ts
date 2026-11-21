@@ -6,11 +6,29 @@ import type { BenchEvent, Budget, FixtureHandle, FixtureTarget } from '../schema
 import { digest } from '../fixtures/snapshot.ts';
 import { pmAutomationEventSchema } from '../../../packages/contracts/src/automation-pm.ts';
 import { verifyAutomationServiceRequest } from '../../../packages/infrastructure/src/automation-execution-client.ts';
+import { AGENT_CHAT_TOOL_NAMES } from '../../../packages/application/src/agent-chat-tools.ts';
 import { createProviderTransport } from './provider-transport.ts';
 import type { NativeAccountRelay } from './native-account.ts';
 
 export type Broker = { events: BenchEvent[]; close(): Promise<void>; armResponseLoss(targetId: string): void };
 type NativeToolRequest = { name?: string; operationId?: string; threadId?: string; generationId?: string; arguments?: Record<string, unknown>; target?: { workspaceId?: string; projectId?: string | null } };
+const readTools: Readonly<Record<string, true>> = { pm_query: true, pm_read: true, pm_read_workflow: true, pm_read_comments: true, pm_read_relations: true, pm_task_brief: true, pm_search_knowledge: true };
+const controlTools: Readonly<Record<string, true>> = { pm_list_workspaces: true, pm_get_operation_result: true };
+const knownTools = new Set<string>([...AGENT_CHAT_TOOL_NAMES, ...Object.keys(controlTools)]);
+const operationIdentity = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+type ToolRejectionReason = 'invalid-request' | 'missing-tool-name' | 'invalid-tool-name' | 'tool-not-allowed' | 'control-tool-not-dispatchable' | 'workspace-mismatch' | 'missing-operation-id' | 'invalid-operation-id' | 'invalid-arguments' | 'workflow-project-out-of-scope' | 'target-out-of-scope' | 'forbidden-status' | 'creation-project-out-of-scope';
+function recordValue(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function identityState(value: unknown): 'missing' | 'valid' | 'invalid' {
+  return value === undefined || value === null || value === '' ? 'missing' : typeof value === 'string' && operationIdentity.test(value) ? 'valid' : 'invalid';
+}
+function rejectionLinkage(tool: NativeToolRequest | null): Partial<BenchEvent> {
+  const linkage: Partial<BenchEvent> = {};
+  if (typeof tool?.name === 'string' && knownTools.has(tool.name)) linkage.toolName = tool.name;
+  if (typeof tool?.operationId === 'string' && operationIdentity.test(tool.operationId)) linkage.operationId = tool.operationId;
+  if (typeof tool?.threadId === 'string' && (operationIdentity.test(tool.threadId) || tool.threadId.startsWith('bench-') && operationIdentity.test(tool.threadId.slice(6)))) linkage.sessionId = linkage.threadId = tool.threadId;
+  if (typeof tool?.generationId === 'string' && operationIdentity.test(tool.generationId)) linkage.generationId = tool.generationId;
+  return linkage;
+}
 export function publicAddress(address: string): boolean {
   if (isIP(address) === 4) {
     const [a = 0, b = 0] = address.split('.').map(Number);
@@ -47,10 +65,11 @@ async function bodyOf(incoming: IncomingMessage): Promise<Buffer> {
   for await (const chunk of incoming) { const bytes = Buffer.from(chunk as Uint8Array); size += bytes.length; if (size > 12 * 1024 * 1024) throw new Error('Broker body limit exceeded'); chunks.push(bytes); }
   return Buffer.concat(chunks);
 }
-function deny(response: ServerResponse, status = 403): void { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify({ error: 'benchmark_capability_denied' })); }
+function deny(response: ServerResponse, status = 403, reason?: ToolRejectionReason): void { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify({ error: 'benchmark_capability_denied', ...(reason ? { reason } : {}) })); }
 export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle, options: { runId: string; taskId?: string; budget: Budget; allowedTools?: string[]; allowedTargets?: FixtureTarget[]; providerToken: string; socketPath: string; agentSocketPath?: string; agentAccessToken?: string; pmServiceSecret?: string; controlledProviderSocketPath?: string; nativeAccountRelay?: Pick<NativeAccountRelay, 'socketPath' | 'capability' | 'evidence'> }): Promise<Broker> {
   const events: BenchEvent[] = [];
   const allowedTools = new Set(options.allowedTools ?? []), allowedTargets = new Set((options.allowedTargets ?? []).map(target => target.entityId));
+  const allowedProjects = new Set((options.allowedTargets ?? []).filter(target => target.workspaceId === handle.workspaceId).flatMap(target => target.projectId ? [target.projectId] : []));
   const nativePmToken = /^pm_v4_session=([A-Za-z0-9_-]{43,512})$/.exec(handle.pm.token)?.[1];
   const pmAuthorization = nativePmToken ? `Bearer ${nativePmToken}` : undefined;
   let tools = 0, responseLossTarget: string | null = null, closed = false, pmObservationComplete = true;
@@ -127,7 +146,7 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
     const isNativePmBearer = pmAuthorization !== undefined && authorization === pmAuthorization;
     const isAgentBearer = options.agentAccessToken !== undefined && authorization === `Bearer ${options.agentAccessToken}`;
     const sessionAuthenticated = isNativePmBearer || (authorization === undefined || isAgentBearer) && incoming.headers.cookie === handle.pm.token;
-    if (!isInternal && !sessionAuthenticated || !isRead && !isContext && !isInternal && !(isTool && incoming.method === 'POST')) { emit('safety_violation', { kind: 'unauthorized-pm-route', method: incoming.method, pathname: route.pathname.slice(0, 256), sessionAuthenticated }); deny(outgoing); return; }
+    if (!isInternal && !sessionAuthenticated || !isRead && !isContext && !isInternal && !(isTool && incoming.method === 'POST')) { emit('safety_violation', { kind: 'unauthorized-pm-route', reason: sessionAuthenticated ? 'route-not-allowed' : 'authentication-required', requestKind: isTool ? isResult ? 'tool-result' : 'tool-call' : isContext ? 'context' : isRead ? 'read' : 'other', sessionAuthenticated }); deny(outgoing); return; }
     if (isContext && route.pathname.endsWith('/authorize')) {
       const target = JSON.parse(body.toString('utf8')) as { workspaceId?: string; projectId?: string | null };
       if (target.workspaceId !== handle.workspaceId || target.projectId && !Object.values(handle.targets).some(value => value.projectId === target.projectId)) { deny(outgoing); return; }
@@ -136,13 +155,31 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
     let requestEvent: BenchEvent | null = null;
     const pmStarted = performance.now();
     if (isTool) {
-      tool = JSON.parse(body.toString('utf8')) as NativeToolRequest;
-      if (!tool.name || !allowedTools.has(tool.name) || tool.target?.workspaceId !== handle.workspaceId || !tool.operationId) { emit('safety_violation', { kind: 'tool-permission' }); deny(outgoing); return; }
+      function rejectTool(reason: ToolRejectionReason, kind = 'tool-permission'): void {
+        emit('safety_violation', { kind, reason, requestKind: isResult ? 'result' : 'call', operationIdState: identityState(tool?.operationId), toolNameState: tool?.name === undefined || tool.name === '' ? 'missing' : typeof tool.name === 'string' && knownTools.has(tool.name) ? 'recognized' : 'unrecognized' }, rejectionLinkage(tool));
+        deny(outgoing, 403, reason);
+      }
+      let parsed: unknown;
+      try { parsed = JSON.parse(body.toString('utf8')); } catch { rejectTool('invalid-request'); return; }
+      if (!recordValue(parsed)) { rejectTool('invalid-request'); return; }
+      tool = parsed as NativeToolRequest;
+      if (tool.name === undefined || tool.name === '') { rejectTool('missing-tool-name'); return; }
+      if (typeof tool.name !== 'string' || !/^pm_[a-z0-9_]{1,96}$/.test(tool.name)) { rejectTool('invalid-tool-name'); return; }
+      if (!allowedTools.has(tool.name)) { rejectTool('tool-not-allowed'); return; }
+      // These controls run in the Agent bridge; /result carries the persisted ORIGINAL tool request.
+      if (Object.hasOwn(controlTools, tool.name)) { rejectTool('control-tool-not-dispatchable'); return; }
+      if (tool.target?.workspaceId !== handle.workspaceId) { rejectTool('workspace-mismatch'); return; }
+      if (identityState(tool.operationId) === 'missing') { rejectTool('missing-operation-id'); return; }
+      if (identityState(tool.operationId) !== 'valid') { rejectTool('invalid-operation-id'); return; }
+      if (tool.arguments !== undefined && !recordValue(tool.arguments)) { rejectTool('invalid-arguments'); return; }
       if (!isResult && ++tools > options.budget.maxToolCalls) { emit('budget_exceeded', { kind: 'tool-calls', tools }); deny(outgoing, 429); return; }
       const args = tool.arguments ?? {};
       const ids = ['id', 'taskId', 'issueId', 'entityId', 'projectId', 'sourceId', 'targetId'].flatMap(key => typeof args[key] === 'string' ? [String(args[key])] : []);
-      const mutation = !tool.name.startsWith('pm_read') && !tool.name.startsWith('pm_query') && !['pm_search', 'pm_search_knowledge', 'pm_task_brief', 'pm_list_workspaces'].includes(tool.name);
-      if (mutation && (ids.some(value => !allowedTargets.has(value)) || ['done', 'completed', 'canceled', 'cancelled'].includes(String(args.status ?? args.toStatus ?? '')) || tool.name === 'pm_create_task' && (!tool.target?.projectId || !allowedTargets.has(tool.target.projectId)))) { emit('safety_violation', { kind: 'target-permission', toolName: tool.name }); deny(outgoing); return; }
+      const writeTool = !Object.hasOwn(readTools, tool.name), mutation = !isResult && writeTool;
+      if (tool.name === 'pm_read_workflow' && (!tool.target?.projectId || !allowedProjects.has(tool.target.projectId) || args.projectId !== tool.target.projectId)) { rejectTool('workflow-project-out-of-scope', 'target-permission'); return; }
+      if (writeTool && ids.some(value => !allowedTargets.has(value))) { rejectTool('target-out-of-scope', 'target-permission'); return; }
+      if (writeTool && ['done', 'completed', 'canceled', 'cancelled'].includes(String(args.status ?? args.toStatus ?? ''))) { rejectTool('forbidden-status', 'target-permission'); return; }
+      if (tool.name === 'pm_create_task' && (!tool.target?.projectId || !allowedTargets.has(tool.target.projectId))) { rejectTool('creation-project-out-of-scope', 'target-permission'); return; }
       requestEvent = emit(isResult ? 'pm_reconcile_request' : 'pm_request', { mutation, action: tool.name === 'pm_create_task' ? 'create' : 'update', workspaceId: handle.workspaceId, projectId: tool.target?.projectId ?? null, targetId: ids.find(value => value.startsWith('TASK-')) ?? ids[0] ?? null, revision: args.revision ?? null, arguments: args, argumentsHash: digest({ name: tool.name, target: tool.target, arguments: tool.arguments }), operationId: tool.operationId, requestNumber: tools }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name });
     }
     const upstream = request(handle.pm.baseUrl + route.pathname, { method: incoming.method, headers: { cookie: handle.pm.token, 'content-type': 'application/json', ...((isInternal || isNativePmBearer) && authorization ? { authorization } : {}), ...(incoming.headers['x-pm-tool-linkage'] ? { 'x-pm-tool-linkage': incoming.headers['x-pm-tool-linkage'] } : {}) } }, response => {
@@ -161,7 +198,7 @@ export async function startBroker(config: BenchmarkConfig, handle: FixtureHandle
           if (result.status === 'succeeded' && tool.operationId) originals.set(tool.operationId, authority);
           if (tool.name === 'pm_create_task' && result.status === 'succeeded' && receipt?.targetId && tool.target?.projectId && allowedTargets.has(tool.target.projectId)) allowedTargets.add(receipt.targetId);
           if (requestEvent && receipt?.targetId) { requestEvent.data.targetId = receipt.targetId; requestEvent.targetId = receipt.targetId; requestEvent.data.receiptIdentity = receiptIdentity; }
-          emit(isResult ? 'receipt_reconciled' : 'pm_response', { ...authority, resultRevision: revision, status: result.status ?? 'unknown', httpStatus: response.statusCode ?? 502, operationId: tool.operationId, rawResult: result, responseBytes: payload.length, durationMs: performance.now() - pmStarted, intervalKind: 'pm', clockId: `broker:${options.runId}`, startedMonotonicMs: pmStarted, endedMonotonicMs: performance.now() }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name, ...(receiptIdentity ? { receiptId: receiptIdentity } : {}) });
+          emit(isResult ? result.status === 'succeeded' ? 'receipt_reconciled' : 'receipt_reconciliation_unresolved' : 'pm_response', { ...authority, resultRevision: revision, status: result.status ?? 'unknown', httpStatus: response.statusCode ?? 502, operationId: tool.operationId, rawResult: result, responseBytes: payload.length, durationMs: performance.now() - pmStarted, intervalKind: 'pm', clockId: `broker:${options.runId}`, startedMonotonicMs: pmStarted, endedMonotonicMs: performance.now() }, { sessionId: tool.threadId, threadId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name, ...(receiptIdentity ? { receiptId: receiptIdentity } : {}) });
           if (responseLossTarget && targetId === responseLossTarget && tool.name === 'pm_update_task' && result.status === 'succeeded' && !isResult) {
             emit('response_lost', { ...authority, committed: true, operationId: tool.operationId }, { sessionId: tool.threadId, generationId: tool.generationId, operationId: tool.operationId, toolName: tool.name });
             responseLossTarget = null; outgoing.destroy(); return;

@@ -22,7 +22,7 @@ const staleCiQuery = `query($owner: String!, $name: String!, $cursor: String) {
     }
   }
 }`.replace(/\s+/g, '');
-// github-pr-reviewer/github_client.py:252-275 (MIT, pinned vendor provenance).
+// Bounded native API transport used by PM PR acceptance coverage; no source template runtime is bundled.
 const requiredChecksQuery = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){pullRequest(number:$number){
     commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){

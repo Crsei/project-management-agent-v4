@@ -252,7 +252,11 @@ export async function compareChangeHistory(ctx:ChangeHistoryContext,input:Change
  ) SELECT coalesce(bool_or(hidden OR completeness='missing_before' OR before_revision IS DISTINCT FROM previous_revision),false) AS gap,
  coalesce(bool_or(completeness='observed_endpoints'),false) AS observed,coalesce(bool_or(completeness='baseline'),false) AS baseline FROM endpoints`,[ctx.workspaceId,scope.stream,from?.sequence??'0',to?.sequence??'0',from?.after_snapshot?.revision??first?.before_snapshot?.revision??null,bindings,member.projectIds]);
  const state=continuity.rows[0]!;
- return {target:input.target,before:from?.after_snapshot??first?.before_snapshot??null,after:to?.after_snapshot??null,fromChangeId:from?.change_id??null,toChangeId:to?.change_id??null,head:to?.sequence??'0',completeness:!to||state.gap?'missing_before':state.observed?'observed_endpoints':state.baseline?'baseline':'exact'};
+ // A review cursor before the first captured entry has no "from" change. The
+ // first baseline endpoint is still real captured bytes, so compare from it and
+ // keep the baseline warning; an exact recorded creation keeps its empty before.
+ const before=from?.after_snapshot??first?.before_snapshot??(first?.completeness==='baseline'?first.after_snapshot:null);
+ return {target:input.target,before,after:to?.after_snapshot??null,fromChangeId:from?.change_id??null,toChangeId:to?.change_id??null,head:to?.sequence??'0',completeness:!to||state.gap?'missing_before':state.observed?'observed_endpoints':state.baseline?'baseline':'exact'};
 }
 async function observedScope(ctx:ChangeHistoryContext,input:ChangeAcknowledgeInput):Promise<{member:Membership;scopes:Scope[]}> {
  const member=await memberFor(ctx),grant=await ctx.sql.query<{through_sequence:string;includes_related:boolean;scope_digest:string}>('SELECT through_sequence::text,includes_related,scope_digest FROM change_history_observations WHERE token=$1 AND workspace_id=$2 AND actor_id=$3 AND target_key=$4',[input.observationToken,ctx.workspaceId,ctx.actor.id,historyTargetKey(input.target)]),seen=grant.rows[0];

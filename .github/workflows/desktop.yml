@@ -60,6 +60,26 @@ on:
         description: Exact successful Repository checks push run for expected_sha; required for draft/publish
         type: string
         required: false
+      native_run_id:
+        description: Exact completed build-only native run whose already-reviewed artifact bytes will be released (required for draft/publish)
+        type: string
+        required: false
+      native_run_attempt:
+        description: Exact native run attempt recorded in those delivery manifests
+        type: string
+        required: false
+      evaluation_material_run_id:
+        description: Exact Actions run containing the private evaluation material bundle (never latest)
+        type: string
+        required: false
+      evaluation_material_artifact:
+        description: Exact artifact name containing release-material.json, sealed evidence, grades and metadata-only registry
+        type: string
+        required: false
+      evaluation_material_sha256:
+        description: Independently reviewed SHA256 of release-material.json; live source approvals and deletion fences are still required
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -81,6 +101,11 @@ env:
   DESKTOP_CI_RUN_ID: ${{ inputs.ci_run_id }}
   DESKTOP_DISTRIBUTION: ${{ inputs.distribution }}
   DESKTOP_WINDOWS_ONLY: ${{ inputs.windows_only }}
+  DESKTOP_NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+  DESKTOP_NATIVE_RUN_ATTEMPT: ${{ inputs.native_run_attempt }}
+  DESKTOP_EVALUATION_SHA256: ${{ inputs.evaluation_material_sha256 }}
+  DESKTOP_EVALUATION_RUN_ID: ${{ inputs.evaluation_material_run_id }}
+  DESKTOP_EVALUATION_ARTIFACT: ${{ inputs.evaluation_material_artifact }}
 
 jobs:
   release-preflight:
@@ -108,7 +133,7 @@ jobs:
         id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/desktop-release.mjs preflight
+        run: node --conditions=development scripts/desktop-release.mjs preflight
 
   release-authorization:
     name: Hard third-party release authorization gate
@@ -152,6 +177,7 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.fast-gates.result == 'success'
         && inputs.distribution == 'unsigned'
+        && inputs.native_run_id == ''
         && (inputs.release_action == 'none'
           || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
             && needs.release-preflight.outputs.staged_draft != 'true')) }}
@@ -299,6 +325,7 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.fast-gates.result == 'success'
         && inputs.distribution == 'signed'
+        && inputs.native_run_id == ''
         && (inputs.release_action == 'none'
           || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
             && needs.release-preflight.outputs.staged_draft != 'true')) }}
@@ -544,16 +571,18 @@ jobs:
 
   release:
     name: Stage complete native assets then explicitly retain draft or publish
-    needs: [release-preflight, release-authorization, unsigned, signed, install-e2e]
+    needs: [fast-gates, release-preflight, release-authorization, unsigned, signed, install-e2e]
     if: >-
       ${{ !cancelled() && inputs.release_action != 'none'
+        && needs.fast-gates.result == 'success'
         && needs.release-preflight.result == 'success'
         && needs.release-preflight.outputs.already_published != 'true'
         && needs.release-authorization.result == 'success'
         && (needs.release-preflight.outputs.staged_draft == 'true'
+          || inputs.native_run_id != ''
           || (inputs.distribution == 'unsigned' && needs.unsigned.result == 'success')
           || (inputs.distribution == 'signed' && needs.signed.result == 'success'))
-        && (inputs.install_e2e != true || needs.install-e2e.result == 'success') }}
+        && (inputs.native_run_id != '' || inputs.install_e2e != true || needs.install-e2e.result == 'success') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     # No other job can mutate GitHub Releases; source-evidence release.yml cannot.
@@ -571,23 +600,41 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - name: Test release orchestration state and immutable-asset rules
-        run: node --test scripts/desktop-release.test.mjs
-      - name: Download exact Windows native delivery from this run
+        run: node --conditions=development --test scripts/desktop-release.test.mjs scripts/desktop-release-evaluation.test.mjs
+      - name: Download exact private evaluation material without running any evaluator or model
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.evaluation_material_run_id }}
+          name: ${{ inputs.evaluation_material_artifact }}
+          path: ${{ runner.temp }}/desktop-evaluation-download
+      - name: Restage downloaded regular files into a new private tree without following links
+        env:
+          DESKTOP_EVALUATION_DOWNLOAD: ${{ runner.temp }}/desktop-evaluation-download
+          DESKTOP_EVALUATION_PRIVATE: ${{ runner.temp }}/desktop-evaluation-private
+        run: node --conditions=development scripts/desktop-release-private-material.mjs
+      - name: Download exact previously built Windows native delivery
         if: needs.release-preflight.outputs.staged_draft != 'true'
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.native_run_id }}
           name: desktop-${{ inputs.distribution }}-win32-x64${{ inputs.install_e2e && '-install-e2e' || '' }}
           path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-win32-x64
-      - name: Download exact Intel macOS native delivery from this run
+      - name: Download exact previously built Intel macOS native delivery
         if: inputs.windows_only != true && needs.release-preflight.outputs.staged_draft != 'true'
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.native_run_id }}
           name: desktop-${{ inputs.distribution }}-darwin-x64
           path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-darwin-x64
-      - name: Download exact Apple Silicon native delivery from this run
+      - name: Download exact previously built Apple Silicon native delivery
         if: inputs.windows_only != true && needs.release-preflight.outputs.staged_draft != 'true'
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.native_run_id }}
           name: desktop-${{ inputs.distribution }}-darwin-arm64
           path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-darwin-arm64
       - name: Reverify every gate, source identity and asset before changing visibility
@@ -595,7 +642,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DESKTOP_RELEASE_DELIVERIES: ${{ runner.temp }}/desktop-release-deliveries
           DESKTOP_RELEASE_STAGE: ${{ runner.temp }}/desktop-release-stage
-        run: node scripts/desktop-release.mjs release
+          DESKTOP_EVALUATION_MATERIAL: ${{ runner.temp }}/desktop-evaluation-private/release-material.json
+        run: node --conditions=development scripts/desktop-release.mjs release
       - name: Retain exact staged release evidence even if draft upload fails
         if: always()
         uses: actions/upload-artifact@v4

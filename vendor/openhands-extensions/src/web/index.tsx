@@ -12,11 +12,13 @@ import "./shared/shared.css";
 export interface OpenHandsExtensionSurfaceProps {
   view: "mcp" | "skills";
   onInteractionBlockedChange?(blocked: boolean): void;
+  /** Host-owned inventory rendered inside the Skills Discover view. */
+  skillsDiscoveryLeading?: ReactNode;
 }
 
 /** Presentation only: the surrounding CC Switch host owns all providers,
  * authorized transport, portals, event leases and source lifecycle hooks. */
-export function OpenHandsExtensionSurface({ view, onInteractionBlockedChange }: OpenHandsExtensionSurfaceProps) {
+export function OpenHandsExtensionSurface({ view, onInteractionBlockedChange, skillsDiscoveryLeading }: OpenHandsExtensionSurfaceProps) {
   const { t } = useOpenHandsTranslation();
   const platform = webPlatform();
   const noNativeSkills = view === "skills" && !platform.context.apps.length;
@@ -26,7 +28,7 @@ export function OpenHandsExtensionSurface({ view, onInteractionBlockedChange }: 
   }, [platform]);
   useEffect(() => () => { onInteractionBlockedChange?.(false); }, [onInteractionBlockedChange]);
   return <ExtensionFrame view={view}>
-    {noNativeSkills ? <div className="oh-module-empty" role="note"><h2>{t("PM$NATIVE_SKILLS_UNAVAILABLE")}</h2><p>{t("PM$NATIVE_SKILLS_BINDING")}</p></div> : view === "mcp" ? <OpenHandsMcpPage onInteractionBlockedChange={onInteractionBlockedChange} /> : <OpenHandsSkillsPage onInteractionBlockedChange={onInteractionBlockedChange} />}
+    {noNativeSkills ? <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>{skillsDiscoveryLeading}<div className="oh-module-empty" role="note"><h2>{t("PM$NATIVE_SKILLS_UNAVAILABLE")}</h2><p>{t("PM$NATIVE_SKILLS_BINDING")}</p></div></div> : view === "mcp" ? <OpenHandsMcpPage onInteractionBlockedChange={onInteractionBlockedChange} /> : <OpenHandsSkillsPage onInteractionBlockedChange={onInteractionBlockedChange} renderDiscoveryLeading={skillsDiscoveryLeading ? () => skillsDiscoveryLeading : undefined} />}
   </ExtensionFrame>;
 }
 

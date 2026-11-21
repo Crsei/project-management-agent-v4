@@ -9,7 +9,7 @@ import { DomainError, type Capability } from '../../../../packages/domain/src/co
 import { agentChatToolResultSchema, type AgentChatToolResult } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
 import { parseConfiguration, workflowFor, type ProtocolConfiguration } from '../../../../packages/pm-schema/index.ts';
 import { Workspace, WorkspaceError } from '../../../../packages/pm-core/index.ts';
-import { createAgentChatTools, type AgentChatToolContext } from '../src/agent-chat-tools.ts';
+import { createAgentChatTools, type AgentChatToolContext } from '../src/agent-tools/agent-chat-tools.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Workflow reader' };

@@ -52,7 +52,7 @@ pnpm services:status
 | [任务代码交付](docs/guides/task-code-delivery.md) | GitHub 前提、独立分支、验证/发布确认及未知结果核对 |
 | [任务工作流](docs/guides/task-workflows.md) / [状态联动](docs/guides/workflow-task-state.md) | 预制模板、发布版本、节点授权、恢复及待审核边界 |
 | [产品规划](docs/guides/product-roadmap.md) / [App 预览](docs/guides/app-preview.md) | PRD/Roadmap、真实任务与依赖、提交覆盖、本机 Linux 预览协议 |
-| [自动化](docs/guides/automations.md) | 47 个模板、触发、集成、分析候选与旧报告能力边界 |
+| [自动化](docs/guides/automations.md) | 24 个 PM 原生模板、触发、集成、分析候选与旧报告能力边界 |
 | [桌面](docs/guides/desktop.md) | Windows x64、macOS arm64/x64 目标、安装数据、备份与原生构建 |
 | [发布流水线](docs/guides/release.md) | 标签源码证据、精确提交 CI 门禁、桌面 GitHub Releases 与更新渠道 |
 | [外部集成](docs/guides/integrations.md) | SMTP/可信恢复邮箱、私有S3配置/停写维护、出站Webhook接收协议 |
@@ -65,10 +65,11 @@ pnpm services:status
 
 ## 架构与数据
 
-- `apps/server/pm`、`worker`、`agent` 与 `gateway.ts`：PM API、后台处理、Agent 执行和同源网关；`apps/web` 是浏览器/桌面共用的唯一 Web 工程。
+- `apps/server/pm`、`worker`、`agent` 与 `gateway`：PM API、后台处理、Agent 执行和同源网关；`apps/web` 是浏览器/桌面共用的唯一 Web 工程。
 - PM 核心对象与正式关系以 **Markdown 文件**为权威；PostgreSQL 保存账号、授权、PM 附加事实、审核/证据、审计、收据与事件；附件字节使用明确绑定的 Local/S3 存储。
 - **Agent SQLite** 保存 Chat、版本化 Agent／Team、业务 Run／委派及执行证据，与 PM PostgreSQL/Markdown 不是跨存储原子事务。可见 Session 删除与必要证据保留分离；旧非空数据库须经明确停写清单升级，不在启动时自动迁移。恢复历史不自动重绑目录、恢复原生执行或重放未知写入。缓存索引可重建，但权威核心、恢复台账、私有会话和历史附件不能当缓存删除；私有恢复 journal 与备份不是脱敏日志。
 - `packages/domain` / `application` 拥有业务规则；HTTP、Worker、Provider 工具和前端不能各自决定任务完成。
+- 每个目录的职责、入口、数据权威、测试和检查边界见[仓库地图](docs/architecture/repository-map.md)。
 
 详见[系统上下文](docs/architecture/context.md)、[模块契约](docs/architecture/module-contracts.md)、[数据所有权](docs/architecture/data-ownership.md)、[已采纳 Markdown ADR](docs/architecture/adr/0003-markdown-core.md)及[领域规范的当前/历史边界](docs/domain-design/README.md)。API 以[生成 OpenAPI](docs/contracts/openapi.yaml)和[客户端](packages/contracts/src/client.ts)为准，不固定宣传某一历史命令/路径数量。
 

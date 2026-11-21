@@ -2,18 +2,18 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { getMembership, type Membership } from '../../../../packages/application/src/access.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { getMembership, type Membership } from '../../../../../packages/application/src/access.ts';
 import {
   AGENT_CHAT_TOOL_REGISTRY, assertAgentToolRecord, agentToolProjectId, parseAgentChatToolInput,
   type AgentChatToolName, type AgentChatToolScope,
-} from '../../../../packages/application/src/agent-chat-tools.ts';
-import { pmChangeSetSchema, type PmChangeField, type PmChangeKind, type PmChangeSet } from '../../../../packages/agent-contracts/src/pm-changes.ts';
-import { pmToolTargetSchema } from '../../../../packages/agent-contracts/src/pm-tools.ts';
-import { validateTransition, workflowFor, type FileRecord, type ProtocolConfiguration } from '../../../../packages/pm-schema/index.ts';
-import { relationFields } from '../../../../packages/pm-schema/relations.ts';
-import { inspectFrontmatter } from '../../../../packages/pm-markdown/index.ts';
-import { WorkspaceError, type Workspace } from '../../../../packages/pm-core/index.ts';
+} from '../../../../../packages/application/src/agent-chat-tools.ts';
+import { pmChangeSetSchema, type PmChangeField, type PmChangeKind, type PmChangeSet } from '../../../../../packages/agent-contracts/src/pm-changes.ts';
+import { pmToolTargetSchema } from '../../../../../packages/agent-contracts/src/pm-tools.ts';
+import { validateTransition, workflowFor, type FileRecord, type ProtocolConfiguration } from '../../../../../packages/pm-schema/index.ts';
+import { relationFields } from '../../../../../packages/pm-schema/relations.ts';
+import { inspectFrontmatter } from '../../../../../packages/pm-markdown/index.ts';
+import { WorkspaceError, type Workspace } from '../../../../../packages/pm-core/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
 
 const previewRequestSchema = z.strictObject({

@@ -1,33 +1,33 @@
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor, Capability, Command, CommandReceipt } from '../../../../packages/domain/src/core.ts';
-import { DomainError } from '../../../../packages/domain/src/core.ts';
-import { taskCommentAgentOriginSchema, type TaskCommentsOptions, type TaskCommentsPage } from '../../../../packages/domain/src/task-comments.ts';
-import type { AgentChatContextSource, AgentChatToolEntity, AgentChatToolComment, AgentChatToolRelation, AgentChatToolReceipt, AgentChatToolResult } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
-import { agentChatToolResultSchema, agentChatToolFieldValueSchema } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
-import { pmCoreMigrationSummarySchema } from '../../../../packages/agent-contracts/src/pm-tool-core.ts';
-import type { PmToolApprovalAuthorityFacts } from '../../../../packages/agent-contracts/src/pm-tools.ts';
-import { AGENT_CHAT_TOOL_REGISTRY, agentChatToolDefinitions, parseAgentChatToolInput, assertAgentToolNotAborted, assertAgentToolRecord, assertAgentToolProject, assertAgentToolOrdinaryMutation, assertAgentToolLifecycleMutation, agentToolProjectId, type AgentChatToolContext, type AgentChatToolName, type AgentChatToolInput } from '../../../../packages/application/src/agent-chat-tools.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { getMembership } from '../../../../packages/application/src/access.ts';
-import { assertTaskCreationProject } from '../../../../packages/application/src/core-task-creation.ts';
-import type { WorkspaceMutationGuard, Workspace } from '../../../../packages/pm-core/index.ts';
-import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
-import type { FileRecord, ProtocolConfiguration } from '../../../../packages/pm-schema/index.ts';
-import { entityKinds as nativeEntityKinds, fieldRegistry, statusCategory, viewConfigOf, workflowFor } from '../../../../packages/pm-schema/index.ts';
-import { relationFields } from '../../../../packages/pm-schema/relations.ts';
-import { inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../packages/pm-markdown/index.ts';
-import { CoreWorkspacePool, authorizeCoreScope, executeAuditedCoreMutation, recoverAuditedCoreMutation, nativeCommandId } from './core-routes.ts';
-import { coreVersion, replaceBody, updateWorkItemRaw } from './core-adapter.ts';
-import { CoreCommandJournal } from './core-journal.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
-import type { MigrationPlan, MigrationResult } from '../../../../packages/pm-core/migrations.ts';
-import { readTaskBrief, searchTaskKnowledge, TaskBriefReadRejection } from '../../../../packages/application/src/task-brief.ts';
-import { taskBriefReadContext } from './task-brief-routes.ts';
+import type { Actor, Capability, Command, CommandReceipt } from '../../../../../packages/domain/src/core.ts';
+import { DomainError } from '../../../../../packages/domain/src/core.ts';
+import { taskCommentAgentOriginSchema, type TaskCommentsOptions, type TaskCommentsPage } from '../../../../../packages/domain/src/task-comments.ts';
+import type { AgentChatContextSource, AgentChatToolEntity, AgentChatToolComment, AgentChatToolRelation, AgentChatToolReceipt, AgentChatToolResult } from '../../../../../packages/agent-contracts/src/pm-tool-result.ts';
+import { agentChatToolResultSchema, agentChatToolFieldValueSchema } from '../../../../../packages/agent-contracts/src/pm-tool-result.ts';
+import { pmCoreMigrationSummarySchema } from '../../../../../packages/agent-contracts/src/pm-tool-core.ts';
+import type { PmToolApprovalAuthorityFacts } from '../../../../../packages/agent-contracts/src/pm-tools.ts';
+import { AGENT_CHAT_TOOL_REGISTRY, agentChatToolDefinitions, parseAgentChatToolInput, assertAgentToolNotAborted, assertAgentToolRecord, assertAgentToolProject, assertAgentToolOrdinaryMutation, assertAgentToolLifecycleMutation, agentToolProjectId, type AgentChatToolContext, type AgentChatToolName, type AgentChatToolInput } from '../../../../../packages/application/src/agent-chat-tools.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import { getMembership } from '../../../../../packages/application/src/access.ts';
+import { assertTaskCreationProject } from '../../../../../packages/application/src/core-task-creation.ts';
+import type { WorkspaceMutationGuard, Workspace } from '../../../../../packages/pm-core/index.ts';
+import { WorkspaceError } from '../../../../../packages/pm-core/index.ts';
+import type { FileRecord, ProtocolConfiguration } from '../../../../../packages/pm-schema/index.ts';
+import { entityKinds as nativeEntityKinds, fieldRegistry, statusCategory, viewConfigOf, workflowFor } from '../../../../../packages/pm-schema/index.ts';
+import { relationFields } from '../../../../../packages/pm-schema/relations.ts';
+import { inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../../packages/pm-markdown/index.ts';
+import { CoreWorkspacePool, authorizeCoreScope, executeAuditedCoreMutation, recoverAuditedCoreMutation, nativeCommandId } from '../routes/core-routes.ts';
+import { coreVersion, replaceBody, updateWorkItemRaw } from '../core-adapter.ts';
+import { CoreCommandJournal } from '../core-journal.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
+import type { MigrationPlan, MigrationResult } from '../../../../../packages/pm-core/migrations.ts';
+import { readTaskBrief, searchTaskKnowledge, TaskBriefReadRejection } from '../../../../../packages/application/src/task-brief.ts';
+import { taskBriefReadContext } from '../routes/task-brief-routes.ts';
 import { documentsFilesRecoveryIdentitySchema } from './agent-tool-documents-files.ts';
 import { automationToolRecoveryIdentitySchema } from './agent-tool-automation.ts';
-import { integrationsToolRecoveryIdentitySchema } from '../../../../packages/agent-contracts/src/pm-tool-integrations.ts';
-import { isCoreAgentChatTool } from '../../../../packages/application/src/agent-chat-tools.ts';
+import { integrationsToolRecoveryIdentitySchema } from '../../../../../packages/agent-contracts/src/pm-tool-integrations.ts';
+import { isCoreAgentChatTool } from '../../../../../packages/application/src/agent-chat-tools.ts';
 
 /** No argument text: retained original native identity used only for status inspection. */
 export const agentToolRecoveryIdentitySchema = z.union([
@@ -54,7 +54,7 @@ export type AgentChatToolFamily = {
   authorizeResult?(name: AgentChatToolName, input: unknown, result: AgentChatToolResult, context: AgentChatToolContext): Promise<void>;
 };
 
-export type { AgentChatToolContext, AgentChatToolName } from '../../../../packages/application/src/agent-chat-tools.ts';
+export type { AgentChatToolContext, AgentChatToolName } from '../../../../../packages/application/src/agent-chat-tools.ts';
 export type AgentChatToolsOptions = {
   database: () => Pool;
   coreWorkspaces: CoreWorkspacePool;

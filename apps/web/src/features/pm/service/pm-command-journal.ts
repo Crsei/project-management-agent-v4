@@ -16,6 +16,7 @@ export class PendingJournalCommandError extends Error {
 /** IndexedDB accommodates the backend's 8 MiB uploads without Web Storage's small quota. */
 export class PmCommandJournal {
   private database: Promise<IDBDatabase> | undefined
+  private openAttempt = 0
   private readonly prefix: string
   private tabId: string | undefined
 
@@ -33,17 +34,33 @@ export class PmCommandJournal {
 
   private open(): Promise<IDBDatabase> {
     if (!this.database) {
-      this.database = new Promise((resolve, reject) => {
-        const request = indexedDB.open("pm-command-recovery", 1)
-        request.onupgradeneeded = () => { request.result.createObjectStore("commands", { keyPath: "key" }) }
-        request.onsuccess = () => {
-          const database = request.result
-          database.onversionchange = () => { database.close(); this.database = undefined }
-          resolve(database)
-        }
-        request.onerror = () => { this.database = undefined; reject(request.error) }
-        request.onblocked = () => { this.database = undefined; reject(new Error("Recovery storage is blocked")) }
-      })
+      const attempt = ++this.openAttempt
+      const { promise, resolve, reject } = Promise.withResolvers<IDBDatabase>()
+      this.database = promise
+      let settled = false
+      const settle = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        callback()
+      }
+      const reset = () => { if (this.openAttempt === attempt) this.database = undefined }
+      const timer = setTimeout(() => {
+        reset()
+        settle(() => reject(new Error("Recovery storage did not open in time")))
+      }, 1_500)
+      let request: IDBOpenDBRequest
+      try { request = indexedDB.open("pm-command-recovery", 1) }
+      catch (error) { reset(); settle(() => reject(error)); return promise }
+      request.onupgradeneeded = () => { request.result.createObjectStore("commands", { keyPath: "key" }) }
+      request.onsuccess = () => {
+        const database = request.result
+        if (settled) { database.close(); return }
+        database.onversionchange = () => { database.close(); if (this.database === promise) this.database = undefined }
+        settle(() => resolve(database))
+      }
+      request.onerror = () => { reset(); settle(() => reject(request.error)) }
+      request.onblocked = () => { reset(); settle(() => reject(new Error("Recovery storage is blocked"))) }
     }
     return this.database
   }

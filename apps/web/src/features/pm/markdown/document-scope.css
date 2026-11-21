@@ -152,6 +152,63 @@
   white-space: nowrap;
 }
 
+/* ---------- 文档列表列宽：标题吃掉剩余空间，其余列紧凑不撑破 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table {
+  table-layout: fixed;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table th.document-type-cell {
+  width: 144px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table th.document-project-cell {
+  width: 18%;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table th.document-updated-cell {
+  width: 190px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table th.document-updated-cell + th {
+  width: 132px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table :is(.document-type-cell, .document-project-cell) .muted {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table .document-updated-cell .muted {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table .table-title {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table .table-title strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .document-collection-table .work-table .table-title .mono {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- 响应式：保持原有收窄间距，表格自身横向滚动 ---------- */
 @media (max-width: 900px) {
   .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading {

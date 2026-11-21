@@ -28,9 +28,10 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--glass-edge);
   background: var(--background);
   padding: 0 12px;
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 .settings-titlebar { display: flex; align-items: center; flex-shrink: 0; min-height: var(--workspace-header-height); }
 .settings-product { display: flex; align-items: center; gap: 10px; min-height: var(--workspace-header-height); padding: 0 10px; font-weight: 600; flex-shrink: 0; }
@@ -41,29 +42,38 @@
 .settings-nav-group > p { margin: 0 10px 6px; color: var(--text-muted); font-size: 12px; line-height: 16px; }
 .settings-navigation a { display: flex; align-items: center; gap: 9px; min-height: 30px; margin: 2px 0; padding: 0 10px; border-radius: var(--control-radius); color: var(--text-secondary); font-size: 13px; line-height: 20px; }
 .settings-navigation a:hover { background: var(--surface-hover); color: var(--foreground); }
-.settings-navigation a[aria-current="page"] { background: var(--selection); color: var(--foreground); font-weight: 500; }
+.settings-navigation a[aria-current="page"] {
+  background: var(--glass-state);
+  color: var(--foreground);
+  font-weight: 500;
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
+}
 .settings-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 16px 8px; flex-shrink: 0; }
 .settings-sidebar-footer > a { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted-foreground); font-size: 13px; }
 .settings-sidebar-footer > a:hover { color: var(--foreground); }
 .settings-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .settings-main > .usage-page { min-height: 100%; }
-.settings-main:focus, .settings-breadcrumb h1:focus { outline: none; }
-.settings-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: var(--workspace-header-height); padding: 6px 28px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 13px; line-height: 20px; }
+.settings-main:focus, .settings-breadcrumb-current:focus { outline: none; }
+.settings-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: var(--workspace-header-height); padding: 6px 28px; border-bottom: 1px solid var(--glass-edge); background: var(--surface); box-shadow: inset 0 1px 0 var(--glass-inner); font-size: 13px; line-height: 20px; }
 .settings-breadcrumb > span:first-child, .settings-breadcrumb > svg { color: var(--text-muted); }
 .settings-breadcrumb > svg { width: 12px; }
-.settings-breadcrumb h1 { font-size: inherit; font-weight: 500; }
+.settings-breadcrumb-current { font-weight: 500; }
 .settings-draft-status { margin-left: auto; color: var(--text-muted); font-size: 12px; line-height: 16px; }
-/* Keep the usable content at 1160px like PM settings; the max includes the inline padding. */
-.settings-content { width: 100%; max-width: 1240px; margin: 0; padding: 24px 40px 32px; }
-.settings-shell[data-extensions-page] .settings-content { max-width: 1216px; padding-inline: 28px; }
+/* One content measure for settings, MCP/Skills and automations: 1160px inside 40px gutters. */
+.settings-content { width: 100%; max-width: 1240px; margin: 0; padding: 16px 40px 32px; }
+.settings-shell[data-extensions-page] .settings-content { max-width: 1240px; padding-inline: 40px; padding-top: 8px; }
+.settings-page-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; min-height: 40px; margin: 0 0 16px; padding: 0 12px; }
+.settings-page-heading h1 { font-size: 24px; font-weight: 600; line-height: 32px; letter-spacing: -.02em; }
 /* Embedded extension drawers must stay below the settings leave confirmation. */
 .settings-extensions-page { isolation: isolate; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.settings-mcp-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.settings-mcp-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--glass-edge); }
 .settings-mcp-navigation a { padding: 10px 12px; border-bottom: 2px solid transparent; color: var(--muted-foreground); font-size: 13px; }
 .settings-mcp-navigation a:hover { color: var(--foreground); background: var(--surface-hover); }
 .settings-mcp-navigation a[aria-current="page"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 500; }
 .settings-extension-context { font-size: 12px; }
-.settings-extension-context-disclosure { border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface); }
+.settings-extension-context-disclosure { border: 1px solid var(--glass-edge); border-radius: var(--radius-module-value); background: var(--surface); box-shadow: var(--edge-shadow); }
 .settings-extension-context-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-height: 44px; padding: 10px 12px; list-style: none; }
 .settings-extension-context-summary::-webkit-details-marker { display: none; }
 .settings-extension-context-summary::after { content: "+"; margin-left: auto; flex-shrink: 0; color: var(--muted-foreground); font-size: 16px; line-height: 1; }
@@ -96,15 +106,15 @@
 .settings-section-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; margin: 0 12px 10px; }
 .settings-section-heading h2 { font-size: 13px; font-weight: 500; }
 .settings-scope-badge { display: inline-block; border: 1px solid var(--border); border-radius: var(--radius-inline-value); padding: 0 6px; color: var(--text-muted); font-size: 12px; line-height: 18px; }
-.settings-section-body { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-module-value); }
+.settings-section-body { padding: 16px; border: 1px solid var(--glass-edge); border-radius: var(--radius-module-value); background: var(--surface); box-shadow: var(--edge-shadow); }
 .settings-section-body :is(p, dd, code) { overflow-wrap: anywhere; }
-.settings-notice { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-popover-value); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.settings-notice { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--glass-edge); border-radius: var(--radius-popover-value); background: var(--surface); box-shadow: var(--control-shadow); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 .settings-notice > svg { margin-top: 2px; }
 .settings-notice > div { flex: 1; min-width: min(180px, 100%); }
 .settings-notice > button { margin-left: auto; }
 .settings-notice > div > button { margin-top: 10px; }
 .settings-notice a { color: var(--ring); text-decoration: none; }
-.settings-notice a:hover { background: var(--selection); }
+.settings-notice a:hover { background: var(--glass-state); }
 .settings-notice[data-kind="error"] { color: var(--destructive); }
 .settings-notice[data-kind="loading"], .settings-notice[data-kind="info"] { color: var(--muted-foreground); }
 .settings-notice[data-kind="success"] { color: var(--success); }
@@ -113,6 +123,7 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
 @media (max-width: 1199px) {
   .settings-sidebar { width: 216px; }
   .settings-content { padding: 20px 24px 32px; }
+  .settings-shell[data-extensions-page] .settings-content { padding-inline: 24px; }
 }
 @media (max-width: 767px) {
   .settings-shell { flex-direction: column; }
@@ -190,7 +201,7 @@ html body .cc-switch-web {
   --bg-app: var(--surface);
   --bg-sidebar: var(--surface);
   --bg-subtle: var(--surface-raised);
-  --bg-selected: color-mix(in srgb, #a6533a 9%, #ffffff);
+  --bg-selected: var(--glass-state);
   --bg-card: var(--surface);
   --border-strong: var(--border-hover);
   --text-1: #232322;
@@ -240,7 +251,7 @@ html.dark body .cc-switch-web {
   --bg-app: var(--surface);
   --bg-sidebar: var(--surface);
   --bg-subtle: var(--surface-raised);
-  --bg-selected: color-mix(in srgb, #de9a7b 14%, #181817);
+  --bg-selected: var(--glass-state);
   --bg-card: var(--surface);
   --border-strong: var(--border-hover);
   --text-1: #ecece8;
@@ -281,4 +292,45 @@ html body .cc-switch-web .openhands-extensions :is(
   padding-block: 0;
   border-radius: var(--control-radius);
   font-weight: 500;
+}
+
+/* The pinned MCP/Skills pages cap their main column at 52rem/68rem. Host pages
+   share one 1160px content measure so settings, extensions and automations line
+   up; the source's own grid breakpoints still apply inside that column. */
+html body .cc-switch-web .openhands-extensions.oh-extension-surface[data-view] .oh-extension-main {
+  width: 100%;
+  max-width: none;
+}
+
+/* Solid Glass: PM cards use one solid edge plus the inset rim; match it on the
+   source cards instead of introducing a second card language. */
+html body .cc-switch-web .openhands-extensions :is(
+  .oh-module-card,
+  .oh-mcp-native,
+  .oh-skills-native
+) {
+  border: 1px solid var(--glass-edge);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+}
+
+html body .cc-switch-web .openhands-extensions :is(
+  .oh-mcp-native-row,
+  .oh-skills-native-row,
+  .oh-module-empty
+) {
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--control-shadow);
+}
+
+html body .cc-switch-web .openhands-extensions .oh-module-empty {
+  background: var(--surface);
+}
+
+/* Selected rows use PM's neutral glass state, not the source orange tint. */
+html body .cc-switch-web :is(.bg-selected, .oh-navigation-active) {
+  background: var(--glass-state);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
 }

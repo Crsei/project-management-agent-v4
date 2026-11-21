@@ -7,17 +7,9 @@ import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { useText } from "../pm-ui"
 import { pmErrorMessage, usePmService } from "../pm-service"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 import { useAccountSecurity, type AccountSecurityState } from "./use-account-security"
 import { RecoveryEmailPanel } from "./recovery-email-panel"
-
-function SecurityPreviewNotice() {
-  const t = useText()
-  return <SettingsNotice>{t(
-    "Lab · 仅非安全的界面预览。不读取真实账号或会话，不收集密码或验证码，也不会修改认证状态。此处的禁用控件不会模拟安全操作成功。",
-    "Lab · Non-security visual preview only. No real account or session is read, no passwords or verification codes are collected, and authentication is not changed. Disabled controls do not simulate successful security operations.",
-  )}</SettingsNotice>
-}
 
 function DisabledSecurityField({ id, label, reasonId, type = "password", numeric = false }: {
   id: string
@@ -56,13 +48,13 @@ export function SecurityActionStatus({ security }: { security: AccountSecuritySt
           : outcome?.errorCode?.startsWith("recovery_") ? t(`恢复邮箱操作被拒绝：${outcome.errorCode}。请重读真实状态；候选冲突须先显式取消，sending 需等待租约结束，旧链接不可重放。`, `Recovery email action rejected: ${outcome.errorCode}. Reload current state. Explicitly cancel an existing candidate; wait for a sending lease; never replay an old link.`)
             : t("会话不存在或不属于本人，未执行撤销。", "The session is unavailable or does not belong to you. It was not revoked.")
   return <div className="space-y-3" aria-live="polite">
-    {storageError && <SettingsNotice>{t("安全恢复记录不可读取或保存；为避免丢失结果，本页禁止提交。请恢复浏览器会话存储权限后重新加载。本页没有发送或持久保存密码。", "The security recovery marker cannot be read or saved, so writes are blocked to avoid losing an outcome. Restore browser session-storage access and reload. This page has not sent or persisted a password.")}</SettingsNotice>}
-    {pending && <SettingsNotice><div className="space-y-3">
+    {storageError && <p role="alert" className="text-sm leading-6 text-destructive">{t("安全恢复记录不可读取或保存；为避免丢失结果，本页禁止提交。请恢复浏览器存储后重新加载。", "The security recovery marker cannot be read or saved, so writes are blocked. Restore browser storage and reload.")}</p>}
+    {pending && <div className="space-y-3 text-sm"><div className="space-y-3">
       <p>{busy ? t("正在处理安全操作；请勿重复提交。", "Processing the security action. Do not submit it again.") : t("原安全操作结果尚待核对，已禁止新的安全写入。密码输入已清空且不会重发。点击核对原操作：若尚未提交，服务端会先阻止延迟请求再取消；若已提交，会读取真实结果。", "The original security action still needs reconciliation; new security writes are blocked. Password fields were cleared and will never be resent. Reconcile the original action: the server reads a committed result, or fences a delayed request before cancelling an uncommitted one.")}</p>
       <p className="break-all font-mono text-xs">{pending.actionId}</p>
       <Button variant="outline" disabled={busy} loading={busy} onClick={() => { void security.recover() }}>{t("核对原安全操作", "Reconcile original security action")}</Button>
       <p className="text-xs">{t("若当前会话已失效，请从登录入口使用新密码核实；不要再次发送原改密请求。", "If this session is invalid, verify sign-in with the new password at the sign-in page; do not resend the original password change.")}</p>
-    </div></SettingsNotice>}
+    </div></div>}
     {error !== null && <p role="alert" className="text-sm leading-6 text-destructive">{pmErrorMessage(error, locale === "en" ? "en" : "zh")}{t(" 如果收到速率限制，请等待后再核对，改密每 15 分钟最多尝试 5 次。", " If rate-limited, wait before reconciling; password changes allow five attempts per 15 minutes.")}</p>}
     {outcome && <p role="status" className={`text-sm leading-6 ${outcome.status === "rejected" ? "text-destructive" : "text-muted-foreground"}`}>
       {outcome.status === "cancelled" ? t("原操作未提交，服务端已阻止其延迟执行；现在可以重新填写并显式发起新操作。", "The original action did not commit and is fenced against delayed execution. You can now enter credentials again and explicitly start a new action.")
@@ -98,14 +90,13 @@ function ServicePassword() {
     setCurrentPassword(""); setNewPassword(""); setConfirmation("")
     void security.changePassword(current, next)
   }
-  return <SettingsSection title={t("密码", "Password")} description={t("验证本人当前密码后更新登录密码，并撤销所有其他会话。", "Verify your current password to change it and revoke every other session.")}>
-    <SettingsNotice>{t("服务端规则：12–256 个字符；须验证当前密码，每账号 15 分钟最多尝试 5 次。保存后所有其他会话立即撤销，当前安全会话保留且不延长到期时间。密码不会进入浏览器恢复存储、业务收据或事件。恢复邮箱须独立验证；MFA 和 SSO 尚未提供。", "Server policy: 12–256 characters; current password required, at most five attempts per account per 15 minutes. All other sessions are revoked; the current session is retained without extending expiry. Passwords never enter browser recovery storage, business receipts or events. Recovery email requires independent verification; MFA and SSO remain unavailable.")}</SettingsNotice>
+  return <SettingsSection title={t("密码", "Password")} description={t("验证当前密码后更新，并撤销其他会话。", "Verify your current password to update it and revoke other sessions.")}>
     <SecurityActionStatus security={security} />
     {security.loading && <p role="status" className="text-sm text-muted-foreground">{t("正在读取安全状态…", "Reading security state…")}</p>}
     <form onSubmit={submit} className="max-w-2xl space-y-5">
       <div className="space-y-2"><label htmlFor={`${id}-current`} className="text-sm font-medium">{t("当前密码", "Current password")}</label><Input id={`${id}-current`} type="password" autoComplete="current-password" required maxLength={256} disabled={disabled} value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></div>
       <div className="space-y-2"><label htmlFor={`${id}-new`} className="text-sm font-medium">{t("新密码", "New password")}</label><Input id={`${id}-new`} type="password" autoComplete="new-password" required minLength={12} maxLength={256} disabled={disabled} value={newPassword} onChange={event => setNewPassword(event.target.value)} aria-describedby={`${id}-rules`} /></div>
-      <p id={`${id}-rules`} className="text-sm leading-6 text-muted-foreground">{t("请使用独立的长密码或密码短语，建议由密码管理器生成。长度校验不代表密码强度评分；本服务不假称已检查泄露密码库。", "Use a unique long password or passphrase, preferably generated by a password manager. Length validation is not a strength score; this service does not claim to check a breached-password database.")}</p>
+      <p id={`${id}-rules`} className="text-sm leading-6 text-muted-foreground">{t("12–256 个字符；建议使用密码管理器生成独立长密码。", "12–256 characters; a unique long password from a password manager is recommended.")}</p>
       <div className="space-y-2"><label htmlFor={`${id}-confirm`} className="text-sm font-medium">{t("确认新密码", "Confirm new password")}</label><Input id={`${id}-confirm`} type="password" autoComplete="new-password" required minLength={12} maxLength={256} disabled={disabled} value={confirmation} onChange={event => setConfirmation(event.target.value)} /></div>
       {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={disabled} loading={security.busy}><KeyRound aria-hidden="true" className="size-4" />{t("更新密码并退出其他会话", "Update password and revoke other sessions")}</Button><Button type="button" variant="outline" disabled={security.loading || security.busy} onClick={() => { void security.refresh() }}>{t("重新读取", "Reload state")}</Button></div>
@@ -124,7 +115,6 @@ export function SettingsPassword({ mode }: SettingsPageProps) {
   const id = useId()
   if (mode === "service") return <ServicePasswordRoute />
   return <SettingsSection title={t("密码", "Password")} description={t("Lab 不接入真实认证。", "Lab is not connected to real authentication.")}>
-    <SecurityPreviewNotice />
     <span id={`${id}-reason`} className="text-sm text-muted-foreground">{t("请在正式应用管理本人密码；此处不接收密码。", "Manage your password in the service application. No password is accepted here.")}</span>
     <DisabledSecurityField id={`${id}-current`} label={t("当前密码", "Current password")} reasonId={`${id}-reason`} />
     <DisabledSecurityField id={`${id}-new`} label={t("新密码", "New password")} reasonId={`${id}-reason`} />
@@ -153,7 +143,6 @@ function ServiceSessions() {
   }
   const others = security.data?.sessions.filter(session => !session.current) ?? []
   return <SettingsSection title={t("会话与设备", "Sessions & devices")} description={t("仅查看和管理本人有效登录会话。", "View and manage only your own active sign-in sessions.")}>
-    <SettingsNotice>{t("会话时间来自服务端，按浏览器时区及日期／时间显示偏好呈现，不改变会话有效期。设备、浏览器、IP、地点与最近活动没有可信来源，明确标为未知，不推测设备身份；会话数量不是设备数量。其他会话撤销后，其后续受保护请求将被拒绝。", "Session timestamps come from the server and use your browser time zone and date/time display preferences without changing session expiry. Device, browser, IP, location and recent activity have no trusted source and are explicitly unknown; a session count is not a device count. Revoked sessions cannot make subsequent protected requests.")}</SettingsNotice>
     <SecurityActionStatus security={security} />
     {security.loading && <p role="status" className="text-sm text-muted-foreground">{t("正在读取会话…", "Reading sessions…")}</p>}
     <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={security.loading || security.busy} onClick={() => { void security.refresh() }}>{t("刷新会话", "Refresh sessions")}</Button><Button variant="outline" disabled={disabled || !others.length} onClick={() => setConfirmation("others")}>{t("退出所有其他会话", "Sign out all other sessions")}</Button></div>
@@ -192,18 +181,14 @@ function ServiceSessionsRoute() {
 export function SettingsSessions({ mode }: SettingsPageProps) {
   const t = useText()
   if (mode === "service") return <ServiceSessionsRoute />
-  return <SettingsSection title={t("会话与设备", "Sessions & devices")} description={t("Lab 不读取真实会话。", "Lab does not read real sessions.")}><SecurityPreviewNotice /><SettingsNotice>{t("设备来源、时间和会话数量未知。请在正式应用查看、撤销本人其他会话或退出当前会话。", "Device sources, timestamps and session counts are unknown. Use the service application to inspect or revoke your own sessions.")}</SettingsNotice><Button disabled>{t("退出所有其他会话", "Sign out all other sessions")}</Button></SettingsSection>
+  return <SettingsSection title={t("会话与设备", "Sessions & devices")} description={t("Lab 不读取真实会话。", "Lab does not read real sessions.")}><p className="text-sm text-muted-foreground">{t("请在正式应用查看或撤销本人会话。", "Inspect or revoke your sessions in the service application.")}</p><Button disabled>{t("退出所有其他会话", "Sign out all other sessions")}</Button></SettingsSection>
 }
 
-export function SettingsTwoFactor({ mode }: SettingsPageProps) {
+export function SettingsTwoFactor() {
   const t = useText()
   const id = useId()
   return <SettingsSection title={t("双重认证", "Two-factor authentication")} description={t("了解认证器注册、验证码与恢复码的支持范围。", "Review authenticator enrollment, verification-code, and recovery-code availability.")}>
-    {mode === "lab" && <SecurityPreviewNotice />}
-    <SettingsNotice><span id={`${id}-unavailable`}>{t(
-      "当前服务未提供可信的账号双重认证状态，也没有注册、验证、恢复码或停用接口。状态保持未知，而不是“已关闭”或“已启用”。本页不生成二维码、注册密钥或恢复码，不接收验证码，也不会改变账号的安全保护。",
-      "This service provides no trusted account-level two-factor status and no enrollment, verification, recovery-code, or disable API. Status remains unknown, not “off” or “on.” This page generates no QR codes, enrollment secrets, or recovery codes, accepts no verification codes, and cannot change account protection.",
-    )}</span></SettingsNotice>
+    <p id={`${id}-unavailable`} className="text-sm leading-6 text-muted-foreground">{t("当前服务不提供双重认证接口，状态未知。", "The service provides no two-factor API; status is unknown.")}</p>
     <div className="flex min-w-0 items-start gap-3 rounded-module border bg-surface p-4 sm:p-5">
       <ShieldAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
       <div className="min-w-0 space-y-2">

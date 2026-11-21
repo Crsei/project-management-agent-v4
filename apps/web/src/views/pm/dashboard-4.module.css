@@ -79,9 +79,9 @@
   height: 70px;
   min-width: 0;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-module-value);
   background: var(--surface);
-  box-shadow: 0 1px 3px rgb(24 24 27 / 5%);
+  box-shadow: var(--edge-shadow);
   font-size: 14px;
 }
 .quickActions svg {
@@ -118,9 +118,9 @@
 .panel {
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-module-value);
   background: var(--surface);
-  box-shadow: 0 1px 3px rgb(24 24 27 / 5%);
+  box-shadow: var(--edge-shadow);
 }
 .canvasCard {
   position: relative;
@@ -149,7 +149,7 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 4px;
-  box-shadow: 0 1px 3px rgb(24 24 27 / 8%);
+  box-shadow: var(--control-shadow);
 }
 .canvas :global(.react-flow__panel) button {
   width: 28px;
@@ -193,7 +193,7 @@
   border-radius: 6px;
   background: var(--surface);
   color: var(--foreground);
-  box-shadow: 0 1px 2px rgb(24 24 27 / 4%);
+  box-shadow: var(--control-shadow);
 }
 .node[data-band="on-track"] {
   border-color: color-mix(in srgb, var(--status-success) 42%, var(--border));
@@ -518,7 +518,7 @@
 .attentionCard {
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--status-error) 20%, transparent);
-  border-radius: 7px;
+  border-radius: var(--radius-module-value);
   background: color-mix(in srgb, var(--status-error) 5%, var(--surface));
 }
 .attentionCard h3 {
@@ -661,13 +661,6 @@
   .donut {
     width: 112px;
     height: 112px;
-  }
-}
-@media (prefers-color-scheme: dark) {
-  .canvasCard,
-  .tableCard,
-  .panel {
-    box-shadow: none;
   }
 }
 .tableCard [role="region"] {

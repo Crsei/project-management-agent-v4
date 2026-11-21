@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import type { DashboardReadContext } from '../../../../packages/application/src/dashboard-read.ts';
-import { lookupPeopleAccount, peopleAccountQuerySchema, peopleCandidateQuerySchema, readPeopleCandidates, readProjectPeople } from '../../../../packages/application/src/people.ts';
+import type { DashboardReadContext } from '../../../../../packages/application/src/dashboard-read.ts';
+import { lookupPeopleAccount, peopleAccountQuerySchema, peopleCandidateQuerySchema, readPeopleCandidates, readProjectPeople } from '../../../../../packages/application/src/people.ts';
 
 /** The host supplies the existing workspace-locked applicationRead transaction. */
 export function registerPeopleRoutes(app: FastifyInstance, options: {

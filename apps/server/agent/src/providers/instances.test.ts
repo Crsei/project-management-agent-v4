@@ -239,6 +239,28 @@ test("explicit enabled configurations, model preferences and revisions survive s
   });
 });
 
+test("launcher bookkeeping does not invalidate provider revisions or saved catalogs", async () => {
+  await isolated(async directory => {
+    const instance = createProviderInstance({ instanceId: "binding-stable", driver: "opencode" });
+    recordProviderObservations(instance.instanceId, instance.revision, {
+      discoveredModels: [{ id: "binding-model", label: "Binding model", temperature: false }],
+    });
+    process.env.PWD = path.join(directory, "another-shell");
+    process.env.OLDPWD = path.join(directory, "previous-shell");
+    process.env.SHLVL = String(Number(process.env.SHLVL ?? "1") + 1);
+    process.env._ = "/opt/node/bin/node";
+    process.env.npm_lifecycle_event = "services:start";
+    const reread = getStoredInstance(instance.instanceId)!;
+    assert.equal(reread.revision, instance.revision);
+    assert.deepEqual(reread.observations?.discoveredModels?.map(model => model.id), ["binding-model"]);
+    const codex = getStoredInstance("codex")!;
+    process.env.CODEX_HOME = path.join(directory, "moved-codex-home");
+    const moved = getStoredInstance("codex")!;
+    assert.ok(moved.revision > codex.revision, "a real native home change still invalidates saved observations");
+    assert.equal(moved.observations, undefined);
+  });
+});
+
 test("blank native home fields leave CLI defaults and native environment paths intact", async () => {
   await isolated(async () => {
     delete process.env.CODEX_HOME; delete process.env.CLAUDE_CONFIG_DIR;

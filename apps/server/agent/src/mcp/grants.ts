@@ -7,7 +7,12 @@ import type { PmToolCallRecord, PmToolInvocation, PmToolTarget } from '@agent-wo
 
 // McpOAuth PendingCode + EnvironmentAuth MCP sessions adapted to existing Agent SQLite records.
 export const MCP_GRANTS = 'mcp:grants', MCP_CODES = 'mcp:codes', MCP_TOKENS = 'mcp:tokens', MCP_CONSENTS = 'mcp:consents';
-export type Grant = McpInvocationIdentity & { clientHash: string; clientName: string; audience: string; createdAt: string; expiresAt: string; revokedAt: string | null };
+export type Grant = McpInvocationIdentity & {
+  clientHash: string; clientName: string; audience: string; createdAt: string; expiresAt: string; revokedAt: string | null;
+  /** Local Agent access uses ordinary grants but is never listed or revoked as an OAuth client. */
+  origin?: "local";
+  localBindingId?: string;
+};
 export type ExpiringRecord = { key: string; expiresAt: number };
 export const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
 export const opaque = (): string => randomBytes(32).toString('base64url');
@@ -37,7 +42,8 @@ export function boundedRecord<T extends ExpiringRecord>(namespace: string, recor
 export function putGrant(grant: Grant): void {
   for (const item of listRecords<Grant>(MCP_GRANTS)) if (Date.parse(item.expiresAt) <= Date.now()) deleteRecord(MCP_GRANTS, item.grantId);
   const grants = listRecords<Grant>(MCP_GRANTS);
-  if (grants.length >= 4096 || grants.filter(item => item.actorId === grant.actorId && !item.revokedAt).length >= 100) throw new McpAuthError('temporarily_unavailable', 'Revoke an existing client before approving another.', 503);
+  const oauth = grants.filter(item => item.origin !== 'local');
+  if (oauth.length >= 4096 || grant.origin !== 'local' && oauth.filter(item => item.actorId === grant.actorId && !item.revokedAt).length >= 100) throw new McpAuthError('temporarily_unavailable', 'Revoke an existing client before approving another.', 503);
   writeRecord(MCP_GRANTS, grant.grantId, grant);
 }
 
@@ -70,6 +76,10 @@ export function readMcpExecutionRoot(identity: McpInvocationIdentity, operationI
   if (!root) throw new McpAuthError('not_found', 'Original operation is unavailable to this delegation.', 404);
   assertExecutionRootGrant(root, grant);
   return root;
+}
+/** Local access resolves the concrete workspace grant from the original root after reading storage. */
+export function readMcpExecutionRootRecord(operationId: string): McpExecutionRoot | null {
+  return readRecord<McpExecutionRoot>(MCP_EXECUTION_ROOTS, operationId);
 }
 /** Reserve once before dispatch; a surviving root is sufficient to forbid blind redispatch. */
 export function reserveMcpExecutionRoot(identity: McpInvocationIdentity, input: PmToolInvocation): { root: McpExecutionRoot; created: boolean } {

@@ -137,19 +137,49 @@
 }
 
 .inspector-terminal {
+  position: relative;
   flex: 1;
   min-height: 260px;
   overflow: hidden;
-  padding: 6px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-module);
   background: var(--background);
 }
 
-.inspector-terminal .xterm,
-.inspector-terminal .xterm-viewport,
-.inspector-terminal .xterm-screen {
+.ghostty-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
   height: 100%;
+  cursor: text;
+}
+
+.ghostty-scrollbar {
+  position: absolute;
+  top: 4px;
+  right: 1px;
+  bottom: 4px;
+  z-index: 1;
+  width: 8px;
+  cursor: default;
+  touch-action: none;
+}
+
+.ghostty-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  left: 1px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  transition: background-color 120ms ease-out;
+}
+
+.ghostty-scrollbar:hover .ghostty-scrollbar-thumb,
+.ghostty-scrollbar:focus-visible .ghostty-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 36%, transparent);
 }
 
 .inspector-browser-chrome-wrap {
@@ -689,7 +719,7 @@
 
 .inspector-panel--bare > .inspector-terminal {
   min-height: 0;
-  padding: 4px 8px;
+  padding: 0;
   border: 0;
   border-radius: 0;
 }
@@ -944,7 +974,10 @@ button.inspector-file-crumb:hover {
 }
 
 .inspector-file-row[data-selected="true"] {
-  background: var(--selection);
+  background: var(--glass-state);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
 }
 
 .inspector-files-surface .inspector-file-chevron {
@@ -1419,7 +1452,7 @@ button.inspector-file-crumb:hover {
 
 .pm-right-panel-surface[data-kind="terminal"] .inspector-terminal {
   min-height: 0;
-  padding: 4px 8px;
+  padding: 0;
   border: 0;
   border-radius: 0;
 }

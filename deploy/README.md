@@ -81,16 +81,18 @@ COMMIT;
 
 ### CLI 登录与隔离验收
 
+本仓库锁定 pnpm 11.9.0，统一使用 `pnpm run pm`；`pnpm pm` 会被 pnpm 自身的内置命令截获，不会执行本仓库脚本。
+
 ```bash
-PM_API_URL=http://127.0.0.1:4194 pnpm pm login --email you@example.com
+PM_API_URL=http://127.0.0.1:4194 pnpm run pm login --email you@example.com
 # 密码从终端隐藏输入；没有 --password 参数，不要把密码写入 shell 历史。
-PM_API_URL=http://127.0.0.1:4194 pnpm pm task list
-PM_API_URL=http://127.0.0.1:4194 pnpm pm logout
+PM_API_URL=http://127.0.0.1:4194 pnpm run pm task list
+PM_API_URL=http://127.0.0.1:4194 pnpm run pm logout
 ```
 
 CLI 凭据优先级为 `PM_SESSION_TOKEN` > **完整** `PM_EMAIL` + `PM_PASSWORD` > 当前服务 origin 的已保存会话；不从旧访问文件读取密码，没有旧文件覆盖变量。`login` 使用邮箱/密码建立有期限会话，仅保存服务器返回的令牌及到期时间，绝不保存密码。`PM_SESSION_TOKEN` 供显式自动化请求使用，不会被悄悄持久化。自动化密码只能通过私有进程环境/秘密管理器提供，不要放进参数、日志或版本库。
 
-默认会话目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`；`PM_CLI_SESSION_DIR` 可选择绝对私有目录。目录为 0700、每个服务文件为 0600，并拒绝符号链接、硬链接及不安全权限。规范化的 origin（协议、主机、端口）分别保存会话，`localhost` 与 `127.0.0.1` 是不同 CLI origin；退出只清当前 origin。远程必须 HTTPS，HTTP 仅限回环；重定向不会收到秘密。过期会话要求重新登录。
+默认会话目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`；`PM_CLI_SESSION_DIR` 可选择绝对私有目录。目录自身及其每个祖先都必须是当前用户拥有、不可被组/其他用户写入的普通目录；若 `$HOME/.config` 等祖先权限不安全（例如 `0777`），`login` 会报 `CLI_SESSION_UNSAFE`，应改用 `mkdir -m 700` 创建的私有目录，而不是放宽校验。目录为 0700、每个服务文件为 0600，并拒绝符号链接、硬链接及不安全权限。规范化的 origin（协议、主机、端口）分别保存会话，`localhost` 与 `127.0.0.1` 是不同 CLI origin；退出只清当前 origin。远程必须 HTTPS，HTTP 仅限回环；重定向不会收到秘密。过期会话要求重新登录。
 
 `logout` 真实调用服务端撤销，成功或服务端已返回未认证后才删除当前 origin 的本地文件；连接/服务错误保留文件并返回失败，不伪报已撤销。若显式环境凭据和保存会话不同，两者都核对退出，其他 origin 不受影响。迁移已有安装时，先显式登录，按账号安全入口更改已暴露密码并核对恢复邮箱，切换自动化后由用户自行清理旧访问文件；此批次不自动改密码或清理文件。
 
@@ -103,14 +105,14 @@ CLI 凭据优先级为 `PM_SESSION_TOKEN` > **完整** `PM_EMAIL` + `PM_PASSWORD
 | DATABASE_URL | 私有数据库连接；不得写入文档、日志或版本库 |
 | BLOB_PROVIDER / BLOB_ROOT | 默认 local，根目录 `.local/blobs`；仍须显式绑定才可用。disabled 明确禁用，S3 必须显式选择和配置，不隐式回退 Local |
 | CORE_WORKSPACE_ROOT | `.local/pm-workspaces`；每个 PM workspace 一个真实目录，存放权威 Markdown/配置/状态 |
-| PM_CHAT_SPACE_ROOT | 默认 PM API 服务用户的 `~/.pmv4`；仅保留 PM 文件区域／保存位置职责，不作为 Agent 代码或 scratch 执行目录 |
-| AGENT_WORKSPACE_ALLOWED_ROOTS | Agent 角色配置的绝对路径 JSON 数组；默认服务用户 Home，限制目录打开／浏览／执行解析。升级时显式核对既有代码目录所在范围，不自动从 PM 登记导入 |
+| PM_CHAT_SPACE_ROOT | 默认 PM API 服务用户的 `~/.pmv4`；仅保留 PM 文件区域／保存位置职责，不作为 Agent 代码或 scratch 执行目录。多 checkout／多实例应使用各自的绝对路径；Compose 使用 `/var/lib/pm/chat-spaces` 和 `chat-data` 卷 |
+| AGENT_WORKSPACE_ALLOWED_ROOTS | Agent 角色配置的绝对路径 JSON 数组；默认服务用户 Home，限制目录打开／浏览／执行解析。Compose 默认 `["/var/lib/pm/projects"]`，需要更多挂载目录时通过 `PM_AGENT_ALLOWED_ROOTS` 或角色环境显式加入。升级时核对既有代码目录所在范围，不自动从 PM 登记导入 |
 | CHOKIDAR_USEPOLLING | 默认 false；宿主 inotify 配额耗尽时设为 true，文件监听改为轮询（权威不变） |
 | COOKIE_SECURE | 本地 HTTP 为 false；HTTPS 部署需 true，并在该部署下重新验证认证 |
 | WORKER_INTERVAL_MS | 500；失败时指数退避，最大 30 秒 |
 | EVENT_RETENTION_DAYS | 7；事件过期后通过实体快照恢复 |
 
-Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚本只传系统运行变量和该角色配置。升级已有安装需由操作者准备 Worker 文件，不能把 API 整份环境复制过去。Worker 需要 `DATABASE_URL`、只读核心目录及按功能分配的邮件/Webhook 配置；迁移角色只需数据库，Web 不得取得这些秘密。
+Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚本只传系统运行变量和该角色配置。升级已有安装需由操作者准备 Worker 文件，不能把 API 整份环境复制过去。Worker 需要 `DATABASE_URL`、只读核心目录及按功能分配的邮件/Webhook 配置；`PUBLIC_ORIGIN` 必须与 API 一致（本机启动器会自动注入，Compose 从 `PM_PUBLIC_ORIGIN` 注入），否则 IM 通知链接会使用默认端口。启用自动化时还需同一 `PM_AUTOMATION_SERVICE_SECRET`、`PM_AUTOMATION_AGENT_URL`，启用 Git Sync 时另需 `PM_AUTOMATION_GIT_MASTER_KEY`。迁移角色只需数据库，Web 不得取得这些秘密。
 
 ### 开发与本机服务管理
 
@@ -120,7 +122,7 @@ Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚�
 
 公共网关将 `/api`、`/health` 和 `/openapi.json` 转发 PM API，将 `/agent/api/*` 去掉 `/agent` 转发 Agent API，其他页面和资源来自同一 Web 构建；WebSocket 与 SSE 保持同源。Provider 设置为 `/agent/settings/providers`，私有环境为 `.env.agent`，没有模型配置不会返回假成功。
 
-启用本机 Agent CLI 认证时，使用独立的 `AGENT_WORKSPACE_ACCESS_TOKEN`，通过私有 token 文件或非 TTY 私有管道登录，不复用 PM Cookie。外部 MCP 还须在 Agent 角色设置固定 `MCP_PUBLIC_ORIGIN`，在 PM 角色设置直连 Agent 的 `PM_MCP_AGENT_URL`，并核对两角色既有服务密钥一致；loopback HTTP 无需新增白名单。非 loopback 私有 HTTP 的精确白名单及信任边界见 [Agent 指南](../docs/guides/agent-chat.md)。配置完成需要加载对应角色环境；HTTP discovery 可用不等于客户端 OAuth 同意与撤销已验收。
+启用本机 Agent CLI 认证时，使用独立的 `AGENT_WORKSPACE_ACCESS_TOKEN`，通过私有 token 文件或非 TTY 私有管道登录，不复用 PM Cookie。外部 MCP 还须在 Agent 角色设置固定 `MCP_PUBLIC_ORIGIN`，在 PM 角色设置直连 Agent 的 `PM_MCP_AGENT_URL`，并核对两角色既有服务密钥一致；loopback HTTP 无需新增白名单。非 loopback 私有 HTTP 的精确白名单及信任边界见 [Agent 指南](../docs/guides/agent-chat.md)。配置完成需要加载对应角色环境；HTTP discovery 可用不等于客户端 OAuth 同意与撤销已验收。回环部署（`MCP_PUBLIC_ORIGIN` 为 localhost／127.0.0.1／::1）可在 MCP 设置“外部访问”登录 PM 启用本机直连；它共享当前账号全部已授权范围，不做逐客户端认证，`MCP_LOCAL_ACCESS=0` 可关闭。生产 Caddy 与开发网关均转发 `/mcp`、OAuth 发现与握手端点。
 
 统一 Web 构建保留旧的带哈希 JS/CSS，避免已经打开的页面稍后加载旧 chunk 失败；历史资源只在停止服务并确认旧页面不再使用后显式清理。
 
@@ -320,11 +322,13 @@ PM_DATABASE_NETWORK=project-management-agent-v4-backend_default
 PM_PUBLIC_ORIGIN=http://127.0.0.1:3224
 PM_WEB_PORT=3224
 PM_COOKIE_SECURE=false
+# Optional: add every mounted host directory the Agent may open.
+# PM_AGENT_ALLOWED_ROOTS=["/var/lib/pm/projects"]
 ```
 
 环境按角色隔离：migration仅数据库；runtime为 PM API 的数据库/存储及按需邮件；worker为数据库、邮件及批准 Webhook 元数据/密钥，禁止 S3/AWS；storage仅维护配置；Agent只有 v4 Provider 配置和新32+字符 `AGENT_WORKSPACE_ACCESS_TOKEN`，不复制 PM 数据库/旧 Provider 凭据。Agent容器非loopback监听仍要求原访问令牌保护，不能借部署关闭。Compose插值需要这些路径，即使未开maintenance。数据库主机为本 v4 专用网络中的 `postgres:5432`，不是宿主loopback；HTTPS必须secure Cookie并独立验收。
 
-本地项目功能在应用 Compose 中默认关闭；显式 `PM_LOCAL_PROJECTS_ENABLED=true` 后，API 使用 `/var/lib/pm/projects` 的 `project-data` 卷，Worker 将同一项目卷只读挂载以解析映射后的核心文件，不获得 legacy blob 卷或 S3 凭据。该只读项目卷本身包含附件，不能宣称 OS 层附件保密隔离；Worker 实现仅消费核心事实。容器 UI 选择的是容器可见目录，不是假装浏览任意宿主路径。项目存储不再受 `allowedRoots` 限制，但容器只能看到已挂载路径；需要既有宿主代码目录时，操作者必须给 API/维护角色可写、Worker 只读的相同绝对路径 bind mount。`allowedRoots` 仍约束文档来源等独立能力，按其自身配置维护。禁止以 symlink 模拟挂载。`project-storage` maintenance service 运行编译后的项目维护 CLI，挂载核心/项目/legacy 卷和 `/maintenance`，仅显式停写操作，不随 API 自行修复。外部根备份必须逐根导出，不能只归档 `core-data`/`blob-data`。
+本地项目功能在应用 Compose 中默认关闭；显式 `PM_LOCAL_PROJECTS_ENABLED=true` 后，API 使用 `/var/lib/pm/projects` 的 `project-data` 卷，Worker 将同一项目卷只读挂载以解析映射后的核心文件，不获得 legacy blob 卷或 S3 凭据。PM 文件区域/聊天空间使用独立的 `chat-data` 卷挂载到 `/var/lib/pm/chat-spaces`；如果启用该能力，备份恢复范围必须显式包含该卷。该只读项目卷本身包含附件，不能宣称 OS 层附件保密隔离；Worker 实现仅消费核心事实。容器 UI 选择的是容器可见目录，不是假装浏览任意宿主路径。项目存储不再受 `allowedRoots` 限制，但容器只能看到已挂载路径；需要既有宿主代码目录时，操作者必须给 API/维护角色可写、Worker 只读的相同绝对路径 bind mount。`allowedRoots` 仍约束文档来源等独立能力，按其自身配置维护。禁止以 symlink 模拟挂载。`project-storage` maintenance service 运行编译后的项目维护 CLI，挂载核心/项目/legacy 卷和 `/maintenance`，仅显式停写操作，不随 API 自行修复。外部根备份必须逐根导出，不能只归档 `core-data`/`blob-data`。
 
 Agent 与 API 同挂载 `project-data:/var/lib/pm/projects`，因此 resolve 返回的绝对目录在执行容器中真实存在；添加其他宿主 bind mount 必须给两者提供相同绝对路径。文档来源等仍受各自 `allowedRoots` 约束的能力按其配置同步。Agent 数据使用独立 `agent-data` 卷，不共享来源 Provider homes。`scripts/agent-docker.sh build|start|stop|status|logs` 只管理 `project-management-agent-v4-app`，读取 `V4_DEPLOY_ENV_FILE`（默认本仓私有 `.env.deploy`），不能用于停止数据库或其他项目。
 

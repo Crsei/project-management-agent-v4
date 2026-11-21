@@ -7,9 +7,9 @@ import { DurableError } from '../durable/errors.ts';
 import type { ThreadMetadata } from '../durable/threads.ts';
 import { authorizeDelivery } from './authority.ts';
 import { verifyWorktree } from './git.ts';
-import { resolveSessionNativeTemplateSnapshot } from '../automation-execution/native-templates/repository.ts';
 import { executionSelectionSchema } from '@agent-workspace/contracts/chat';
 import { authorizeAutomationNativeThreadExecution } from '../automation-execution/context.ts';
+import { assertChatWorktreeStable, readChatWorktree, verifyChatWorktree } from '../chat-worktrees.ts';
 
 const namespace = 'task-code-delivery-v1';
 export function deliveryTaskRevision(delivery: TaskCodeDelivery): string {
@@ -31,8 +31,15 @@ export const deliveryStore = {
 export async function resolveChatExecutionScope(thread: ThreadMetadata, headers?: Headers, purpose: 'execute' | 'inspect' = 'execute', signal?: AbortSignal): Promise<AgentExecutionSnapshot> {
   const selection = executionSelectionSchema.safeParse(thread.executionSelection);
   if (!selection.success) throw new DurableError(412, 'session_cutover_required', '旧会话不能继续执行；请创建新版 Session。');
+  assertChatWorktreeStable(thread.remoteId);
+  const chatWorktree = readChatWorktree(thread.remoteId);
+  if (!chatWorktree && thread.executionEnvironment?.worktree?.deliveryId === null)
+    throw new DurableError(409, 'worktree_changed', 'Chat 工作树记录缺失；拒绝回退到主工作树。');
   const collaboration = await resolveCollaborationThreadScope(thread, headers, purpose, signal);
-  if (collaboration) return collaboration;
+  if (collaboration) {
+    if (chatWorktree) throw new DurableError(409, 'worktree_changed', '协作 Session 与 Chat 工作树绑定冲突。');
+    return collaboration;
+  }
   const original = await resolveAgentExecution(selection.data, thread.remoteId, signal);
   const persisted = thread.executionEnvironment;
   original.environment.frozen = persisted?.frozen ?? false;
@@ -40,12 +47,20 @@ export async function resolveChatExecutionScope(thread: ThreadMetadata, headers?
       persisted.agentWorkspaceRevision !== original.environment.agentWorkspaceRevision || persisted.sourcePath !== original.environment.sourcePath))
     throw new DurableError(409, 'execution_environment_changed', '执行环境已变化；不能为已有 Session 隐式改绑目录。');
   const delivery = deliveryStore.list().find(v => v.threadId === thread.remoteId);
+  if (chatWorktree) {
+    if (delivery) throw new DurableError(409, 'delivery_worktree_conflict', '任务交付与 Chat 工作树绑定冲突。');
+    await verifyChatWorktree(chatWorktree, original);
+    const environment = { ...original.environment, executionPath: chatWorktree.directory,
+      worktree: { deliveryId: null, branch: chatWorktree.branch } };
+    if (persisted?.frozen && (thread.executionPath !== chatWorktree.directory || !sameExecutionIdentity(persisted, environment)))
+      throw new DurableError(409, 'worktree_changed', 'Chat 工作树执行身份已变化；拒绝隐式改绑。');
+    return { ...original, path: chatWorktree.directory, environment };
+  }
   if (!delivery) {
     await authorizeAutomationNativeThreadExecution(thread.remoteId, original, purpose, signal);
-    const actual = await resolveSessionNativeTemplateSnapshot(thread.remoteId, original, purpose);
-    if (persisted?.frozen && (thread.executionPath && actual.path !== thread.executionPath || !sameExecutionIdentity(persisted, actual.environment)))
+    if (persisted?.frozen && (thread.executionPath && original.path !== thread.executionPath || !sameExecutionIdentity(persisted, original.environment)))
       throw new DurableError(409, 'execution_environment_changed', 'Session actual execution filesystem changed; no implicit rebind is permitted.');
-    return actual;
+    return original;
   }
   const ownedSelection = executionSelectionSchema.safeParse(delivery.executionSelection);
   if (!delivery.git || !ownedSelection.success || ownedSelection.data.agentWorkspaceId === null ||

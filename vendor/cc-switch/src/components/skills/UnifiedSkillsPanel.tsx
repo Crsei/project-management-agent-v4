@@ -49,6 +49,7 @@ import {
   useUpdateSkill,
 } from "../../hooks/useSkills";
 import type { AppId } from "../../lib/api/types";
+import type { UnmanagedSkill } from "../../lib/api/skills";
 import { SKILLS_APP_IDS } from "../../config/appConfig";
 import { settingsApi, skillsApi } from "../../web/api";
 import { copyText } from "../../lib/clipboard";
@@ -108,6 +109,11 @@ export interface SkillsInstalledPresentation {
   onOpenDirectory: (skill: InstalledSkill) => void;
   onOpenDocs: (skill: InstalledSkill) => void;
   onOpenStorage: () => void;
+  /** Read-only native directories discovered on the current management context. */
+  nativeSkills?: UnmanagedSkill[];
+  nativeScanning?: boolean;
+  nativeError?: string;
+  onOpenNativeImport?: () => void;
 }
 
 interface UnifiedSkillsPanelProps {
@@ -117,6 +123,8 @@ interface UnifiedSkillsPanelProps {
   onNavigationBlockedChange?: (blocked: boolean) => void;
   renderInstalled?: (state: SkillsInstalledPresentation, mode?: "catalog" | "config") => React.ReactNode;
   renderDiscovery?: React.ComponentProps<typeof SkillsPage>["renderCards"];
+  /** Host-owned inventory pinned above the repository / skills.sh results. */
+  renderDiscoveryLeading?: React.ComponentProps<typeof SkillsPage>["renderDiscoverLeading"];
   /** OpenHands uses its own page header and adds a Config tab. */
   presentation?: "default" | "openhands";
   renderHeader?: (parts: { actions: React.ReactNode; appIds: AppId[]; installedCount: number; assignedCount: number; view: SkillsView }) => React.ReactNode;
@@ -148,6 +156,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   onNavigationBlockedChange,
   renderInstalled,
   renderDiscovery,
+  renderDiscoveryLeading,
   presentation = "default",
   renderHeader,
   presentationLabels,
@@ -214,9 +223,9 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   const bulkToggleAppMutation = useBulkToggleSkillApp();
   const uninstallMutation = useUninstallSkill();
   const restoreBackupMutation = useRestoreSkillBackup();
-  // Native unmanaged directories are read only after explicit Import Existing.
-  const { data: unmanagedSkills, refetch: scanUnmanaged } =
-    useScanUnmanagedSkills({ enabled: false });
+  // Native unmanaged directories are read-only observations; importing stays explicit.
+  const { data: unmanagedSkills, refetch: scanUnmanaged, isFetching: scanningUnmanaged, error: unmanagedError } =
+    useScanUnmanagedSkills({ enabled: view === "installed" });
   const importMutation = useImportSkillsFromApps();
   const installFromZipMutation = useInstallSkillsFromZip();
   const {
@@ -1101,9 +1110,9 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         {
           value: "installed",
           label: openhandsPresentation
-            ? <>{presentationLabels?.catalog ?? "Catalog"}<span className="oh-skills-tab-count">{nInstalled}</span></>
+            ? <>{presentationLabels?.catalog ?? "Catalog"}<span className="oh-skills-tab-count">{nInstalled + nUnmanaged}</span></>
             : loadOk
-              ? t("skillsPage.viewInstalledCount", { count: nInstalled })
+              ? t("skillsPage.viewInstalledCount", { count: nInstalled + nUnmanaged })
               : t("skillsPage.viewInstalled"),
         },
         {
@@ -1192,6 +1201,10 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         onOpenDirectory: (skill) => { void openDirectory(skill); },
         onOpenDocs: (skill) => { void openDocs(skill); },
         onOpenStorage: () => setStorageOpen(true),
+        nativeSkills: unmanagedSkills ?? [],
+        nativeScanning: scanningUnmanaged,
+        nativeError: unmanagedError ? extractErrorMessage(unmanagedError) : undefined,
+        onOpenNativeImport: () => { void handleOpenImport(); },
       }, view === "config" ? "config" : "catalog");
     }
     if (nInstalled === 0) {
@@ -1579,6 +1592,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
               onOpenRepoManager={() => setRepoManagerOpen(true)}
               onEnableFailures={recordEnableFailures}
               renderCards={renderDiscovery}
+              renderDiscoverLeading={renderDiscoveryLeading}
               onInteractionBlockedChange={setDiscoveryBusy}
             />
           </div>

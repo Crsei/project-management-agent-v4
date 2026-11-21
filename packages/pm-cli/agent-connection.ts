@@ -155,6 +155,8 @@ const PM_CONTEXT_ROUTES: readonly (readonly [string, RegExp])[] = [
   ['POST', /^\/api\/extensions\/contexts\/[^/]+\/(?:invoke|uploads)$/u],
   ['GET', /^\/api\/mcp-apps\/[^/]+\/[^/]+\/(?:snapshot|tools)$/u],
   ['POST', /^\/api\/mcp-apps\/[^/]+\/[^/]+\/(?:call|resource|context)$/u],
+  ['GET', /^\/api\/evaluation\/(?:status|decisions|windows\/[0-9a-fA-F-]{36})$/u],
+  ['POST', /^\/api\/evaluation\/(?:policies(?:\/(?:pause|revoke))?|observations\/delete|retention|export|windows|decisions)$/u],
 ];
 
 function operatorToken(value: string): string {

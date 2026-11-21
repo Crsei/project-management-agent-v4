@@ -13,7 +13,7 @@ import { readonlyCorePort } from '../packages/pm-core/readonly.ts';
 import { captureCoreFacts } from '../apps/server/pm/src/core-facts.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
 import { CoreFactImporter } from '../apps/server/pm/src/core-fact-importer.ts';
-import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/routes/core-routes.ts';
 import type { CapturedServiceFact } from '../packages/application/src/service-facts.ts';
 import { capturePmAutomationEvents, insertPmAutomationSignal, receivePmAutomationSignal, recordPmAutomationVisit, runPmAutomationSignalBatch, withPmAutomationOrigin } from '../packages/application/src/automation-pm-signals.ts';
 import { pmAutomationTemplateVersion, type PmAutomationEvent, type PmAutomationTemplateId } from '../packages/contracts/src/automation-pm.ts';

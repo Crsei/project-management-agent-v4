@@ -37,7 +37,7 @@ import { ProviderAdapterDriverCreateError, type ProviderAdapterDriver, type Prov
 import { OmpSettings } from "../settings.ts";
 import { buildOmpRpcLaunch, resolveOmpLaunchArgs, resolveOmpNativeHome } from "./launch.ts";
 import { makeOmpRpcConnection, parseOmpModelSlug, ompRecordField as field, ompRecordString as string,
-  ompRecordNumber as number, type OmpRpcRecord } from "./rpc.ts";
+  ompRecordNumber as number, OmpRpcError, type OmpRpcRecord } from "./rpc.ts";
 import { materializeOmpPermissionGate, parseOmpGateCall, ompPermissionKind, OMP_GATE_VERSION } from "./permissions.ts";
 import { authorizeOmpPrompt, makeOmpHostTools, type OmpHostTools } from "./hostTools.ts";
 import { bindOmpSessionEvidence, readOmpSessionHeader, readOmpActiveBranch, ompBranchPreservesConversationHead } from "./sessionEvidence.ts";
@@ -162,7 +162,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (options
       const args = resolveOmpLaunchArgs(options.settings.launchArgs);
       if (!args.ok) return yield* protocolError(args.message);
       const launch = yield* Effect.try(() => buildOmpRpcLaunch({ launchArgs: args.args, environment: options.environment,
-        extensionPath: gate.extensionPath, cwd, homeDirectory: userHome, ...(technicalNoTools ? { disableTools: true } : {}) }));
+        extensionPath: gate.extensionPath, cwd, ...(technicalNoTools ? { disableTools: true } : {}) }));
       const wrapped = yield* agentScope.wrap({ command: options.settings.binaryPath || "omp", args: launch.args,
         name: "omp", threadId: input.threadId, env: launch.env });
       const stopScope = wrapped.unit === undefined ? Effect.void : yield* Effect.cached(agentScope.stop(wrapped.unit));
@@ -626,7 +626,19 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (options
         yield* Deferred.fail(ready, protocolError("OMP permission boundary did not start", cause));
         yield* gate.update({ active: false }).pipe(Effect.ignore);
         if (active) {
-          if (!active.stopping) active.failure ??= makeProviderFailure({ message: "OMP stream closed without a settled prompt result", cause, class: "transport_error" });
+          if (!active.stopping && active.result !== "aborted") {
+            const error = Cause.squash(cause);
+            const rpcFailure = error instanceof OmpRpcError;
+            const operation = rpcFailure && ["read", "write", "exit", "terminate"].includes(error.operation) ? error.operation : "unknown";
+            // Only host-authored stage names cross this boundary, never raw
+            // stdout/stderr, provider bodies or arbitrary defect messages.
+            active.failure ??= makeProviderFailure({
+              message: rpcFailure ? `OMP RPC ${operation} failed before a settled prompt result`
+                : "OMP event handling failed before a settled prompt result",
+              code: rpcFailure ? `omp_rpc_${operation}` : "omp_event_processing_failed",
+              class: rpcFailure ? "transport_error" : error instanceof ProviderAdapter.ProviderAdapterProtocolError ? "validation_error" : "unknown",
+            });
+          }
           yield* finish(active, true).pipe(Effect.ignore);
         }
         yield* cancelUi(); yield* cancelHostCalls();

@@ -10,7 +10,7 @@ import * as Exit from "effect/Exit";
 import {
   ThreadId, RunId, MessageId, ProjectId, ProviderInstanceId, ModelSelection, OrchestrationV2AppThread,
   OrchestrationV2ProviderThreadJson, OrchestrationV2ProviderTurnJson,
-  type OrchestrationV2ProviderThread, type OrchestrationV2ProviderTurn,
+  type OrchestrationV2ProviderThread, type OrchestrationV2ProviderTurn, type ProviderApprovalDecision,
 } from "@t3tools/contracts";
 import { IdAllocatorV2, layer as idAllocatorLayer } from "@t3tools/provider-core/server/IdAllocator";
 import type { ProviderAdapterV2Event, ProviderAdapterV2TurnInput } from "@t3tools/provider-core/server/ProviderAdapter";
@@ -208,9 +208,39 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             pendingRequests.set(request.id, { token, close: () => closed.resolve() });
             const work = (async () => {
               if (sourceRequest.responseCapability.type !== "live" || sourceRequest.responseCapability.providerSessionId !== runtime.providerSessionId) return;
+              const responseCurrent = async () => {
+                await assertCurrent();
+                const liveBinding = await Effect.runPromise(runtimeHost.read({ threadId, providerInstanceId: lease.instance.instanceId }));
+                return !stopped && !observed.end && !firstFailure
+                  && pendingRequests.get(request.id)?.token === token && mapper.requests.get(request.id)?.status === "pending"
+                  && liveBinding?.executionId === runId;
+              };
+              const waitForResponse = async () => {
+                const answered = Promise.resolve().then(() => options.onRequest!(request)).catch((error) => {
+                  if (!stopped && !options.signal?.aborted && pendingRequests.get(request.id)?.token === token) callbackFailure ??= error;
+                  throw error;
+                });
+                const response = await Promise.race([answered, closed.promise.then(() => undefined)]);
+                if (!response || stopped || observed.end || firstFailure
+                  || pendingRequests.get(request.id)?.token !== token || mapper.requests.get(request.id)?.status !== "pending") return undefined;
+                return await responseCurrent() ? response : undefined;
+              };
               if (request.kind === "approval") {
                 await assertCurrent();
-                const decision = autoApproveApprovals() ? "accept" : "decline";
+                const autoApprove = autoApproveApprovals();
+                let decision: ProviderApprovalDecision;
+                if (autoApprove) decision = "accept";
+                // Headless callers have no user to ask; preserve the deny-by-default boundary.
+                else if (!options.onRequest) decision = "decline";
+                else {
+                  const response = await waitForResponse();
+                  if (!response) return;
+                  if (response.answers !== undefined)
+                    throw pmExecutionError(400, "invalid_native_response", "A native permission cannot submit an answer.");
+                  decision = response.cancelled ? "cancel" : response.optionId as ProviderApprovalDecision;
+                }
+                if (!["accept", "acceptForSession", "acceptAlways", "decline", "cancel"].includes(decision))
+                  throw pmExecutionError(400, "invalid_native_response", "A native permission requires an offered decision.");
                 await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id, decision }));
                 const current = mapper.requests.get(request.id);
                 const currentItem = mapper.sourceItems.get(request.itemId);
@@ -223,16 +253,8 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
                 }
                 return;
               }
-              const answered = Promise.resolve().then(() => options.onRequest!(request)).catch((error) => {
-                if (!stopped && !options.signal?.aborted && pendingRequests.get(request.id)?.token === token) callbackFailure ??= error;
-                throw error;
-              });
-              const response = await Promise.race([answered, closed.promise.then(() => undefined)]);
-              if (!response || stopped || observed.end || firstFailure || pendingRequests.get(request.id)?.token !== token) return;
-              await assertCurrent();
-              const liveBinding = await Effect.runPromise(runtimeHost.read({ threadId, providerInstanceId: lease.instance.instanceId }));
-              if (stopped || observed.end || firstFailure || pendingRequests.get(request.id)?.token !== token
-                || liveBinding?.executionId !== runId || mapper.requests.get(request.id)?.status !== "pending") return;
+              const response = await waitForResponse();
+              if (!response) return;
               if (response.cancelled) {
                 await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id, decision: "cancel" }));
               } else {

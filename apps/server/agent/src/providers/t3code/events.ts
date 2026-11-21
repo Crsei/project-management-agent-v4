@@ -70,8 +70,15 @@ export function makePmEventAdapter(input: {
     if (!itemOpen || source.status !== "pending") closedRequests.add(id);
     const live = !closedRequests.has(id) && source.status === "pending" && source.responseCapability.type === "live"
       && input.isLiveRequest?.(source) === true;
-    const respondable = informational && live && input.canRespond && item.questions.length > 0;
     const autoApprove = !informational && autoApproveApprovals();
+    // Only decisions the provider actually offered; the defaults mirror the native
+    // accept/decline/cancel every approved adapter accepts.
+    const approvalOptions = informational ? undefined : item.options?.length
+      ? item.options.map((option) => ({ id: option.decision, label: option.label, ...(option.warning ? { description: option.warning } : {}) }))
+      : [{ id: "accept", label: "Allow once" }, { id: "decline", label: "Deny" }, { id: "cancel", label: "Cancel" }];
+    const respondable = informational
+      ? live && input.canRespond && item.questions.length > 0
+      : !autoApprove && live && input.canRespond && approvalOptions!.length > 0;
     const approved = !informational && source.status === "resolved"
       && (source.decision === "accept" || source.decision === "acceptForSession" || source.decision === "acceptAlways");
     const denied = !informational && source.status === "resolved" && source.decision === "decline";
@@ -81,7 +88,7 @@ export function makePmEventAdapter(input: {
       id, itemId: item.id, kind: informational ? "user_input" : "approval",
       title: item.title ?? (informational ? "Provider question" : cancelled ? "Native permission cancelled"
         : denied ? "Native permission denied" : approved ? autoApprove ? "Native permission auto-approved" : "Native permission approved"
-        : source.status === "resolved" ? "Native permission closed" : autoApprove ? "Native permission approval pending" : "Native permission denied"),
+        : source.status === "resolved" ? "Native permission closed" : "Native permission approval pending"),
       respondable,
       ...(!informational && (approved || denied || cancelled || source.status === "resolved") ? {
         resolution: cancelled ? "cancelled" as const : denied ? "denied" as const
@@ -91,13 +98,15 @@ export function makePmEventAdapter(input: {
         id: question.id, title: question.header, prompt: question.question,
         options: question.options.map((option) => ({ id: option.value ?? option.label, label: option.label, description: option.description })),
         multiple: question.multiSelect, allowText: question.allowCustomAnswer,
-      })) } : { detail: item.reason ?? item.prompt }),
+      })) } : { detail: item.reason ?? item.prompt, options: approvalOptions! }),
       ...(!respondable ? { unavailableReason: !informational
         ? cancelled ? "The native permission request was cancelled; no action required."
-          : denied ? "Native permissions are denied. PM business approvals remain separate."
+          : denied ? "Native permissions were denied for this request."
           : approved ? autoApprove ? "Auto-approved by configuration; no action required." : "Native permission approved; no action required."
           : source.status === "resolved" ? "The provider closed this permission request."
-          : autoApprove ? "Native permission is being auto-approved by configuration; no action required." : "Native permissions are denied. PM business approvals remain separate."
+          : autoApprove ? "Native permission is being auto-approved by configuration; no action required."
+          : source.responseCapability.type === "not_resumable" ? source.responseCapability.reason
+          : !live ? "The provider closed this interaction." : "Native permission needs a live response channel."
         : source.responseCapability.type === "not_resumable" ? source.responseCapability.reason
         : !live ? "The provider closed this interaction." : "This interaction has no live response channel." } : {}),
     };

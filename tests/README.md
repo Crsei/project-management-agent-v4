@@ -1,15 +1,11 @@
 # 跨包验收测试
 
-按 [场景规格](../docs/domain-design/scenarios.md) 与实施计划 INF 场景实现真实 PostgreSQL、文件存储、HTTP、Worker 与 SSE 集成测试。
+按 [场景规格](../docs/domain-design/scenarios.md) 与实施计划 INF 场景实现真实 PostgreSQL、文件存储、HTTP、Worker 与 SSE 集成测试；无数据库的合同/模型测试也混排在同一目录，由同一受监督入口串行运行。
 
-| 文件 | 范围 |
-| --- | --- |
-| backend.integration.test.ts | 人工完整业务闭环、幂等/CAS、审核竞态、授权、文件字节、事件分页及 SSE |
-| uuid-audit.test.ts | UUID 大小写、依赖环、唯一转化、最后管理员、历史引用和重开恢复 |
-| worker-process.integration.test.ts | 两个真实 Worker 进程并发、停止后积压、新进程恢复、心跳与 readiness |
-| outbox-recovery.integration.test.ts | 十次失败隔离、真实进程重启、受审计 CLI 恢复、日志失败回滚 |
-| agent-file-areas.test.ts | v3 AgentScope / LocalDirectory / revision 严格合同；用户主目录默认值、安全默认目录预检与无写入读取 |
-| agent-file-areas.integration.test.ts | v3 真实授权目录册、空组、原项目挂载、两级保存/重读、默认目录隔离与优先级、根设置 CAS/权限、缺盘/替换/软链接拒绝及 PM 原文件不变 |
+- 完整清单以 `node scripts/backend-tests.mjs backend --list` 为准，本页不承诺固定文件数量；新增/删除测试文件不需要改这里。
+- `*.integration.test.ts` 表示需要真实外部资源（PostgreSQL schema、HTTP 服务、Worker 子进程、SMTP/TLS、S3/MinIO、SSE 或文件根）。没有配置时明确失败，不以 skip 计为通过。
+- 普通 `*.test.ts` 表示不依赖外部数据库的合同、模型、规则或纯函数测试；与集成测试共享同一套文件期限、TAP 汇总和失败判定。
+- 两种命名都必须以 `.test.ts` 结尾才会被入口选中；fixture、helper 与类型文件不使用该后缀。
 
 `pnpm test:backend` 从私有 `.env` 加载 DATABASE_URL，并通过受监督入口串行运行全部后端单元/合同/集成测试。数据库套件使用独立随机 schema；文件和子进程由各测试创建并仅清理自有资源。未配置数据库、缺少 S3 输入等造成的 skip 不是通过证据，入口返回非零。
 
@@ -106,10 +102,10 @@ CLI 的 Windows 跨卷 junction 场景只在 Windows 注册；Linux `agent` 阶�
 
 `.github/workflows/ci.yml` 对原 push / PR / manual 范围仍执行默认入口；PR token 只读、不持久 checkout 凭据、无签名环境/Provider secret。新增 task/dependency 共享缓存只对默认分支 trusted push/manual restore/save，所有 PR（同仓/fork）与其他分支不读写共享缓存。task-cache 上传仅 `.local/check-turbo/actions-trusted`，按 OS/arch/hosted image/固定工具链和 policy 分区，native task hash 核验实际输入；上传前拒绝 symlink/未知文件/硬链接。未授权触发真实远端作业，本轮不宣称 hosted restore/save、全量成功或性能收益。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。
 
-全量 Node 文件选择以 `scripts/backend-tests.mjs` 和 `scripts/check-ci.mjs` 为准，不改用 Web 包中较窄的 `test` 脚本：
+全量 Node 文件选择以 `scripts/backend-tests.mjs` 和 `scripts/check-ci.mjs` 为准；Web 包的 `test` 只覆盖 `apps/web/src/**/*.test.ts`，不代替后端、Agent 或数据库入口：
 
 - backend：`apps/server/pm/tests/*.test.ts`、`packages/{application,contracts,domain,infrastructure,pm-core,pm-markdown,pm-cli}/tests/*.test.ts` 和 `tests/*.test.ts`。
-- agent：`apps/server/gateway.test.ts`、`packages/agent-client-runtime/src/**/*.test.ts`、`apps/server/agent/src/**/*.test.ts`、`apps/web/src/**/*.test.ts`、`scripts/*.test.mjs` 和 `vendor/openhands-extensions/scripts/provenance.test.mjs`，全部经原监督器串行运行。
+- agent：`apps/server/gateway/tests/gateway.test.ts`、`packages/agent-client-runtime/src/**/*.test.ts`、`apps/server/agent/src/**/*.test.ts`、`apps/web/src/**/*.test.ts`、`scripts/*.test.mjs` 和 `vendor/openhands-extensions/scripts/provenance.test.mjs`，全部经原监督器串行运行。
 - Actions 在默认 `all` 之前仍新鲜运行 `scripts/upstream-sync/*.test.mjs`、`scripts/upstream-publish.test.mjs`。对应维护工具 lint 由默认 static 的 `lint:upstream` 统一覆盖，workflow 不再重复执行；协议测试未转成缓存任务。受影响选择器或 lint 缓存不能省略这些额外工作流测试。
 
 ## CI 计时与长任务诊断

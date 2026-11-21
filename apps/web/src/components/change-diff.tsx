@@ -1,6 +1,6 @@
 import { PatchDiff, type FileDiffOptions } from '@pierre/diffs/react';
 import { createTwoFilesPatch } from 'diff';
-import { Component, useMemo, useState, type ReactNode } from 'react';
+import { Component, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 
 class DiffBoundary extends Component<{ children: ReactNode; fallback: ReactNode; patch: string }, { failed: boolean; patch: string }> {
   state = { failed: false, patch: this.props.patch };
@@ -11,39 +11,70 @@ class DiffBoundary extends Component<{ children: ReactNode; fallback: ReactNode;
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-function SourceEndpoints({ before, after, en }: { before: string; after: string; en: boolean }) {
+function SourceEndpoints({ before, after, en, onReady }: { before: string; after: string; en: boolean; onReady?: () => void }) {
+  useLayoutEffect(() => { onReady?.(); }, [before, after, onReady]);
   return <div>
     <p role="status">{en ? 'The source difference exceeds the display limit or could not be rendered. Both complete endpoints remain available below; no content has been truncated.' : '源码差异超出展示限制或无法渲染。可在下方查看两个完整端点，内容未截断。'}</p>
     {([{ label: en ? 'Before source' : '之前的源码', value: before }, { label: en ? 'After source' : '之后的源码', value: after }]).map(({ label, value }) => <details key={label}><summary>{label}</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' }}>{value}</pre></details>)}
   </div>;
 }
 
+const inlineDiffCSS = `
+  :host {
+    --diffs-bg: var(--background);
+    --diffs-fg: var(--foreground);
+    --diffs-fg-number: var(--muted-foreground);
+    --diffs-bg-context: var(--background);
+    --diffs-bg-context-gutter: var(--background);
+    --diffs-addition-base: var(--success);
+    --diffs-deletion-base: var(--destructive);
+    --diffs-bg-addition-override: color-mix(in srgb, var(--success) 15%, var(--background));
+    --diffs-bg-deletion-override: color-mix(in srgb, var(--destructive) 15%, var(--background));
+    --diffs-font-family: var(--font-mono);
+    --diffs-font-size: 12px;
+  }
+  [data-line] span { color: var(--foreground); background-color: transparent; }
+  [data-line-type=change-addition] { background-color: var(--diffs-bg-addition-override); }
+  [data-line-type=change-deletion] { background-color: var(--diffs-bg-deletion-override); }
+  [data-separator] { display: none; }
+`;
+
 /** Renders supplied immutable endpoints; missing endpoints must be handled by the caller. */
-export function ChangeDiff({ before, after, name, en }: { before: string; after: string; name: string; en: boolean }) {
+export function ChangeDiff({ before, after, name, en, presentation = 'history', onReady }: { before: string; after: string; name: string; en: boolean; presentation?: 'history' | 'inline'; onReady?: () => void }) {
   const [layout, setLayout] = useState<'unified' | 'split'>('unified');
   const [wrap, setWrap] = useState(true);
+  const inline = presentation === 'inline';
   const patch = useMemo(() => {
     if (before === after || before.length + after.length > 512_000) return undefined;
     const filename = name.replace(/[\r\n\t]/g, ' ');
     try {
-      return createTwoFilesPatch(filename, filename, before, after, undefined, undefined, { context: 3, timeout: 150, maxEditLength: 4000 });
+      return createTwoFilesPatch(filename, filename, before, after, undefined, undefined, { context: inline ? Number.MAX_SAFE_INTEGER : 3, timeout: 150, maxEditLength: 4000 });
     } catch { return undefined; }
-  }, [before, after, name]);
+  }, [before, after, name, inline]);
   const options = useMemo<FileDiffOptions<undefined, undefined>>(() => ({
-    themeType: 'system', diffStyle: layout, overflow: wrap ? 'wrap' : 'scroll',
+    themeType: 'system', diffStyle: inline ? 'unified' : layout, overflow: inline || wrap ? 'wrap' : 'scroll',
     maxLineDiffLength: 2000, tokenizeMaxLineLength: 2000, tokenizeMaxLength: 50_000,
-  }), [layout, wrap]);
+    ...(inline ? {
+      disableFileHeader: true, disableLineNumbers: false, disableBackground: false,
+      // The bounded patch already contains every context line; expanding a
+      // parsed patch would require Pierre's separate full-file loader.
+      disableErrorHandling: true, diffIndicators: 'classic' as const,
+      lineDiffType: 'none' as const, unsafeCSS: inlineDiffCSS,
+    } : {}),
+    ...(onReady ? { onPostRender: (node, _instance, phase) => { if (phase !== 'unmount' && node.shadowRoot?.querySelector('[data-line]')) onReady(); } } satisfies Partial<FileDiffOptions<undefined, undefined>> : {}),
+  }), [layout, wrap, inline, onReady]);
+  useLayoutEffect(() => { if (before === after) onReady?.(); }, [before, after, onReady]);
   if (before === after) return <p>{en ? 'No text changes.' : '正文没有变化。'}</p>;
-  const fallback = <SourceEndpoints before={before} after={after} en={en} />;
+  const fallback = <SourceEndpoints before={before} after={after} en={en} onReady={onReady} />;
   if (!patch) return fallback;
   return <section aria-label={en ? 'Source difference' : '源码差异'} style={{ minWidth: 0, maxWidth: '100%' }}>
-    <div className="flex flex-wrap items-center gap-2 py-2">
+    {!inline && <div className="flex flex-wrap items-center gap-2 py-2">
       <div role="group" aria-label={en ? 'Diff layout' : '差异布局'}>
         <button type="button" aria-pressed={layout === 'unified'} onClick={() => setLayout('unified')}>{en ? 'Unified' : '单栏'}</button>
         <button type="button" aria-pressed={layout === 'split'} onClick={() => setLayout('split')}>{en ? 'Side by side' : '左右对照'}</button>
       </div>
       <label><input type="checkbox" checked={wrap} onChange={event => setWrap(event.target.checked)} /> {en ? 'Wrap lines' : '自动换行'}</label>
-    </div>
+    </div>}
     <div style={{ overflow: 'auto', maxWidth: '100%' }}><DiffBoundary patch={patch} fallback={fallback}><PatchDiff patch={patch} disableWorkerPool options={options} /></DiffBoundary></div>
   </section>;
 }

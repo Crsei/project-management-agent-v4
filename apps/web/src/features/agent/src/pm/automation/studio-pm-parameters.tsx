@@ -17,8 +17,8 @@ export function StudioPmParameters({ values, issues, templateId, allowRepository
     onChange("repository", { provider: "github", repository: "", ref: null, pullRequestNumber: null, ...repository, ...patch });
   }
   return <section className={styles.section} aria-label={t("PM 分析参数", "PM analysis parameters")}>
-    <h2>{t("分析范围与来源", "Analysis scope and sources")}</h2>
-    <p>{t("仅分析所选项目的当前授权事实。默认项目范围；开启筛选后必须明确填写，空筛选不会退回全项目。来源不足会显示覆盖缺口，不伪造结论。", "Analyzes authorized facts in the selected project. Default scope is the project; enabled filters must be explicit. An empty filter never falls back to the whole project. Missing sources produce coverage gaps, not invented conclusions.")}</p>
+    <h2>{t("分析参数", "Analysis parameters")}</h2>
+    <p>{t("默认分析整个项目。可选筛选项必须明确填写，空筛选不会退回全项目；来源不足会报告覆盖缺口。", "Analyzes the whole project by default. Optional filters must be explicit; an empty filter never falls back to the whole project. Missing sources are reported as coverage gaps.")}</p>
     {selectors.map(name => <div key={name}>
       <label><input type="checkbox" checked={values[name] !== undefined} onChange={event => onChange(name, event.target.checked ? [] : undefined)} /> {t("限定", "Limit")} {labels[name]}</label>
       {values[name] !== undefined && <Field label={labels[name]} help={t("每行一个真实 ID / 标签；筛选取交集，不接受空选择。", "One real ID / label per line. Filters intersect; empty selections are rejected.")} issue={issue(name)}>{id => <textarea id={id} rows={2} value={Array.isArray(values[name]) ? values[name].join("\n") : String(values[name])} onChange={event => onChange(name, event.target.value.split(/\r?\n/))} />}</Field>}
@@ -32,6 +32,6 @@ export function StudioPmParameters({ values, issues, templateId, allowRepository
       <p className={styles.dependency}>{t("需选择同项目已验证的原生 API 连接及版本。仅配置不等于已认证，浏览不会发起外部探测；PM 来源不要求外部连接。", "Select a verified native API connection and revision in this project. Configured is not authenticated; browsing does not probe external services. PM-only sources do not require an external connection.")}</p>
     </>}
     <Field label={t("补充分析要求（不授予写权限）", "Additional analysis instructions (no write authority)")} issue={issue("instructions")}>{id => <textarea id={id} rows={4} maxLength={12000} value={String(values.instructions ?? "")} onChange={event => onChange("instructions", event.target.value || undefined)} />}</Field>
-    <p className={styles.notice}>{t("运行只生成持久化发现及候选。任务、关系、文档和规划写入必须在运行详情中逐项预览并由您确认；模型成功不是任务完成。", "Runs only produce persisted findings and candidates. Task, relationship, document and plan writes require individual preview and your confirmation in execution details. Model success is not task completion.")}</p>
+    <p className={styles.notice}>{t("运行只产生发现与候选；写入需在运行详情中逐项预览并确认。", "Runs produce findings and candidates only; writes require per-item preview and confirmation in execution details.")}</p>
   </section>;
 }

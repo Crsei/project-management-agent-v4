@@ -27,6 +27,24 @@ function overlaps(a: string, b: string): boolean {
   const relative = path.relative(a, b);
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
+const PROXY_ENV_KEYS = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "all_proxy", "no_proxy"] as const;
+/** Source proxy routing for native management contexts. Prefer the bound
+ * Providers, then any enabled Provider, so OMP can use the same host proxy. */
+function extensionProxyEnv(providerInstanceIds: readonly string[]): Record<string, string> {
+  const instances = listStoredInstances().filter(instance => instance.enabled);
+  const ordered = [...new Set([...providerInstanceIds, ...instances.map(instance => instance.instanceId)])];
+  for (const id of ordered) {
+    const instance = instances.find(item => item.instanceId === id);
+    if (!instance) continue;
+    const proxy: Record<string, string> = {};
+    for (const key of PROXY_ENV_KEYS) {
+      const value = instance.env[key];
+      if (typeof value === "string" && value.trim()) proxy[key] = value;
+    }
+    if (Object.keys(proxy).length) return proxy;
+  }
+  return {};
+}
 function writableRoots(binding: ExtensionProviderBinding, unifiedOwned = false): string[] {
   const appRoots = Object.values(binding.appDirs).map(root => canonicalExtensionProviderPath(root));
   return binding.physicalRoots.filter(root => root !== binding.unifiedSkillsRoot || unifiedOwned || appRoots.includes(root));
@@ -245,7 +263,8 @@ export class ExtensionHost {
       await privateDirectory(path.join(dataDir, "uploads"));
       const homeDir = stored.binding?.homeDir ?? path.join(dataDir, "home");
       if (!stored.binding) await privateDirectory(homeDir);
-      return { dataDir, homeDir, appDirs: { ...(stored.binding?.appDirs ?? {}) }, ...(stored.binding?.claudeMcpFile ? { claudeMcpFile: stored.binding.claudeMcpFile } : {}), secretKey: await contextSecretKey(stored) };
+      const proxyEnv = stored.binding ? extensionProxyEnv(stored.binding.providerInstanceIds) : undefined;
+      return { dataDir, homeDir, appDirs: { ...(stored.binding?.appDirs ?? {}) }, ...(stored.binding?.claudeMcpFile ? { claudeMcpFile: stored.binding.claudeMcpFile } : {}), ...(proxyEnv ? { proxyEnv } : {}), secretKey: await contextSecretKey(stored) };
     }, publish) };
     return runtime;
   }

@@ -104,6 +104,9 @@ No source checkout, repository download or model invocation is needed.
 
 The explicit POST reuses the registered Provider's existing native owner,
 cc-switch managed library, native deployment/staging and backup machinery.
+A live native session/account connection is not part of this write contract:
+an enabled Provider with a current reviewed target can receive the files, while
+readiness is reported separately and installation never claims runtime loading.
 Disabled, remote and unsupported targets remain unavailable. Builtins have a
 distinct managed record ID and durable `source` metadata
 `{sourceLabel,sourcePath,sha256,treeHash}` in SQLite schema 3 and uninstall backups;

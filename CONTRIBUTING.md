@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢参与 Dovspace。提交代码前先阅读 [README](README.md)、[AGENTS.md](AGENTS.md)、[当前架构](docs/architecture/context.md)和[领域规范第七节](docs/domain-design/README.md#implementation-plan)。内部计划、机器路径与历史验收不作为贡献者安装依赖。
+感谢参与 Dovspace。提交代码前先阅读 [README](README.md)、[AGENTS.md](AGENTS.md)、[仓库地图](docs/architecture/repository-map.md)、[当前架构](docs/architecture/context.md)和[领域规范第七节](docs/domain-design/README.md#implementation-plan)。内部计划、机器路径与历史验收不作为贡献者安装依赖。
 
 ## 准备环境
 
@@ -23,6 +23,8 @@ pnpm install --frozen-lockfile
 - 不提交 `.env`、令牌、访问文件、数据库、私有日志/截图或用户目录。Bug 报告与测试夹具须去除真实账号、业务内容和凭据，参见 [SECURITY](SECURITY.md)。
 
 ## 检查范围
+
+目录职责、数据权威、测试与禁止边界见[仓库地图](docs/architecture/repository-map.md)；`pnpm check:docs` 会校验当前目录都已入图。
 
 | 命令 | 实际范围 |
 | --- | --- |

@@ -83,9 +83,10 @@ test("transient list errors retain a dated stale snapshot and metadata errors re
   assert.match(store.getSnapshot().error || "", /offline/);
   assert.equal(store.getSnapshot().metadataError, null);
   mode = "metadata-fails";
+  await store.refreshMetadata();
   await store.refresh();
   assert.equal(store.getSnapshot().threads[0]?.remoteId, "metadata-fails");
-  assert.equal(store.getSnapshot().loadedAt, "snapshot-2");
+  assert.notEqual(store.getSnapshot().loadedAt, "snapshot-1");
   assert.equal(store.getSnapshot().error, null);
   assert.match(store.getSnapshot().metadataError || "", /folder unavailable/);
   assert.deepEqual(store.getSnapshot().workspaces, [workspace]);
@@ -112,7 +113,7 @@ for (const status of [401, 403]) {
     await Promise.all([store.refresh(), selected.refresh()]);
     assert.equal(selected.getSnapshot().data?.messages[0]?.id, "sensitive");
     denied = true;
-    const refreshing = store.refresh();
+    const refreshing = Promise.all([store.refresh(), store.refreshMetadata()]);
     await nextTurn();
     assert.deepEqual(store.getSnapshot().threads, []);
     assert.deepEqual(store.getSnapshot().workspaces, []);
@@ -450,4 +451,19 @@ for (const status of [401, 403]) test(`execution HTTP ${status} authorization lo
   disposeExecution();
   disposeHistory();
   disposeBoard();
+});
+
+test("thread polling does not reread folder or provider metadata", async () => {
+  const io = transport(path => readResponse(path, [thread()]));
+  const store = createRunBoardData(io.client, createRunBoardAccessScope(), () => "observed");
+  const dispose = store.start();
+  await store.refresh();
+  assert.equal(io.requests.length, 3);
+  await store.refresh();
+  assert.equal(io.requests.length, 4);
+  assert.equal(io.requests.at(-1)?.path, "/api/chat/threads");
+  await store.refreshMetadata();
+  assert.equal(io.requests.length, 6);
+  assert.equal(store.getSnapshot().metadataLoadedAt, "observed");
+  dispose();
 });

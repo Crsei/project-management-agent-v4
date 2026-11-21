@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/routes/core-routes.ts';
 import { CoreFactImporter } from '../apps/server/pm/src/core-fact-importer.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
 import { captureCoreFacts } from '../apps/server/pm/src/core-facts.ts';

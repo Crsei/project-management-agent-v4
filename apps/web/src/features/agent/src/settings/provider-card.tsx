@@ -79,8 +79,7 @@ export function ProviderCard({ provider, definition, onAuth, onTest, onLogout, o
   const staleConnection = Boolean(connection && connection.instanceRevision !== provider.revision);
   const connectionFailed = connection?.ok === false;
   const connectionUnverified = Boolean(connection?.ok && connection.nativeSessionReady !== true);
-  const ompStartupRefused = provider.driver === "omp" && !staleConnection && connectionFailed
-    && /OMP startup refused/i.test(connection?.error ?? "");
+  const ompAmbientStartup = provider.driver === "omp" && provider.enabled;
   const connectionLabel = !connection ? "" : [
     connectionFailed ? t(`失败：${connection.error ?? "未知错误"}`, `Failed: ${connection.error ?? "unknown error"}`) : t("检查完成", "Check completed"),
     connection.nativeSessionReady === true ? t("本次检查：原生会话就绪", "This check: native session ready") : t("本次检查：原生会话未确认就绪", "This check: native session readiness not confirmed"),
@@ -119,10 +118,10 @@ export function ProviderCard({ provider, definition, onAuth, onTest, onLogout, o
     {updateNotice && <p role="status" className="provider-feedback">{updateNotice}</p>}
     {actionError && <p role="alert" className="provider-feedback provider-feedback-error">{actionError}</p>}
     {connection && <p role={!staleConnection && connectionFailed ? "alert" : "status"} className={`provider-feedback${staleConnection ? "" : connectionFailed ? " provider-feedback-error" : connectionUnverified ? " provider-feedback-warning" : ""}`}>{staleConnection && <strong>{t("上次旧配置检查（已失效，需重新检查）", "Previous check used an older configuration (stale, re-check needed)")}</strong>}{t("原生 Agent 状态检查：", "Native Agent status check: ")}{connectionLabel}</p>}
-    {ompStartupRefused && <p role="note" className="provider-feedback provider-feedback-warning">
+    {ompAmbientStartup && <p role="note" className="provider-feedback provider-feedback-warning">
       {t(
-        "OMP 原生会话在启动前被拒绝：stock OMP 会从真实 Home 自动发现 Codex / Claude / Gemini / Cursor 等 MCP、插件与 dotenv 配置，宿主无法证明这些来源不会启动外部进程或执行代码，因此不会启动 OMP。该限制只影响聊天与模型发现，不影响配置读取——MCP 与 Skills 管理页仍会读取本实例的真实 OMP 配置，无需隔离 Home 或重新认证。OMP Skills 仍是原生目录观测，不能在 Composer 中调用。",
-        "The OMP native session is refused before launch: stock OMP discovers MCP, plugin and dotenv configuration from the real Home (Codex, Claude, Gemini, Cursor, ...). The host cannot prove those sources will not start processes or execute code, so it does not launch OMP. This affects chat and model discovery only, not configuration reads — MCP and Skills management still read this instance's real OMP configuration without an isolated Home or re-authentication. OMP Skills remain native-directory observations and are not callable from Composer.",
+        "OMP 使用服务机器的真实 Home 启动，会加载 Codex / Claude / Gemini / Cursor 等 ambient MCP、插件与 dotenv 配置；PM 权限桥只约束 OMP 的工具调用，不约束启动期加载。需要隔离时请为该实例显式设置独立 Home。MCP 与 Skills 管理页读取同一实例 Home 的配置；OMP Skills 仍是原生目录观测，不能在 Composer 中调用。",
+        "OMP starts with the real Home of the service machine and loads ambient MCP, plugin and dotenv configuration from Codex, Claude, Gemini, Cursor and others. The PM boundary only governs OMP tool calls, not startup loading. Set an isolated Home on this instance when isolation is required. MCP and Skills management read the same instance Home; OMP Skills remain native-directory observations and are not callable from Composer.",
       )}{" "}
       <Link className="underline underline-offset-2" to={`/agent/settings/mcp-servers?provider=${encodeURIComponent(provider.instanceId)}`}>{t("查看 OMP 的 MCP", "View OMP MCP")}</Link>
       {" · "}

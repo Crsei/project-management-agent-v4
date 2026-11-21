@@ -231,9 +231,9 @@ process.exit(result.status ?? 1);
       env.CC_SWITCH_HOST_ENTRY = path.join(buildRoot, 'cc-switch', 'host', 'main.mjs');
       await node('Agent, client runtime, gateway, Web models, doctor and provenance regressions', [
         'scripts/backend-tests.mjs', 'files', '--',
-        'apps/server/gateway.test.ts', 'packages/agent-client-runtime/src/**/*.test.ts',
+        'apps/server/gateway/tests/gateway.test.ts', 'packages/agent-client-runtime/src/**/*.test.ts',
         'apps/server/agent/src/**/*.test.ts', 'apps/web/src/**/*.test.ts', 'scripts/*.test.mjs',
-        'vendor/openhands-extensions/scripts/provenance.test.mjs',
+        'benchmarks/dovspace/evaluation/*.test.ts', 'vendor/openhands-extensions/scripts/provenance.test.mjs',
       ], { supervised: true });
     });
   } catch (error) { failure = error; }

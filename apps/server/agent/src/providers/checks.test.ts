@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { checkProviderConnection } from "./checks.ts";
+import { getProviderModels } from "./catalog.ts";
 import { createProviderInstance, getStoredInstance, updateProviderInstance } from "./instances.ts";
 import { getNativeProviderAdapter } from "./driver-registry.ts";
 import type { ProviderDriverStatus } from "./driver-adapter.ts";
@@ -64,4 +65,25 @@ test("a status result losing the instance CAS race cannot overwrite the winning 
     assert.equal(getStoredInstance(id)!.revision, winner.revision);
     assert.equal(getStoredInstance(id)!.observations, undefined);
   } finally { complete.resolve(); adapter.check = previous; }
+}));
+test("a failed refresh keeps the last verified model catalog for browsing", async () => isolated(async id => {
+  const adapter = getNativeProviderAdapter("opencode")!;
+  const previous = adapter.check;
+  const model = { id: "catalog-model", label: "Catalog model", temperature: false };
+  try {
+    adapter.check = async () => ({ ...ready, models: [model] });
+    const cached = await checkProviderConnection(id);
+    assert.equal(cached.ok, true);
+    assert.deepEqual(getProviderModels(id).map(entry => entry.id), [model.id]);
+    adapter.check = async () => ({ installation: { status: "installed" }, authentication: "unknown", nativeSessionReady: false, models: [], methods: [], canLogout: false, message: "native discovery timed out" });
+    const failed = await checkProviderConnection(id);
+    assert.equal(failed.ok, false);
+    assert.deepEqual(failed.models?.map(entry => entry.id), [model.id]);
+    assert.deepEqual(getProviderModels(id).map(entry => entry.id), [model.id]);
+    assert.deepEqual(getStoredInstance(id)!.observations?.discoveredModels?.map(entry => entry.id), [model.id]);
+    adapter.check = async () => ({ ...ready, models: [] });
+    const cleared = await checkProviderConnection(id);
+    assert.equal(cleared.ok, true);
+    assert.deepEqual(getProviderModels(id), []);
+  } finally { adapter.check = previous; }
 }));

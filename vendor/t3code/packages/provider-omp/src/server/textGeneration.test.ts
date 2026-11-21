@@ -66,6 +66,30 @@ function replies(prompt: (request: OmpRpcRecord, controls: OmpTestControls) => E
     assert.isUndefined(process.received.find((request) => request.type === "get_last_assistant_text"));
   }).pipe(Effect.scoped));
 
+  it.effect("ignores OMP built-in UI notifications during tool-free generation", () => Effect.gen(function* () {
+    const root = yield* workspace;
+    const process = yield* makeOmpTestProcess({ onRequest: replies((request, controls) => Effect.gen(function* () {
+      yield* controls.emit({ type: "extension_ui_request", id: "widget", method: "setWidget", widgetKey: "autoresearch" });
+      yield* controls.reply(request, { agentInvoked: true });
+      yield* controls.emit({ type: "prompt_result", id: request.id, status: "completed", agentInvoked: true, sessionSettled: true });
+      yield* controls.emit({ type: "session_settled" });
+    })) });
+    const generator = yield* makeOmpTextGeneration(settings, { HOME: root }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, process.spawner));
+    const result = yield* generator.generateCommitMessage({ cwd: root, branch: "main", stagedSummary: "M a", stagedPatch: "patch", modelSelection: selection });
+    assert.deepEqual(result, { subject: "Keep native identity", body: "Preserve OMP state." });
+  }).pipe(Effect.scoped));
+
+  it.effect("rejects a real interactive prompt during tool-free generation", () => Effect.gen(function* () {
+    const root = yield* workspace;
+    const process = yield* makeOmpTestProcess({ onRequest: replies((request, controls) => Effect.gen(function* () {
+      yield* controls.reply(request, { agentInvoked: true });
+      yield* controls.emit({ type: "extension_ui_request", id: "confirm", method: "confirm", title: "Allow tool?" });
+    })) });
+    const generator = yield* makeOmpTextGeneration(settings, { HOME: root }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, process.spawner));
+    const error = yield* generator.generateCommitMessage({ cwd: root, branch: "main", stagedSummary: "M a", stagedPatch: "patch", modelSelection: selection }).pipe(Effect.flip);
+    assert.include(error.detail, "host interaction");
+  }).pipe(Effect.scoped));
+
   it.effect("refuses a native effort downgrade before admitting a prompt", () => Effect.gen(function* () {
     const root = yield* workspace;
     const process = yield* makeOmpTestProcess({ onRequest: replies((_request, _controls) => Effect.void, "high") });
@@ -75,16 +99,23 @@ function replies(prompt: (request: OmpRpcRecord, controls: OmpTestControls) => E
     assert.isUndefined(process.received.find((request) => request.type === "prompt"));
   }).pipe(Effect.scoped));
 
-  it.effect("rejects unsafe startup sources without spawning or executing any native tools", () => Effect.gen(function* () {
+  it.effect("accepts ambient startup sources and completes generation", () => Effect.gen(function* () {
     const root = yield* workspace;
     const home = Path.join(root, "home");
     Fs.mkdirSync(home);
     Fs.mkdirSync(Path.join(root, ".omp", "tools"), { recursive: true });
-    Fs.writeFileSync(Path.join(root, ".omp", "tools", "unsafe.ts"), "process.exit(1)");
-    const process = yield* makeOmpTestProcess();
+    Fs.writeFileSync(Path.join(root, ".omp", "tools", "native.ts"), "process.exit(1)");
+    Fs.mkdirSync(Path.join(home, ".codex"), { recursive: true });
+    Fs.writeFileSync(Path.join(home, ".codex", "config.toml"), "ambient native source");
+    const process = yield* makeOmpTestProcess({ onRequest: replies((request, controls) => Effect.gen(function* () {
+      yield* controls.reply(request, { agentInvoked: true });
+      yield* controls.emit({ type: "prompt_result", id: request.id, status: "completed", agentInvoked: true, sessionSettled: true });
+      yield* controls.emit({ type: "session_settled" });
+    })) });
     const generator = yield* makeOmpTextGeneration(settings, { HOME: home }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, process.spawner));
-    const error = yield* generator.generateCommitMessage({ cwd: root, branch: "main", stagedSummary: "M a", stagedPatch: "patch", modelSelection: selection }).pipe(Effect.flip);
-    assert.include(error.detail, "startup refused");
-    assert.lengthOf(process.launches, 0);
+    const result = yield* generator.generateCommitMessage({ cwd: root, branch: "main", stagedSummary: "M a", stagedPatch: "patch", modelSelection: selection });
+    assert.deepEqual(result, { subject: "Keep native identity", body: "Preserve OMP state." });
+    assert.isAbove(process.launches.length, 0);
+    assert.notInclude(process.launches[0] ?? [], "--trusted-extension");
   }).pipe(Effect.scoped));
 });

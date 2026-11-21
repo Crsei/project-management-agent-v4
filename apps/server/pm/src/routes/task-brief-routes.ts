@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import type { FileRecord } from '../../../../packages/pm-schema/index.ts';
-import { readTaskBrief, searchTaskKnowledge, type TaskBriefContext } from '../../../../packages/application/src/task-brief.ts';
-import { taskBriefEntityIdSchema, taskBriefRevisionSchema, taskBriefStageSchema, taskBriefQuerySchema, taskKnowledgeQuerySchema } from '../../../../packages/agent-contracts/src/task-brief.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import type { FileRecord } from '../../../../../packages/pm-schema/index.ts';
+import { readTaskBrief, searchTaskKnowledge, type TaskBriefContext } from '../../../../../packages/application/src/task-brief.ts';
+import { taskBriefEntityIdSchema, taskBriefRevisionSchema, taskBriefStageSchema, taskBriefQuerySchema, taskKnowledgeQuerySchema } from '../../../../../packages/agent-contracts/src/task-brief.ts';
 import { authorizeCoreScope, type CoreWorkspacePool } from './core-routes.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };

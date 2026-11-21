@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { listWorkspaces } from '../../../../packages/application/src/queries.ts';
-import { assertWorkspaceCreationActor, createWorkspaceFromRequest } from '../../../../packages/application/src/workspace-creation.ts';
-import { initializeNovaWorkspaceSample, readWorkspaceCreation, resumeActorWorkspaceSamples, type WorkspaceSampleOptions } from '../../../../packages/application/src/workspace-samples.ts';
-import type { WorkspaceInitialization } from '../../../../packages/contracts/src/workspace-creation.ts';
-import { workspaceCreationKeySchema, workspaceCreationRequestSchema, workspaceCreationRecoveryRequestSchema } from '../../../../packages/contracts/src/workspace-creation.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { listWorkspaces } from '../../../../../packages/application/src/queries.ts';
+import { assertWorkspaceCreationActor, createWorkspaceFromRequest } from '../../../../../packages/application/src/workspace-creation.ts';
+import { initializeNovaWorkspaceSample, readWorkspaceCreation, resumeActorWorkspaceSamples, type WorkspaceSampleOptions } from '../../../../../packages/application/src/workspace-samples.ts';
+import type { WorkspaceInitialization } from '../../../../../packages/contracts/src/workspace-creation.ts';
+import { workspaceCreationKeySchema, workspaceCreationRequestSchema, workspaceCreationRecoveryRequestSchema } from '../../../../../packages/contracts/src/workspace-creation.ts';
 
 export function registerWorkspaceCreationRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; sample: WorkspaceSampleOptions }): void {
   const resuming = new Map<string, Promise<void>>();

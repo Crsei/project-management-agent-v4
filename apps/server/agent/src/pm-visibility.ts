@@ -31,6 +31,9 @@ function merge(...values: PmContentProvenance[]): PmContentProvenance {
     authorities: [...new Map(values.flatMap(value => value.authorities ?? []).map(authority => [JSON.stringify([authority.actorId, key(authority.target)]), authority])).values()],
     contextSources: [...new Map(values.flatMap(value => value.contextSources ?? []).map(source => [JSON.stringify(source), source])).values()] };
 }
+/** An empty provenance record proves only that a generation ran; it carries no PM dependency. */
+const hasPmDependencies = (value: PmContentProvenance): boolean =>
+  value.operationIds.length > 0 || value.targets.length > 0 || (value.authorities?.length ?? 0) > 0 || (value.contextSources?.length ?? 0) > 0;
 /** Dependencies come from typed PM evidence, never JSON examples in user prose or tool arguments. */
 export function pmPayloadTargets(value: unknown, workspaceId?: string): PmToolTarget[] {
   const targets = new Map<string, PmToolTarget>();
@@ -142,7 +145,7 @@ export type PmVisibilityProjector = {
   uiChunk(chunk: UIMessageChunk, generationId: string): UIMessageChunk;
 };
 /** Session/delegation authorization MUST run before this read projection. Recreate for every outgoing SSE frame. */
-export async function createPmVisibilityProjector(threadId: string, headers: Headers, options?: { operationIds?: readonly string[] }): Promise<PmVisibilityProjector> {
+export async function createPmVisibilityProjector(threadId: string, headers: Headers, options?: { operationIds?: readonly string[]; payloads?: boolean }): Promise<PmVisibilityProjector> {
   const allCalls = listRecords<StoredPmToolCall>(CALLS);
   const threadCalls = allCalls.filter(call => call.record.threadId === threadId && (!options?.operationIds || options.operationIds.includes(call.record.operationId)));
   const generations = listRecords<Generation>("chat:generations").filter(value => value.threadId === threadId);
@@ -217,7 +220,7 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
       : targets.some(target => call.record.actorId && currentActors.get(key(target)) && currentActors.get(key(target)) !== call.record.actorId) ? "redacted"
       : targets.length === 0 && call.record.name !== "pm_list_workspaces" ? "unavailable" : targetsVisibility(targets);
     let record = call.record;
-    if (state === "visible" && record.status === "succeeded" && record.name !== "pm_list_workspaces") {
+    if (state === "visible" && record.status === "succeeded" && record.name !== "pm_list_workspaces" && options?.payloads !== false) {
       try {
         // Project ACLs do not prove that a linked source, private record or native capability survived.
         // PM authorizes its original stored payload. Never substitute our older cached payload for it.
@@ -238,6 +241,9 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
     }
     // Unconfirmed dispatches have no currently authorized result snapshot to justify retained payloads.
     if (state === "visible" && record.status !== "succeeded" && record.result !== null) state = "unavailable";
+    // Payload-free projection proves visibility only; never expose a saved body
+    // as if the current PM authority had returned it.
+    if (options?.payloads === false) record = { ...record, result: null };
     callVisibility.set(call.record.operationId, state);
     if (state !== "visible") return { operationId: call.record.operationId, threadId: call.record.threadId, messageId: call.record.messageId, generationId: call.record.generationId, visibility: state };
     const normalized = normalizePmToolResult(record);
@@ -274,6 +280,12 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
   const hidden = projectedCalls.some(call => call.visibility !== "visible") || [...visibility.values()].some(state => state !== "visible") ||
     [...provenance, ...quotes].some(value => depsVisibility(value) !== "visible") || contextItems.some(item => contextVisibility(item) !== "visible") ||
     generations.some(value => value.pmOperations?.some(authority => currentActors.get(key(authority.target)) && currentActors.get(key(authority.target)) !== authority.actorId));
+  // Payload-free listing cannot re-prove per-source result availability. Treat any
+  // PM dependency as contaminated so a legacy Session title never outlives a deleted
+  // source merely because a project ACL still exists.
+  const nativeContextContaminated = hidden || (options?.payloads === false && (
+    calls.length > 0 || provenance.some(hasPmDependencies) || quotes.some(hasPmDependencies) || contextItems.length > 0 ||
+    generations.some(value => (value.pmOperations?.length ?? 0) > 0)));
   const generationVisibility = (id: string): Visibility => {
     const generation = generations.find(value => value.id === id);
     if (generation?.pmOperations?.some(operation => currentActors.get(key(operation.target)) && currentActors.get(key(operation.target)) !== operation.actorId)) return "redacted";
@@ -332,7 +344,7 @@ export async function createPmVisibilityProjector(threadId: string, headers: Hea
     provenance: merge(...provenance.filter(value => depsVisibility(value) === "visible"), { operationIds: projectedCalls.filter(call => call.visibility === "visible").map(call => call.operationId),
       targets: [...authorities.values()].filter(value => targetsVisibility([value.target]) === "visible").map(value => value.target),
       authorities: generations.filter(value => generationVisibility(value.id) === "visible").flatMap(value => value.pmOperations ?? []) }),
-    nativeContextContaminated: hidden,
+    nativeContextContaminated,
     visibleProvenance(messageIds) {
       const ids = new Set(messageIds);
       const deps = merge(...provenance.filter(value => value.messageIds.some(id => ids.has(id))), ...quotes.filter(value => ids.has(value.messageId) && depsVisibility(value) === "visible"),

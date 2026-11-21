@@ -105,11 +105,16 @@ function nativeHome(instanceId: string, driver: ProviderDriver, config: Provider
   const home = env.HOME || env.USERPROFILE || os.homedir();
   return resolveProviderNativeHome(driver, config, env, cwd, home, stateDirectory(instanceId));
 }
+/** Inherited variables that can move the native account, home or transport; shell bookkeeping cannot. */
+const NATIVE_BINDING_ENV = /^(?:HOME|USERPROFILE|HOMEDRIVE|HOMEPATH|XDG_(?:CONFIG|DATA|STATE|CACHE)_HOME|CODEX_HOME|CLAUDE_CONFIG_DIR|OPENCODE_[A-Z0-9_]+|OMP_[A-Z0-9_]+|PI_(?:PROFILE|CODING_AGENT_DIR|CODING_AGENT_SESSION_DIR)|ANTIGRAVITY_[A-Z0-9_]+|CURSOR_[A-Z0-9_]+|GROK_[A-Z0-9_]+|MUSE_[A-Z0-9_]+|ACP_[A-Z0-9_]+|(?:HTTP|HTTPS|ALL|NO)_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|NODE_EXTRA_CA_CERTS|.*(?:API_KEY|TOKEN|SECRET|PASSWORD|AUTH).*)$/;
 function environmentBinding(instance: StoredProviderInstance): string {
   const env = nativeEnvironment(instance.env);
   const shadowBase = instance.driver === "codex" && instance.config.setupMode !== "managed" && instance.config.shadowHomePath && !instance.config.homePath ? env.HOME || env.USERPROFILE || os.homedir() : undefined;
-  // The Claude SDK writes its version on first query; that is not an account change.
-  const environment = Object.entries(env).filter(([key]) => key !== "CLAUDE_AGENT_SDK_VERSION").sort(([a], [b]) => a.localeCompare(b));
+  // PWD, OLDPWD, SHLVL, `_`, npm_*/PNPM_* and launcher flags change on every start; they are not native identity.
+  // Explicit instance overrides stay binding-relevant even when their names are not on the inherited allowlist.
+  const inherited = Object.entries(env).filter(([key]) => key !== "CLAUDE_AGENT_SDK_VERSION" && NATIVE_BINDING_ENV.test(key));
+  const explicit = Object.entries(instance.env).filter(([key]) => key !== "CLAUDE_AGENT_SDK_VERSION");
+  const environment = [...new Map([...inherited, ...explicit]).entries()].sort(([a], [b]) => a.localeCompare(b));
   return createHash("sha256").update(JSON.stringify([instance.homeDirectory, shadowBase, environment])).digest("hex");
 }
 function decode(raw: RawInstance): StoredProviderInstance | null {

@@ -37,7 +37,7 @@ export function ProjectShareDialog({ project, open, onOpenChange }: { project: E
             <p>{workspace.projectIds === null ? t("继承整个工作区的授权。", "Inherited from workspace-wide access.") : t("当前项目在你的明确授权范围内。", "This project is in your explicit access scope.")}</p>
             <AccessPermissions capabilities={workspace.capabilities} />
           </section>
-          {managing && open ? <ProjectShareManagement key={`${actor?.id}:${workspace.id}:${project.id}`} project={project} onNavigate={close} /> : <p className="text-sm text-muted-foreground">{t("仅具有整个工作区 access.manage 的成员可以查看完整授权、添加成员或发送邀请。你的权限未因此改变；其他成员的权限不会推测展示。", "Only members with unrestricted workspace access.manage can view all grants, add members or send invitations. Your permissions are unchanged; other members’ permissions are not inferred.")}</p>}
+          {managing && open ? <ProjectShareManagement key={`${actor?.id}:${workspace.id}:${project.id}`} project={project} onNavigate={close} /> : <p className="text-sm text-muted-foreground">{t("仅具有整个工作区 access.manage 的成员可以在此查看完整授权、添加成员或从项目入口发送邀请；具备成员规划编辑能力的成员可在成员页邀请同级或访客。你的权限未因此改变；其他成员的权限不会推测展示。", "Only members with unrestricted workspace access.manage can view all grants, add members or send invitations from this project entry; members with planning edit can invite peers or guests from the members page. Your permissions are unchanged; other members’ permissions are not inferred.")}</p>}
         </>}
       </DialogBody>
       <DialogFooter className="flex-col items-stretch border-t">

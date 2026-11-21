@@ -8,6 +8,20 @@
   overflow: hidden;
 }
 
+.boardColumn {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.boardColumn > .page {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+
 .page {
   flex: 1 1 0;
   height: 100%;
@@ -45,6 +59,39 @@
   outline-offset: 2px;
 }
 
+.chatContent {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.chatDock {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chatDockActions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chatDockConversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .detail {
   display: flex;
   flex-direction: column;
@@ -59,15 +106,6 @@
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 20px;
-}
-
-.detailTabs {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
 }
 
 .pageActions {
@@ -230,4 +268,164 @@
   .page [data-pm-header] { padding-right: 12px; }
   .page [data-pm-header] > :first-child { flex-basis: 100%; }
   .notices { padding-inline: 16px; }
+}
+
+.attentionBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-inline-start: 6px;
+  padding-inline: 6px;
+  border: 1px solid color-mix(in srgb, var(--status-error) 55%, var(--border));
+  border-radius: 999px;
+  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 12%, var(--surface));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.cardSlot {
+  position: relative;
+  min-width: 0;
+}
+
+.cardSlot > [data-agent-run] {
+  width: 100%;
+}
+
+.cardSlot[data-selected] > [data-agent-run] {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.cardMenu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  background: var(--surface);
+  opacity: 0;
+  transition: opacity var(--motion-hover) ease-out, color var(--motion-hover) ease-out;
+}
+
+.cardMenu:hover,
+.cardMenu:focus-visible {
+  color: var(--foreground);
+}
+
+.cardMenu:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.cardSlot:hover .cardMenu,
+.cardSlot:focus-within .cardMenu,
+.cardSlot[data-selected] .cardMenu {
+  opacity: 1;
+}
+
+.shortcuts {
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+.shortcutList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.shortcutList > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shortcutList dt {
+  flex: none;
+  min-width: 72px;
+}
+
+.shortcutList dd {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.shortcutList kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+@media (hover: none) {
+  .cardMenu { opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .shortcutList { grid-template-columns: 1fr; }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0 24px 24px;
+  list-style: none;
+}
+
+.listGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.listGroupTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.listGroupTitle span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.listItems {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listItems > li {
+  min-width: 0;
 }

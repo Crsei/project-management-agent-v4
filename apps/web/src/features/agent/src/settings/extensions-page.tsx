@@ -8,7 +8,6 @@ import { BundledSkillsPanel } from "@/components/bundled-skills-panel";
 import { useAgentText } from "../i18n";
 import { useI18n } from "@/lib/i18n-provider";
 import { extensionJson, readExtensionEvents, uploadExtensionZip } from "./extensions-api";
-import { ExtensionNativeSkills } from "./extensions-native-skills";
 import { SettingsNotice, useSettingsGuard } from "./settings-layout";
 import McpExternalAccess from "./mcp-external-access";
 
@@ -37,7 +36,6 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const loadSequence = useRef(0);
   const [transportBusy, setTransportBusy] = useState(0);
   const [panelBusy, setPanelBusy] = useState(false);
-  const [nativeBusy, setNativeBusy] = useState(false);
   const [bundledBusy, setBundledBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
@@ -54,8 +52,8 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const context = !loading && !error ? current?.context : undefined;
   const id = context?.id;
   const ompSelected = context?.apps.includes("omp") === true;
-  const locked = transportBusy > 0 || panelBusy || nativeBusy || bundledBusy || dirty;
-  useEffect(() => { setGuard(transportBusy > 0 || panelBusy || nativeBusy || bundledBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, nativeBusy, bundledBusy, dirty, setGuard]);
+  const locked = transportBusy > 0 || panelBusy || bundledBusy || dirty;
+  useEffect(() => { setGuard(transportBusy > 0 || panelBusy || bundledBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, bundledBusy, dirty, setGuard]);
   const onBundledBusyChange = useCallback((busy: boolean) => {
     setBundledBusy(busy);
     if (busy) setGuard("busy");
@@ -181,8 +179,12 @@ function Management({ view }: { view: "mcp" | "skills" }) {
     setParams(next);
   };
   if (projectScope && !service.actor) return <PmLoginPage />;
+  const providerSetupOnly = !loading && !error && requestedContext === null && requestedProvider === null && !projectScope && !!current && !current.context && current.targets.length === 0;
+  const bundledSkillsPanel = view === "skills"
+    ? <BundledSkillsPanel t={t} ownerKey={`${service.actor?.id ?? "anonymous"}:${service.actorEpoch}:${scopeKey}`} preferredProviderId={requestedProvider ?? undefined} disabled={transportBusy > 0 || panelBusy || dirty || !!context && !!streamError} onBusyChange={onBundledBusyChange} />
+    : undefined;
   return <div className="settings-extensions-page">
-    <section className="settings-extension-context" aria-label={t("扩展配置目标", "Extension configuration target")}>
+    {view === "mcp" && <section className="settings-extension-context" aria-label={t("扩展配置目标", "Extension configuration target")}>
       {(!projectScope || requestedProvider !== null) && current && current.contexts && current.contexts.length > 1 && current.targets.length === 0 && <div className="settings-extension-context-controls">
         <label htmlFor={selectId}><span>{t("配置目标", "Configuration target")}</span><select id={selectId} value={context?.id ?? ""} disabled={locked || loading} onChange={event => selectContext(event.target.value)}>{current.contexts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.apps.join(" / ")}</option>)}</select></label>
       </div>}
@@ -199,20 +201,27 @@ function Management({ view }: { view: "mcp" | "skills" }) {
       {loading && <SettingsNotice kind="loading">{t("正在读取配置…", "Loading configuration…")}</SettingsNotice>}
       {error && <SettingsNotice kind="error" onRetry={() => void load()}>{error}</SettingsNotice>}
       {context?.lastError && <SettingsNotice kind="error">{context.lastError.message}</SettingsNotice>}
-    </section>
+    </section>}
+    {view === "skills" && <>
+      {loading && <SettingsNotice kind="loading">{t("正在读取配置…", "Loading configuration…")}</SettingsNotice>}
+      {error && <SettingsNotice kind="error" onRetry={() => void load()}>{error}</SettingsNotice>}
+      {context?.lastError && <SettingsNotice kind="error">{context.lastError.message}</SettingsNotice>}
+      {current && current.contexts && current.contexts.length > 1 && <div className="settings-extension-context-controls">
+        <label htmlFor={selectId}><span>{t("Agent", "Agent")}</span><select id={selectId} value={context?.id ?? ""} disabled={locked || loading} onChange={event => selectContext(event.target.value)}>{current.contexts.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      </div>}
+    </>}
     {ompSelected && <p className="settings-extension-scope-note" role="note">
       {t(
-        "OMP 配置从当前 Agent 服务所在机器的真实用户 Home 读取，不需要隔离 Home 或重新认证：MCP 读取 OMP agent 目录的 mcp.json；Skills 观测 OMP agent 目录的 skills/ 与 Home/.agents/skills。MCP 主矩阵展示管理库定义，OMP 原生 mcp.json 条目可通过导入预览查看。本页只读取和管理配置，不启动 OMP，因此 OMP 原生会话因 ambient MCP/插件/dotenv 被拒绝时，这里的显示不受影响。OMP Skills 仍是原生目录观测，不代表运行中已加载或可在 Composer 调用；项目内 .agents/skills 属于会话范围，不并入本清单。",
-        "OMP configuration is read from the real user Home of the machine running this Agent service; no isolated Home or re-authentication is required. MCP reads the OMP agent directory's mcp.json; Skills observes the OMP agent directory's skills/ and Home/.agents/skills. The MCP matrix lists managed-library definitions; entries from OMP's native mcp.json are available through the import preview. This page only reads and manages configuration and never starts OMP, so an OMP native session refused for ambient MCP/plugin/dotenv sources does not affect what is shown here. OMP Skills remain native-directory observations, not a claim of runtime loading or Composer callability; project-local .agents/skills belong to a session scope and are not merged into this inventory.",
+        "OMP 配置从当前 Agent 服务所在机器的真实用户 Home 读取：MCP 读取 OMP agent 目录的 mcp.json；Skills 观测 OMP agent 目录的 skills/ 与 Home/.agents/skills。MCP 主矩阵展示管理库定义，OMP 原生 mcp.json 条目可通过导入预览查看。本页只读取和管理配置，不启动 OMP；OMP 原生会话启动时也会读取同一 Home 的 ambient MCP/插件/dotenv 配置，本页显示不代表运行中已加载。OMP Skills 仍是原生目录观测，不代表可在 Composer 调用；项目内 .agents/skills 属于会话范围，不并入本清单。",
+        "OMP configuration is read from the real user Home of the machine running this Agent service. MCP reads the OMP agent directory's mcp.json; Skills observes the OMP agent directory's skills/ and Home/.agents/skills. The MCP matrix lists managed-library definitions; entries from OMP's native mcp.json are available through the import preview. This page only reads and manages configuration and never starts OMP; an OMP native session also reads ambient MCP/plugin/dotenv configuration from the same Home at startup, so this view does not prove what is loaded at runtime. OMP Skills remain native-directory observations, not a claim of Composer callability; project-local .agents/skills belong to a session scope and are not merged into this list.",
       )}
     </p>}
-    {!loading && !error && requestedContext === null && requestedProvider === null && !projectScope && current && !current.context && current.targets.length === 0 && <OpenHandsProviderSetupSurface view={view} locale={locale} onConfigureProvider={() => navigate("/agent/settings/providers")} />}
+    {providerSetupOnly && <OpenHandsProviderSetupSurface view={view} locale={locale} onConfigureProvider={() => navigate("/agent/settings/providers")} />}
     {context && streamError && <SettingsNotice kind="error" onRetry={() => setStreamVersion(version => version + 1)}>{streamError}</SettingsNotice>}
-    {view === "skills" && <BundledSkillsPanel t={t} ownerKey={`${service.actor?.id ?? "anonymous"}:${service.actorEpoch}:${scopeKey}`} preferredProviderId={requestedProvider ?? undefined} disabled={transportBusy > 0 || panelBusy || nativeBusy || dirty || !!context && !!streamError} onBusyChange={onBundledBusyChange} />}
+    {bundledSkillsPanel && !context && !loading && bundledSkillsPanel}
     <div className="settings-extensions-page" inert={bundledBusy || undefined}>
-      {context?.kind === "native" && view === "skills" && <ExtensionNativeSkills key={`native-skills:${scopeKey}:${id}`} invoke={invoke} subscribe={subscribe} disabled={locked || !!streamError} onBusyChange={setNativeBusy} />}
       {context && <CcSwitchManagement key={`management:${scopeKey}:${id}`} context={context} contexts={[context]} locale={locale} invoke={invoke} upload={upload} subscribe={subscribe} onDirtyChange={setDirty}>
-        <div inert={nativeBusy || undefined}><OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} /></div>
+        <OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} skillsDiscoveryLeading={bundledSkillsPanel} />
       </CcSwitchManagement>}
     </div>
   </div>;

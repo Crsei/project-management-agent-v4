@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { applyStudioAssistantPatch, clearStudioRecovery, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, type StudioDraftState, type StudioPending } from "./studio-setup.ts";
+import { applyStudioAssistantPatch, clearStudioRecovery, cronFor, emptyStudioConfig, frequencyOf, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, type StudioDraftState, type StudioPending } from "./studio-setup.ts";
 import type { AutomationIntegrationConnection } from "../../../../../../../../packages/contracts/src/automation-integrations.ts";
-import type { StudioCapabilities, StudioConfig, StudioNativeTemplateId } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
+import type { StudioCapabilities, StudioConfig } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
 import type { ExecutionSelection } from "../../../../../../../../packages/agent-contracts/src/execution.ts";
 
 function installStorage(t: TestContext) {
@@ -39,32 +39,24 @@ test("test payload and filters must be JSON objects", () => {
   assert.deepEqual(parseStudioObject('{"repository":{"full_name":"org/repo"}}'), { repository: { full_name: "org/repo" } });
 });
 
-test("source bundle values retain arrays/numbers while expression literals are escaped", () => {
-  const values = { repositories: ["org/a", "org/b"], maxNewPerRun: 2, triggerReviewer: "a'b\\c" };
-  assert.deepEqual(interpolateStudioTemplate({ repos: "{{form.repositories}}", limit: "{{form.maxNewPerRun}}" }, values), { repos: ["org/a", "org/b"], limit: 2 });
-  assert.equal(interpolateStudioExpression("contains({{form.repositories}}, repository.full_name)", values), "contains(['org/a', 'org/b'], repository.full_name)");
-  assert.equal(interpolateStudioExpression("review.user.login == '{{form.triggerReviewer}}'", values), "review.user.login == 'a\\'b\\\\c'");
-});
-
 test("assistant updates protect nested native arguments and edits made after preview", () => {
   const config = emptyStudioConfig("PRJ-001");
   config.name = "My name";
-  config.action = { kind: "template", templateId: "github-issue-to-pr", arguments: { triggerLabel: "mine", branchPrefix: "old" }, providerInstanceId: "provider-a", model: "real-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
-  const patch = { name: "AI name", description: "AI description", action: { ...config.action, arguments: { triggerLabel: "AI label", branchPrefix: "new" }, providerInstanceId: "provider-b" } };
-  const merged = applyStudioAssistantPatch(config, patch, new Set(["name", "action.arguments.triggerLabel", "action.providerInstanceId"]));
+  config.action = { kind: "template", templateId: "pm-requirement-review", arguments: { instructions: "old" }, providerInstanceId: "provider-a", model: "real-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
+  const patch = { name: "AI name", description: "AI description", action: { ...config.action, arguments: { instructions: "new" }, providerInstanceId: "provider-b" } };
+  const merged = applyStudioAssistantPatch(config, patch, new Set(["name", "action.arguments.instructions", "action.providerInstanceId"]));
   assert.equal(merged.name, "My name");
   assert.equal(merged.description, "AI description");
   assert.equal(merged.action.kind, "template");
   if (merged.action.kind === "template") {
-    assert.equal(merged.action.arguments.triggerLabel, "mine");
-    assert.equal(merged.action.arguments.branchPrefix, "new");
+    assert.equal(merged.action.arguments.instructions, "old");
     assert.equal(merged.action.providerInstanceId, "provider-a");
   }
   const afterUserEdit = { ...merged, description: "Typed after preview" };
   assert.equal(applyStudioAssistantPatch(afterUserEdit, merged, new Set(["description"])).description, "Typed after preview");
-  const switched = applyStudioAssistantPatch(config, { action: { kind: "script", files: [], content: "print(1)", setup: "", entrypoint: "python3 main.py", bundleRef: null, repositories: [], plugins: [], timeoutSeconds: 600 } }, new Set(["action.arguments.triggerLabel"]));
+  const switched = applyStudioAssistantPatch(config, { action: { kind: "script", files: [], content: "print(1)", setup: "", entrypoint: "python3 main.py", bundleRef: null, repositories: [], plugins: [], timeoutSeconds: 600 } }, new Set(["action.arguments.instructions"]));
   assert.equal(switched.action.kind, "template");
-  assert.deepEqual(config.action.arguments, { triggerLabel: "mine", branchPrefix: "old" });
+  assert.deepEqual(config.action.arguments, { instructions: "old" });
 });
 
 test("membership cutovers redact private drafts but retain original unknown request identity", t => {
@@ -145,17 +137,15 @@ test("selected Provider tool limits do not disable ordinary model-only prompts",
   assert.equal(studioProviderToolReadiness(config, null).available, false);
 });
 
-test("workspace-tool limits apply to repository templates, not news or deterministic native workflows", () => {
+test("no-tools analysis limits apply only to semantic PM templates", () => {
   const capabilities: StudioCapabilities = {
     canWrite: true, actions: [], providers: [], repositories: [], plugins: [], scheduler: { authority: "worker", ready: true, reason: null },
-    features: [{ id: "provider:model-only:templateWorkspace", available: false, reason: "This driver has no scoped repository workspace adapter." }],
+    features: [{ id: "provider:model-only:pmAnalysis", available: false, reason: "This driver has no enforced no-tools adapter." }],
   };
-  const config: StudioConfig = { ...emptyStudioConfig("PRJ-001"), action: { kind: "template", templateId: "github-issue-to-pr", arguments: {}, providerInstanceId: "model-only", model: "configured-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 } };
-  assert.equal(studioProviderToolReadiness(config, capabilities).reason, "This driver has no scoped repository workspace adapter.");
+  const config: StudioConfig = { ...emptyStudioConfig("PRJ-001"), action: { kind: "template", templateId: "pm-requirement-review", arguments: {}, providerInstanceId: "model-only", model: "configured-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 } };
+  assert.equal(studioProviderToolReadiness(config, capabilities).reason, "This driver has no enforced no-tools adapter.");
   if (config.action.kind !== "template") throw new Error("Expected template test configuration");
-  const news = { ...config, action: { ...config.action, templateId: "news-digest" as const } };
-  assert.deepEqual(studioProviderToolReadiness(news, capabilities), { featureId: null, available: true, reason: null });
-  const deterministic = { ...config, action: { ...config.action, templateId: "github-delivery-watchdog" as const, providerInstanceId: null, model: null, options: {} } };
+  const deterministic = { ...config, action: { ...config.action, templateId: "pm-stalled-tasks" as const, providerInstanceId: null, model: null, options: {} } };
   assert.deepEqual(studioProviderToolReadiness(deterministic, capabilities), { featureId: null, available: true, reason: null });
 });
 
@@ -177,22 +167,8 @@ test("fresh shortcut defaults preserve explicit project selection, draft reload 
   assert.equal(readStudioDraft(key)?.config.quickAccess, false);
 });
 
-test("repository-producing native templates require an independent v2 Agent Workspace before enable or test", () => {
-  const ids: StudioNativeTemplateId[] = ["github-pr-reviewer", "github-issue-to-pr", "github-issue-triage", "github-agents-md-maintainer", "gitlab-issue-to-mr"];
-  const executionSelection: ExecutionSelection = { version: 2, agentWorkspaceId: "independent-folder", agentWorkspaceRevision: 3 };
-  for (const templateId of ids) {
-    const action: StudioConfig["action"] = { kind: "template", templateId, arguments: {}, providerInstanceId: "configured-provider", model: "configured-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
-    assert.equal(studioExecutionEnvironmentIssue(action), "agent-workspace-required", templateId);
-    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection }), null, templateId);
-    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null } }), "agent-workspace-required", templateId);
-    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { ...executionSelection, agentWorkspaceRevision: null } }), "agent-workspace-required", templateId);
-    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { ...executionSelection, agentWorkspaceRevision: 0 } }), "agent-workspace-required", templateId);
-  }
-  assert.deepEqual(executionSelection, { version: 2, agentWorkspaceId: "independent-folder", agentWorkspaceRevision: 3 });
-});
-
-test("API-only PM repository metadata and non-repository templates remain chat-only", () => {
-  for (const templateId of ["news-digest", "github-delivery-watchdog", "github-stale-ci-pr-closer", "pm-pr-acceptance-coverage", "pm-project-digest"] as const) {
+test("PM-native templates stay chat-only while scripts require an explicit v2 Agent Workspace", () => {
+  for (const templateId of ["pm-pr-acceptance-coverage", "pm-project-digest"] as const) {
     const action: StudioConfig["action"] = { kind: "template", templateId, arguments: { repository: { provider: "github", repository: "owner/repo", ref: null, pullRequestNumber: 12 } }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
     assert.equal(studioExecutionEnvironmentIssue(action), null, templateId);
   }

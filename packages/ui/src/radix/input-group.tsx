@@ -8,7 +8,7 @@ export function InputGroup({ className, ...props }: ComponentProps<"div">) {
     <div
       {...props}
       className={cn(
-        "flex min-w-0 items-center gap-2 rounded-control border bg-surface px-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 has-[[aria-invalid=true]]:border-destructive",
+        "flex min-w-0 items-center gap-2 rounded-control border bg-surface px-2 shadow-[inset_0_1px_0_var(--field-rim)] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 has-[[aria-invalid=true]]:border-destructive",
         className,
       )}
     />
@@ -36,7 +36,7 @@ export function InputGroupInput({
     <Input
       {...props}
       className={cn(
-        "border-0 bg-transparent px-0 focus-visible:ring-0",
+        "border-0 bg-transparent px-0 shadow-none focus-visible:ring-0",
         className,
       )}
     />
@@ -50,7 +50,7 @@ export function InputGroupTextarea({
     <Textarea
       {...props}
       className={cn(
-        "border-0 bg-transparent px-0 focus-visible:ring-0",
+        "border-0 bg-transparent px-0 shadow-none focus-visible:ring-0",
         className,
       )}
     />

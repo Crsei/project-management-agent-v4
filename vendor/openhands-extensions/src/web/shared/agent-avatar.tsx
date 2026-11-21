@@ -1,5 +1,5 @@
 import type { AppId } from "@pm/cc-switch-ui";
-import { APP_DISPLAY_NAME } from "@pm/cc-switch-ui";
+import { AppGlyph, APP_DISPLAY_NAME } from "@pm/cc-switch-ui";
 import { cn } from "@pm/openhands-source/utils/utils";
 
 interface Appearance {
@@ -46,6 +46,7 @@ const SIZES = {
   md: "oh-agent-avatar-md",
   lg: "oh-agent-avatar-lg",
 } as const;
+const GLYPH_SIZES = { xs: 12, sm: 14, md: 20, lg: 28 } as const;
 
 export function AgentAvatar({ app, size = "sm", className }: {
   app: string;
@@ -54,13 +55,14 @@ export function AgentAvatar({ app, size = "sm", className }: {
 }) {
   const appearance = appearanceFor(app);
   const name = APP_DISPLAY_NAME[app as AppId] ?? app;
+  const known = Object.hasOwn(APP_DISPLAY_NAME, app);
   return <span
     title={name}
     aria-label={name}
     data-agent={app}
-    className={cn("oh-agent-avatar", SIZES[size], className)}
-    style={{ backgroundColor: appearance.color, color: appearance.foreground }}
-  >{appearance.short}</span>;
+    className={cn("oh-agent-avatar", SIZES[size], known && "oh-agent-avatar-brand", className)}
+    style={known ? undefined : { backgroundColor: appearance.color, color: appearance.foreground }}
+  >{known ? <AppGlyph app={app as AppId} size={GLYPH_SIZES[size]} /> : appearance.short}</span>;
 }
 
 export function AgentStack({ appIds, size = "sm", max = 4, className, emptyLabel }: {

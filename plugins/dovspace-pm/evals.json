@@ -5,7 +5,7 @@
     {
       "id": "plugin-cli-unknown-visibility",
       "skill": "project-management",
-      "prompt": "仅给操作建议，不执行工具。我们使用 pnpm pm CLI，没有 MCP。现有私有请求文件 /private/original.json 保存已派发写入的完整 operationId/name/target/arguments；当时超时，现在同一身份的 plugin result 退出 0，结构化结果 status=unknown、visibility=visible、result=null。同事建议将 name 改成 pm_get_operation_result 再 plugin call，或换 profile 重写。另一个旧操作 status=succeeded 但 visibility=redacted，旧缓存含正文。怎样恢复、判断能否继续下游并汇报？也说明首次发现工具/工作区和后续 visible+succeeded 结果的成功门槛。",
+      "prompt": "仅给操作建议，不执行工具。我们使用 pnpm run pm CLI，没有 MCP。现有私有请求文件 /private/original.json 保存已派发写入的完整 operationId/name/target/arguments；当时超时，现在同一身份的 plugin result 退出 0，结构化结果 status=unknown、visibility=visible、result=null。同事建议将 name 改成 pm_get_operation_result 再 plugin call，或换 profile 重写。另一个旧操作 status=succeeded 但 visibility=redacted，旧缓存含正文。怎样恢复、判断能否继续下游并汇报？也说明首次发现工具/工作区和后续 visible+succeeded 结果的成功门槛。",
       "must": ["通过 plugin tools/workspaces 发现能力和范围，而非伪造业务调用", "保留原文件、operationId、身份和 origin，用 plugin result --file 核对原操作", "unknown 停止下游，不由退出 0 推断成功", "使用私有结果文件和 plugin check，本地检查 visible、succeeded、result 存在、error=null 四项", "保留旧成功事实但不展示被遮蔽正文"],
       "mustNot": ["把 gateway 控制工具作为 CLI 业务 name", "修改原请求、换身份或新键重新写入", "恢复或引用撤权后的缓存正文", "声称已核对真实操作"]
     },

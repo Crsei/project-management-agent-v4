@@ -164,7 +164,7 @@ export default function ProvidersPage() {
   </section> : null;
 
   return <>
-    <div className="provider-page-heading"><h2>{t("提供商", "Providers")}</h2><Button variant="ghost" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}><RefreshCw aria-hidden="true" className={loading ? "animate-spin" : undefined} />{t("刷新状态", "Refresh status")}</Button></div>
+    <div className="provider-page-heading"><h2>{t("本机 Provider", "Local providers")}</h2><Button variant="ghost" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}><RefreshCw aria-hidden="true" className={loading ? "animate-spin" : undefined} />{t("刷新状态", "Refresh status")}</Button></div>
     <ProviderHealthSetting />
     <p>{t("此处显示可配置的提供商。启用、原生就绪和账号认证分别核验；查看设置不会选择会话模型，请在会话中明确选择。", "These are available provider configurations. Enabling, native readiness, and account authentication are checked separately; viewing settings does not select a conversation model. Choose the model explicitly in your conversation.")}</p>
     {error && <div role="alert" className="provider-feedback provider-feedback-error"><span>{error}</span><Button variant="outline" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}>{t("重试", "Retry")}</Button></div>}

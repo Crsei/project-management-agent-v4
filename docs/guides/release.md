@@ -73,17 +73,21 @@ gh workflow run desktop.yml --ref main \
 
 ### 先暂存，再显式发布
 
-根／桌面 `package.json`、安装器、清单、tag 必须使用同一个版本；支持 `X.Y.Z-preview.N` 与稳定 `X.Y.Z`。先提交、推送并建立准确 tag，等待该 SHA 的完整 `Repository checks` push run 成功，再执行：
+根／桌面 `package.json`、安装器、清单、tag 必须使用同一个版本；支持 `X.Y.Z-preview.N` 与稳定 `X.Y.Z`。先提交、推送并建立准确 tag，等待该 SHA 的完整 `Repository checks` push run 成功；再用 `release_action=none` 完成准确 native build，并准备下述已审阅的 evaluation material。draft／publish 复用这个成功 run／attempt 的原生成品，**不重新构建已审阅字节**：
 
 ```sh
 gh workflow run desktop.yml --ref "v$VERSION" \
   -f distribution=unsigned -f windows_only=true \
   -f install_e2e=false -f release_action=draft \
   -f release_channel=preview -f release_tag="v$VERSION" \
-  -f expected_sha="$SHA" -f ci_run_id="$CI_RUN"
+  -f expected_sha="$SHA" -f ci_run_id="$CI_RUN" \
+  -f native_run_id="$NATIVE_RUN" -f native_run_attempt="$NATIVE_ATTEMPT" \
+  -f evaluation_material_run_id="$EVALUATION_RUN" \
+  -f evaluation_material_artifact="$EVALUATION_ARTIFACT" \
+  -f evaluation_material_sha256="$EVALUATION_MATERIAL_SHA256"
 ```
 
-`VERSION`、`SHA`、`CI_RUN` 必须替换为本次准确版本、40 位提交和成功 CI run。稳定版需 `distribution=signed`、`release_channel=stable`；signed 的全部目标发布须完成 Windows、macOS x64／arm64 的原生成品检查与签名门禁。
+`VERSION`、`SHA`、`CI_RUN` 必须替换为本次准确版本、40 位提交和成功 CI run。`NATIVE_RUN`／`NATIVE_ATTEMPT` 指向同一候选的完整成功桌面构建；`EVALUATION_RUN`／`EVALUATION_ARTIFACT` 指向同仓库受控 Actions 材料，`EVALUATION_MATERIAL_SHA256` 独立钉住其原始 material 文件字节。不能从下载包自取一个摘要充当授权。稳定版需 `distribution=signed`、`release_channel=stable`；signed 的全部目标发布须完成 Windows、macOS x64／arm64 的原生成品检查与签名门禁。
 
 在检查完完整 draft 后，用相同来源参数再次 dispatch，改为 `release_action=publish`。已完整暂存且来源／资产身份一致的 draft 可直接复验并提升可见性，不重新构建或替换；已发布且准确一致的版本只读核对，不覆盖。冲突、不完整或来源未知的旧 draft 失败关闭，保留现场供人工核对。
 
@@ -93,6 +97,19 @@ gh workflow run desktop.yml --ref "v$VERSION" \
 2. 完整目标集合、相同公开源码字节、准确 native run／attempt、最终发行文件检查与 native payload smoke；Actions artifact 不是安装／GUI 验收。
 3. 原有 `--release` 授权、来源、OSV、签名及材料门禁。**四项 OPEN 仍阻塞，包括 unsigned preview；不提供跳过开关。**
 4. 先创建 draft，上传完整材料，核对远端资产名、数量、大小与 SHA256，再在改变可见性前重复门禁。上传失败保持不可见；重试不删除／覆盖已有资产。
+5. Evaluation 材料、独立预登记的采集公钥与实验、当前默认分支的批准／撤销记录，以及精确候选的原始签名执行证据。创建 draft、上传和改变可见性前均重新验证；缺失材料不会退回旧发布流程。
+
+### Evaluation 发布证据
+
+离线入口为 `bench evaluation release-decide`／`release-validate`，用法见 [Benchmark 指南](../../benchmarks/dovspace/README.md#evaluation-evidence-and-feedback-loop)。它们只生成、核对决定，不调用 GitHub 或部署服务。
+
+- **先登记再执行。** 来源控制中的 registry 独立钉住策略、实验设计、可信 Ed25519 公钥与 ledger ID。真实 runner 在模型调用前登记 admission，以宿主私钥签名 admission／封存结果；闭合 ledger 保留失败、重复、未封存和中断尝试。私钥必须在 Agent 挂载与发布材料之外；包内自带的公钥、`producer` 字段或哈希不能自证可信。
+- **准确的数据与版本。** 新模型运行使用已登记的 `canonical-task` 成员和准确 task／fixture／criterion 合同；旧 trace 的 `frozen-reproduction` pass/fail 标签不能代替新任务期望。候选／基线、模型控制、evaluator、校准、完整分母、cohort、成本／未知量、来源时效和撤销状态均参与判断。原始完整失败是有效负证据，不是被丢掉的重试；合成、导入声称、离线 regrade 或缺少安全观察的记录不能放行真实质量。
+- **产物绑定。** 桌面公开源码 inventory 与 Benchmark 的服务器源码闭包分别校验，并核对实际投影关系；不能把两种不同范围的摘要直接当成相同。准确 native run 的原始发布字节用于最终发行，不用“同一提交重新构建”替代原审核产物。
+- **私有材料。** Actions 下载会改变文件权限；工作流只从受控下载树读取普通单链接文件，在新的 0700／0600 私有树中重新暂存，再按独立摘要与签名验证。拒绝符号链接、硬链接、特殊文件和已有目标；不通过放宽证据读取权限解决下载格式差异。
+- **批准与例外。** registry 默认没有预登记或批准，不会自动制造绿色决定。批准绑定精确材料和 ledger closure 摘要；当前撤销、到期、数据删除或新增未决尝试都会阻止旧结论继续放行。有限期例外不能绕过权限、安全、来源和许可门禁。
+
+准备 evaluation artifact、真实模型预算、可信采集账号、默认分支批准及 GitHub dispatch 都须各自授权。本地校验或合成正反例通过不代表云端发布、真实模型效果或线上观察已经通过。发布后观察见 [Agent 指南](agent-chat.md#evaluation-元数据观察与发布后回顾)：观察决定只记录证据／建议，不自动部署或回退。
 
 ### 更新材料
 

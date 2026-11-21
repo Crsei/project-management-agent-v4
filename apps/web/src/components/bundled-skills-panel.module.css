@@ -1,29 +1,57 @@
+/* Host tokens hold colors; the cc-switch portal shadows the same names with HSL
+   channel triples for its own utilities. Bridge the panel subtree to the source
+   hex slots so both the panel and the controls it renders stay readable. */
+:global(.cc-switch-web) .panel {
+  --background: var(--bg-card, #ffffff);
+  --foreground: var(--text-1, #18181b);
+  --muted: var(--bg-subtle, #efeff2);
+  --muted-foreground: var(--text-2, #52525b);
+  --primary: var(--text-1, #18181b);
+  --primary-foreground: var(--bg-card, #ffffff);
+  --border: var(--border-strong, #cfcfd6);
+  --ring: var(--action-bg, #f97316);
+  --destructive: var(--danger-text, #b91c1c);
+}
+
+/* The cc-switch portal applies unprefixed preflight rules such as
+   `.cc-switch-web p { margin: 0 }`. Keep every panel rule at two-class
+   specificity so the same markup renders identically in both hosts. */
 .panel { min-width: 0; border: 1px solid var(--border); border-radius: 12px; padding: 16px; color: var(--foreground); }
-.heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.heading h2 { margin: 0; font-size: 15px; font-weight: 600; }
-.panel p { margin: 10px 0; font-size: 12px; line-height: 1.65; color: var(--muted-foreground); overflow-wrap: anywhere; }
-.panel code { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
-.version { padding: 8px 10px; border-radius: 6px; background: var(--muted); }
-.provider { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 500; }
-.provider select { min-width: 0; max-width: 100%; width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--background); color: var(--foreground); font: inherit; }
-.provider select:focus-visible, .skills input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.provider select:disabled { opacity: .6; }
-.skills { min-width: 0; margin: 16px 0; padding: 0; border: 0; }
-.skills legend { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
-.skills > ul { list-style: none; padding: 0; margin: 8px 0; max-height: 450px; overflow-y: auto; overscroll-behavior: contain; }
-.skills > ul > li { min-width: 0; border-top: 1px solid var(--border); padding: 12px 2px; }
-.skillHeading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 13px; }
-.skillHeading input { align-self: center; margin: 0; accent-color: var(--primary); }
-.skillHeading code { color: var(--muted-foreground); }
-.source { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 8px 0; font-size: 11px; line-height: 1.6; }
-.source dt { color: var(--muted-foreground); }
-.source dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.panel .heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.panel .heading h2 { margin: 0; font-size: 15px; font-weight: 600; }
+/* Panel-owned controls: the same markup renders inside the host page and the
+   cc-switch portal, where the source resets would clear native button styles. */
+.panel .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--control-radius, 6px); background: var(--surface, var(--background)); color: var(--foreground); font: inherit; font-size: 13px; font-weight: 500; line-height: 20px; cursor: pointer; transition: background-color .15s ease, border-color .15s ease, opacity .15s ease; }
+.panel .button:hover:not(:disabled) { border-color: var(--border-hover, var(--border)); background: var(--surface-hover, var(--muted)); }
+.panel .button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.panel .button:disabled { opacity: .45; cursor: not-allowed; }
+.panel .buttonGhost { border-color: transparent; background: transparent; }
+.panel .buttonGhost:hover:not(:disabled) { background: var(--surface-hover, var(--muted)); }
+.panel .buttonPrimary { border-color: transparent; background: var(--primary); color: var(--primary-foreground); }
+.panel .buttonPrimary:hover:not(:disabled) { background: var(--primary); filter: brightness(.94); }
+.panel.panel p { margin: 10px 0; font-size: 12px; line-height: 1.65; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.panel.panel code { font-size: 11px; overflow-wrap: anywhere; word-break: break-word; }
+.panel .version { padding: 8px 10px; border-radius: 6px; background: var(--muted); }
+.panel .provider { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 500; }
+.panel .provider select { min-width: 0; max-width: 100%; width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--background); color: var(--foreground); font: inherit; }
+.panel .provider select:focus-visible, .panel .skills input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.panel .provider select:disabled { opacity: .6; }
+.panel .skills { min-width: 0; margin: 16px 0; padding: 0; border: 0; }
+.panel .skills legend { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+.panel .skills > ul { list-style: none; padding: 0; margin: 8px 0; max-height: 450px; overflow-y: auto; overscroll-behavior: contain; }
+.panel .skills > ul > li { min-width: 0; border-top: 1px solid var(--border); padding: 12px 2px; }
+.panel .skillHeading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.panel .skillHeading input { align-self: center; margin: 0; accent-color: var(--primary); }
+.panel .skillHeading code { color: var(--muted-foreground); }
+.panel .source { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 8px 0; font-size: 11px; line-height: 1.6; }
+.panel .source dt { color: var(--muted-foreground); }
+.panel .source dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .panel .status { font-weight: 600; color: var(--foreground); }
-.panel .error, .status[data-status="conflict"] { color: var(--destructive); }
+.panel .error, .panel .status[data-status="conflict"] { color: var(--destructive); }
 .panel .warning { color: var(--foreground); border-left: 2px solid var(--border); padding-left: 8px; }
-.outcome { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; }
-.outcome h3 { font-size: 13px; font-weight: 600; margin: 0; }
-.outcome ul { margin: 8px 0; padding-left: 18px; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
-.confirm { border-top: 1px solid var(--border); padding-top: 8px; }
-.confirm button { max-width: 100%; height: auto; min-height: 36px; white-space: normal; }
-@media (max-width: 480px) { .panel { padding: 12px; } .source { grid-template-columns: minmax(0, 1fr); gap: 2px; } .source dd { margin-bottom: 6px; } }
+.panel .outcome { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.panel .outcome h3 { font-size: 13px; font-weight: 600; margin: 0; }
+.panel .outcome ul { margin: 8px 0; padding-left: 18px; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.panel .confirm { border-top: 1px solid var(--border); padding-top: 8px; }
+.panel .confirm button { max-width: 100%; height: auto; min-height: 36px; white-space: normal; }
+@media (max-width: 480px) { .panel { padding: 12px; } .panel .source { grid-template-columns: minmax(0, 1fr); gap: 2px; } .panel .source dd { margin-bottom: 6px; } }

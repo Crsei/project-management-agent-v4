@@ -59,8 +59,17 @@ export const makeOmpTextGeneration = Effect.fn("makeOmpTextGeneration")(function
       let assistantFailure = false;
       while (true) {
         const event = yield* Queue.take(connection.events);
-        if (event.type === "extension_ui_request" || event.type === "host_tool_call") {
+        if (event.type === "host_tool_call") {
           return yield* new TextGenerationError({ operation, detail: "Tool-free OMP generation unexpectedly requested host interaction." });
+        }
+        if (event.type === "extension_ui_request") {
+          // OMP reports built-in UI updates (autoresearch widget, status, title) as
+          // extension UI requests. They need no answer and must not fail a tool-free
+          // generation; only an actual blocking prompt would.
+          const method = ompRecordString(event, "method");
+          if (!["setStatus", "setWidget", "setTitle", "set_editor_text", "open_url"].includes(method ?? "")) {
+            return yield* new TextGenerationError({ operation, detail: "Tool-free OMP generation unexpectedly requested host interaction." });
+          }
         }
         if (event.type === "message_end") {
           const message = ompRecordField(event, "message");

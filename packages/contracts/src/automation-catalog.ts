@@ -1,9 +1,8 @@
 import type { PmAutomationTemplateId } from './automation-pm.ts';
 
 /**
- * Host-owned catalog DTOs. Shape adapted from the pinned OpenHands automation
- * interface (MIT, vendor/openhands-automations/LICENSE.extensions).
- * Catalog manifests, bundle bytes and source assembly belong to automation-resources.
+ * Host-owned catalog DTOs for PM-native automation templates.
+ * Catalog data and argument validation belong to automation-resources.
  */
 export interface AutomationCatalogField {
   type: 'text' | 'textarea' | 'select' | 'number' | 'cron' | 'timezone' | 'repo-picker' | 'llm-profile' | 'event-source' | 'event-type' | 'plugin-sources' | 'tarball-upload';
@@ -36,7 +35,7 @@ export interface AutomationCatalogTemplate {
   skill?: string;
   exampleImplementation: string;
   impact?: { basis: 'completed-runs'; one: string; other: string };
-  source?: 'openhands' | 'pm';
+  source?: 'pm';
   sourceCategory?: string;
   maturity?: 'stable' | 'beta';
   recommended?: boolean;

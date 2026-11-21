@@ -5,7 +5,7 @@ import { Workspace, WorkspaceError, type WorkspaceMutationGuard } from '../../..
 import { descriptionOf, inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../packages/pm-markdown/index.ts';
 import { MAX_WORK_ITEM_ESTIMATE_POINTS, ProtocolError, workflowFor, type FileRecord, type UnsupportedFile, type WorkflowDefinition } from '../../../../packages/pm-schema/index.ts';
 import { DomainError, type Actor, type Command, type CommandReceipt, type Entity } from '../../../../packages/domain/src/core.ts';
-import { authorizeCoreScope, type CoreScope } from './core-routes.ts';
+import { authorizeCoreScope, type CoreScope } from './routes/core-routes.ts';
 import { dashboardPlanningCommands } from '../../../../packages/application/src/dashboard-planning.ts';
 import { dashboardSprintsCommands } from '../../../../packages/application/src/dashboard-sprints.ts';
 import { executeDashboardPlanningCoreCommand, isDashboardPlanningCoreCommand } from './dashboard-planning-core-adapter.ts';

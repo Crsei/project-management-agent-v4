@@ -8,6 +8,9 @@ import { getTaskDefinition } from '../tasks/index.ts';
 import { evaluateFairness, parseModelRun, summarizeRuns, verifiedSuccess, type OutcomeSummary } from './index.ts';
 import { prepareReportDirectory, readReportJson, writeReportFile } from './files.ts';
 import { summarizeMetric, type MetricSummary } from './statistics.ts';
+import { reviewLegacyRun } from '../evaluation/review-legacy.ts';
+import { createEvaluationReview, evaluationDigest, type AttemptReview, type EvaluationReview, type ReviewRequest } from '../evaluation/review.ts';
+import type { TrustedReviewOptions } from '../evaluation/review-provenance.ts';
 
 export interface PairedEffect { completePairs: number; missingPairs: number; taskClusters: number; meanDelta: number | null; relativeImprovement: number | null; descriptiveTaskBootstrap95: { lower: number; upper: number } | null }
 export interface StudyTelemetrySummary {
@@ -27,6 +30,8 @@ export interface StudySummary {
   telemetry: Record<StudyVariant, StudyTelemetrySummary>;
   targetedSafetyEvidence: { status: 'unverified'; declaredArtifactSha256: string | null; semanticCoverage: null; reason: string };
   caveats: string[]; runs: RunResult[];
+  reviews: AttemptReview[];
+  evaluationReview: EvaluationReview | null;
 }
 
 /** Exact paired identity and per-variant original fairness; only proved treatment bytes may differ. */
@@ -202,6 +207,7 @@ export function aggregateStudy(runs: readonly RunResult[], input: unknown, sourc
     targetedSafetyEvidence: { status: 'unverified', declaredArtifactSha256: manifest.safetyEvidence?.artifactSha256 ?? null, semanticCoverage: null, reason: 'No recoverable candidate-bound targeted-safety artifact contents are verified by this reporter. A declared digest is only a reference, never safety clearance. Self-declared passed/cases/semanticCoverage fields are rejected. Real independently graded run safety/replay failures still veto.' },
     noninferiority: { status: 'not-proven', margin: 0.05, reason: 'Descriptive paired task-cluster intervals do not establish a one-sided 95% noninferiority bound. Tiny or exploratory runs cannot establish noninferiority; retain the baseline absent independent confirmation and complete targeted safety evidence.' },
     variants, effects, coverage,
+    reviews: runs.map(reviewLegacyRun), evaluationReview: null,
     caveats: [
       'Every admitted infrastructure/provider/grader failure remains in the denominator. Missing pair/evidence invalidates comparison, never silently drops a failure.',
       'Report fixtures and controlled protocol observations are not model evidence. No semantic comprehension or model advantage is inferred from response/request bytes.',
@@ -219,7 +225,7 @@ function diagnosticText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/[\\`|*_[\]#()]/g, '\\$&').replace(/[\r\n]+/g, ' ');
 }
 
-export async function writeStudyReport(runs: readonly RunResult[], input: unknown, directory: string): Promise<StudySummary> {
+export async function writeStudyReport(runs: readonly RunResult[], input: unknown, directory: string, evaluation?: { request: ReviewRequest; registryRoot: string; authority?: TrustedReviewOptions }): Promise<StudySummary> {
   const manifest = StudyManifestSchema.parse(input);
   let proof: StudySourceProof | null = null, sourceError: string | null = null;
   if (manifest.evidenceKind === 'model-study') {
@@ -228,6 +234,18 @@ export async function writeStudyReport(runs: readonly RunResult[], input: unknow
   }
   const summary = aggregateStudy(runs, manifest, proof);
   if (sourceError) summary.fairness.issues.push(sourceError);
+  if (evaluation) {
+    const review = await createEvaluationReview(evaluation.request, evaluation.registryRoot, evaluation.authority);
+    if (runs.some(run => review.attempts.filter(attempt => attempt.runId === run.runId && attempt.versions.taskVersion === run.taskVersion
+      && attempt.versions.modelConfigSha256 === run.reproducibility.modelConfigHash && attempt.versions.resultCanonicalSha256 === evaluationDigest(run)).length !== 1)) throw new Error('Versioned study review must preserve every exact original admitted run/result/version');
+    if (review.attempts.length !== runs.length) summary.fairness.issues.push('Signed ledger includes additional incomplete/omitted admissions; full denominators are retained in evaluationReview');
+    summary.evaluationReview = review; summary.reviews = review.attempts;
+    // Structured review adds evidence, not a retain/release authority or a new interpretation of synthetic fixtures.
+    if (!review.comparable) {
+      summary.fairness.valid = false;
+      summary.fairness.issues.push(...review.comparabilityIssues);
+    }
+  }
   await prepareReportDirectory(directory);
   const sources: Record<string, unknown> = {}, environments: Record<string, unknown> = {};
   const storedRuns = runs.map(run => {

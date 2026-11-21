@@ -363,6 +363,23 @@ test("sidebar and title routes work without PM and title unavailable preserves h
   assert.deepEqual(getThreadHistory("api"), history);
 });
 
+test("an empty generation provenance record does not mask a Session title", async () => {
+  ensureThread("plain-title", "Generated title");
+  writeRecord("pm-content-provenance", "generation", {
+    threadId: "plain-title", generationId: "generation", messageIds: ["message"],
+    operationIds: [], targets: [], authorities: [], contextSources: [],
+  });
+  const app = new Hono().route("/api", chatRoutes);
+  const plain = await (await app.request("http://localhost/api/chat/threads/plain-title")).json();
+  assert.equal(plain.thread.title, "Generated title");
+  writeRecord("pm-content-provenance", "dependency", {
+    threadId: "plain-title", generationId: "generation", messageIds: ["message"],
+    operationIds: ["operation"], targets: [], authorities: [], contextSources: [],
+  });
+  const masked = await (await app.request("http://localhost/api/chat/threads/plain-title")).json();
+  assert.equal(masked.thread.title, "会话");
+});
+
 test("Codex title helper uses isolated ephemeral read-only execution and leaves history intact", async () => {
   const peer = await titlePeer("codex-fixture", "Real generated title");
   const home = join(directory, "native-home");

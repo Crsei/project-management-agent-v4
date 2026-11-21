@@ -70,12 +70,12 @@ export function ServiceWorkspaceSettings() {
   const section = params.get("section")
   const preferences = section === "preferences"
   if (!section) return <Navigate to={`${paths.root}/settings/general${params.size ? `?${params}` : ""}${location.hash}`} replace state={location.state} />
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-settings-content>
     <nav aria-label={t("工作区设置导航", "Workspace settings navigation")} className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
       <Link className="rounded-control px-3 py-2 text-sm text-muted-foreground hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring" to={`${paths.root}/settings/general`}>
         {t("返回设置中心", "Settings center")}
       </Link>
-      {workspaceSettingsPages.map(item => <Link key={item.section} to={`${paths.root}/settings?section=${item.section}`} aria-current={section === item.section ? "page" : undefined} className={`rounded-control px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring ${section === item.section ? "bg-selection font-medium" : "text-muted-foreground hover:bg-surface-hover"}`}>{t(item.zh, item.en)}</Link>)}
+      {workspaceSettingsPages.map(item => <Link key={item.section} to={`${paths.root}/settings?section=${item.section}`} aria-current={section === item.section ? "page" : undefined} className={`rounded-control px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring ${section === item.section ? "settings-nav-current font-medium" : "text-muted-foreground hover:bg-surface-hover"}`}>{t(item.zh, item.en)}</Link>)}
     </nav>
     {section === "migrations" && <section className="space-y-2 border-b p-4 text-sm" aria-label={t("协议备份范围", "Protocol backup scope")}><p>{t("此编辑器只处理 Markdown 协议迁移及本次迁移的核心文件 / 配置恢复材料，不是 PM + Agent 全量备份，也不恢复 PostgreSQL、全部附件或 Agent 私有 SQLite。完整恢复必须通过主机停写 / 停服或桌面维护流程执行，不提供在线整机恢复按钮。", "This editor only handles Markdown protocol migrations and core-file / configuration restore materials for that migration. It is not a full PM + Agent backup and does not restore PostgreSQL, all attachments or Agent private SQLite. Full recovery requires host write-stop / offline or desktop maintenance; there is no online full-system restore action.")}</p><Link className="text-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" to={`${paths.root}/settings?section=local-storage`}>{t("查看项目目录、文档来源与完整恢复边界", "See project directories, document sources and full-recovery boundaries")}</Link></section>}
     {preferences ? <ServiceSettings /> : section === "local-storage" ? <LocalProjectStorageSettings /> : <ServiceMarkdown mode="settings" settingsSection={section === "migrations" || section === "diagnostics" ? section : "configuration"} />}

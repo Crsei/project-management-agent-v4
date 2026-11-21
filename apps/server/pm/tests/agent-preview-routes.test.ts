@@ -8,8 +8,8 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError, type Capability } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
-import { registerAgentPreviewRoutes } from '../src/agent-preview-routes.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
+import { registerAgentPreviewRoutes } from '../src/routes/agent-preview-routes.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Fixture' };

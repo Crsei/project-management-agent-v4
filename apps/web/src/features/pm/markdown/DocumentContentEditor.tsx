@@ -23,6 +23,7 @@ import { Preview } from './Preview';
 import { getDocumentEditorPosition, retainDocumentEditorPosition } from './document-workbench-state';
 import './document-editor.css';
 import { RadixSelect } from "@/components/ui/radix-select"
+import { InlineChangeReview } from './inline-change-review';
 
 const commands = [...documentCommands, ...structureCommands];
 const structureIds: Record<string, true> = Object.fromEntries(structureCommands.map(command => [command.id, true]));
@@ -60,7 +61,7 @@ function selectDocumentFragment(editor: EditorView, raw: string, hash: string) {
   editor.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'center' }) });
 }
 
-export function DocumentContentEditor({ controller: c, en, onSource }: { controller: WorkspaceController; en: boolean; onSource: () => void }) {
+export function DocumentContentEditor({ controller: c, en, onSource, reviewEnabled = true }: { controller: WorkspaceController; en: boolean; onSource: () => void; reviewEnabled?: boolean }) {
   const location = useLocation();
   const view = useRef<EditorView | null>(null);
   const previewPane = useRef<HTMLElement | null>(null);
@@ -429,7 +430,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
           controller.updateDraft(parts.prefix + (pendingBody.current ?? applyBodyChanges(parts.body, changes)));
         }} />
       </section>
-      <section ref={previewPane} onScroll={retainPosition} className="document-preview-pane" aria-label={label('Live draft preview', '实时草稿预览')}>{layout !== 'preview' && <div className="document-pane-label">{label('Live preview · same unsaved draft', '实时预览 · 同一未保存草稿')}</div>}<Preview raw={c.raw} body={body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} hideTitle disabled={disabled || c.draftParseError} onToggle={line => {
+      <section ref={previewPane} onScroll={retainPosition} className="document-preview-pane" aria-label={label('Live draft preview', '实时草稿预览')}>{layout !== 'preview' && <div className="document-pane-label">{label('Live preview · same unsaved draft', '实时预览 · 同一未保存草稿')}</div>}<InlineChangeReview key={c.selectedId} workspaceId={c.session.queryKey[3]} target={{ kind: 'core', entityId: c.selectedId }} currentRevision={c.selected?.revision ?? ''} en={en} enabled={reviewEnabled && layout !== 'edit' && !!c.selected && !c.selected.stale && !c.accessError && !c.query.error} dirty={!!c.draft}><Preview raw={c.raw} body={body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} hideTitle disabled={disabled || c.draftParseError} onToggle={line => {
         const expected = target();
         try {
           const { prefix, body: text } = requireTarget(expected);
@@ -439,7 +440,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
           lines[bodyLine] = lines[bodyLine].replace(/\[([ xX])\]/, (_, checked: string) => checked === ' ' ? '[x]' : '[ ]');
           apply({ text: lines.join('\n'), selection: { from: expected.from, to: expected.to } }, expected);
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
-      }} onLink={c.wikiLink} /></section>
+      }} onLink={c.wikiLink} /></InlineChangeReview></section>
     </div>
     {layout !== 'preview' && block && <div className="document-block-controls" role="group" aria-label={label('Current block actions', '当前块操作')}><span>{`${label('Block', '块')} · ${block.kind}`}</span>{byIds(['block-move-up', 'block-move-down', 'block-duplicate', 'block-delete']).map(command => <button type="button" key={command.id} disabled={disabled || !!commandReasons[command.id]} title={disabled ? readonlyReason : commandReasons[command.id] || undefined} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}>{commandLabel(command)}</button>)}</div>}
     {layout !== 'preview' && <DocumentObjectActions controller={c} en={en} request={objectRequest} selection={{ ...selection, text: body.slice(selection.from, selection.to) }} disabled={disabled || c.draftInvalid} onInsert={markdownText => {

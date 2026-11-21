@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { inventoryPersistence, namespacePolicy, persistenceRecords } from "./persistence-schema.ts";
+import { deleteEvaluationThread } from "../evaluation-feedback/persistence.ts";
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : null;
@@ -86,6 +87,7 @@ export function inspectThreadRetention(db: DatabaseSync, threadId: string, allow
 }
 /** Only after actual owned runtimes stopped, under the lifecycle commit transaction. No bytes/PM records are deleted. */
 export function commitThreadRetention(db: DatabaseSync, retention: ThreadRetention): void {
+  deleteEvaluationThread(db, retention.threadId);
   const remove = db.prepare("DELETE FROM records WHERE namespace=? AND key=?");
   for (const row of retention.deleteRecords) remove.run(row.namespace, row.key);
   const retained = new Set(retention.retainedGenerationIds);

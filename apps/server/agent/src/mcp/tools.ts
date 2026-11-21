@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { UIMessage } from "ai";
 import * as Schema from "effect/Schema";
 import { McpSchema } from "effect/ai";
-import { agentCatalogSchema } from "../../../../../packages/contracts/src/agent-file-areas.ts";
+import { agentCatalogSchema, type AgentCatalog } from "../../../../../packages/contracts/src/agent-file-areas.ts";
 import { threadSettingsSchema, executionSelectionSchema, chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
 import { pmToolInvocationSchema, pmToolTargetSchema } from "@agent-workspace/contracts/pm-tools";
 import { publicThread, publicAuthorizedThread, publicChatGeneration } from "../chat.ts";
@@ -14,9 +14,10 @@ import { listStoredInstances } from "../providers/instances.ts";
 import { getProviderModels, resolveProviderModelOptions } from "../providers/catalog.ts";
 import { callPmTool, listPmTools, readPmToolOperation, destructivePmToolNames } from "../pm-tools.ts";
 import { assertMcpIdentity, assertMcpThread, grantMcpThread, mcpIdentityHeaders, type McpInvocationIdentity } from "./identity.ts";
+import { assertLocalContext, isLocalMcpContext, localCatalog, localIdentityForTarget, localScopedIdentity, type LocalMcpContext, type McpToolIdentity } from "./local-access.ts";
 import { closeMcpAppSession } from "../mcp-apps/live.ts";
 import { resolveAgentExecution } from "../durable/agent-execution.ts";
-import { readMcpExecutionRoot, reserveMcpExecutionRoot, type McpExecutionRoot } from "./grants.ts";
+import { readMcpExecutionRoot, readMcpExecutionRootRecord, reserveMcpExecutionRoot, type McpExecutionRoot } from "./grants.ts";
 import { createPmVisibilityProjector } from "../pm-visibility.ts";
 
 // Adapted from copied mcp/toolkits/{orchestrator,project}/tools.ts and handlers.ts.
@@ -70,17 +71,59 @@ async function catalog(identity: McpInvocationIdentity) {
 async function pmCatalog(identity: McpInvocationIdentity) {
   return pmCatalogSchema.parse(await listPmTools(await mcpIdentityHeaders(identity), identity)).tools;
 }
-export async function listMcpTools(identity: McpInvocationIdentity): Promise<McpToolDefinition[]> {
+type PmCatalogTool = z.infer<typeof pmCatalogSchema>["tools"][number];
+function toMcpToolDefinition(tool: PmCatalogTool): McpToolDefinition {
+  return { name: tool.name, description: `${tool.description ?? tool.name} Uses the common PM approval/receipt service. No Chat Session is required. Preserve operationId and exact arguments; recover using pm_get_operation_result.`,
+    inputSchema: decodeToolSchema({ ...tool.inputSchema,
+      properties: { ...(tool.inputSchema.properties as Record<string, unknown>), operationId: { type: "string", format: "uuid" } },
+      required: [...new Set([...((tool.inputSchema.required as string[] | undefined) ?? []), "operationId"])], additionalProperties: false }),
+    annotations: { readOnlyHint: !tool.write, destructiveHint: destructivePmToolNames[tool.name] === true, idempotentHint: true, openWorldHint: tool.write } };
+}
+/** Local access has no Chat thread delegation; only PM business targets and project reads are exposed. */
+const localApplicationTools = applicationTools.filter(tool => tool.name === "orchestrator_capabilities" || tool.name === "t3_project_list" || tool.name === "t3_project_read" || tool.name === "pm_get_operation_result");
+function localRefs(identity: LocalMcpContext) {
+  const wide = new Set(identity.local.grants.filter(ref => ref.projectId === null).map(ref => ref.workspaceId));
+  return identity.local.grants.filter(ref => ref.projectId === null || !wide.has(ref.workspaceId));
+}
+/** The union reflects every enabled workspace/project; each call still rechecks the specific target. */
+async function localPmCatalog(identity: LocalMcpContext): Promise<PmCatalogTool[]> {
+  const tools = new Map<string, PmCatalogTool>();
+  let lastError: unknown;
+  for (const ref of localRefs(identity)) {
+    try {
+      const scoped = localScopedIdentity(identity, ref);
+      for (const tool of await pmCatalog(scoped)) {
+        const prior = tools.get(tool.name);
+        if (!prior) tools.set(tool.name, { ...tool });
+        else if (tool.write && !prior.write) prior.write = true;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!tools.size) {
+    if (lastError instanceof Error) throw lastError;
+    fail("No PM tool is currently authorized for local access", 403);
+  }
+  return [...tools.values()];
+}
+export async function listMcpTools(identity: McpToolIdentity): Promise<McpToolDefinition[]> {
+  if (isLocalMcpContext(identity)) {
+    await assertLocalContext(identity);
+    await localCatalog(identity);
+    const tools = localApplicationTools.map(tool => ({ ...tool }));
+    for (const tool of await localPmCatalog(identity)) {
+      if (tools.some(existing => existing.name === tool.name)) fail("PM tool registry contains a duplicate tool name", 503);
+      tools.push(toMcpToolDefinition(tool));
+    }
+    return tools;
+  }
   await catalog(identity);
   const tools = applicationTools.filter(tool => identity.access === "full" || !writes[tool.name]);
   for (const tool of await pmCatalog(identity)) {
     if (tool.write && identity.access !== "full") continue;
     if (tools.some(existing => existing.name === tool.name)) fail("PM tool registry contains a duplicate tool name", 503);
-    tools.push({ name: tool.name, description: `${tool.description ?? tool.name} Uses the common PM approval/receipt service. No Chat Session is required. Preserve operationId and exact arguments; recover using pm_get_operation_result.`,
-      inputSchema: decodeToolSchema({ ...tool.inputSchema,
-        properties: { ...(tool.inputSchema.properties as Record<string, unknown>), operationId: { type: "string", format: "uuid" } },
-        required: [...new Set([...((tool.inputSchema.required as string[] | undefined) ?? []), "operationId"])], additionalProperties: false }),
-      annotations: { readOnlyHint: !tool.write, destructiveHint: destructivePmToolNames[tool.name] === true, idempotentHint: true, openWorldHint: tool.write } });
+    tools.push(toMcpToolDefinition(tool));
   }
   return tools;
 }
@@ -116,14 +159,60 @@ async function publicMcpCreatedThread(identity: McpInvocationIdentity, value: un
   await assertMcpThread(identity, thread.remoteId);
   return { thread: projected };
 }
-export async function invokeMcpTool(identity: McpInvocationIdentity, name: string, value: unknown): Promise<unknown> {
+function providerCatalog(search?: string) {
+  return listStoredInstances().filter(instance => instance.enabled).map(instance => ({ instanceId: instance.instanceId, driver: instance.driver, label: instance.label,
+    models: getProviderModels(instance.instanceId).filter(model => !search || JSON.stringify([model.id, model.label]).toLowerCase().includes(search)).map(model => ({ id: model.id, name: model.label })) }));
+}
+function flatProjects(value: AgentCatalog) {
+  return value.workspaces.flatMap(workspace => workspace.projects.map(project => ({ ...project, workspaceId: workspace.id, workspaceName: workspace.name })));
+}
+async function invokeLocalMcpTool(identity: LocalMcpContext, name: string, value: unknown): Promise<unknown> {
+  await assertLocalContext(identity);
+  if (name === "orchestrator_capabilities") {
+    const input = schemas.orchestrator_capabilities.parse(value); await localCatalog(identity);
+    return { providers: providerCatalog(input.search?.toLowerCase()), scope: { all: true }, access: "full" };
+  }
+  if (name === "t3_project_list") {
+    const input = schemas.t3_project_list.parse(value), projects = flatProjects(await localCatalog(identity));
+    return { projects: projects.slice(input.cursor, input.cursor + input.limit), nextCursor: input.cursor + input.limit < projects.length ? input.cursor + input.limit : null };
+  }
+  if (name === "t3_project_read") {
+    const input = schemas.t3_project_read.parse(value), project = flatProjects(await localCatalog(identity)).find(item => item.id === input.projectId);
+    if (!project) fail("Project not found in the enabled local access", 404);
+    return project;
+  }
+  if (name.startsWith("t3_thread_")) fail("Local MCP access does not include Chat sessions; grant explicit threads through OAuth consent.", 403);
+  if (name === "pm_list_workspaces") {
+    z.strictObject({ arguments: z.strictObject({}) }).parse(value);
+    return { kind: "workspaces", items: (await localCatalog(identity)).workspaces, nextCursor: null, truncated: false, sources: [] };
+  }
+  if (name === "pm_get_operation_result") {
+    const input = schemas.pm_get_operation_result.parse(value);
+    const root = readMcpExecutionRootRecord(input.operationId);
+    if (!root) fail("Original operation is unavailable to this delegation.", 404);
+    const scoped = localIdentityForTarget(identity, root.scope);
+    return readPmToolOperation(input.operationId, externalPmContext(scoped, readMcpExecutionRoot(scoped, input.operationId)));
+  }
+  const tool = (await localPmCatalog(identity)).find(item => item.name === name);
+  if (!tool) fail("Unknown or unauthorized tool", 404);
+  const supplied = z.strictObject({ operationId: z.uuid().toLowerCase(), target: pmToolTargetSchema.optional(), arguments: z.unknown() }).parse(value);
+  const input = pmToolInvocationSchema.parse({ ...supplied, name });
+  if (!input.target) fail("This PM tool requires an explicit workspace/project target.", 400);
+  const scoped = localIdentityForTarget(identity, input.target);
+  const { root, created } = reserveMcpExecutionRoot(scoped, input);
+  const context = externalPmContext(scoped, root);
+  if (!created) return readPmToolOperation(input.operationId, context);
+  await callPmTool({ ...context, headers: await mcpIdentityHeaders(scoped),
+    authorizeExecution: async () => { await assertMcpIdentity(scoped); } }, input);
+  return readPmToolOperation(input.operationId, context);
+}
+export async function invokeMcpTool(identity: McpToolIdentity, name: string, value: unknown): Promise<unknown> {
+  if (isLocalMcpContext(identity)) return invokeLocalMcpTool(identity, name, value);
   await assertMcpIdentity(identity);
   if (writes[name]) assertMcpWrite(identity);
   if (name === "orchestrator_capabilities") {
     const input = schemas.orchestrator_capabilities.parse(value); await catalog(identity);
-    const search = input.search?.toLowerCase();
-    return { providers: listStoredInstances().filter(instance => instance.enabled).map(instance => ({ instanceId: instance.instanceId, driver: instance.driver, label: instance.label,
-      models: getProviderModels(instance.instanceId).filter(model => !search || JSON.stringify([model.id, model.label]).toLowerCase().includes(search)).map(model => ({ id: model.id, name: model.label })) })), scope: identity.scope, access: identity.access };
+    return { providers: providerCatalog(input.search?.toLowerCase()), scope: identity.scope, access: identity.access };
   }
   if (name === "t3_project_list") {
     const input = schemas.t3_project_list.parse(value), projects = await catalog(identity);

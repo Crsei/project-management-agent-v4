@@ -9,7 +9,7 @@ import { accessCommands, listMembers, requireCapability } from '../../applicatio
 import { getCommandReceipt, runCommand } from '../../application/src/kernel.ts';
 import { listEntities, listWorkspaces, readEntity } from '../../application/src/queries.ts';
 import type { CommandRegistry } from '../../application/src/ports.ts';
-import { authenticate, createUser, createWorkspace, login, logout } from '../src/auth.ts';
+import { authenticate, createUser, createWorkspace, DEFAULT_SESSION_TTL_SECONDS, login, logout, renewSession } from '../src/auth.ts';
 import { checkDatabase, createPool, databaseFor, migrate } from '../src/database.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -120,6 +120,16 @@ describe('PostgreSQL foundation: durable commands, authority and history', { ski
     const expired = await login(pool, { email: actor.email, password: 'testing-password-01' });
     await pool.query("UPDATE sessions SET created_at=now()-interval '2 hours',expires_at=now()-interval '1 hour' WHERE user_id=$1", [actor.id]);
     await assert.rejects(authenticate(pool, expired.token), { code: 'unauthenticated' });
+  });
+  it('keeps sessions for 30 days and renews them only inside the final week', async () => {
+    const session = await login(pool, { email: actor.email, password: 'testing-password-01' });
+    assert.ok(Math.abs(Date.parse(session.expiresAt) - (Date.now() + DEFAULT_SESSION_TTL_SECONDS * 1000)) < 60_000);
+    await pool.query("UPDATE sessions SET expires_at=now()+interval '20 days' WHERE user_id=$1", [actor.id]);
+    const renewed = await renewSession(pool, session.token);
+    assert.ok(Date.parse(renewed) > Date.now() + 29 * 86_400_000);
+    assert.equal(await renewSession(pool, session.token), renewed);
+    await pool.query('UPDATE sessions SET expires_at=now() WHERE user_id=$1', [actor.id]);
+    await assert.rejects(renewSession(pool, session.token), { code: 'unauthenticated' });
   });
   it('reuses canonical same-key requests after reconnect and refuses a changed request', async () => {
     const input: Command = { commandId: randomUUID(), commandType: 'CreateFixtureConversation', payload: { title: 'Idempotent' } };

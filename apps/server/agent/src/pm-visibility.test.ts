@@ -331,3 +331,119 @@ test("revocation removes all accepted context bodies and sensitive source metada
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a historical run whose PM read has since changed stays readable; an actual outage still hides it", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pm-visibility-stale-"));
+  const oldData = process.env.AGENT_WORKSPACE_DATA_DIR, oldUrl = process.env.PM_API_URL;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  const actorId = randomUUID(), workspaceId = randomUUID(), projectId = "PRJ-001";
+  const threadId = "stale-read-history", generationId = randomUUID(), messageId = "stale-assistant", operationId = randomUUID();
+  let resultMode: "stale" | "outage" = "stale";
+  const server = createServer(async (req, res) => {
+    let text = ""; for await (const chunk of req) text += String(chunk);
+    res.setHeader("content-type", "application/json");
+    if (req.url?.endsWith("/agent-tools/result")) {
+      if (resultMode === "outage") { res.writeHead(503).end(JSON.stringify({ error: { code: "temporarily_unavailable" } })); return; }
+      res.writeHead(409).end(JSON.stringify({ error: { code: "agent_tool_read_stale", message: "The saved read is no longer current knowledge." } }));
+      return;
+    }
+    assert.equal(req.url, "/api/v1/agent-contexts/authorize");
+    const target = JSON.parse(text) as { workspaceId: string; projectId: string | null };
+    res.end(JSON.stringify({ actorId, scope: target }));
+  });
+  const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string"); process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  const target = { workspaceId, projectId };
+  const result = { kind: "workflow" as const, items: [], nextCursor: null, truncated: false, sources: [],
+    workflow: { workspaceId, projectId, entity: "work_item" as const, initial: "todo",
+      states: [{ id: "todo", label: "To do", category: "unstarted" as const }], transitions: [], defaultTargets: null,
+      configuration: { schema: "pm/config/v1" as const, revision: "1", source: "builtin" as const, workflowRevision: "a".repeat(64) } } };
+  const record: PmToolCallRecord = { operationId, name: "pm_read_workflow", status: "succeeded", actorId, threadId, messageId, generationId,
+    workspaceId, target, result, error: null, createdAt: "2026-11-13T11:30:00.000Z", finishedAt: "2026-11-13T11:30:01.000Z",
+    arguments: { projectId }, certainty: { dispatch: "possibly_sent", evidence: "pm_result" }, commandIds: [] };
+  const request = { operationId, name: record.name, target, arguments: record.arguments, threadId, messageId, generationId };
+  try {
+    writeRecord<StoredPmToolCall>("pm-tool-calls", operationId, { record, request });
+    writeRecord("chat:generations", generationId, { id: generationId, threadId, messageId });
+    recordPmContentProvenance({ threadId, generationId, messageIds: [messageId], operationIds: [operationId], targets: [target] });
+    const snapshot = { generationId, threadId, sequence: 3, status: "completed" as const, items: [
+      { id: `pm-tool:${operationId}`, type: "dynamic_tool" as const, status: "completed" as const, toolName: "pm_read_workflow", output: JSON.stringify(record) },
+      { id: "stale-assistant-prose", type: "assistant_message" as const, status: "completed" as const, text: "historical assistant prose" },
+    ] };
+    const projector = await createPmVisibilityProjector(threadId, new Headers());
+    assert.equal(projector.calls[0]!.visibility, "visible", "a stale read keeps its saved, originally authorized receipt");
+    const projected = projector.nativeSnapshot(snapshot);
+    assert.ok(projected.items.every(item => item.visibility === undefined || item.visibility === "visible"), JSON.stringify(projected.items));
+    assert.match(JSON.stringify(projected), /historical assistant prose/);
+    assert.match(JSON.stringify(projected), /pm_read_workflow/);
+    assert.equal(projector.generation({ id: generationId } as { id: string } & Record<string, unknown>).pmVisibility, undefined);
+    resultMode = "outage";
+    const outage = await createPmVisibilityProjector(threadId, new Headers());
+    assert.equal(outage.calls[0]!.visibility, "unavailable", "an unverifiable PM read remains fail-closed");
+    assert.ok(outage.nativeSnapshot(snapshot).items.every(item => item.visibility === "unavailable"));
+    assert.doesNotMatch(JSON.stringify(outage.nativeSnapshot(snapshot)), /historical assistant prose/);
+  } finally {
+    const closed = Promise.withResolvers<void>(); server.close(() => closed.resolve()); await closed.promise; closeStore();
+    if (oldData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldData;
+    if (oldUrl === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldUrl;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("payload-free projection authorizes the target but never fetches the stored result", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pm-visibility-payload-free-"));
+  const oldData = process.env.AGENT_WORKSPACE_DATA_DIR, oldUrl = process.env.PM_API_URL;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  const actorId = randomUUID(), workspaceId = randomUUID(), projectId = "PRJ-001";
+  const threadId = "payload-free", generationId = randomUUID(), messageId = "assistant", operationId = randomUUID();
+  const target = { workspaceId, projectId };
+  const workflowResult = { kind: "workflow" as const, items: [], nextCursor: null, truncated: false, sources: [],
+    workflow: { workspaceId, projectId, entity: "work_item" as const, initial: "todo",
+      states: [{ id: "todo", label: "To do", category: "unstarted" as const }], transitions: [], defaultTargets: null,
+      configuration: { schema: "pm/config/v1" as const, revision: "1", source: "builtin" as const, workflowRevision: "a".repeat(64) } } };
+  let resultReads = 0, authorizations = 0;
+  const server = createServer(async (req, res) => {
+    let text = ""; for await (const chunk of req) text += String(chunk);
+    res.setHeader("content-type", "application/json");
+    if (req.url?.endsWith("/agent-tools/result")) {
+      resultReads++;
+      res.end(JSON.stringify({ operationId, threadId, messageId, generationId, actorId, workspaceId, target, name: "pm_read_workflow",
+        status: "succeeded", createdAt: "2026-11-13T11:30:00.000Z", finishedAt: "2026-11-13T11:30:01.000Z", arguments: { projectId }, error: null,
+        certainty: { dispatch: "possibly_sent", evidence: "pm_result" }, commandIds: [],
+        result: workflowResult }));
+      return;
+    }
+    assert.equal(req.url, "/api/v1/agent-contexts/authorize");
+    authorizations++;
+    const posted = JSON.parse(text) as typeof target;
+    res.end(JSON.stringify({ actorId, scope: posted }));
+  });
+  const listening = Promise.withResolvers<void>(); server.listen(0, "127.0.0.1", listening.resolve); await listening.promise;
+  const address = server.address(); assert.ok(address && typeof address !== "string");
+  process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
+  const record: PmToolCallRecord = { operationId, name: "pm_read_workflow", status: "succeeded", actorId, threadId, messageId, generationId,
+    workspaceId, target, error: null, createdAt: "2026-11-13T11:30:00.000Z", finishedAt: "2026-11-13T11:30:01.000Z",
+    arguments: { projectId }, certainty: { dispatch: "possibly_sent", evidence: "pm_result" }, commandIds: [],
+    result: workflowResult };
+  const request = { operationId, name: record.name, target, arguments: record.arguments, threadId, messageId, generationId };
+  try {
+    writeRecord<StoredPmToolCall>("pm-tool-calls", operationId, { record, request });
+    const projection = await createPmVisibilityProjector(threadId, new Headers(), { payloads: false });
+    assert.equal(projection.calls.length, 1);
+    const call = projection.calls[0]!;
+    assert.equal(call.visibility, "visible");
+    assert.equal(call.visibility === "visible" ? call.result : undefined, null, "an unverified saved body must not be exposed");
+    assert.equal(projection.nativeContextContaminated, true, "payload-free listing conservatively hides legacy titles");
+    assert.equal(resultReads, 0, "the thread list must not refetch tool results");
+    assert.ok(authorizations >= 1, "current target authority is still checked");
+    const eager = await createPmVisibilityProjector(threadId, new Headers());
+    const eagerCall = eager.calls[0]!;
+    assert.equal(eagerCall.visibility === "visible" ? eagerCall.result?.kind : undefined, "workflow");
+    assert.equal(resultReads, 1);
+  } finally {
+    const closed = Promise.withResolvers<void>(); server.close(() => closed.resolve()); await closed.promise; closeStore();
+    if (oldData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldData;
+    if (oldUrl === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldUrl;
+    await rm(directory, { recursive: true, force: true });
+  }
+});

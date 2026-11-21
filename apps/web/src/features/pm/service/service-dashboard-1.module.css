@@ -108,7 +108,7 @@
     margin-top: 24px;
     overflow: visible;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-module-value);
   }
   .filters :global(.w-64) {
     width: 100%;

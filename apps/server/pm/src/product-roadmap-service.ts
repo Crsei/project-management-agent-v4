@@ -7,7 +7,7 @@ import { ROADMAP_FIELD, roadmapActionSchema } from '../../../../packages/contrac
 import { publishRoadmap, readRoadmap, roadmapRead, roadmapDependencyClosure, saveRoadmapDraft, taskInput } from '../../../../packages/application/src/product-roadmap.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
-import { authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation, type CoreWorkspacePool } from './core-routes.ts';
+import { authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation, type CoreWorkspacePool } from './routes/core-routes.ts';
 import { CoreCommandJournal } from './core-journal.ts';
 
 export type ProductRoadmapServiceOptions = { database: () => Pool; coreWorkspaces: CoreWorkspacePool | undefined };

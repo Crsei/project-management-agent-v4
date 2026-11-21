@@ -6,9 +6,10 @@ import { currentGrant, grantIdentity, MCP_GRANTS, McpAuthError, type Grant } fro
 import { pmBrowser } from './identity.ts';
 import { approval, authorizationFailureRedirect, authorizationMetadata, decide, exchangeCode, managementCsrf, protectedResourceMetadata, registerClient, requireBrowserOrigin, validateAuthorization } from './oauth.ts';
 import { invalidateMcpAppGrant } from '../mcp-apps/live.ts';
+import { disableLocalAccess, enableLocalAccess, localAccessAvailable, localMcpEndpoint, readLocalBinding } from './local-access.ts';
 
 /** Root-mounted before Agent's shared access guard; every browser mutation checks PM identity + Origin + CSRF. */
-type ManagementBrowser = { actorId: string; headers: Headers; sessionHash: string };
+type ManagementBrowser = { actorId: string; actorName?: string; headers: Headers; sessionHash: string };
 type ManagementBudget = { startedAt: number; requests: number; active: number };
 export const mcpOAuthRoutes = new Hono<{ Variables: { mcpBrowser: ManagementBrowser } }>();
 let activeRequests = 0;
@@ -18,7 +19,7 @@ let activeManagementRequests = 0;
 const managementBudgets = new Map<string, ManagementBudget>();
 mcpOAuthRoutes.use('*', async (c, next) => {
   const pathname = new URL(c.req.url).pathname;
-  if (!pathname.startsWith('/oauth/mcp/') && !pathname.startsWith('/api/mcp/clients') && !pathname.startsWith('/.well-known/oauth-')) { await next(); return; }
+  if (!pathname.startsWith('/oauth/mcp/') && !pathname.startsWith('/api/mcp/clients') && !pathname.startsWith('/api/mcp/local-access') && !pathname.startsWith('/.well-known/oauth-')) { await next(); return; }
   const publicEndpoint = pathname.startsWith('/.well-known/oauth-') || pathname === '/oauth/mcp/register' || pathname === '/oauth/mcp/token';
   if (publicEndpoint) {
     c.header('Access-Control-Allow-Origin', '*');
@@ -26,7 +27,8 @@ mcpOAuthRoutes.use('*', async (c, next) => {
   }
   c.header('Cache-Control', 'no-store'); c.header('Pragma', 'no-cache'); c.header('X-Content-Type-Options', 'nosniff');
   if (Number(c.req.header('content-length') ?? '0') > 65_536 || c.req.url.length > 12_000) return c.json({ error: 'invalid_request' }, 413);
-  const management = pathname === '/api/mcp/clients' || /^\/api\/mcp\/clients\/[^/]+\/revoke$/.test(pathname);
+  const management = pathname === '/api/mcp/clients' || /^\/api\/mcp\/clients\/[^/]+\/revoke$/.test(pathname) ||
+    pathname === '/api/mcp/local-access' || pathname === '/api/mcp/local-access/disable';
   if (management) {
     if (c.req.method !== 'GET') requireBrowserOrigin(c.req.raw);
     const browser = await pmBrowser(c.req.raw);
@@ -85,7 +87,40 @@ mcpOAuthRoutes.post('/oauth/mcp/token', async c => {
 });
 mcpOAuthRoutes.get('/api/mcp/clients', async c => {
   const browser = c.get('mcpBrowser');
-  return c.json({ csrfToken: managementCsrf(browser.actorId, browser.sessionHash), items: listRecords<Grant>(MCP_GRANTS).filter(grant => grant.actorId === browser.actorId).map(grant => ({ id: grant.grantId, clientName: grant.clientName, scope: grant.scope, access: grant.access, threadIds: grant.threadIds, createdAt: grant.createdAt, expiresAt: grant.expiresAt, revokedAt: grant.revokedAt })) });
+  return c.json({ csrfToken: managementCsrf(browser.actorId, browser.sessionHash), items: listRecords<Grant>(MCP_GRANTS).filter(grant => grant.actorId === browser.actorId && grant.origin !== 'local').map(grant => ({ id: grant.grantId, clientName: grant.clientName, scope: grant.scope, access: grant.access, threadIds: grant.threadIds, createdAt: grant.createdAt, expiresAt: grant.expiresAt, revokedAt: grant.revokedAt })) });
+});
+function localAccessState(browser: ManagementBrowser) {
+  const binding = readLocalBinding(), available = localAccessAvailable();
+  const owner = binding?.actorId === browser.actorId;
+  return {
+    available,
+    ...(available ? { endpoint: localMcpEndpoint() } : {}),
+    enabled: binding !== undefined,
+    owner,
+    occupied: binding !== undefined && !owner,
+    ...(owner ? {
+      actor: { id: binding.actorId, name: binding.actorName },
+      workspaceCount: binding.catalog.workspaces.length,
+      projectCount: binding.catalog.workspaces.reduce((total, workspace) => total + workspace.projects.length, 0),
+      updatedAt: binding.updatedAt,
+    } : {}),
+    csrfToken: managementCsrf(browser.actorId, browser.sessionHash),
+  };
+}
+mcpOAuthRoutes.get('/api/mcp/local-access', c => c.json(localAccessState(c.get('mcpBrowser'))));
+mcpOAuthRoutes.post('/api/mcp/local-access', async c => {
+  requireBrowserOrigin(c.req.raw);
+  const browser = c.get('mcpBrowser'), input = z.strictObject({ csrfToken: z.string().max(128) }).parse(await json(c.req.raw));
+  if (!mcpEqual(input.csrfToken, managementCsrf(browser.actorId, browser.sessionHash))) throw new McpAuthError('access_denied', 'Invalid CSRF token.', 403);
+  await enableLocalAccess({ actorId: browser.actorId, actorName: browser.actorName, headers: browser.headers });
+  return c.json(localAccessState(browser));
+});
+mcpOAuthRoutes.post('/api/mcp/local-access/disable', async c => {
+  requireBrowserOrigin(c.req.raw);
+  const browser = c.get('mcpBrowser'), input = z.strictObject({ csrfToken: z.string().max(128) }).parse(await json(c.req.raw));
+  if (!mcpEqual(input.csrfToken, managementCsrf(browser.actorId, browser.sessionHash))) throw new McpAuthError('access_denied', 'Invalid CSRF token.', 403);
+  disableLocalAccess(browser.actorId);
+  return c.json(localAccessState(browser));
 });
 mcpOAuthRoutes.post('/api/mcp/clients/:id/revoke', async c => {
   requireBrowserOrigin(c.req.raw);

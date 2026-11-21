@@ -8,9 +8,9 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
-import type { AgentChatTools } from '../src/agent-chat-tools.ts';
-import { registerAgentCapabilityRoutes } from '../src/agent-capability-routes.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
+import type { AgentChatTools } from '../src/agent-tools/agent-chat-tools.ts';
+import { registerAgentCapabilityRoutes } from '../src/routes/agent-capability-routes.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: 'user-1', email: 'fixture@example.invalid', name: 'Fixture' };

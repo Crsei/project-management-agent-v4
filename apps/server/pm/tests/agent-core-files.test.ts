@@ -8,8 +8,8 @@ import type { Pool } from 'pg';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
 import { createMcpServiceBearer } from '../../../../packages/infrastructure/src/mcp-service-auth.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
-import { registerAgentCoreFilesRoutes } from '../src/agent-core-files-routes.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
+import { registerAgentCoreFilesRoutes } from '../src/routes/agent-core-files-routes.ts';
 
 test('registered shared and independent core files preserve invalid raw content without crossing project scope', async () => {
   const base = await mkdtemp(path.join(tmpdir(), 'pm-core-source-'));

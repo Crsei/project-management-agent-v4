@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { changeHistoryQuerySchema, changeCompareInputSchema, changeAcknowledgeInputSchema, taskAttentionQuerySchema } from '../../../../packages/contracts/src/change-history.ts';
-import { readChangeHistory, readChangeDetail, compareChangeHistory, acknowledgeChangeHistory, readTaskAttention, type ChangeHistoryContext } from '../../../../packages/application/src/change-history.ts';
-import { authorizeExternalDocumentHistory, resolveAuthorizedExternalDocumentHistoryAddress, type DocumentSourceContext } from '../../../../packages/application/src/document-sources.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { changeHistoryQuerySchema, changeCompareInputSchema, changeAcknowledgeInputSchema, taskAttentionQuerySchema } from '../../../../../packages/contracts/src/change-history.ts';
+import { readChangeHistory, readChangeDetail, compareChangeHistory, acknowledgeChangeHistory, readTaskAttention, type ChangeHistoryContext } from '../../../../../packages/application/src/change-history.ts';
+import { authorizeExternalDocumentHistory, resolveAuthorizedExternalDocumentHistoryAddress, type DocumentSourceContext } from '../../../../../packages/application/src/document-sources.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; core: NotificationCorePort; sources: Omit<DocumentSourceContext, 'sql' | 'actor'> };
 const params = z.object({ workspaceId: z.uuid().toLowerCase() });

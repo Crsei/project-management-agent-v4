@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { imBindingParamsSchema, imBindingUpdateSchema, imEmptySchema, imParamsSchema, type ImConnectivity } from '../../../../packages/contracts/src/im-gateway.ts';
-import type { ImGatewayConfig } from '../../../../packages/infrastructure/src/im-gateway-config.ts';
-import { createImLinkCode, listImBindings, revokeImBinding, setImNotification } from '../../../../packages/application/src/im-gateway.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { imBindingParamsSchema, imBindingUpdateSchema, imEmptySchema, imParamsSchema, type ImConnectivity } from '../../../../../packages/contracts/src/im-gateway.ts';
+import type { ImGatewayConfig } from '../../../../../packages/infrastructure/src/im-gateway-config.ts';
+import { createImLinkCode, listImBindings, revokeImBinding, setImNotification } from '../../../../../packages/application/src/im-gateway.ts';
 
 export function registerImRoutes(app: FastifyInstance, options: {
   database: () => Pool;

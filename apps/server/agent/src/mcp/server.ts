@@ -5,19 +5,21 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpProtocol, McpSchema, McpServer } from "effect/ai";
 import { HttpRouter } from "effect/http";
-import { authenticateMcpRequest, assertMcpIdentity, mcpPublicOrigin, type McpInvocationIdentity } from "./identity.ts";
+import { authenticateMcpRequest, assertMcpIdentity, mcpPublicOrigin } from "./identity.ts";
+import { assertLocalContext, authenticateLocalMcpRequest, isLocalMcpContext, type McpToolIdentity } from "./local-access.ts";
+import { McpAuthError } from "./grants.ts";
 import { invokeMcpTool, listMcpTools } from "./tools.ts";
 
 // Transport derivation: copied apps/server/src/mcp/McpHttpServer.ts layerMcpTransport.
 // Effect owns initialize, sessions, list/call, ping, notifications, DELETE and JSON-RPC errors.
 // A runtime per grant/version prevents an authenticated caller adopting another grant's session.
-type Session = { identity: McpInvocationIdentity; catalog: string; touchedAt: number; users: number; handler: (request: Request) => Promise<Response>; dispose: () => Promise<void> };
+type Session = { identity: McpToolIdentity; catalog: string; touchedAt: number; users: number; handler: (request: Request) => Promise<Response>; dispose: () => Promise<void> };
 const sessions = new Map<string, Promise<Session>>();
 const maximumGrants = 256;
 let accepting = false;
 /** Only the host runtime lifecycle may reopen external admissions. */
 export function startMcpServer(): void { accepting = true; }
-async function makeSession(identity: McpInvocationIdentity): Promise<Session> {
+async function makeSession(identity: McpToolIdentity): Promise<Session> {
   const definitions = await listMcpTools(identity);
   const session = { identity, catalog: JSON.stringify(definitions), touchedAt: Date.now(), users: 0 } as Session;
   const registration = Layer.effectDiscard(Effect.gen(function* () {
@@ -56,16 +58,23 @@ mcpRoutes.onError((error, c) => {
 mcpRoutes.use("/mcp", bodyLimit({ maxSize: 1024 * 1024, onError: c => c.json({ error: "MCP request exceeds 1 MiB" }, 413) }));
 mcpRoutes.all("/mcp", async c => {
   if (!accepting) return c.json({ error: "MCP server is stopping" }, 503);
-  let identity: McpInvocationIdentity;
-  try { identity = await authenticateMcpRequest(c.req.raw); await assertMcpIdentity(identity); }
-  catch {
+  let identity: McpToolIdentity;
+  try {
+    identity = c.req.header("authorization") ? await authenticateMcpRequest(c.req.raw) : authenticateLocalMcpRequest(c.req.raw);
+    if (isLocalMcpContext(identity)) await assertLocalContext(identity); else await assertMcpIdentity(identity);
+  }
+  catch (error) {
+    // A deployment without loopback local access keeps the OAuth challenge for existing clients.
+    if (error instanceof McpAuthError && (c.req.header("authorization") || error.status !== 404))
+      return c.json({ error: error.code, error_description: error.message }, error.status as 400, { "cache-control": "no-store" });
+
     // Issuer is configured, never inferred from a caller-controlled Host/Forwarded header.
     let issuer: string | undefined;
     try { issuer = mcpPublicOrigin(); } catch { /* Missing deployment configuration must not trust Host. */ }
     const challenge = issuer ? `Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource/mcp", error="invalid_token"` : 'Bearer error="invalid_token"';
     return c.json({ error: "invalid_mcp_credential" }, 401, { "www-authenticate": challenge, "cache-control": "no-store" });
   }
-  const key = JSON.stringify([identity.grantId, identity.version]);
+  const key = isLocalMcpContext(identity) ? JSON.stringify(["local", identity.local.bindingId, identity.local.version]) : JSON.stringify([identity.grantId, identity.version]);
   let pending = sessions.get(key);
   if (!pending) {
     for (const [oldKey, oldPending] of sessions) {
@@ -82,7 +91,7 @@ mcpRoutes.all("/mcp", async c => {
   catch { return c.json({ error: "MCP scope or tool catalog unavailable" }, 503); }
   session.identity = identity; session.touchedAt = Date.now(); session.users++;
   try {
-    await assertMcpIdentity(identity);
+    if (isLocalMcpContext(identity)) await assertLocalContext(identity); else await assertMcpIdentity(identity);
     if (JSON.stringify(await listMcpTools(identity)) !== session.catalog) {
       if (sessions.get(key) === pending) sessions.delete(key);
       await session.dispose();

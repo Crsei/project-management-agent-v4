@@ -53,20 +53,10 @@ export type ComposerPrimaryAction = {
 
 const SEND: ComposerText = { zh: "发送消息", en: "Send message" };
 const SEND_CONTEXT: ComposerText = { zh: "发送已选上下文", en: "Send selected context" };
-const STEER: ComposerText = { zh: "引导当前执行", en: "Steer current turn" };
 const QUEUE: ComposerText = { zh: "加入队列", en: "Queue message" };
 const RESUME: ComposerText = { zh: "继续未完成部分", en: "Continue unfinished part" };
 const UPDATE_QUEUED: ComposerText = { zh: "更新队列", en: "Update queued" };
 const HIDDEN: ComposerText = { zh: "", en: "" };
-
-const TEXT_REQUIRED: ComposerText = {
-  zh: "引导只接受文字指令；附件、引用请使用“草稿与队列”。",
-  en: "Steering accepts text only; use “Draft and queue” for attachments or references.",
-};
-const STEER_NEEDS_CONFIRMATION: ComposerText = {
-  zh: "此 Provider 的引导可能打断待处理工具；请先在“草稿与队列”核对后再引导。",
-  en: "Steering may interrupt pending tools for this provider; confirm in “Draft and queue” first.",
-};
 
 function blockedReason(input: ComposerPrimaryInput): ComposerText | undefined {
   if (input.historyBlocked)
@@ -121,24 +111,9 @@ export function resolveComposerPrimaryAction(input: ComposerPrimaryInput): Compo
     };
   }
   if (input.running) {
-    // While a turn runs, the cancel control is the primary affordance; only a
-    // real follow-up capability is added next to it.
     if (!hasDraft || !input.remoteThread) return hidden;
-    const steerReady = input.steer.supported && !input.steer.interruptsTools;
-    if (steerReady)
-      return {
-        kind: "steer",
-        label: STEER,
-        disabled: !!reason || !input.hasText,
-        reason: reason ?? (input.hasText ? undefined : TEXT_REQUIRED),
-      };
     if (isPlainTextDraft(input))
-      return {
-        kind: "queue",
-        label: QUEUE,
-        disabled: !!reason,
-        reason: reason ?? (input.steer.interruptsTools ? STEER_NEEDS_CONFIRMATION : undefined),
-      };
+      return { kind: "queue", label: QUEUE, disabled: !!reason, reason };
     return hidden;
   }
 

@@ -8,18 +8,23 @@ import { prepareReportDirectory } from '../reports/files.ts';
 import { gradeTask } from '../graders/index.ts';
 import type { CodeExecutionResult, CodeExecutor, GradeResult } from '../graders/types.ts';
 import { RUNNABLE_TASK_IDS } from '../tasks/index.ts';
-import { calibrationMutations, GUIDANCE_EXPECTED_FAILURES } from './cases.ts';
+import { calibrationMutations, CALIBRATION_EXPECTED_FAILURES, calibrationExpectedPasses } from './cases.ts';
 import { materializeReference, referenceCase, REFERENCE_SCOPE } from './reference.ts';
+import { currentEvaluatorVersion } from '../evaluation/evaluator.ts';
+import { archiveCalibrationEvidence } from '../evaluation/archive.ts';
 
 export interface CalibrationOptions { outputDir: string; runCodeTests?: boolean; config?: BenchmarkConfig; codeExecutor?: CodeExecutor }
 export interface CalibrationCaseResult {
   taskId: string; name: string; expectedPass: boolean; actualPass: boolean; passed: boolean; exercised: boolean;
   safetyGatePassed: boolean | null; failedChecks: string[]; resultPath: string; referencePath: string; error: string | null;
   expectedFailedCheck: string | null; intendedFailureObserved: boolean;
+  expectedPassedChecks: string[]; boundaryChecksObserved: boolean;
+  archiveRoot?: string; manifestSha256?: string; initialGradePath?: string; initialGradeSha256?: string;
 }
 export interface CalibrationResult {
   kind: 'grader-calibration'; agent: null; model: null; success: boolean; scope: string; createdAt: string;
   cases: CalibrationCaseResult[]; infrastructureErrors: string[]; codeExecution: { realSandboxCalls: number; exactInputCacheHits: number }; artifacts: { json: string; markdown: string };
+  evaluatorSha256: string; calibrationDefinitionSha256: string;
 }
 
 /** Explicit reference calibration, deliberately separate from all adapters and model-run reporting. */
@@ -30,10 +35,11 @@ export async function calibrate(options: CalibrationOptions): Promise<Calibratio
   const relative = path.relative(config.outputsRoot, outputDir);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Calibration output must be a new directory inside the reserved outputs tree.');
   await prepareReportDirectory(outputDir, true);
-  const result: CalibrationResult = { kind: 'grader-calibration', agent: null, model: null, success: false, scope: REFERENCE_SCOPE, createdAt: new Date().toISOString(), cases: [], infrastructureErrors: [], codeExecution: { realSandboxCalls: 0, exactInputCacheHits: 0 }, artifacts: { json: path.join(outputDir, 'calibration.json'), markdown: path.join(outputDir, 'calibration.md') } };
+  const evaluator = await currentEvaluatorVersion(config.codeImage);
+  const result: CalibrationResult = { kind: 'grader-calibration', agent: null, model: null, success: false, scope: REFERENCE_SCOPE, createdAt: new Date().toISOString(), evaluatorSha256: evaluator.sha256, calibrationDefinitionSha256: evaluator.calibrationDefinitionSha256, cases: [], infrastructureErrors: [], codeExecution: { realSandboxCalls: 0, exactInputCacheHits: 0 }, artifacts: { json: path.join(outputDir, 'calibration.json'), markdown: path.join(outputDir, 'calibration.md') } };
   let runtimeRoot: string | undefined;
   let scenarioIsolationFailures: string[] = [];
-  const execute = options.codeExecutor ?? createCodeExecutor(config);
+  const execute = options.codeExecutor ?? createCodeExecutor({ ...config, codeImage: evaluator.runtime.codeImageDigest ?? config.codeImage });
   // Cache only observed executions for exactly the same source/test bytes and probe inputs. Never cache a model outcome.
   const observed = new Map<string, CodeExecutionResult>();
   const codeExecutor: CodeExecutor = async (request) => {
@@ -73,12 +79,18 @@ export async function calibrate(options: CalibrationOptions): Promise<Calibratio
         const exercised = error === null && scenarioIsolationFailures.length === 0;
         const actualPass = grade?.success === true;
         const failedChecks = grade ? [...Object.values(grade.checks).flat(), ...grade.safetyGate.checks].filter(item => item.required && !item.passed).map(item => item.id) : [];
-        const expectedFailedCheck = GUIDANCE_EXPECTED_FAILURES[taskId]?.[scenario.name] ?? null;
-        const intendedFailureObserved = expectedFailedCheck === null || failedChecks.includes(expectedFailedCheck);
-        const entry: CalibrationCaseResult = { taskId, name: scenario.name, expectedPass, actualPass, passed: exercised && actualPass === expectedPass && intendedFailureObserved, exercised, safetyGatePassed: grade?.safetyGate.passed ?? null, failedChecks, expectedFailedCheck, intendedFailureObserved, resultPath, referencePath, error };
+        const expectedFailedCheck = expectedPass ? null : CALIBRATION_EXPECTED_FAILURES[taskId]?.[scenario.name] ?? null;
+        const intendedFailureObserved = expectedPass || expectedFailedCheck !== null && failedChecks.includes(expectedFailedCheck);
+        const expectedPassedChecks = expectedPass ? [] : calibrationExpectedPasses(scenario.name);
+        const allChecks = grade ? [...Object.values(grade.checks).flat(), ...grade.safetyGate.checks] : [];
+        const boundaryChecksObserved = expectedPassedChecks.every(id => allChecks.some(item => item.id === id && item.passed));
+        const entry: CalibrationCaseResult = { taskId, name: scenario.name, expectedPass, actualPass, passed: exercised && actualPass === expectedPass && intendedFailureObserved && boundaryChecksObserved, exercised, safetyGatePassed: grade?.safetyGate.passed ?? null, failedChecks, expectedFailedCheck, intendedFailureObserved, expectedPassedChecks, boundaryChecksObserved, resultPath, referencePath, error };
         result.cases.push(entry);
         for (const failure of scenarioIsolationFailures) if (!result.infrastructureErrors.includes(failure)) result.infrastructureErrors.push(failure);
         if (error) result.infrastructureErrors.push(`${taskId}/${scenario.name}: ${error}`);
+        const archiveRoot = path.join(input.outputDir, 'evaluation');
+        const sealed = await archiveCalibrationEvidence(input, grade, error, archiveRoot, evaluator);
+        Object.assign(entry, { archiveRoot, manifestSha256: sealed.manifestSha256, initialGradePath: sealed.initialGradePath, initialGradeSha256: sealed.initialGradeSha256 });
         await writeFile(resultPath, JSON.stringify({ kind: 'grader-calibration-case', scope: REFERENCE_SCOPE, ...entry, grade: grade ?? null }, null, 2) + '\n', { mode: 0o600 });
       }
     }

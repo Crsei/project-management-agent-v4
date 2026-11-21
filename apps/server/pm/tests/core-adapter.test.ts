@@ -11,7 +11,7 @@ import { Workspace, revisionOf } from '../../../../packages/pm-core/index.ts';
 import { createMarkdown, parseMarkdown } from '../../../../packages/pm-markdown/index.ts';
 import type { FileRecord, WorkflowDefinition } from '../../../../packages/pm-schema/index.ts';
 import { DomainError, type Actor, type Capability, type Command, type CommandReceipt, type Entity } from '../../../../packages/domain/src/core.ts';
-import { CoreScope } from '../src/core-routes.ts';
+import { CoreScope } from '../src/routes/core-routes.ts';
 import {
   CORE_ENTITY_KINDS, coreRecordToEntity, coreVersion, executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities,
   readCoreEntity, toCorePriority, toCoreStatus, toPmPriority, toPmStatus, type CoreCommandContext,

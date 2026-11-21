@@ -9,10 +9,12 @@ import "@pm/openhands-source/web/skills/skills.css";
 
 export interface OpenHandsSkillsPageProps {
   onInteractionBlockedChange?: (blocked: boolean) => void;
+  /** Host-owned inventory shown inside the Discover view, above repository results. */
+  renderDiscoveryLeading?: React.ComponentProps<typeof UnifiedSkillsPanel>["renderDiscoveryLeading"];
 }
 
 /** OpenHands source cards/facets/details on the existing CC Switch Rust lifecycle host. */
-export function OpenHandsSkillsPage({ onInteractionBlockedChange }: OpenHandsSkillsPageProps) {
+export function OpenHandsSkillsPage({ onInteractionBlockedChange, renderDiscoveryLeading }: OpenHandsSkillsPageProps) {
   const { t } = useOpenHandsTranslation();
   return <main data-testid="skills-settings-screen" className="oh-skills-page">
     <UnifiedSkillsPanel
@@ -32,6 +34,7 @@ export function OpenHandsSkillsPage({ onInteractionBlockedChange }: OpenHandsSki
       }}
       renderInstalled={(state, mode) => <OpenHandsInstalledSkills state={state} mode={mode ?? "catalog"} />}
       renderDiscovery={(state) => <OpenHandsDiscoveredSkills {...state} />}
+      renderDiscoveryLeading={renderDiscoveryLeading}
     />
   </main>;
 }

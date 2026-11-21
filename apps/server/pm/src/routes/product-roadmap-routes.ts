@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { roadmapActionSchema } from '../../../../packages/contracts/src/product-roadmap.ts';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
+import { roadmapActionSchema } from '../../../../../packages/contracts/src/product-roadmap.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
 import type { CoreWorkspacePool } from './core-routes.ts';
-import { createProductRoadmapService } from './product-roadmap-service.ts';
+import { createProductRoadmapService } from '../product-roadmap-service.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };
 export function registerProductRoadmapRoutes(app: FastifyInstance, options: Options) {

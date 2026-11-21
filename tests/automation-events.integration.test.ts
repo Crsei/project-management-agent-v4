@@ -11,7 +11,7 @@ import type { StudioConfig } from '../packages/contracts/src/automation-studio.t
 import type { AutomationEventReceipt } from '../packages/contracts/src/automation-integrations.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
-import { createAutomationPrivateStore, type AutomationMcpAdapter } from '../packages/infrastructure/src/automation-integrations.ts';
+import { createAutomationPrivateStore } from '../packages/infrastructure/src/automation-integrations.ts';
 import type { AutomationServiceIdentity } from '../packages/infrastructure/src/automation-execution-client.ts';
 import { readonlyCorePort } from '../packages/pm-core/readonly.ts';
 import { acquireMailFixtureDatabase, createMailFixtureDatabase, type MailFixtureDatabase } from './mail-fixture-database.ts';
@@ -72,63 +72,6 @@ describe('PostgreSQL authenticated automation events and private connector opera
     await f.pool.query('UPDATE memberships SET revoked_at=clock_timestamp() WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, f.actor.id]);
     await assert.rejects(receive(Buffer.from('{"action":"opened","new":true}')), rejected('not_found_or_forbidden'));
     assert.equal((await f.pool.query('SELECT count(*)::text AS count FROM automation_studio_executions WHERE definition_id=$1', [definitionId])).rows[0].count, '2');
-  });
-  it('keeps private headers encrypted, freezes native API operations and never redispatches an unknown external result', { timeout: 60000 }, async t => {
-    const f = await fixture(t.signal); t.after(f.close);
-    let mcpCalls = 0; let nativeProbes = 0;
-    const controlledAdapter: AutomationMcpAdapter = { list: async () => { mcpCalls++; throw new Error('API-only must never contact MCP'); }, call: async () => { throw new Error('API-only has no MCP calls'); } };
-    const connections = createAutomationIntegrationsService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, adapter: controlledAdapter, nativeAdapter: async () => { nativeProbes++; return { status: 200, body: { full_name: 'owner/approved' }, headers: {} }; } });
-    const connectionId = randomUUID(); const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0, config: { projectId: 'PRJ-001', provider: 'github', label: 'Explicit API-only connection', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } }, nativePrivateHeaders: { Authorization: 'Bearer controlled-private-not-real-provider' } });
-    assert.equal(JSON.stringify(saved).includes('controlled-private'), false);
-    const stored = (await f.pool.query('SELECT native_private_config FROM automation_integration_connections WHERE id=$1', [connectionId])).rows[0]; assert.equal(stored.native_private_config.includes('controlled-private'), false);
-    const verified = await connections.verify(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: saved.revision });
-    assert.equal(verified.status, 'verified'); assert.deepEqual(verified.verification, { mcp: false, nativeApi: true }); assert.equal(mcpCalls, 0); assert.equal(nativeProbes, 1);
-    const config: StudioConfig = { ...f.config, templateId: 'github-delivery-watchdog', action: { kind: 'template', templateId: 'github-delivery-watchdog', arguments: { repositories: ['owner/approved'] }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [{ id: `integration:${connectionId}`, version: String(verified.revision) }], timeoutSeconds: 30 } };
-    const definitionId = await f.definition(config); const endpoint = await f.endpoint(definitionId);
-    const received = await f.events.receive(endpoint.id, Buffer.from('{"action":"opened","for":"native"}'), { 'x-automation-key': f.secret, 'x-webhook-id': randomUUID() }) as AutomationEventReceipt; assert.ok(received.executionId);
-    await f.pool.query('UPDATE automation_studio_executions SET dispatched_at=clock_timestamp() WHERE id=$1', [received.executionId]);
-    const row = (await f.pool.query('SELECT request_id FROM automation_studio_executions WHERE id=$1', [received.executionId])).rows[0]; const generationId = randomUUID();
-    const identity: AutomationServiceIdentity = { actorId: f.actor.id, workspaceId: f.workspaceId, projectId: 'PRJ-001', executionId: received.executionId!, requestId: row.request_id, definitionId, definitionRevision: 1, audience: 'automation-integrations', generationId, issuedAt: Date.now(), expiresAt: Date.now() + 60000 };
-    let attempts = 0;
-    const broker = createAutomationIntegrationRuntimeService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, adapter: controlledAdapter, nativeAdapter: async () => { attempts++; throw new Error('Controlled response lost after possible provider write'); } });
-    await broker.handle(identity, { executionId: identity.executionId, generationId, method: 'grant/open' });
-    assert.deepEqual(await broker.handle(identity, { executionId: identity.executionId, generationId, method: 'tools/list' }), { tools: [] }); assert.equal(mcpCalls, 0);
-    const call = { executionId: identity.executionId, generationId, method: 'provider/request' as const, params: { provider: 'github', operationId: randomUUID(), method: 'POST', path: '/repos/owner/approved/issues/1/comments', body: { body: 'Explicit controlled test write' } } };
-    await assert.rejects(broker.handle(identity, call), rejected('integration_outcome_unknown')); await assert.rejects(broker.handle(identity, call), rejected('integration_outcome_unknown')); assert.equal(attempts, 1);
-    await broker.handle(identity, { executionId: identity.executionId, generationId, method: 'grant/close' });
-    await assert.rejects(broker.handle(identity, call), rejected('integration_grant_revoked'));
-    const revoked = await connections.revoke(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: verified.revision }); assert.deepEqual(revoked.verification, { mcp: false, nativeApi: false });
-    assert.equal((await connections.operation(f.actor, f.workspaceId, String(call.params.operationId))).status, 'outcome_unknown', 'Historical original outcome remains authorized and readable after connector revocation');
-  });
-  it('withholds a confirmed external result after revocation without losing the original completed receipt', { timeout: 60000 }, async t => {
-    const f = await fixture(t.signal); t.after(f.close);
-    const connections = createAutomationIntegrationsService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, nativeAdapter: async () => ({ status: 200, body: { full_name: 'owner/approved' }, headers: {} }) });
-    const connectionId = randomUUID();
-    const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0,
-      config: { projectId: 'PRJ-001', provider: 'github', label: 'Revocation race', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } },
-      nativePrivateHeaders: { Authorization: 'Bearer controlled-not-a-real-credential' },
-    });
-    const verified = await connections.verify(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: saved.revision });
-    const definitionId = await f.definition({ ...f.config, templateId: 'github-delivery-watchdog', action: { kind: 'template', templateId: 'github-delivery-watchdog', arguments: { repositories: ['owner/approved'] }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [{ id: `integration:${connectionId}`, version: String(verified.revision) }], timeoutSeconds: 30 } });
-    const endpoint = await f.endpoint(definitionId);
-    const received = await f.events.receive(endpoint.id, Buffer.from('{"action":"opened","for":"revocation"}'), { 'x-automation-key': f.secret, 'x-webhook-id': randomUUID() }) as AutomationEventReceipt;
-    assert.ok(received.executionId);
-    await f.pool.query('UPDATE automation_studio_executions SET dispatched_at=clock_timestamp() WHERE id=$1', [received.executionId]);
-    const row = (await f.pool.query('SELECT request_id FROM automation_studio_executions WHERE id=$1', [received.executionId])).rows[0];
-    const generationId = randomUUID();
-    const identity: AutomationServiceIdentity = { actorId: f.actor.id, workspaceId: f.workspaceId, projectId: 'PRJ-001', executionId: received.executionId, requestId: row.request_id, definitionId, definitionRevision: 1, audience: 'automation-integrations', generationId, issuedAt: Date.now(), expiresAt: Date.now() + 60000 };
-    const providerResult = { status: 201, body: { id: 77, body: 'created-but-withheld' }, headers: {} };
-    const broker = createAutomationIntegrationRuntimeService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, nativeAdapter: async () => {
-      await connections.revoke(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: verified.revision });
-      return providerResult;
-    } });
-    await broker.handle(identity, { executionId: identity.executionId, generationId, method: 'grant/open' });
-    const operationId = randomUUID();
-    await assert.rejects(broker.handle(identity, { executionId: identity.executionId, generationId, method: 'provider/request', params: { provider: 'github', operationId, method: 'POST', path: '/repos/owner/approved/issues/1/comments', body: { body: 'controlled write' } } }),
-      error => rejected('integration_outcome_unknown')(error) && !String(error).includes('created-but-withheld'));
-    const receipt = await connections.operation(f.actor, f.workspaceId, operationId);
-    assert.equal(receipt.status, 'completed');
-    assert.deepEqual(receipt.result, providerResult);
   });
   it('confines PM acceptance analysis to its frozen PR even when the verified connection permits broader writes', { timeout: 120000 }, async t => {
     const f = await fixture(t.signal); t.after(f.close);

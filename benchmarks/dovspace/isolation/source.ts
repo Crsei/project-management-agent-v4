@@ -30,6 +30,22 @@ export async function collectSourceManifest(root: string): Promise<SourceManifes
   return { version: '1', files, sourceHash: digest(files) };
 }
 
+/** Project a separately verified distribution inventory onto the exact benchmark server closure representation. */
+export function projectProductSourceInventory(inventory: readonly { path: string; sha256: string }[]): SourceManifest {
+  const seen = new Set<string>(), files: SourceManifest['files'] = [];
+  for (const entry of inventory) {
+    if (typeof entry.path !== 'string' || entry.path.includes('\\') || entry.path.startsWith('/')
+      || entry.path.split('/').some(part => !part || part === '.' || part === '..')
+      || !/^[a-f0-9]{64}$/.test(entry.sha256) || seen.has(entry.path)) throw new Error('Product source projection requires a canonical complete inventory');
+    seen.add(entry.path);
+    if (rootFiles.includes(entry.path) || roots.some(root => entry.path.startsWith(`${root}/`))
+      && entry.path.split('/').every(included)) files.push({ path: entry.path, sha256: entry.sha256 });
+  }
+  if (rootFiles.some(name => !files.some(file => file.path === name)) || roots.some(root => !files.some(file => file.path.startsWith(`${root}/`)))) throw new Error('Distribution inventory is missing the benchmark server/package/vendor closure');
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  return { version: '1', files, sourceHash: digest(files) };
+}
+
 /** Called by the study verifier only AFTER it proves the predeclared treatment delta. */
 export async function approveSourceStage(root: string, manifest: SourceManifest): Promise<SourceStage> {
   const observed = await collectSourceManifest(root);

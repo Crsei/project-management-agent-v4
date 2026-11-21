@@ -46,12 +46,12 @@
 .columns { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; gap: 20px; }
 .stack { display: flex; flex-direction: column; gap: 20px; }
 .panel { border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface); box-shadow: var(--edge-shadow); overflow: hidden; }
-.panelHeader { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 48px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panelHeader { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 48px; padding: 12px 16px; border-bottom: 1px solid var(--glass-edge); }
 .panelHeader h2 { margin: 0; flex-shrink: 0; font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 500; }
 .panelLink { margin-left: auto; font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
-.tabs { display: inline-flex; max-width: 100%; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface-raised); }
+.tabs { display: inline-flex; max-width: 100%; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface-raised); box-shadow: var(--control-shadow); }
 .tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 3px 8px; border-radius: var(--radius-inline-value); color: var(--text-secondary); font-size: var(--text-meta); line-height: var(--text-meta--line-height); white-space: nowrap; cursor: pointer; }
-.tabs button[aria-selected="true"] { color: var(--foreground); background: var(--surface); box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 9%, transparent); }
+.tabs button[aria-selected="true"] { color: var(--foreground); background: var(--surface); box-shadow: var(--control-shadow); }
 .tabs button span { color: var(--text-muted); font-size: var(--text-meta); font-variant-numeric: tabular-nums; }
 .taskList, .projectList, .deadlines ul, .activityList { margin: 0; padding: 0; list-style: none; }
 .taskList li + li, .projectRow + .projectRow { border-top: 1px solid var(--border); }

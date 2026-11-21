@@ -29,7 +29,7 @@
 | [thread-actions.ts](../../apps/server/agent/src/durable/thread-actions.ts)、[engine.ts](../../apps/server/agent/src/durable/engine.ts)、[thread-sidebar.ts](../../apps/server/agent/src/durable/thread-sidebar.ts) | Fork／rewind／steer、每线程进程内执行锁、侧栏独立 revision 与派生活动 |
 | [native-output.ts](../../apps/server/agent/src/durable/native-output.ts)、[continuation.ts](../../apps/server/agent/src/providers/t3code/continuation.ts) | 输出序号／快照、live 交互闭包、原生续聊强边界与所属线程 |
 | [pm-tools.ts](../../apps/server/agent/src/pm-tools.ts)、[pm-tool-transport.ts](../../apps/server/agent/src/pm-tool-transport.ts)、[pm-visibility.ts](../../apps/server/agent/src/pm-visibility.ts) | 原 operation、派发证据、结果核对、正文可见性和污染的原生上下文 |
-| [PM agent-tool-routes.ts](../../apps/server/pm/src/agent-tool-routes.ts)、[PM agent-chat-tools.ts](../../apps/server/pm/src/agent-chat-tools.ts) | PostgreSQL 操作台账、原 command/native journal 恢复、提交前授权和结果交付复查 |
+| [PM agent-tool-routes.ts](../../apps/server/pm/src/routes/agent-tool-routes.ts)、[PM agent-chat-tools.ts](../../apps/server/pm/src/agent-tools/agent-chat-tools.ts) | PostgreSQL 操作台账、原 command/native journal 恢复、提交前授权和结果交付复查 |
 | [agent-workspaces.ts](../../apps/server/agent/src/agent-workspaces.ts) | `agent:workspaces:v1`／`agent:scratch:v1`、规范目录和 device/inode/birthtime 身份 |
 | [agent-backup.ts](../../apps/server/agent/src/maintenance/agent-backup.ts)、[PM backup.mjs](../../scripts/backup.mjs)、[桌面 maintenance.ts](../../apps/desktop/src/backend/maintenance.ts) | Agent 快照／脱敏、PM SQL/core/blob 检查点、桌面已有组合备份 |
 | [session-cutover.ts](../../apps/server/agent/src/maintenance/session-cutover.ts) | 已有显式旧 Session 清理的清单、指纹、业务证据保留和未知 namespace 拒绝模式；不等于本设计迁移已实现 |

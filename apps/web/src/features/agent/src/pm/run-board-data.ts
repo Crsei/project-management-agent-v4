@@ -31,9 +31,11 @@ type BoardSnapshot = {
   providers: ProvidersResponse["providers"];
   loading: boolean;
   refreshing: boolean;
+  metadataLoading: boolean;
   error: string | null;
   metadataError: string | null;
   loadedAt: string | null;
+  metadataLoadedAt: string | null;
 };
 type HistorySnapshot = { data: RunBoardHistory | null; loading: boolean; error: string | null };
 type ExecutionSnapshot = { environment: ExecutionEnvironment | null; loading: boolean; error: string | null };
@@ -45,7 +47,7 @@ const isAuthorizationError = (cause: unknown): cause is WorkspaceClientError =>
   cause instanceof WorkspaceClientError && (cause.status === 401 || cause.status === 403);
 const authorizationMessage = (cause: WorkspaceClientError) =>
   `Agent 访问授权失效（HTTP ${cause.status}）；已清除旧数据，请重新登录或刷新。`;
-const emptyBoard = (): BoardSnapshot => ({ threads: [], workspaces: [], providers: [], loading: true, refreshing: false, error: null, metadataError: null, loadedAt: null });
+const emptyBoard = (): BoardSnapshot => ({ threads: [], workspaces: [], providers: [], loading: true, refreshing: false, metadataLoading: false, error: null, metadataError: null, loadedAt: null, metadataLoadedAt: null });
 
 export type RunBoardAccessScope = {
   revision: () => number;
@@ -79,10 +81,10 @@ function visible() {
   return typeof document === "undefined" || document.visibilityState !== "hidden";
 }
 
-function pollVisible(refresh: () => Promise<void>): () => void {
+function pollVisible(refresh: () => Promise<void>, intervalMs = 5_000): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {};
   const refreshVisible = () => { if (visible()) void refresh(); };
-  const interval = window.setInterval(refreshVisible, 5_000);
+  const interval = window.setInterval(refreshVisible, intervalMs);
   window.addEventListener("focus", refreshVisible);
   window.addEventListener("online", refreshVisible);
   document.addEventListener("visibilitychange", refreshVisible);
@@ -101,6 +103,7 @@ export function createRunBoardData(client: Client = workspaceClient, access: Run
   let snapshot = emptyBoard();
   let active = false;
   let pending: ReadOperation | null = null;
+  let metadataPending: ReadOperation | null = null;
   const listeners = new Set<Listener>();
   const actionReads = new Set<AbortController>();
   const stopping = new Set<string>();
@@ -108,11 +111,13 @@ export function createRunBoardData(client: Client = workspaceClient, access: Run
   const invalidate = (error: string) => {
     pending?.controller.abort();
     pending = null;
+    metadataPending?.controller.abort();
+    metadataPending = null;
     for (const controller of actionReads) controller.abort();
     publish({ ...emptyBoard(), loading: false, error });
   };
 
-  const refresh = (): Promise<void> => {
+  const refreshThreads = (): Promise<void> => {
     if (!active) return Promise.resolve();
     if (pending) return pending.promise;
     const controller = new AbortController();
@@ -123,11 +128,38 @@ export function createRunBoardData(client: Client = workspaceClient, access: Run
     const operation: ReadOperation = { controller, promise: Promise.resolve() };
     pending = operation;
     operation.promise = (async () => {
-      const [threads, workspaces, providers] = await Promise.allSettled([
+      const [threads] = await Promise.allSettled([
         read<{ threads: RemoteThread[] }>("/api/chat/threads").then(body => {
           if (!Array.isArray(body?.threads)) throw new Error("会话列表响应不兼容；未替换上次快照。");
           return body.threads.filter(thread => thread.status !== "archived");
         }),
+      ]);
+      if (!current() || pending !== operation) return;
+      publish({
+        ...snapshot,
+        threads: threads.status === "fulfilled" ? threads.value : snapshot.threads,
+        loading: false,
+        refreshing: false,
+        error: threads.status === "rejected" ? message(threads.reason) : null,
+        loadedAt: threads.status === "fulfilled" ? now() : snapshot.loadedAt,
+      });
+    })().finally(() => { if (pending === operation) pending = null; });
+    return operation.promise;
+  };
+
+  // Folder and Provider metadata change far less often than Session activity.
+  const refreshMetadata = (): Promise<void> => {
+    if (!active) return Promise.resolve();
+    if (metadataPending) return metadataPending.promise;
+    const controller = new AbortController();
+    const revision = access.revision();
+    const current = () => active && !controller.signal.aborted && revision === access.revision();
+    publish({ ...snapshot, metadataLoading: true });
+    const read = <T,>(path: string) => observeAuthorization(client.json<T>(path, { signal: controller.signal, cache: "no-store" }), access, current);
+    const operation: ReadOperation = { controller, promise: Promise.resolve() };
+    metadataPending = operation;
+    operation.promise = (async () => {
+      const [workspaces, providers] = await Promise.allSettled([
         read<{ workspaces: AgentWorkspace[] }>("/api/agent-workspaces").then(body => {
           if (!Array.isArray(body?.workspaces)) throw new Error("文件夹元数据响应不兼容。");
           return body.workspaces;
@@ -137,29 +169,31 @@ export function createRunBoardData(client: Client = workspaceClient, access: Run
           return body.providers;
         }),
       ]);
-      if (!current() || pending !== operation) return;
+      if (!current() || metadataPending !== operation) return;
       const metadataErrors: string[] = [];
       if (workspaces.status === "rejected") metadataErrors.push(`文件夹：${message(workspaces.reason)}`);
       if (providers.status === "rejected") metadataErrors.push(`Provider：${message(providers.reason)}`);
       publish({
-        threads: threads.status === "fulfilled" ? threads.value : snapshot.threads,
+        ...snapshot,
         workspaces: workspaces.status === "fulfilled" ? workspaces.value : snapshot.workspaces,
         providers: providers.status === "fulfilled" ? providers.value : snapshot.providers,
-        loading: false,
-        refreshing: false,
-        error: threads.status === "rejected" ? message(threads.reason) : null,
+        metadataLoading: false,
         metadataError: metadataErrors.length ? metadataErrors.join("；") : null,
-        loadedAt: threads.status === "fulfilled" ? now() : snapshot.loadedAt,
+        metadataLoadedAt: metadataErrors.length ? snapshot.metadataLoadedAt : now(),
       });
-    })().finally(() => { if (pending === operation) pending = null; });
+    })().finally(() => { if (metadataPending === operation) metadataPending = null; });
     return operation.promise;
+  };
+
+  const refreshAll = async (): Promise<void> => {
+    await Promise.allSettled([refreshThreads(), refreshMetadata()]);
   };
 
   // A refresh already in flight can predate the stop. Await it, then read again.
   const reconcile = async () => {
     if (pending) await pending.promise;
     if (!active) throw new Error("运行面板已关闭；请重新打开会话核对原停止请求。");
-    await refresh();
+    await refreshThreads();
     if (snapshot.error || !snapshot.loadedAt) throw new Error(snapshot.error || "未取得当前会话快照。");
   };
 
@@ -213,21 +247,27 @@ export function createRunBoardData(client: Client = workspaceClient, access: Run
   return {
     getSnapshot: () => snapshot,
     subscribe(listener: Listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    refresh,
+    refresh: refreshThreads,
+    refreshMetadata,
+    refreshAll,
     stop,
     start() {
       active = true;
       const unsubscribe = access.subscribe(invalidate);
-      const unpoll = pollVisible(refresh);
-      if (visible()) void refresh();
+      const unpollThreads = pollVisible(refreshThreads);
+      const unpollMetadata = pollVisible(refreshMetadata, 60_000);
+      if (visible()) void refreshAll();
       return () => {
         active = false;
         pending?.controller.abort();
         pending = null;
+        metadataPending?.controller.abort();
+        metadataPending = null;
         for (const controller of actionReads) controller.abort();
         actionReads.clear();
         unsubscribe();
-        unpoll();
+        unpollThreads();
+        unpollMetadata();
       };
     },
   };
@@ -343,11 +383,11 @@ export function useRunBoardAccessError(): string | null {
   return error;
 }
 
-export function useRunBoard(): BoardSnapshot & { refresh: () => Promise<void>; stop: (threadId: string, generationId: string) => Promise<void> } {
+export function useRunBoard(): BoardSnapshot & { refresh: () => Promise<void>; refreshMetadata: () => Promise<void>; refreshAll: () => Promise<void>; stop: (threadId: string, generationId: string) => Promise<void> } {
   const store = useMemo(() => createRunBoardData(), []);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   useEffect(store.start, [store]);
-  return { ...snapshot, refresh: store.refresh, stop: store.stop };
+  return { ...snapshot, refresh: store.refresh, refreshMetadata: store.refreshMetadata, refreshAll: store.refreshAll, stop: store.stop };
 }
 
 export function useRunBoardHistory(threadId: string | null): HistorySnapshot & { refresh: () => Promise<void> } {

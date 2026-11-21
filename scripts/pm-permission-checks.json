@@ -43,7 +43,7 @@
         "apps/server/agent/src/mcp/server.test.ts",
         "apps/server/agent/src/mcp-apps/requests.test.ts",
         "packages/pm-cli/tests/auth.test.ts",
-        "apps/server/gateway.test.ts"
+        "apps/server/gateway/tests/gateway.test.ts"
       ]
     },
     "real-db": {

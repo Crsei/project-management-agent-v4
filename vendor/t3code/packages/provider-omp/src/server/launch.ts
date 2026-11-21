@@ -2,8 +2,6 @@
 // packages/utils/src/dirs.ts, coding-agent/src/cli/{args,flag-tables}.ts and main.ts.
 import { existsSync } from "node:fs";
 import * as Path from "node:path";
-import { homedir } from "node:os";
-import { assertOmpStartupSafe } from "./startupPolicy.ts";
 import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 
 export type OmpLaunchArgsResolution =
@@ -108,7 +106,6 @@ export function buildOmpRpcLaunch(input: {
   readonly launchArgs: ReadonlyArray<string>;
   readonly environment: NodeJS.ProcessEnv;
   readonly cwd?: string;
-  readonly homeDirectory?: string;
   readonly extensionPath?: string;
   readonly permissionEnvironment?: NodeJS.ProcessEnv;
   readonly sessionPath?: string;
@@ -137,9 +134,6 @@ export function buildOmpRpcLaunch(input: {
     env[key] = value;
   }
   const cwd = Path.resolve(input.cwd ?? process.cwd());
-  const homeDirectory = input.homeDirectory || homedir();
-  const nativeHome = resolveOmpNativeHome({ environment: env, homeDirectory, cwd });
-  assertOmpStartupSafe({ environment: env, homeDirectory: nativeHome.homeDirectory, cwd, nativeHome });
   const args = ["--mode", "rpc-ui", "--approval-mode", "always-ask", ...validated.args];
   // An exact native trust allowlist also disables ambient hooks/configured extensions.
   if (input.extensionPath !== undefined) {

@@ -7,6 +7,7 @@ import {
 import { isTargetAvailable } from "@pm/openhands-source/web/bridge";
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { SkillIconBadge } from "@pm/openhands-source/components/features/skills/skill-icon-badge";
+import { AgentAvatar } from "@pm/openhands-source/web/shared/agent-avatar";
 import { agentName, isNativeDiscoveryAgent } from "./skill-presentation";
 
 /** Adapted from mcp-skill-page SkillAgentDrawer: writes are immediate, not simulated drafts. */
@@ -49,7 +50,7 @@ export function SkillAgentDrawer({ skill, state, onClose }: {
             const reasonId = `${assignmentId}-${app}`;
             return <div key={app} className="oh-skill-assignment" data-target-bound={bound} data-testid={`skill-agent-row-${app}`}>
               <div className="oh-skill-assignment-heading">
-                <label><span className="oh-skill-agent-avatar" aria-hidden="true">{agentName(app).slice(0, 2).toUpperCase()}</span><span>{agentName(app)}</span>
+                <label><AgentAvatar app={app} size="md" /><span>{agentName(app)}</span>
                   <input type="checkbox" checked={enabled} disabled={!bound || state.busy} aria-describedby={reasonId}
                     onChange={(event) => state.onToggle(skill.id, app, event.target.checked)} /></label>
                 <span className="oh-skill-state-badge">{t(statusKey)}</span>

@@ -47,7 +47,7 @@
 - **App 中安装：** 在 Agent Chat → 设置 → Skills 的“Dovspace 内置 PM Skills”区域，选择已启用、已配置且支持原生扩展的 Provider，再明确勾选并安装。初始化的可选 AI 步骤提供相同入口，也可以跳过；仅打开页面、连接 Provider 或升级 App 不自动写入原生目录。
 - **来源可核对：** 每份显示 Dovspace 来源、仓库相对路径和内容 SHA-256；安装状态绑定实际 Provider 根及当前资源版本。普通原生 Skill 只展示 Provider 实际报告的路径，不因同名就标记为内置。
 - **保护已有文件：** 仅更新有内置来源记录且完整文件树仍匹配的托管 Skill；同名未托管或用户修改的文件显示冲突，不覆盖。共享管理库的更新可能影响已分配的其他 Provider，先核对界面警告。响应未知时先重新读取状态，不自动重发。
-- **供其他 Agent 使用：** `pnpm pm plugin generate/install/update/uninstall` 使用同一九份目录；portable、Codex 的两种布局、Claude、Pi、OpenCode 六种布局各含九份 Skill。原生加载及 MCP/OAuth 配置步骤见[插件指南](../../plugins/dovspace-pm/README.md)。
+- **供其他 Agent 使用：** `pnpm run pm plugin generate/install/update/uninstall` 使用同一九份目录；portable、Codex 的两种布局、Claude、Pi、OpenCode 六种布局各含九份 Skill。原生加载及 MCP/OAuth 配置步骤见[插件指南](../../plugins/dovspace-pm/README.md)。
 
 安装只证明文件已写入所选原生目标，不证明当前会话已加载、模型调用或 PM 写入权限；按实际客户端要求重新发现／加载或新建会话。Pi／OMP 的目录观测语义及 OMP 调用禁用边界不变。
 

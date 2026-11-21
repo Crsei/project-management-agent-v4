@@ -23,7 +23,7 @@
 
 受信Chat execution identity绑定thread/generation/message/scope。存在PM bridge而缺少identity时在startTurn前失败；非Chat无工具调用仅分配技术身份，不伪造PM授权。runtime binding在openSession前建立，冲突不得覆盖live binding；finalizer只清自己拥有的token。
 
-原生MCP/ACP/SDK/Host Tools只承载同一generation的PM桥，不注入t3业务/browser/device授权。原生permission请求默认拒绝；信息问题回答不能转成权限accept。允许匹配本session的PM transport admission不代表批准业务动作；后者仍由PM能力/审批/revision判断。标题、探测、用量刷新和技术性压缩不获得业务工具，不提供acceptAlways。
+原生MCP/ACP/SDK/Host Tools只承载同一generation的PM桥，不注入t3业务/browser/device授权。原生permission请求在用户明确批准前拒绝；没有可响应的Chat交互通道（自动化或无UI调用）时直接拒绝。信息问题回答不能转成权限accept。允许匹配本session的PM transport admission不代表批准业务动作；后者仍由PM能力/审批/revision判断。标题、探测、用量刷新和技术性压缩不获得业务工具，不提供acceptAlways。
 
 目录/cwd是执行定位，不是文件系统沙箱。Agent仍面向可信本机单操作者，尚无按PM成员隔离的会话所有权。
 

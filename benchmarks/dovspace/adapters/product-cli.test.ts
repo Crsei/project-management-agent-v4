@@ -22,7 +22,7 @@ async function fixture(options: { loseSubmit?: boolean; running?: boolean; unava
   await mkdir(directory, { mode: 0o700 });
   const pmToken = 'p'.repeat(43), agentToken = 'a'.repeat(43), cookie = `agent_v4_access=${'b'.repeat(64)}`;
   const requests: { route: string; method: string; headers: IncomingMessage['headers']; body: Json }[] = [];
-  const threads = new Map<string, Json>(), generations = new Map<string, Json>();
+  const threads = new Map<string, Json>(), generations = new Map<string, Json>(), submissions = new Map<string, string>();
   const provider = options.provider ?? 'codex';
   let configuration: Json = { instanceId: provider, driver: provider, revision: 1, config: {}, environment: [], models: [], customModels: [], modelPreferences: {} };
   const reply = (response: ServerResponse, value: unknown, status = 200): void => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); };
@@ -46,7 +46,12 @@ async function fixture(options: { loseSubmit?: boolean; running?: boolean; unava
     if (route === `/api/providers/${provider}`) { configuration = { ...configuration, ...body, revision: Number(configuration.revision) + 1 }; return reply(response, configuration); }
     if (route === `/api/providers/${provider}/test`) return reply(response, { ok: true, nativeSessionReady: true, models: options.omitModel ? [] : [{ id: provider === 'omp' ? 'bench/fixed-model' : 'fixed-model' }] });
     if (route === '/api/agent-workspaces/open') return reply(response, { workspace: { id: 'workspace-original', revision: 1, path: '/workspace', status: 'available' } });
-    if (route.startsWith('/api/chat/') || route === '/api/chat') {
+    const lifecycleRequest = /^\/api\/chat\/threads\/[^/]+\/generations\/[^/]+\/lifecycle$/.test(route);
+    const stopRequest = /^\/api\/chat\/threads\/[^/]+\/cancel$/.test(route);
+    const submissionRequest = /^\/api\/chat\/threads\/[^/]+\/submissions\/[^/]+$/.test(route);
+    if (lifecycleRequest || stopRequest || submissionRequest) {
+      if (request.headers.authorization || request.headers.cookie.includes('pm_v4_session=')) return reply(response, { error: 'lifecycle must not require or forward PM identity' }, 400);
+    } else if (route.startsWith('/api/chat/') || route === '/api/chat') {
       if (request.headers.authorization !== `Bearer ${pmToken}` || !request.headers.cookie.includes(`pm_v4_session=${pmToken}`)) return reply(response, { error: 'native PM token required' }, 401);
     }
     if (route === '/api/chat/threads') {
@@ -55,8 +60,9 @@ async function fixture(options: { loseSubmit?: boolean; running?: boolean; unava
     }
     if (route === '/api/chat') {
       const input = (body.messages as Json[])[0]!;
-      const generation = { id: `generation-${generations.size + 1}`, threadId: body.id, inputMessageId: input.id, status: options.running ? 'running' : 'completed', messageId: `assistant-${generations.size + 1}` };
+      const generation = { id: `generation-${generations.size + 1}`, threadId: body.id, inputMessageId: input.id, status: options.running ? 'running' : 'completed', messageId: `assistant-${generations.size + 1}`, createdAt: new Date().toISOString() };
       generations.set(generation.id, generation);
+      submissions.set(JSON.stringify([body.id, body.idempotencyKey]), generation.id);
       await options.beforeSubmit?.(body);
       if (options.loseSubmit) { request.socket.destroy(); return; }
       response.writeHead(200, { 'content-type': 'text/event-stream', 'x-resumable-stream-id': generation.id, 'x-accepted-input-message-id': options.mismatchAcceptance ? 'unrelated-input' : String(input.id) });
@@ -76,6 +82,17 @@ async function fixture(options: { loseSubmit?: boolean; running?: boolean; unava
         return reply(response, { thread });
       }
       if (action === 'generations') return reply(response, { generations: [...generations.values()].filter(generation => generation.threadId === id).map(generation => options.mismatchGeneration ? { ...generation, threadId: 'other-session' } : generation) });
+      const lifecycle = /^generations\/([^/]+)\/lifecycle$/.exec(action ?? '');
+      if (lifecycle) {
+        const generation = generations.get(lifecycle[1]!);
+        if (!generation || generation.threadId !== id) return reply(response, { error: 'original generation missing' }, 404);
+        return reply(response, { generation: options.mismatchGeneration ? { ...generation, threadId: 'other-session' } : generation });
+      }
+      const submission = /^submissions\/([^/]+)$/.exec(action ?? '');
+      if (submission) {
+        const generationId = submissions.get(JSON.stringify([id, submission[1]]));
+        return reply(response, { status: generationId ? 'accepted' : 'unknown', ...(generationId ? { generationId } : {}), storeId: 'controlled-store', restoreEpoch: 0 });
+      }
       if (action === 'execution') return reply(response, { threadId: id, source: 'controlled-peer', status: 'available' });
       if (action.startsWith('messages/')) return reply(response, options.unavailableContext ? { error: 'not available' } : { threadId: id, messageId: action.split('/')[1], references: [], context: 'product projection' }, options.unavailableContext ? 403 : 200);
       if (action === 'cancel') {
@@ -133,6 +150,10 @@ test('actual staged CLI uses separate native identities and returns correlated p
     const submitted = current.requests.find(request => request.route === '/api/chat')!;
     assert.equal(submitted.headers.authorization, `Bearer ${'p'.repeat(43)}`);
     const evidence = JSON.stringify([...audits, ...events]);
+    const lifecycle = current.requests.filter(request => request.route.endsWith('/lifecycle'));
+    assert.ok(lifecycle.length > 0);
+    assert.equal(lifecycle.every(request => !request.headers.authorization && !request.headers.cookie?.includes('pm_v4_session=')), true);
+    assert.equal(current.requests.some(request => request.route.endsWith('/generations')), false, 'Polling never requests the historical content projection');
     assert.equal(evidence.includes('p'.repeat(43)), false); assert.equal(evidence.includes('a'.repeat(43)), false); assert.equal(evidence.includes('b'.repeat(64)), false);
     await current.adapter.dispose();
   } finally { await current.close(); }
@@ -236,9 +257,9 @@ test('mismatched generation association is retained in observations but cannot b
     await current.adapter.prepare(current.input);
     const started = await current.adapter.start({ taskId: 'K02', instruction: 'original' });
     const events = await drain(current.adapter, started.sessionId);
-    assert.equal(events.some(event => event.type === 'adapter_error' && String(event.data.message).includes('mismatch')), true);
+    assert.equal(events.some(event => event.type === 'adapter_error' && /mismatch|projection unavailable/.test(String(event.data.message))), true);
     assert.equal(events.some(event => event.type === 'generation_status'), false);
-    await assert.rejects(current.adapter.interrupt(started.sessionId, 'must not stop another Session'), /mismatch/);
+    await assert.rejects(current.adapter.interrupt(started.sessionId, 'must not stop another Session'), /mismatch|projection unavailable/);
     await assert.rejects(current.adapter.resume({ priorSessionId: started.sessionId, instruction: 'forbidden' }), /acknowledgement/);
     assert.equal(current.requests.some(request => request.route.endsWith('/cancel')), false);
     await assert.rejects(current.adapter.dispose(), /cleanup incomplete/);

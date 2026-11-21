@@ -7,6 +7,14 @@ import { getPmReferences } from "./pm-chat-bridge";
 const PREFIX = "pm-v3:agent-draft:";
 type ComposerDraft = ReturnType<AssistantRuntime["thread"]["composer"]["getState"]>;
 const memoryDrafts = new Map<string, Pick<ComposerDraft, "text" | "quote" | "attachments">>();
+const draftKey = (remoteId: string) => `thread:${remoteId}`;
+/** A blank Session stays in the sidebar only when this browser has something to restore. */
+export function hasLocalDraft(remoteId: string): boolean {
+  const key = draftKey(remoteId);
+  const memory = memoryDrafts.get(key);
+  if (memory && (memory.text.trim() || memory.quote || memory.attachments.length)) return true;
+  try { return typeof sessionStorage !== "undefined" && sessionStorage.getItem(PREFIX + key) !== null; } catch { return false; }
+}
 export function useChatDrafts(runtime: AssistantRuntime, enabled = true) {
   const localId = useAuiState((s) => s.threads.mainThreadId);
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
@@ -84,9 +92,8 @@ export function useChatDrafts(runtime: AssistantRuntime, enabled = true) {
     };
   }, [enabled, runtime, localId, key]);
   const protect = () => {
-    const draft = runtime.thread.composer.getState();
-    if (!draft.text.trim() && !draft.attachments.length && !draft.quote && !hasMessageContextDraft(localId) && !getPmReferences(localId).length) return true;
-    return window.confirm(agentText("当前会话有未发送草稿。文字可在此标签页恢复；附件和消息上下文仅在同一页面会话中保留，刷新浏览器会丢失。仍要切换吗？后台生成不会取消。", "This session has an unsent draft. Text can be restored in this tab; attachments and message context last only for this page session and are lost on reload. Switch anyway? Background generation continues."));
+    if (!hasMessageContextDraft(localId) && !getPmReferences(localId).length) return true;
+    return window.confirm(agentText("当前会话还有未保存的消息上下文或 PM 引用，切换后可能无法恢复。仍要切换吗？后台生成不会取消。", "This session has unsaved message context or PM references that may not be restored after switching. Switch anyway? Background generation continues."));
   };
   return { protect, storageError };
 }

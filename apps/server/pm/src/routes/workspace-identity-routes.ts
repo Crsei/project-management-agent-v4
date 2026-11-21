@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { readWorkspaceIdentity, readWorkspaceOrganization } from '../../../../packages/application/src/workspace-identity.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { readWorkspaceIdentity, readWorkspaceOrganization } from '../../../../../packages/application/src/workspace-identity.ts';
 
 export function registerWorkspaceIdentityRoutes(app: FastifyInstance, options: {
   database: () => Pool;

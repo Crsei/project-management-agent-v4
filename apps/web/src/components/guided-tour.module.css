@@ -1,0 +1,239 @@
+/* Spotlight + anchored callout used by guided walkthroughs. The layer sits
+   above workspace overlays but leaves the page interactive so a step can ask
+   the user to operate the highlighted control directly. */
+.spotlight {
+  position: fixed;
+  z-index: calc(var(--layer-overlay, 60) + 300);
+  border-radius: var(--radius-module);
+  outline: 2px solid color-mix(in srgb, var(--ring, var(--accent)) 72%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 100vmax rgb(20 18 16 / 46%);
+  pointer-events: none;
+  transition: top 140ms ease-out, left 140ms ease-out, width 140ms ease-out, height 140ms ease-out;
+}
+
+:global(html.dark) .spotlight {
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 58%);
+}
+
+.bubble {
+  position: fixed;
+  z-index: calc(var(--layer-overlay, 60) + 320);
+  width: min(360px, calc(100vw - 24px));
+  padding: 16px 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: var(--shadow-floating);
+  outline: none;
+}
+
+.bubble:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.progress {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  background: var(--surface-hover);
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 180ms ease-out;
+}
+
+.bubbleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  margin: -4px -6px -4px 0;
+  place-items: center;
+  border-radius: var(--radius-control);
+  color: var(--muted-foreground);
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.bubble h3 {
+  margin: 8px 0 6px;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.body p {
+  margin: 0 0 8px;
+}
+
+.body p:last-child {
+  margin-bottom: 0;
+}
+
+.body ul,
+.body ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.body li + li {
+  margin-top: 4px;
+}
+
+.body strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.body kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.footerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  animation: spin 700ms linear infinite;
+}
+
+.arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+
+.arrow[data-side="top"] {
+  top: -6px;
+  left: calc(var(--arrow) - 6px);
+  box-shadow: -1px -1px 0 rgb(0 0 0 / 5%);
+}
+
+.arrow[data-side="bottom"] {
+  bottom: -6px;
+  left: calc(var(--arrow) - 6px);
+  box-shadow: 1px 1px 0 rgb(0 0 0 / 5%);
+}
+
+.arrow[data-side="left"] {
+  top: calc(var(--arrow) - 6px);
+  left: -6px;
+  box-shadow: -1px 1px 0 rgb(0 0 0 / 5%);
+}
+
+.arrow[data-side="right"] {
+  top: calc(var(--arrow) - 6px);
+  right: -6px;
+  box-shadow: 1px -1px 0 rgb(0 0 0 / 5%);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .bubble {
+    padding: 14px 14px 14px;
+  }
+
+  .footer {
+    align-items: stretch;
+  }
+
+  .footerActions {
+    width: 100%;
+  }
+
+  .footerActions > :global(button) {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spotlight,
+  .progress > span,
+  .arrow {
+    transition: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
+}

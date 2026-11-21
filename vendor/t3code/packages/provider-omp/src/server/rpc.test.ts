@@ -87,6 +87,25 @@ const connect = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"], st
     assert.equal(yield* connection.exited, 7);
   }).pipe(Effect.scoped));
 
+  for (const together of [true, false]) it.effect(`retains valid terminal prefixes before corrupt framing (${together ? "coalesced" : "split"} reads)`, () => Effect.gen(function* () {
+    const process = yield* makeOmpTestProcess();
+    const connection = yield* connect(process.spawner);
+    const prefix = { type: "prompt_result", id: "original-prompt", status: "error", sessionSettled: false,
+      error: { message: "Original provider failure", code: "original-provider-code" } };
+    const bytes = `${JSON.stringify(prefix)}\n`;
+    if (together) yield* process.controls.emitBytes(new TextEncoder().encode(`${bytes}{invalid}\n`));
+    else {
+      yield* process.controls.emitBytes(new TextEncoder().encode(bytes));
+      yield* process.controls.emitBytes(new TextEncoder().encode("{invalid}\n"));
+    }
+    assert.deepEqual(yield* Queue.take(connection.events), prefix);
+    const error = yield* Queue.take(connection.events).pipe(Effect.flip);
+    assert.equal(error._tag, "OmpRpcError");
+    assert.equal(error.operation, "read");
+    // No framing recovery or later admission is permitted after corruption.
+    assert.equal((yield* connection.request({ type: "get_state" }).pipe(Effect.flip))._tag, "OmpRpcError");
+  }).pipe(Effect.scoped));
+
   it.effect("continues draining stdout after closing stdin during terminate", () => Effect.gen(function* () {
     const process = yield* makeOmpTestProcess({ onEof: (controls) => controls.emit({ type: "session_settled", final: true }) });
     const connection = yield* connect(process.spawner);

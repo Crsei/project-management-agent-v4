@@ -7,6 +7,8 @@ import { costPerSuccess, summarizeMetric, wilsonInterval } from './statistics.ts
 import type { CostPerSuccess, MetricSummary } from './statistics.ts';
 import { readReportJson, writeReportFile } from './files.ts';
 import { hashValue } from '../runners/telemetry.ts';
+import { reviewLegacyRun } from '../evaluation/review-legacy.ts';
+import type { AttemptReview } from '../evaluation/review.ts';
 
 export type FailureCategory = 'task' | 'model' | 'platform' | 'grader';
 export type ExperimentConfiguration = Pick<BenchmarkConfig, 'controlTransport' | 'provider' | 'providerApi' | 'hostAuthBoundary' | 'ompModel' | 'model' | 'modelOptions' | 'budget' | 'prices' | 'providerEndpoint' | 'providerBinary' | 'agentImage' | 'codeImage' | 'postgresImage'>;
@@ -71,6 +73,7 @@ export interface ExperimentSummary {
   arms: Partial<Record<Arm, OutcomeSummary>>;
   tasks: Record<string, Partial<Record<Arm, OutcomeSummary>>>;
   runs: Array<{ runId: string; taskId: string; arm: Arm; success: boolean; failureCategory: FailureCategory | null; resultPath: string | null }>;
+  reviews: AttemptReview[];
 }
 
 export function failureCategory(result: RunResult): FailureCategory | null {
@@ -265,6 +268,7 @@ export function aggregateExperiment(runs: readonly RunResult[], options: ReportO
     overall: summarizeRuns(runs), arms: byArm, tasks: byTask,
     inferenceObservation: { runsWithObservedModelRequest: observedRequestRuns, runsWithoutObservedModelRequest: runs.length - observedRequestRuns },
     runs: runs.map((run) => ({ runId: run.runId, taskId: run.taskId, arm: run.arm, success: verifiedSuccess(run), failureCategory: failureCategory(run), resultPath: options.resultPaths?.[run.runId] ?? null })),
+    reviews: runs.map(reviewLegacyRun),
   };
 }
 

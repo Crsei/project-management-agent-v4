@@ -124,13 +124,14 @@ async function loadNewSettings(key: string, force = false): Promise<void> {
   if (loads.has(key)) return loads.get(key);
   putState(key, { ...stateFor(key), loading: true });
   const task = workspaceClient.json<ChatDefaultsResponse>("/api/settings/chat-defaults")
-    .then(({ defaults, availability }) => {
+    .then(({ defaults, availability, lastUsed }) => {
       // Creation may have finished while this preview request was in flight.
       if (bindings.has(key)) return;
       const current = stateFor(key);
+      const selection = defaults.selection ?? lastUsed ?? null;
       putState(key, {
         ...current,
-        settings: { ...UNSELECTED_THREAD_SETTINGS, ...defaults.selection, ...current.pendingPatch },
+        settings: { ...UNSELECTED_THREAD_SETTINGS, ...selection, ...current.pendingPatch },
         settingsLoaded: true,
         loading: false,
         error: current.pendingPatch ? current.error : availability.status === "unavailable"

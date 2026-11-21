@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { createAutomationGitSyncService } from '../../../../packages/application/src/automation-git-sync.ts';
-import { createAutomationTransferService, type AutomationTransferStudio } from '../../../../packages/application/src/automation-transfer.ts';
-import { automationGitCheckSchema, automationGitRunSchema, automationGitSaveSchema } from '../../../../packages/contracts/src/automation-git-sync.ts';
-import { automationBundleUploadSchema, automationTransferImportSchema, automationTransferPreviewSchema } from '../../../../packages/contracts/src/automation-transfer.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { createAutomationGitSyncService } from '../../../../../packages/application/src/automation-git-sync.ts';
+import { createAutomationTransferService, type AutomationTransferStudio } from '../../../../../packages/application/src/automation-transfer.ts';
+import { automationGitCheckSchema, automationGitRunSchema, automationGitSaveSchema } from '../../../../../packages/contracts/src/automation-git-sync.ts';
+import { automationBundleUploadSchema, automationTransferImportSchema, automationTransferPreviewSchema } from '../../../../../packages/contracts/src/automation-transfer.ts';
 
 export function registerAutomationGitSyncRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; core: NotificationCorePort; studio: AutomationTransferStudio }): void {
   const git = createAutomationGitSyncService(options), transfer = createAutomationTransferService(options);

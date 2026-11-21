@@ -15,14 +15,14 @@ export async function pmRequest(path: string, headers: Headers): Promise<unknown
   return JSON.parse(await readBoundedMcpBody(response, 2 * 1024 * 1024));
 }
 /** Consent only accepts PM's real browser session. Shared Agent cookies and OAuth bearers confer no authority. */
-export async function pmBrowser(request: Request): Promise<{ actorId: string; headers: Headers; sessionHash: string }> {
+export async function pmBrowser(request: Request): Promise<{ actorId: string; actorName?: string; headers: Headers; sessionHash: string }> {
   const cookie = request.headers.get('cookie') ?? '';
   const sessions = cookie.split(';').map(value => value.trim()).filter(value => value.startsWith('pm_v4_session='));
-  if (sessions.length !== 1 || sessions[0]!.length > 4096 || sessions[0] === 'pm_v4_session=') throw new McpAuthError('login_required', 'Sign in to PM to manage MCP clients.', 401);
+  if (sessions.length !== 1 || sessions[0]!.length > 4096 || sessions[0] === 'pm_v4_session=') throw new McpAuthError('login_required', 'Sign in to PM to manage MCP access.', 401);
   const headers = new Headers({ cookie: sessions[0]! });
-  const value = await pmRequest('/api/v1/auth/me', headers) as { actor?: { id?: string } };
+  const value = await pmRequest('/api/v1/auth/me', headers) as { actor?: { id?: string; name?: string } };
   if (!value.actor?.id) throw new McpAuthError('login_required', 'Current PM identity is required.', 401);
-  return { actorId: value.actor.id, headers, sessionHash: digest(sessions[0]!) };
+  return { actorId: value.actor.id, ...(value.actor.name ? { actorName: value.actor.name } : {}), headers, sessionHash: digest(sessions[0]!) };
 }
 export function mcpIdentityFromHeaders(headers: Headers): McpInvocationIdentity | null {
   const authorization = headers.get('authorization') ?? '';

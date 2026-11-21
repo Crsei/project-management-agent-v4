@@ -36,8 +36,8 @@ function candidate(input: PmAutomationSnapshot): PmAutomationCandidate {
 }
 
 describe('all PM-native catalogue and configuration contracts', () => {
-  it('preserves all 23 pinned source entries and adds every stable PM ID as an actual native manifest', () => {
-    assert.equal(automationCatalog.filter(template => automationTemplateSource(template) === 'openhands').length, 23);
+  it('exposes every stable PM ID as an actual native manifest and no external source entries', () => {
+    assert.ok(automationCatalog.every(template => automationTemplateSource(template) === 'pm'));
     assert.equal(pmAutomationCatalog.length, pmAutomationTemplateIds.length);
     assert.equal(new Set(automationCatalog.map(template => template.id)).size, automationCatalog.length);
     assert.deepEqual(pmAutomationRecommendedIds, ['pm-requirement-review', 'pm-stalled-tasks', 'pm-project-digest']);

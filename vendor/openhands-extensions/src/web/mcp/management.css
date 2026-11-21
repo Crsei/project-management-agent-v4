@@ -199,6 +199,24 @@
 .openhands-extensions .oh-mcp-matrix > .oh-matrix-toolbar .oh-matrix-summary { margin-inline-start: auto; }
 .openhands-extensions .oh-mcp-matrix .oh-agent-matrix-table .oh-agent-matrix-row-heading .oh-mcp-muted { display: none; }
 .openhands-extensions .oh-mcp-matrix .oh-mcp-error { margin: 0; }
+.openhands-extensions .oh-mcp-native { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--oh-border); border-radius: 10px; background: var(--oh-color-base-secondary); }
+.openhands-extensions .oh-mcp-native-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+.openhands-extensions .oh-mcp-native-header > div { min-width: 0; flex: 1 1 320px; }
+.openhands-extensions .oh-mcp-native-header h3 { margin: 0; color: var(--oh-foreground); font-size: 14px; font-weight: 600; }
+.openhands-extensions .oh-mcp-native-header p { margin: 4px 0 0; color: var(--oh-muted); font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-native-header button { flex-shrink: 0; padding: 7px 11px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-color-tertiary); color: var(--oh-foreground); cursor: pointer; font-size: 12px; line-height: 1.5; }
+.openhands-extensions .oh-mcp-native-header button:hover:not(:disabled) { background: var(--oh-color-base-secondary); }
+.openhands-extensions .oh-mcp-native-header button:disabled { opacity: .45; cursor: not-allowed; }
+.openhands-extensions .oh-mcp-native-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.openhands-extensions .oh-mcp-native-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-color-base); }
+.openhands-extensions .oh-mcp-native-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.openhands-extensions .oh-mcp-native-copy strong { min-width: 0; color: var(--oh-foreground); font-size: 13px; overflow-wrap: anywhere; }
+.openhands-extensions .oh-mcp-native-copy span { color: var(--oh-muted); font-size: 11px; }
+.openhands-extensions .oh-mcp-native-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 6px; }
+.openhands-extensions .oh-mcp-native-actions button { padding: 5px 9px; border: 1px solid var(--oh-border); border-radius: 7px; background: var(--oh-color-tertiary); color: var(--oh-foreground); cursor: pointer; font-size: 11px; line-height: 1.5; }
+.openhands-extensions .oh-mcp-native-actions button:hover:not(:disabled) { background: var(--oh-color-base-secondary); }
+.openhands-extensions .oh-mcp-native-actions button.oh-mcp-primary { border-color: transparent; background: var(--oh-accent); color: var(--oh-accent-foreground); }
+.openhands-extensions .oh-mcp-native-actions button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 760px) {
   .openhands-extensions .oh-mcp-page-header { flex-direction: column; }
   .openhands-extensions .oh-mcp-page-header .oh-mcp-actions { width: 100%; flex-wrap: wrap; }

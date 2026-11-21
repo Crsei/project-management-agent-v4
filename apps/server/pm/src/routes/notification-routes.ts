@@ -1,12 +1,12 @@
 import type { FastifyInstance,FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError,type Actor } from '../../../../packages/domain/src/core.ts';
-import { readNotificationInbox,notificationInboxQuery } from '../../../../packages/application/src/notifications.ts';
-import { readMentionCandidates,mentionCandidatesQuery } from '../../../../packages/application/src/notification-mentions.ts';
-import { requireCapability } from '../../../../packages/application/src/access.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { requireDashboardReadSelf } from '../../../../packages/application/src/dashboard-read.ts';
+import { DomainError,type Actor } from '../../../../../packages/domain/src/core.ts';
+import { readNotificationInbox,notificationInboxQuery } from '../../../../../packages/application/src/notifications.ts';
+import { readMentionCandidates,mentionCandidatesQuery } from '../../../../../packages/application/src/notification-mentions.ts';
+import { requireCapability } from '../../../../../packages/application/src/access.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { requireDashboardReadSelf } from '../../../../../packages/application/src/dashboard-read.ts';
 export function registerNotificationRoutes(app:FastifyInstance,options:{database:()=>Pool;actor:(request:FastifyRequest)=>Promise<Actor>;core:NotificationCorePort}):void {
  app.get<{Params:{workspaceId:string};Querystring:Record<string,unknown>}>('/api/v1/workspaces/:workspaceId/notification-inbox',async request=>{
   const workspaceId=z.uuid().toLowerCase().parse(request.params.workspaceId),actor=await options.actor(request);

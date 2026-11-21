@@ -19,3 +19,16 @@ export type McpApproval = {
   threads: { id: string; title: string }[];
 };
 export type McpClients = { csrfToken: string; items: { id: string; clientName: string; scope: McpScope; access: "read-only" | "full"; threadIds: string[]; createdAt: string; expiresAt: string; revokedAt: string | null }[] };
+
+export type LocalMcpAccessState = {
+  available: boolean;
+  endpoint?: string;
+  enabled: boolean;
+  owner: boolean;
+  occupied: boolean;
+  actor?: { id: string; name: string };
+  workspaceCount?: number;
+  projectCount?: number;
+  updatedAt?: string;
+  csrfToken: string;
+};

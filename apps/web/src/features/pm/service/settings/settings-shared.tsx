@@ -16,7 +16,3 @@ export function SettingsSection({ title, description, children }: {
     <div className="min-w-0 space-y-6">{children}</div>
   </section>
 }
-
-export function SettingsNotice({ children }: { children: ReactNode }) {
-  return <div role="note" className="rounded-module border bg-surface-raised p-4 text-sm leading-6 text-muted-foreground">{children}</div>
-}

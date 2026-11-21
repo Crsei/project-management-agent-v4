@@ -28,7 +28,7 @@ async function fixture() {
     const result = await scanOriginalTranscripts(context, { instance, provider: "codex", format: codexUsageReader.format, dir: sessions, binding }, cache);
     await cache.flush(); return result;
   };
-  return { root, sessions, file, saved, read };
+  return { root, sessions, file, saved, read, instance, context };
 }
 
 test("native append and provisional tails survive restart without double billing or losing original reducer state", async () => {
@@ -70,6 +70,33 @@ test("removed-file history remains partial only within the exact source and inst
     assert.equal((await f.read(new TranscriptCache(f.saved), "b".repeat(64))).records.length, 0);
     await rename(f.sessions, `${f.sessions}.old`); await mkdir(f.sessions);
     assert.equal((await f.read()).records.length, 0);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test("legacy global cache loss applies only to sources the old cache actually contained", async () => {
+  const f = await fixture();
+  try {
+    await writeFile(f.file, line(meta) + line(turn) + line(usage(10)));
+    await f.read();
+    const saved = JSON.parse(await readFile(f.saved, "utf8"));
+    await writeFile(f.saved, JSON.stringify({ ...saved, version: 2, lostBeforeMs: Date.now(), lostBefore: undefined, lostBeforeAll: undefined }));
+    if (codexUsageReader.kind !== "transcripts") throw new Error("Original Codex transcript contract changed.");
+    const laterDir = path.join(f.root, "later-sessions");
+    await mkdir(laterDir);
+    await writeFile(path.join(laterDir, "rollout.jsonl"), line(meta) + line(turn) + line(usage(5)));
+    const cache = new TranscriptCache(f.saved);
+    await cache.load();
+    const later = await scanOriginalTranscripts(f.context, {
+      instance: f.instance, provider: "codex", format: codexUsageReader.format, dir: laterDir, binding: "b".repeat(64),
+    }, cache);
+    assert.equal(later.source.status, "ok");
+    assert.equal(cache.hasLostCoverage(Date.parse("2026-10-20"), "codex", "a".repeat(64)), true);
+    assert.equal(cache.hasLostCoverage(Date.parse("2026-10-20"), "codex", "b".repeat(64)), false);
+    await cache.flush();
+    const migrated = new TranscriptCache(f.saved);
+    await migrated.load();
+    assert.equal(migrated.hasLostCoverage(Date.parse("2026-10-20"), "codex", "a".repeat(64)), true);
+    assert.equal(migrated.hasLostCoverage(Date.parse("2026-10-20"), "codex", "b".repeat(64)), false);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 

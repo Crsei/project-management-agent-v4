@@ -160,7 +160,7 @@
   .provider-list-pane { border-right: 0; border-bottom: 1px solid var(--border); }
   .provider-instance-list { display: flex; overflow-x: auto; overflow-y: hidden; }
   .provider-list-item { flex: 0 0 205px; border-right: 1px solid var(--border); border-bottom: 0; }
-  .provider-list-item[data-selected] { background: var(--selection); color: var(--foreground); font-weight: 600; }
+  .provider-list-item[data-selected] { background: var(--glass-state); color: var(--foreground); font-weight: 600; box-shadow: inset 0 1px 0 var(--glass-state-rim), inset 0 0 0 1px var(--glass-state-edge); }
   .provider-list-select { padding-left: 12px; }
   .provider-list-add { flex: 0 0 150px; }
   .provider-detail-pane { overflow: visible; }

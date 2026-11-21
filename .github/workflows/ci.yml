@@ -53,7 +53,7 @@ jobs:
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Check desktop release identity and immutable draft/publication contracts
-        run: node --test scripts/desktop-release.test.mjs
+        run: node --conditions=development --test scripts/desktop-release.test.mjs scripts/desktop-release-evaluation.test.mjs
       - name: Prepare private local task-cache directories
         shell: bash
         run: |

@@ -4,12 +4,12 @@ import { z } from 'zod';
 import { DomainError } from '../../domain/src/core.ts';
 import type { Actor } from '../../domain/src/core.ts';
 import type { InvitationDeliveryStatus, InvitationFailureCode, InvitationListDto, InvitationStatus, MemberInvitationDto } from '../../domain/src/invitations.ts';
-import { MEMBER_ROLES } from '../../domain/src/members.ts';
+import { MEMBER_ROLES, memberRoleCapabilities } from '../../domain/src/members.ts';
 import type { MemberRole } from '../../domain/src/members.ts';
 import { encryptMailToken } from '../../infrastructure/src/system-mail.ts';
 import type { InvitationMailConfig } from '../../infrastructure/src/invitation-mail.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
-import { requireCapability } from './access.ts';
+import { getMembership } from './access.ts';
 import type { CommandContext, CommandRegistry, SqlExecutor } from './ports.ts';
 
 import { readInvitationTeams } from './invitation-teams.ts';
@@ -23,6 +23,27 @@ export type InvitationRow = {
 export const invitationColumns = `SELECT i.*,q.status AS delivery_status,q.failure_code,q.updated_at AS delivery_updated_at
   FROM member_invitations i LEFT JOIN invitation_mail_queue q ON q.invitation_id=i.id AND q.generation=i.generation`;
 export function invitationTokenHash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
+export type InvitationGrant = { role: MemberRole; projectIds: string[] | null };
+/**
+ * Administrators keep workspace-wide authority. Any other active member may
+ * invite only equal-or-lower capabilities inside their own project scope, so an
+ * invitation can never be used to escalate the inviter or an invitee.
+ */
+export async function requireInvitationAuthority(sql: SqlExecutor, actor: Actor, workspaceId: string, grant: InvitationGrant): Promise<void> {
+  const member = await getMembership(sql, actor, workspaceId);
+  if (member.projectIds === null && member.capabilities.includes('access.manage')) return;
+  if (!member.capabilities.includes('planning.edit')) throw new DomainError('permission_denied', 'Inviting members requires planning.edit or workspace access.manage', 403);
+  if (!memberRoleCapabilities(grant.role).every(capability => member.capabilities.includes(capability))) {
+    throw new DomainError('permission_denied', 'The invitation cannot grant capabilities the inviter does not hold', 403);
+  }
+  if (grant.projectIds === null) {
+    if (member.projectIds !== null) throw new DomainError('permission_denied', 'A project-scoped member cannot invite to the whole workspace', 403);
+    return;
+  }
+  if (member.projectIds !== null && !grant.projectIds.every(id => member.projectIds!.includes(id))) {
+    throw new DomainError('permission_denied', 'The invitation projects exceed the inviter scope', 403);
+  }
+}
 export function invitationDto(row: InvitationRow, now = new Date()): MemberInvitationDto {
   return { id: row.id, workspaceId: row.workspace_id, email: row.email, role: row.role, projectIds: row.project_ids, teamIds: row.team_ids,
     status: row.status === 'pending' && row.expires_at <= now ? 'expired' : row.status, version: row.version,
@@ -35,8 +56,11 @@ export async function listMemberInvitations(pool: Pool, actor: Actor, workspaceI
   try {
     await sql.query('BEGIN');
     await lockWorkspace(sql, workspaceId);
-    await requireCapability(sql, actor, workspaceId, 'access.manage');
-    const result = await sql.query<InvitationRow>(`${invitationColumns} WHERE i.workspace_id=$1 ORDER BY i.created_at DESC,i.id`, [workspaceId]);
+    const member = await getMembership(sql, actor, workspaceId);
+    const administrator = member.projectIds === null && member.capabilities.includes('access.manage');
+    const result = administrator
+      ? await sql.query<InvitationRow>(`${invitationColumns} WHERE i.workspace_id=$1 ORDER BY i.created_at DESC,i.id`, [workspaceId])
+      : await sql.query<InvitationRow>(`${invitationColumns} WHERE i.workspace_id=$1 AND i.invited_by=$2 ORDER BY i.created_at DESC,i.id`, [workspaceId, actor.id]);
     await sql.query('COMMIT');
     return { enabled: Boolean(config), items: result.rows.map(row => invitationDto(row)) };
   } catch (error) { await sql.query('ROLLBACK'); throw error; }
@@ -63,11 +87,13 @@ async function queueMail(sql: SqlExecutor, row: InvitationRow, token: string, co
     [randomUUID(), row.id, row.generation, encryptMailToken(config.tokenKey, row.id, token)]);
 }
 async function currentInvitation(ctx: CommandContext): Promise<InvitationRow> {
-  await ctx.require('access.manage');
   if (ctx.command.projectId || !z.uuid().safeParse(ctx.command.targetId).success) throw new DomainError('scope_mismatch', 'Invitation commands target a workspace invitation');
+  const member = await getMembership(ctx.sql, ctx.actor, ctx.workspaceId);
   const result = await ctx.sql.query<InvitationRow>(`${invitationColumns} WHERE i.workspace_id=$1 AND i.id=$2 FOR UPDATE OF i`, [ctx.workspaceId, ctx.command.targetId]);
   const row = result.rows[0];
   if (!row) throw new DomainError('not_found_or_forbidden', 'Invitation is not accessible', 404);
+  const administrator = member.projectIds === null && member.capabilities.includes('access.manage');
+  if (!administrator && row.invited_by !== ctx.actor.id) throw new DomainError('permission_denied', 'Only the invitation creator or a workspace administrator can manage this invitation', 403);
   if (ctx.command.expectedVersions?.[row.id] !== row.version) throw new DomainError('version_conflict', 'Invitation version changed', 409, { id: row.id, currentVersion: row.version });
   return row;
 }
@@ -91,10 +117,10 @@ export function createInvitationCommands(config?: InvitationMailConfig, validate
     CreateMemberInvitation: {
       payload: createPayload,
       async handler(ctx): Promise<MemberInvitationDto> {
-        await ctx.require('access.manage');
-        const mail = enabled(config);
         if (ctx.command.projectId || ctx.command.targetId) throw new DomainError('scope_mismatch', 'Invitation creation targets the workspace');
         const payload = createPayload.parse(ctx.command.payload);
+        await requireInvitationAuthority(ctx.sql, ctx.actor, ctx.workspaceId, payload);
+        const mail = enabled(config);
         if (payload.role === 'admin' && payload.projectIds !== null) throw new DomainError('validation_failed', 'Administrators require workspace scope');
         await projectsForCommand(ctx, payload.projectIds, validateProjects);
         await readInvitationTeams(ctx.sql, ctx.workspaceId, payload.teamIds);
@@ -132,6 +158,7 @@ export function createInvitationCommands(config?: InvitationMailConfig, validate
         const mail = enabled(config);
         if (row.status === 'accepted' || row.status === 'revoked') throw new DomainError('invitation_not_pending', 'This invitation cannot be resent', 409);
         if (row.delivery_status === 'sending') throw new DomainError('invitation_send_in_progress', 'Wait for the sending attempt to resolve before explicitly resending', 409);
+        await requireInvitationAuthority(ctx.sql, ctx.actor, ctx.workspaceId, { role: row.role, projectIds: row.project_ids });
         await projectsForCommand(ctx, row.project_ids, validateProjects);
         await readInvitationTeams(ctx.sql, ctx.workspaceId, row.team_ids);
         await rejectExistingMember(ctx.sql, ctx.workspaceId, row.email);

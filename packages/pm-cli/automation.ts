@@ -4,7 +4,8 @@ import { studioActionKindSchema, studioConfigSchema, studioCreateSchema, studioU
 import { pmAutomationCandidateEditSchema, pmAutomationPreviewRequestSchema, pmAutomationApplyRequestSchema, pmAutomationReviewRequestSchema } from '../contracts/src/automation-pm.ts';
 import { automationTransferPreviewSchema, automationTransferImportSchema, automationBundleUploadSchema } from '../contracts/src/automation-transfer.ts';
 import { automationGitSaveSchema, automationGitCheckSchema, automationGitRunSchema } from '../contracts/src/automation-git-sync.ts';
-import { automationCatalog, automationTemplateSource, automationCatalogSource } from '../automation-resources/catalog.ts';
+import { automationCatalog } from '../automation-resources/catalog.ts';
+import { pmAutomationCatalogSource } from '../automation-resources/pm-catalog.ts';
 import { parseDocument } from 'yaml';
 import path from 'node:path';
 import { readPrivateFile } from './private-files.ts';
@@ -57,7 +58,7 @@ export const automationFamily: CliFamily = {
     if (args[0] !== 'automation') return false;
     const action = args[1], rest = args.slice(2);
     switch (action) {
-      case 'templates': { const p = parseOptions(rest, ['id', 'source']), source = p.source === undefined ? undefined : z.enum(['pm', 'openhands']).parse(p.source); const items = automationCatalog.filter(t => (!p.id || t.id === p.id) && (!source || automationTemplateSource(t) === source)); if (p.id && !items.length) throw new Error('Unknown automation template ID'); runtime.print({ source: automationCatalogSource, items }); return true; }
+      case 'templates': { const p = parseOptions(rest, ['id']); const items = automationCatalog.filter(t => !p.id || t.id === p.id); if (p.id && !items.length) throw new Error('Unknown automation template ID'); runtime.print({ source: pmAutomationCatalogSource, items }); return true; }
       case 'timezones': { const p = parseOptions(rest, ['search']); runtime.print({ items: ['UTC', ...Intl.supportedValuesOf('timeZone')].sort().filter(zone => !p.search || zone.toLowerCase().includes(p.search.toLowerCase())) }); return true; }
       case 'capabilities': { const p = parseOptions(rest, ['project', 'action']), q = new URLSearchParams({ projectId: project.parse(nonempty(p.project, '--project')) }); if (p.action !== undefined) q.set('actionKind', studioActionKindSchema.parse(p.action)); await send(runtime, `/studio-capabilities?${q}`); return true; }
       case 'definitions': { const p = parseOptions(rest, ['project', 'quick-access', 'cursor']), q = new URLSearchParams(); if (p.project !== undefined) q.set('projectId', project.parse(p.project)); if (p['quick-access'] !== undefined) q.set('quickAccess', z.enum(['true', 'false']).parse(p['quick-access'])); if (p.cursor !== undefined) q.set('cursor', uuid.parse(p.cursor)); await send(runtime, `/definitions${q.size ? `?${q}` : ''}`); return true; }

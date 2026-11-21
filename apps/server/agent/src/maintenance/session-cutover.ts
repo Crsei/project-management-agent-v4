@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { inventoryPersistence, namespacePolicy, registerPersistenceWriter } from "../durable/persistence-schema.ts";
 import { inspectThreadRetention } from "../durable/thread-retention.ts";
+import { deleteEvaluationThread } from "../evaluation-feedback/persistence.ts";
 
 type RecordRow = { namespace: string; key: string; value: string };
 type JsonObject = Record<string, unknown>;
@@ -42,7 +43,7 @@ export function inventorySessionCutover(db: DatabaseSync, dataDirectory: string)
     : business.test(row.namespace) || row.namespace === 'mcp:grants' || row.namespace === 'mcp:tool-receipts' ? 'business'
     : credentialNamespaces[row.namespace] === true ? 'credentials' : preservedMetadata[row.namespace] === true ? 'settings-usage'
     : row.namespace === 'agent:workspaces:v1' || row.namespace === 'agent:scratch:v1' ? 'workspaces'
-    : row.namespace === 'agent:session-cutover' || namespacePolicy(row.namespace)?.owner === 'persistence' ? 'audit'
+    : row.namespace === 'agent:session-cutover' || namespacePolicy(row.namespace)?.owner === 'persistence' || namespacePolicy(row.namespace)?.owner === 'evaluation' ? 'audit'
     : namespacePolicy(row.namespace)?.owner === 'business' ? 'business'
     : namespacePolicy(row.namespace)?.owner === 'chat' || namespacePolicy(row.namespace)?.owner === 'provider' ? 'session'
     : namespacePolicy(row.namespace)?.owner === 'mcp' ? 'business'
@@ -141,6 +142,7 @@ export function applySessionCutover(db: DatabaseSync, expected: SessionCutoverPl
     for (const row of current.deleteRecords) remove.run(row.namespace, row.key);
     const at = new Date().toISOString();
     for (const id of current.candidateIds) {
+      deleteEvaluationThread(db, id);
       db.prepare("UPDATE records SET value=? WHERE namespace='chat:threads' AND key=?").run(JSON.stringify({ remoteId: id, deleted: true, sessionCutover: { version: 2, at, fingerprint: current.fingerprint } }), id);
     }
     const ids = new Set(current.candidateIds);

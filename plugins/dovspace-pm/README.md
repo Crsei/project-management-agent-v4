@@ -17,12 +17,14 @@ From the Dovspace source checkout, using its Node 24 toolchain:
 
 ```sh
 mkdir -m 700 /tmp/dovspace-pm-profile
-pnpm pm plugin generate --root /tmp/dovspace-pm-profile --origin http://127.0.0.1:3224
+pnpm run pm plugin generate --root /tmp/dovspace-pm-profile --origin http://127.0.0.1:3224
 # install is the same owned-path publication with an installed status:
-# pnpm pm plugin install --root /absolute/new-private-root --origin https://YOUR_CONFIRMED_ORIGIN
-pnpm pm plugin update --root /tmp/dovspace-pm-profile --origin http://127.0.0.1:3224
-pnpm pm plugin uninstall --root /tmp/dovspace-pm-profile
+# pnpm run pm plugin install --root /absolute/new-private-root --origin https://YOUR_CONFIRMED_ORIGIN
+pnpm run pm plugin update --root /tmp/dovspace-pm-profile --origin http://127.0.0.1:3224
+pnpm run pm plugin uninstall --root /tmp/dovspace-pm-profile
 ```
+
+This repository pins pnpm 11.9.0: use `pnpm run pm`; a bare `pnpm pm` is intercepted by pnpm's built-in command and does not run the repository script.
 
 The loopback example is only the existing local gateway, **not** a claim that MCP/OAuth is configured or reachable there. For an external installation supply the administrator-confirmed HTTPS origin. Do not copy `YOUR_CONFIRMED_ORIGIN` into a real configuration. Origins must be absolute, concrete, credential-free and path/query/fragment-free. HTTP is allowed only on loopback. `${ENV}` and other placeholders are rejected; portable remote URLs/headers do not expand variables. The generator writes the supplied concrete origin plus `/mcp`, never tokens or headers.
 
@@ -167,11 +169,11 @@ The repository CLI deliberately reuses existing `pm login` / origin-bound privat
 **Approval channel boundary:** Agent `AGENT_APPROVAL_MODE=ask` applies to the Agent/MCP route. The ordinary CLI uses the existing direct native PM API, whose existing authentication, capabilities, project scope, lifecycle and CAS/idempotency guards remain authoritative; it does not enter or claim to exercise the Agent approval queue. This adapter adds neither an Agent approval bypass endpoint nor a new CLI approval gate. Test native CLI semantics separately from MCP-client approval scenarios.
 
 ```sh
-pnpm pm login --email YOUR_EMAIL
-pnpm pm plugin tools
-pnpm pm plugin workspaces
-pnpm pm plugin call --file /private/path/original-request.json
-pnpm pm plugin result --file /private/path/original-request.json
+pnpm run pm login --email YOUR_EMAIL
+pnpm run pm plugin tools
+pnpm run pm plugin workspaces
+pnpm run pm plugin call --file /private/path/original-request.json
+pnpm run pm plugin result --file /private/path/original-request.json
 ```
 
 Use an unchanged request object `{ "operationId": "UUID", "name": "advertised PM tool", "target": { "workspaceId": "authorized UUID", "projectId": "authorized PRJ ID or null" }, "arguments": { "registered tool arguments": "..." } }`, replacing every description with actual discovered values. Read current revisions before writes. The file is caller-owned and may contain private business text; keep it private and out of the plugin package. Do not include credentials, actor claims, client-issued trace IDs or Chat IDs.
@@ -182,7 +184,7 @@ All adapters preserve original operationId, server traceId, invocation and comma
 
 The ordinary CLI accepts only the public result projection. A visible record must match the original operation, tool, workspace/project target, external execution root and empty Chat correlation IDs; any receipt must identify the original operation. Wrong-target/malformed results and hidden projections carrying extra payload are replaced by a safe unavailable response, never echoed. Unknown non-contract fields are discarded rather than returned as an unchecked body copy.
 
-Exit 0 from `plugin call` or `plugin result` means transport/projection handling, **not business success**. For machine consumption, save output in a private file and run `pnpm pm plugin check --file RESULT.json` before continuing. This local schema check requires visible + succeeded + a present result + no error; failed, unknown, running, pending approval, redacted and unavailable all stop the chain. It makes no network request and never redispatches an operation. In a source checkout, `docs/guides/cli.md` documents the complete PM resource and independent Agent operator CLI; those host/credential management commands are not added to this PM plugin.
+Exit 0 from `plugin call` or `plugin result` means transport/projection handling, **not business success**. For machine consumption, save output in a private file and run `pnpm run pm plugin check --file RESULT.json` before continuing. This local schema check requires visible + succeeded + a present result + no error; failed, unknown, running, pending approval, redacted and unavailable all stop the chain. It makes no network request and never redispatches an operation. In a source checkout, `docs/guides/cli.md` documents the complete PM resource and independent Agent operator CLI; those host/credential management commands are not added to this PM plugin.
 
 
 ## Compatibility and release evidence

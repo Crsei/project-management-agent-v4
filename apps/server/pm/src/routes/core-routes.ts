@@ -5,30 +5,30 @@ import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { Workspace, WorkspaceError, type ItemQuery, type WorkspaceMutationGuard, type WorkspaceCreationPrepared } from '../../../../packages/pm-core/index.ts';
-import { ProtocolError, statusCategory, type Diagnostic, type Entity, type FileRecord, type ProtocolConfiguration, type UnsupportedFile, type ViewConfig, type WorkspaceSnapshot } from '../../../../packages/pm-schema/index.ts';
-import { graphQuerySchema, type GraphQuery } from '../../../../packages/pm-schema/graph.ts';
-import { getMembership, type Membership } from '../../../../packages/application/src/access.ts';
-import { DomainError, type Actor, type Capability } from '../../../../packages/domain/src/core.ts';
-import type { SqlExecutor, TrustedMutationSource } from '../../../../packages/application/src/ports.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
-import { appendProjectAudit } from '../../../../packages/application/src/project-audit.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { requestHash as creationInputHash } from '../../../../packages/pm-core/state.ts';
-import { assertCoreProtectedMetadata, assertCoreTaskMutation, requireTaskAssignee } from '../../../../packages/application/src/core-task-creation.ts';
-import type { CoreCreationAttempt } from '../../../../packages/contracts/src/core-creation.ts';
-import { coreProjectAuditWrites } from './core-adapter.ts';
-import { CoreCommandJournal, type CoreHttpCreation, type CoreHttpOutcome } from './core-journal.ts';
-import { captureCoreFacts, recoverPreparedCoreCreations } from './core-facts.ts';
-import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
-import { insertServiceFact, type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
-import { initializeLocalProject, beginLocalProjectOperation, readLocalProjectOperation, requireLocalManagement, assertLocalProjectWritable, assertLocalProjectTargetAvailable, resolveLocalInitializationDirectory, resolveLocalRecoveryDirectory, toLocalDirectory, type LocalProjectConfiguration } from '../../../../packages/application/src/local-projects.ts';
-import { assertCoreDeletionSafe } from '../../../../packages/application/src/core-deletion.ts';
-import { localDirectorySchema, type LocalDirectory } from '../../../../packages/contracts/src/local-projects.ts';
+import { Workspace, WorkspaceError, type ItemQuery, type WorkspaceMutationGuard, type WorkspaceCreationPrepared } from '../../../../../packages/pm-core/index.ts';
+import { ProtocolError, statusCategory, type Diagnostic, type Entity, type FileRecord, type ProtocolConfiguration, type UnsupportedFile, type ViewConfig, type WorkspaceSnapshot } from '../../../../../packages/pm-schema/index.ts';
+import { graphQuerySchema, type GraphQuery } from '../../../../../packages/pm-schema/graph.ts';
+import { getMembership, type Membership } from '../../../../../packages/application/src/access.ts';
+import { DomainError, type Actor, type Capability } from '../../../../../packages/domain/src/core.ts';
+import type { SqlExecutor, TrustedMutationSource } from '../../../../../packages/application/src/ports.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
+import { appendProjectAudit } from '../../../../../packages/application/src/project-audit.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import { requestHash as creationInputHash } from '../../../../../packages/pm-core/state.ts';
+import { assertCoreProtectedMetadata, assertCoreTaskMutation, requireTaskAssignee } from '../../../../../packages/application/src/core-task-creation.ts';
+import type { CoreCreationAttempt } from '../../../../../packages/contracts/src/core-creation.ts';
+import { coreProjectAuditWrites } from '../core-adapter.ts';
+import { CoreCommandJournal, type CoreHttpCreation, type CoreHttpOutcome } from '../core-journal.ts';
+import { captureCoreFacts, recoverPreparedCoreCreations } from '../core-facts.ts';
+import { readCoreSnapshot } from '../../../../../packages/pm-core/change-snapshots.ts';
+import { insertServiceFact, type CapturedServiceFact } from '../../../../../packages/application/src/service-facts.ts';
+import { initializeLocalProject, beginLocalProjectOperation, readLocalProjectOperation, requireLocalManagement, assertLocalProjectWritable, assertLocalProjectTargetAvailable, resolveLocalInitializationDirectory, resolveLocalRecoveryDirectory, toLocalDirectory, type LocalProjectConfiguration } from '../../../../../packages/application/src/local-projects.ts';
+import { assertCoreDeletionSafe } from '../../../../../packages/application/src/core-deletion.ts';
+import { localDirectorySchema, type LocalDirectory } from '../../../../../packages/contracts/src/local-projects.ts';
 import { registerLocalProjectRoutes } from './local-project-routes.ts';
-import type { ProjectMount } from '../../../../packages/pm-core/project-locations.ts';
-import type { Command } from '../../../../packages/domain/src/core.ts';
-import { assertWorkspaceSampleReady } from '../../../../packages/application/src/workspace-samples.ts';
+import type { ProjectMount } from '../../../../../packages/pm-core/project-locations.ts';
+import type { Command } from '../../../../../packages/domain/src/core.ts';
+import { assertWorkspaceSampleReady } from '../../../../../packages/application/src/workspace-samples.ts';
 
 export type CoreAuthenticator = (request: FastifyRequest) => Promise<Actor>;
 
@@ -91,8 +91,12 @@ function coreError(error: unknown, request: FastifyRequest, reply: FastifyReply)
 /** One authoritative Markdown workspace per PM workspace, created lazily and closed with the API. */
 export class CoreWorkspacePool {
   private readonly entries = new Map<string, { ready: Promise<Workspace> }>();
+  private readonly refreshes = new Map<string, Promise<void>>();
+  private readonly refreshedAt = new Map<string, number>();
   private readonly root: string;
   private readonly sql: SqlExecutor | undefined;
+  /** Short window to share a completed refresh with late arrivals from the same request burst. */
+  private static readonly REFRESH_COALESCE_MS = 100;
   constructor(root: string, sql?: SqlExecutor) { this.root = root; this.sql = sql; }
   rootFor(workspaceId: string): string { return path.join(this.root, workspaceId); }
 
@@ -102,13 +106,32 @@ export class CoreWorkspacePool {
     else Workspace.confirmCreation(this.rootFor(workspaceId), key);
   }
 
-  /** Cached projections are refreshed at acquisition, not only by the asynchronous watcher. */
+  /**
+   * Cached projections are refreshed at acquisition, not only by the asynchronous watcher.
+   * A scan parses every Markdown file, so concurrent acquisitions (tool-result bursts, history
+   * projection) must join one scan instead of queueing one full rescan each on the workspace mutex.
+   */
+  private refresh(workspaceId: string, workspace: Workspace): Promise<void> {
+    const active = this.refreshes.get(workspaceId);
+    if (active) return active;
+    if (Date.now() - (this.refreshedAt.get(workspaceId) ?? 0) < CoreWorkspacePool.REFRESH_COALESCE_MS)
+      return Promise.resolve();
+    const refresh = workspace.rescan('refresh').then(
+      () => { this.refreshedAt.set(workspaceId, Date.now()); },
+      error => { throw error; },
+    ).finally(() => {
+      if (this.refreshes.get(workspaceId) === refresh) this.refreshes.delete(workspaceId);
+    });
+    this.refreshes.set(workspaceId, refresh);
+    return refresh;
+  }
+
   async get(workspaceId: string, sql: SqlExecutor | undefined = this.sql): Promise<Workspace> {
     if (sql) await assertWorkspaceSampleReady(sql, workspaceId);
     const existing = this.entries.get(workspaceId);
     if (existing) {
       const workspace = await existing.ready;
-      await workspace.rescan('refresh');
+      await this.refresh(workspaceId, workspace);
       return workspace;
     }
     let workspace: Workspace | undefined;
@@ -141,6 +164,8 @@ export class CoreWorkspacePool {
   async close(): Promise<void> {
     const entries = [...this.entries.values()];
     this.entries.clear();
+    this.refreshes.clear();
+    this.refreshedAt.clear();
     await Promise.allSettled(entries.map(async entry => { const workspace = await entry.ready.catch(() => undefined); await workspace?.close(); }));
   }
 }

@@ -280,7 +280,9 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     await f.pool.query("INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,ARRAY['domain.read'],NULL)", [f.workspaceId, ordinary.id]);
     const signIn = await f.request('/api/v1/auth/login', { email: ordinary.email, password: 'ordinary-account-password' }, '');
     const cookie = signIn.headers.get('set-cookie')!.split(';')[0]!;
-    assert.equal((await f.request(`/api/v1/workspaces/${f.workspaceId}/members/invitations`, undefined, cookie)).status, 403);
+    const listed = await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`, undefined, cookie);
+    assert.equal(listed.status, 200);
+    assert.deepEqual(listed.body.items, []);
     assert.equal((await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'forbidden@example.test', role: 'guest', projectIds: null } }, cookie)).status, 403);
     assert.equal((await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'scope@example.test', role: 'admin', projectIds: ['PROJ-9999'] } })).status, 400);
     assert.ok([400, 404].includes((await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'missing-project@example.test', role: 'member', projectIds: ['PROJ-9999'] } })).status));
@@ -292,6 +294,60 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     await f.pool.query("INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,ARRAY['domain.read'],NULL)", [f.workspaceId, user.id]);
     assert.equal((await f.request('/api/v1/invitations/accept', { commandId: randomUUID(), token, password: 'already-added-account-password' }, '')).status, 409);
     assert.deepEqual((await f.pool.query('SELECT capabilities,version FROM memberships WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, user.id])).rows[0], { capabilities: ['domain.read'], version: 1 });
+  });
+
+  it('lets ordinary members invite peers but never grant capabilities above their own', { timeout: mailFixtureCaseTimeout }, async () => {
+    const email = `${randomUUID()}@example.test`;
+    const password = 'ordinary-member-inviter-password';
+    const inviter = await createUser(f.pool, { email, name: 'Ordinary member inviter', password });
+    await f.pool.query('INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,$3,NULL)', [f.workspaceId, inviter.id, memberRoleCapabilities('member')]);
+    const signedIn = await f.request('/api/v1/auth/login', { email, password }, '');
+    assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
+    const cookie = signedIn.headers.get('set-cookie')!.split(';')[0]!;
+    const invitee = `${randomUUID()}@example.test`;
+    const created = await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: invitee, role: 'member', projectIds: null, teamIds: [] } }, cookie);
+    assert.equal(created.status, 200, JSON.stringify(created.body));
+    const invitation = created.body.result as MemberInvitationDto;
+    assert.equal(invitation.invitedBy, inviter.id);
+    const escalation = await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: `${randomUUID()}@example.test`, role: 'admin', projectIds: null, teamIds: [] } }, cookie);
+    assert.equal(escalation.status, 403);
+    const own = await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`, undefined, cookie);
+    assert.equal(own.status, 200);
+    assert.deepEqual(own.body.items.map(item => item.id), [invitation.id]);
+    const all = await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`);
+    assert.ok(all.body.items.some(item => item.id === invitation.id));
+    const token = await mail(invitation);
+    const accepted = await f.request<InvitationAcceptDto>('/api/v1/invitations/accept', { commandId: randomUUID(), token, password: 'member-invitee-password', name: 'Member invitee' }, '');
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    assert.deepEqual((await f.pool.query('SELECT capabilities,project_ids FROM memberships WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, accepted.body.userId])).rows[0], { capabilities: memberRoleCapabilities('member'), project_ids: null });
+    const ownerInvitation = await f.invite();
+    const afterOwner = await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`, undefined, cookie);
+    assert.deepEqual(afterOwner.body.items.map(item => item.id), [invitation.id]);
+    const ownerList = await f.request<InvitationListDto>(`/api/v1/workspaces/${f.workspaceId}/members/invitations`);
+    assert.ok(ownerList.body.items.some(item => item.id === ownerInvitation.id));
+    assert.ok(ownerList.body.items.some(item => item.id === invitation.id));
+  });
+
+  it('limits project-scoped member invitations to their own project scope', { timeout: mailFixtureCaseTimeout }, async () => {
+    const createProject = async (name: string): Promise<Entity> => {
+      const response = await f.send({ commandId: randomUUID(), commandType: 'CreateProject', payload: { name, goal: 'Bounded invitation scope', ownerId: f.owner.id, completionCriteria: ['Reviewed'] } });
+      assert.equal(response.status, 200, JSON.stringify(response.body));
+      return response.body.result as Entity;
+    };
+    const first = await createProject('Scoped invite project');
+    const second = await createProject('Outside invite project');
+    const email = `${randomUUID()}@example.test`;
+    const password = 'scoped-member-inviter-password';
+    const inviter = await createUser(f.pool, { email, name: 'Scoped member inviter', password });
+    await f.pool.query('INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,$3,$4)', [f.workspaceId, inviter.id, memberRoleCapabilities('member'), [first.id]]);
+    const signedIn = await f.request('/api/v1/auth/login', { email, password }, '');
+    assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
+    const cookie = signedIn.headers.get('set-cookie')!.split(';')[0]!;
+    const invite = (projectIds: string[] | null) => f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: `${randomUUID()}@example.test`, role: 'guest', projectIds, teamIds: [] } }, cookie);
+    assert.equal((await invite(null)).status, 403);
+    assert.equal((await invite([second.id])).status, 403);
+    const allowed = await invite([first.id]);
+    assert.equal(allowed.status, 200, JSON.stringify(allowed.body));
   });
 
   it('revalidates authoritative projects at acceptance and allows access-only administrators to invite', { timeout: mailFixtureCaseTimeout }, async () => {

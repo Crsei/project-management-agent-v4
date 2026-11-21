@@ -128,7 +128,7 @@ export function SettingsLayout() {
   const [guards] = useState(() => new Map<symbol, SettingsGuardState>());
   const activeGuard = useRef<SettingsGuardState>("clean");
   const [guardState, setGuardState] = useState<SettingsGuardState>("clean");
-  const heading = useRef<HTMLHeadingElement>(null);
+  const heading = useRef<HTMLElement>(null);
   const main = useRef<HTMLElement>(null);
   const navigation = useRef<HTMLElement>(null);
   const navigationId = useId();
@@ -210,10 +210,11 @@ export function SettingsLayout() {
         {fullBleed ? <SettingsContentBoundary key={location.pathname}>
           <Suspense key={location.pathname} fallback={<p role="status" className="p-8">{t("正在加载用量…", "Loading usage…")}</p>}><Outlet /></Suspense>
         </SettingsContentBoundary> : <>
-          <header className="settings-breadcrumb desktop-titlebar desktop-titlebar-reserve-controls"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{extensionPage ? t("自定义", "Customize") : pageTitle}</h1>
+          <header className="settings-breadcrumb desktop-titlebar desktop-titlebar-reserve-controls"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><span ref={heading} tabIndex={-1} className="settings-breadcrumb-current">{extensionPage ? t("自定义", "Customize") : pageTitle}</span>
             <span className="settings-draft-status" role="status">{guardState === "busy" ? t("操作进行中", "Working") : guardState === "dirty" ? t("有未保存的修改", "Unsaved changes") : ""}</span>
           </header>
           <div className="settings-content">
+            {!extensionPage && <header className="settings-page-heading"><h1>{pageTitle}</h1></header>}
             <SettingsContentBoundary key={location.pathname}>
               <Suspense key={location.pathname} fallback={<SettingsNotice kind="loading">{t("正在加载设置页面…", "Loading settings…")}</SettingsNotice>}><Outlet /></Suspense>
             </SettingsContentBoundary>

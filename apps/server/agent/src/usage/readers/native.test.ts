@@ -20,19 +20,28 @@ test("all original readers preserve disabled history or explicitly disclose miss
   try {
     await mkdir(process.env.AGENT_WORKSPACE_DATA_DIR);
     await writeFile(path.join(process.env.AGENT_WORKSPACE_DATA_DIR, "provider-instances.json"), JSON.stringify({ version: 1, instances: [] }));
-    const home = path.join(root, "home"), sessions = path.join(root, "pi-sessions");
-    await mkdir(home); await mkdir(sessions);
+    const home = path.join(root, "home"), sessions = path.join(root, "pi-sessions"), ompSessions = path.join(home, ".omp", "agent", "sessions");
+    await mkdir(home); await mkdir(sessions); await mkdir(ompSessions, { recursive: true });
     const environment = Object.entries({ HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: path.join(home, ".config"), XDG_DATA_HOME: path.join(home, ".local", "share"),
       CODEX_HOME: path.join(home, ".codex"), CLAUDE_CONFIG_DIR: path.join(home, ".claude"), GROK_HOME: path.join(home, ".grok"),
       PI_CODING_AGENT_SESSION_DIR: sessions, ANTIGRAVITY_DATA_DIR: path.join(home, "antigravity"), OPENCODE_DATA_DIR: path.join(home, "opencode"),
       CURSOR_API_KEY: "", CURSOR_AUTH_TOKEN: "", AGENT_CLI_CREDENTIAL_STORE: "file" }).map(([name, value]) => ({ name, value, sensitive: false }));
+    // OMP shares the Pi session-directory variable name; bind its fixture to the OMP Home instead.
+    const ompEnvironment = environment.filter(entry => entry.name !== "PI_CODING_AGENT_SESSION_DIR");
     const instances = usageProviderKindSchema.options.map(driver => createProviderInstance({ instanceId: `usage-${driver}`, driver, enabled: false,
       config: driver === "acpRegistry"
         ? { source: "local", commandPath: path.join(root, "missing-native-binary"), commandArgs: [] }
-        : { binaryPath: path.join(root, "missing-native-binary") }, environment }));
+        : { binaryPath: path.join(root, "missing-native-binary") },
+      environment: driver === "omp" ? ompEnvironment : environment }));
     await writeFile(path.join(sessions, "session.jsonl"), [
       { type: "session", id: "native-session" },
       { type: "usage", id: "native-turn", timestamp: "2026-10-20T12:00:00.000Z", provider: "fixture", model: "fixture-model", usage: { input: 7, output: 2, cost: { total: 0 } } },
+    ].map(entry => JSON.stringify(entry)).join("\n") + "\n");
+    await writeFile(path.join(ompSessions, "session.jsonl"), [
+      { type: "title", v: 1, title: "" },
+      { type: "session", version: 3, id: "omp-native-session", timestamp: "2026-10-20T12:00:00.000Z", cwd: root },
+      { type: "message", id: "omp-native-turn", timestamp: "2026-10-20T12:00:01.000Z",
+        message: { role: "assistant", provider: "fixture", model: "omp-fixture-model", usage: { input: 9, output: 3, cacheRead: 2, cacheWrite: 1, reasoningTokens: 1, cost: { total: 0.02 } } } },
     ].map(entry => JSON.stringify(entry)).join("\n") + "\n");
     await startPmProviderApplication(providerApplicationOptions);
     const context: UsageReadContext = { instances, sinceMs: Date.parse("2026-10-20"), untilMs: Date.parse("2026-10-21"), awaitRefresh: true,
@@ -42,7 +51,13 @@ test("all original readers preserve disabled history or explicitly disclose miss
     assert.ok(scans.every(scan => scan.source.status === "ok" || scan.source.status === "missing"), JSON.stringify(scans.map(scan => scan.source)));
     const pi = scans.find(scan => scan.source.fingerprint.provider === "pi")!;
     assert.equal(pi.records[0]?.totals.uncachedInputTokens, 7); assert.equal(pi.records[0]?.reportedCostUsd, null);
-    for (const driver of ["fx", "acpRegistry", "omp"] as const) {
+    const omp = scans.find(scan => scan.source.fingerprint.provider === "omp")!;
+    assert.equal(omp.source.status, "ok");
+    assert.equal(omp.records.length, 1);
+    assert.equal(omp.records[0]?.totals.uncachedInputTokens, 9);
+    assert.equal(omp.records[0]?.totals.cachedInputTokens, 2);
+    assert.equal(omp.records[0]?.reportedCostUsd, 0.02);
+    for (const driver of ["fx", "acpRegistry"] as const) {
       const unsupported = scans.find(scan => scan.source.fingerprint.provider === driver)!;
       assert.equal(unsupported.source.status, "missing"); assert.match(unsupported.source.message!, /does not support native usage history/);
     }

@@ -33,9 +33,10 @@
   grid-column: span 6;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-module-value);
   padding: 16px;
   background: var(--surface);
+  box-shadow: var(--edge-shadow);
 }
 .widget[data-width="4"] {
   grid-column: span 4;

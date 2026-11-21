@@ -47,8 +47,7 @@ test("catalog DTOs remain type-only while resource assembly owns the reviewed ma
   assert.deepEqual(inspectImportBoundaries(consumer, `import { type AutomationCatalogTemplate } from '${dto}';`), []);
   assert.match(inspectImportBoundaries(consumer, `import { automationCatalog } from '${dto}';`)[0], /Import catalog DTOs/);
   const assembly = "packages/automation-resources/catalog.ts";
-  assert.deepEqual(inspectImportBoundaries(assembly, "import source from '../../vendor/openhands-automations/interface.json' with { type: 'json' };"), []);
-  assert.equal(inspectImportBoundaries(assembly, "import source from '../../vendor/openhands-automations/catalog/new-template/manifest.json' with { type: 'json' };").length, 1);
+  assert.equal(inspectImportBoundaries(assembly, "import source from '../../vendor/openhands-automations/interface.json' with { type: 'json' };").length, 1);
 });
 
 test("source-checkout paths and literal escapes cannot bypass module boundaries", () => {
@@ -57,4 +56,74 @@ test("source-checkout paths and literal escapes cannot bypass module boundaries"
   }
   assert.equal(inspectImportBoundaries(consumer, `import { entry } from '../../../../../ven\\u0064or/t3code/apps/server/src/provider/ClaudeModelCatalog.ts';`).length, 1);
   assert.deepEqual(inspectImportBoundaries(consumer, `// import '${source}';\nconst description = ${JSON.stringify(source)};`), []);
+});
+
+test("application may depend on approved infrastructure modules only", () => {
+  const importer = "packages/application/src/feature.ts";
+  assert.deepEqual(inspectImportBoundaries(importer, "import { lockWorkspace } from '../../infrastructure/src/database.ts';"), []);
+  const issues = inspectImportBoundaries(importer, "import { sink } from '../../infrastructure/src/new-sink.ts';");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /packages\/application\/src\/feature\.ts/);
+  assert.match(issues[0], /packages\/infrastructure\/src\/new-sink\.ts/);
+  assert.match(issues[0], /application->infrastructure/);
+});
+
+test("infrastructure may implement approved application modules only", () => {
+  const importer = "packages/infrastructure/src/adapter.ts";
+  assert.deepEqual(inspectImportBoundaries(importer, "import type { SqlExecutor } from '../../application/src/ports.ts';"), []);
+  const issues = inspectImportBoundaries(importer, "import { run } from '../../application/src/new-service.ts';");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /infrastructure->application/);
+});
+
+test("contracts may reference only the application ports module", () => {
+  const importer = "packages/contracts/src/dto.ts";
+  assert.deepEqual(inspectImportBoundaries(importer, "import type { SqlExecutor } from '../../application/src/ports.ts';"), []);
+  const issues = inspectImportBoundaries(importer, "import { kernel } from '../../application/src/kernel.ts';");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /contracts->application/);
+});
+
+test("domain may depend on pm-schema but not on application layers", () => {
+  const importer = "packages/domain/src/rule.ts";
+  assert.deepEqual(inspectImportBoundaries(importer, "import type { Graph } from '../../pm-schema/index.ts';"), []);
+  assert.deepEqual(inspectImportBoundaries(importer, "import { z } from 'zod';"), []);
+  const issues = inspectImportBoundaries(importer, "import { access } from '../../application/src/access.ts';");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /\(domain\)/);
+  assert.match(issues[0], /packages\/application\/src\/access\.ts/);
+});
+
+test("pm-core and isolated packages keep their narrow dependency sets", () => {
+  assert.deepEqual(inspectImportBoundaries("packages/pm-core/index.ts", "import { graph } from '../pm-schema/index.ts';"), []);
+  assert.match(inspectImportBoundaries("packages/pm-core/index.ts", "import { access } from '../application/src/access.ts';")[0], /\(pm-core\)/);
+  assert.match(inspectImportBoundaries("packages/agent-client-runtime/src/client.ts", "import type { Dto } from '../../contracts/src/dto.ts';")[0], /isolated-package/);
+});
+
+test("packages must not depend on applications", () => {
+  const issues = inspectImportBoundaries("packages/application/src/feature.ts", "import { api } from '../../../apps/web/src/api.ts';");
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /packages-no-apps/);
+  assert.match(issues[0], /apps\/web\/src\/api\.ts/);
+});
+
+test("pm and worker applications must not reach into agent, web or desktop sources", () => {
+  for (const [importer, target, resolved] of [
+    ["apps/server/pm/src/routes.ts", "../../agent/src/index.ts", "apps/server/agent/src/index.ts"],
+    ["apps/server/pm/src/routes.ts", "../../../web/src/api.ts", "apps/web/src/api.ts"],
+    ["apps/server/worker/src/worker.ts", "../../../desktop/src/main.ts", "apps/desktop/src/main.ts"],
+  ]) {
+    const issues = inspectImportBoundaries(importer, `import '${target}';`);
+    assert.equal(issues.length, 1, target);
+    assert.match(issues[0], /apps-server-backend/);
+    assert.ok(issues[0].includes(resolved), target);
+  }
+  assert.deepEqual(inspectImportBoundaries("apps/server/pm/src/routes.ts", "import { access } from '../../../packages/application/src/access.ts';"), []);
+});
+
+test("the CLI's one reviewed desktop private-state edge stays exact", () => {
+  const importer = "packages/pm-cli/agent-runtime.ts";
+  assert.deepEqual(inspectImportBoundaries(importer, "import { readPrivateJson } from '../../apps/desktop/src/private-state.mjs';"), []);
+  assert.match(inspectImportBoundaries(importer, "import { other } from '../../apps/desktop/src/other.mjs';")[0], /packages-no-apps/);
+  assert.match(inspectImportBoundaries("packages/pm-cli/other.ts", "import { readPrivateJson } from '../../apps/desktop/src/private-state.mjs';")[0], /packages-no-apps/);
 });

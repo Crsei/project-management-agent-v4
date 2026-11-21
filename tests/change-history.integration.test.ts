@@ -4,10 +4,10 @@ import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import type { Entity } from '../packages/domain/src/core.ts';
-import type { FileRecord, ProtocolConfiguration } from '../packages/pm-schema/index.ts';
+import { defaultConfiguration, type FileRecord, type ProtocolConfiguration } from '../packages/pm-schema/index.ts';
 import type { ChangeHistoryPage, ChangeDetail, ChangeComparison, ChangeAcknowledgement, TaskAttentionPage, ChangeHistoryTarget } from '../packages/contracts/src/change-history.ts';
 import type { NotificationInboxPage } from '../packages/domain/src/notifications.ts';
-import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/routes/core-routes.ts';
 import { CoreFactImporter } from '../apps/server/pm/src/core-fact-importer.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
 import { captureCoreFacts } from '../apps/server/pm/src/core-facts.ts';
@@ -15,6 +15,8 @@ import { Workspace } from '../packages/pm-core/index.ts';
 import { DurableState } from '../packages/pm-core/state.ts';
 import { FileRepository, revisionOf } from '../packages/pm-core/repository.ts';
 import { parseMarkdown } from '../packages/pm-markdown/index.ts';
+import { coreChangeSnapshot } from '../packages/pm-core/change-snapshots.ts';
+import { insertChangeHistory, compareChangeHistory, historyTargetKey } from '../packages/application/src/change-history.ts';
 import { lockWorkspace } from '../packages/infrastructure/src/database.ts';
 import { readServiceFactObservations } from '../packages/pm-core/service-facts.ts';
 import { readonlyCorePort } from '../packages/pm-core/readonly.ts';
@@ -127,6 +129,39 @@ describe('immutable change history and personal review cursors on an isolated re
     const next = await save(f, file, file.raw.replace('Version 12', 'Version 13'));
     const sinceRead = await f.request<ChangeComparison>(`${base(f)}/change-history/compare`, { method: 'POST', body: { target: target(file.id) } });
     assert.equal(sinceRead.status, 200); assert.equal(sinceRead.body.before!.raw, file.raw); assert.equal(sinceRead.body.after!.raw, next.raw);
+  });
+
+  it('compares from the retained baseline endpoint when the review cursor predates capture', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal }); t.after(() => f.close());
+    const p = await project(f);
+    const raw = `---\nschema: pm/v1\nproject: ${p.id}\nentity: work_item\nid: TASK-900\nstatus: todo\n---\n\n# Baseline comparison\n\nBefore baseline edit\n\n- [ ] Keep this`;
+    const nextRaw = raw.replace('Before baseline edit', 'After baseline edit');
+    const followingRaw = nextRaw.replace('After baseline edit', 'After reviewed edit');
+    const file = (value: string): FileRecord => ({ path: 'work-items/TASK-900.md', raw: value, revision: revisionOf(value), id: 'TASK-900', entity: parseMarkdown(value, defaultConfiguration) });
+    const baseline = file(raw), next = file(nextRaw), following = file(followingRaw);
+    const now = new Date().toISOString();
+    // The baseline is the first retained endpoint: this file existed before capture, so no creation/change entry precedes it.
+    await insertChangeHistory(f.pool, f.workspaceId, { changeId: randomUUID(), sourceKey: `baseline:test:${baseline.revision}`, target: target(baseline.id), entityKind: 'work_item', projectId: p.id,
+      before: null, after: coreChangeSnapshot(baseline), changedFields: [], changeKinds: [], completeness: 'baseline', origin: 'observation', actorId: null, observedAt: now, occurredAt: null });
+    const nextChange = randomUUID();
+    await insertChangeHistory(f.pool, f.workspaceId, { changeId: nextChange, sourceKey: `exact:test:${next.revision}`, target: target(baseline.id), entityKind: 'work_item', projectId: p.id,
+      before: coreChangeSnapshot(baseline), after: coreChangeSnapshot(next), changedFields: ['body'], changeKinds: ['content_changed'], completeness: 'exact', origin: 'manual', actorId: f.owner.id, observedAt: now, occurredAt: now });
+    const ctx = { sql: f.pool, actor: f.owner, workspaceId: f.workspaceId, snapshot: { files: [next], fingerprint: 'baseline-review-test' },
+      authorizeExternal: async () => { throw new Error('core target only'); }, resolveExternal: async () => { throw new Error('core target only'); } };
+    const comparison = await compareChangeHistory(ctx, { target: target(baseline.id) });
+    assert.equal(comparison.completeness, 'baseline');
+    assert.equal(comparison.before?.revision, baseline.revision);
+    assert.equal(comparison.before?.raw, raw);
+    assert.equal(comparison.after?.raw, nextRaw);
+    const nextRow = (await f.pool.query<{ sequence: string }>('SELECT sequence::text FROM change_history_entries WHERE workspace_id=$1 AND change_id=$2', [f.workspaceId, nextChange])).rows[0]!;
+    await f.pool.query('INSERT INTO change_history_cursors(workspace_id,actor_id,target_key,reviewed_through) VALUES($1,$2,$3,$4)', [f.workspaceId, f.owner.id, historyTargetKey(target(baseline.id)), nextRow.sequence]);
+    const followingChange = randomUUID();
+    await insertChangeHistory(f.pool, f.workspaceId, { changeId: followingChange, sourceKey: `exact:test:${following.revision}`, target: target(baseline.id), entityKind: 'work_item', projectId: p.id,
+      before: coreChangeSnapshot(next), after: coreChangeSnapshot(following), changedFields: ['body'], changeKinds: ['content_changed'], completeness: 'exact', origin: 'manual', actorId: f.owner.id, observedAt: now, occurredAt: now });
+    const reviewed = await compareChangeHistory({ ...ctx, snapshot: { files: [following], fingerprint: 'baseline-review-test' } }, { target: target(baseline.id) });
+    assert.equal(reviewed.completeness, 'exact');
+    assert.equal(reviewed.before?.raw, nextRaw);
+    assert.equal(reviewed.after?.raw, followingRaw);
   });
 
   it('reviews only formal related sources, rejects changed link scopes, and does not clear unseen related history with a self-only grant', { timeout: 180_000 }, async t => {

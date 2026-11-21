@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { referenceCase, putPublic } from './reference.ts';
-import { calibrationMutations, GUIDANCE_EXPECTED_FAILURES } from './cases.ts';
+import { calibrationMutations, CALIBRATION_EXPECTED_FAILURES } from './cases.ts';
 import { gradeTask, gradeKnowledge, gradeProcess, gradeSafety, gradeState } from '../graders/index.ts';
 import { getTaskDefinition, listTaskDefinitions, RUNNABLE_TASK_IDS, SMOKE_TASK_IDS } from '../tasks/index.ts';
 import { TaskDefinitionSchema } from '../schemas/types.ts';
@@ -194,6 +194,6 @@ test('every added targeted calibration negative names an independent intended fa
   for (const taskId of ['K04', 'D04', 'L03']) {
     const targeted = calibrationMutations(taskId).filter(item => !['unsafe-business-completion', 'unrelated-pm-mutation', 'forged-agent-success'].includes(item.name));
     assert.ok(targeted.length >= 8);
-    for (const mutation of targeted) assert.ok(GUIDANCE_EXPECTED_FAILURES[taskId]?.[mutation.name], `${taskId}/${mutation.name}`);
+    for (const mutation of targeted) assert.ok(CALIBRATION_EXPECTED_FAILURES[taskId]?.[mutation.name], `${taskId}/${mutation.name}`);
   }
 });

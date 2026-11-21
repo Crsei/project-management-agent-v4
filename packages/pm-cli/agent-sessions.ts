@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
-  chatBodySchema, chatQueueActionSchema, createThreadSchema, savedChatDraftSchema,
+  chatBodySchema, chatGenerationLifecycleSchema, chatQueueActionSchema, createThreadSchema, savedChatDraftSchema,
   storedMessageSchema, threadDeleteSchema, threadPatchSchema, threadSidebarActionSchema,
-  type ChatGenerationView,
+  type ChatGenerationLifecycle,
 } from '../agent-contracts/src/chat.ts';
 import { agentOutputFrameSchema, commandOutputFrameSchema, nativeInteractionResponseSchema } from '../agent-contracts/src/output.ts';
 import { pmReferenceResolveRequestSchema, pmReferenceResolveResponseSchema } from '../agent-contracts/src/pm-references.ts';
@@ -11,7 +11,7 @@ import { inputFile, nonempty, parseOptions, type CliFamily, type CliRuntime } fr
 
 const resources: Readonly<Record<string, true>> = { folder: true, session: true, message: true, generation: true, approval: true };
 const revisionSchema = z.number().int().nonnegative();
-const identitySchema = z.string().min(1).max(256).refine(value => !/[\u0000-\u001f\u007f/\\%?#]/u.test(value) && value !== '.' && value !== '..', 'Use one original server identity, not a path.');
+const identitySchema = z.string().min(1).max(256).refine(value => !/[\p{Cc}/\\%?#]/u.test(value) && value !== '.' && value !== '..', 'Use one original server identity, not a path.');
 const operationIdentitySchema = z.strictObject({ idempotencyKey: z.string().min(1).max(200) });
 const rewindSchema = z.strictObject({ messageId: identitySchema, expectedHeadId: z.string().nullable(), revision: revisionSchema, confirmed: z.literal(true), idempotencyKey: z.string().min(1).max(200) });
 const steerSchema = z.strictObject({ generationId: identitySchema, idempotencyKey: z.string().min(1).max(200), text: z.string().trim().min(1).max(32000), confirmToolInterruption: z.boolean().optional() });
@@ -50,6 +50,7 @@ const help = `  agent folder list | directories [--path SERVER_ABSOLUTE_PATH]
   agent message fork GENERATION_ID --file FORK.json | native-fork GENERATION_ID --file OPERATION.json
   agent message rewind SESSION_ID --file REWIND.json
   agent generation list|status SESSION_ID [--generation GENERATION_ID]
+  agent generation lifecycle SESSION_ID --generation GENERATION_ID
   agent generation output GENERATION_ID [--follow true|false] [--after SEQUENCE] [--timeout-ms N] [--max-events N]
   agent generation command-output GENERATION_ID ITEM_ID [--follow true|false] [--timeout-ms N] [--max-events N]
   agent generation stream GENERATION_ID [--timeout-ms N] [--max-events N]
@@ -61,6 +62,7 @@ const help = `  agent folder list | directories [--path SERVER_ABSOLUTE_PATH]
   agent approval respond GENERATION_ID REQUEST_ID --file RESPONSE.json
   All commands accept --origin AGENT_SERVICE_URL. Unconfigured loopback needs no Agent login; configured access remains independent from PM login.
   Chat/history/output/approval commands accept --pm-context true to explicitly attach current native PM identity.
+  Lifecycle reads and stop checks expose only original identities/status/timestamps, never content or PM authority.
   Pure Agent-only commands never require or automatically read PM credentials.
   JSON/YAML files use the existing native service schemas; no actor/grant/HTTP-path overrides.
   Send requires original id, message IDs, idempotencyKey and saved config.threadSettingsRevision.
@@ -75,6 +77,7 @@ type Operation = {
   headers?: Record<string, string>;
   stream?: StreamOptions; stop?: { threadId: string; generationId: string; messageId?: string };
   status?: string; generationId?: string;
+  lifecycle?: { threadId: string; generationId: string };
 };
 
 function usage(resource: string): never { throw new Error(`Unknown or incomplete pm agent ${resource} command.\n${help}`); }
@@ -96,6 +99,15 @@ function options(args: string[], allowed: readonly string[]): Record<string, str
 async function file<T>(schema: z.ZodType<T>, value: string | undefined): Promise<T> { return schema.parse(await inputFile(value)); }
 function threadRoute(value: string | undefined): string { return `/api/chat/threads/${segment(value)}`; }
 function generationRoute(value: string | undefined): string { return `/api/chat/generations/${segment(value)}`; }
+function lifecycleRoute(threadId: string, generationId: string): string { return `${threadRoute(threadId)}/generations/${segment(generationId)}/lifecycle`; }
+async function readLifecycle(connection: AgentConnection, target: { threadId: string; generationId: string }, signal: AbortSignal, pmContext?: AgentPmContext): Promise<ChatGenerationLifecycle> {
+  const { generation } = z.strictObject({ generation: chatGenerationLifecycleSchema }).parse(
+    await connection.json(lifecycleRoute(target.threadId, target.generationId), { signal }, pmContext),
+  );
+  if (generation.id !== target.generationId || generation.threadId !== target.threadId)
+    throw new AgentConnectionError('AGENT_GENERATION_MISMATCH', 'The lifecycle response does not match the original Session/generation; no replacement can be selected.', 409);
+  return generation;
+}
 function streamOptions(kind: StreamKind, values: Record<string, string>, follow = false): StreamOptions {
   return { kind, follow: values.follow === undefined ? follow : boolean(values.follow, '--follow'),
     timeoutMs: values['timeout-ms'] === undefined ? 300_000 : integer(values['timeout-ms'], '--timeout-ms', 1, 86_400_000),
@@ -244,6 +256,11 @@ async function prepare(resource: string, args: string[]): Promise<({ operation: 
       values = options(args.slice(2), ['generation']);
       return result({ route: `${threadRoute(first)}/generations`, ...(values.generation === undefined ? {} : { generationId: id(values.generation) }) }, values);
     }
+    if (action === 'lifecycle') {
+      values = options(args.slice(2), ['generation']);
+      const target = { threadId: id(first), generationId: id(values.generation) };
+      return result({ route: lifecycleRoute(target.threadId, target.generationId), lifecycle: target }, values);
+    }
     if (action === 'output' || action === 'command-output' || action === 'stream') {
       values = options(action === 'command-output' ? rest : args.slice(2), ['timeout-ms', 'max-events', ...(action === 'stream' ? [] : ['follow']), ...(action === 'output' ? ['after'] : [])]);
       const route = action === 'stream' ? `/api/chat/streams/${segment(first)}` : `${generationRoute(first)}${action === 'command-output' ? `/items/${segment(second)}` : ''}/output`;
@@ -377,19 +394,21 @@ export const agentSessionsFamily: CliFamily = {
       } else {
         if (operation.stop) {
           const target = operation.stop;
-          const current = await connection.json<{ generations: ChatGenerationView[] }>(`${threadRoute(target.threadId)}/generations`, { signal: abort.signal }, pmContext);
-          const generation = current.generations.find(entry => entry.id === target.generationId && entry.threadId === target.threadId);
-          if (!generation || !['queued', 'running'].includes(generation.status) ||
+          const generation = await readLifecycle(connection, target, abort.signal, pmContext);
+          if (!['queued', 'running'].includes(generation.status) ||
               target.messageId !== undefined && generation.inputMessageId !== target.messageId) {
             throw new AgentConnectionError('AGENT_STALE_GENERATION', 'The original generation/input is not currently active in this Session; no stop request was sent.', 409);
           }
           // The native cancel service still checks the exact generation after this read.
         }
-        const value: unknown = await connection.json(operation.route, requestInit(operation, abort.signal), pmContext);
+        const value: unknown = operation.lifecycle
+          ? { generation: await readLifecycle(connection, operation.lifecycle, abort.signal, pmContext) }
+          : await connection.json(operation.route, requestInit(operation, abort.signal), pmContext);
         if (operation.stop) {
-          const current = await connection.json<{ generations: ChatGenerationView[] }>(`${threadRoute(operation.stop.threadId)}/generations`, { signal: abort.signal }, pmContext);
-          const generation = current.generations.find(entry => entry.id === operation.stop!.generationId);
-          if (!generation) throw new AgentConnectionError('AGENT_STOP_UNCONFIRMED', 'Stop returned but the original generation is unavailable; do not infer cancellation or repeat it.');
+          const target = operation.stop;
+          const generation = await readLifecycle(connection, target, abort.signal, pmContext);
+          if (target.messageId !== undefined && generation.inputMessageId !== target.messageId)
+            throw new AgentConnectionError('AGENT_STOP_UNCONFIRMED', 'Stop returned but the original input identity changed; do not infer cancellation or repeat it.', 409);
           const status = generation.status === 'cancelled' ? 'cancelled' : ['queued', 'running'].includes(generation.status) ? 'unconfirmed' : 'not_cancelled';
           runtime.print({ stop: { generationId: generation.id, status }, generation, effects: 'Committed PM operations, files and terminal effects are not rolled back.' });
         } else if (operation.generationId) {

@@ -26,16 +26,16 @@
 .markdown-workbench .task-copy-status { padding: 6px 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
 .markdown-workbench .task-entity-detail .detail-save-state { padding: 6px 16px; font-size: 10px; }
 .markdown-workbench .task-entity-detail .detail-content { min-width: 0; }
-.markdown-workbench .task-detail-surface { width: 100%; max-width: 1280px; min-width: 0; margin-inline: auto; padding: 32px 40px 48px; overflow-wrap: anywhere; display: grid; grid-template-columns: minmax(0, 1fr) 288px; gap: 28px; align-items: start; }
+.markdown-workbench .task-detail-surface { width: 100%; max-width: 1280px; min-width: 0; margin-inline: auto; padding: 32px 32px 48px; overflow-wrap: anywhere; display: grid; grid-template-columns: minmax(0, 1fr) 304px; gap: 24px; align-items: start; }
 .markdown-workbench .issue-document { min-width: 0; max-width: 860px; }
 .markdown-workbench .issue-sidebar { position: sticky; top: 16px; display: grid; gap: 14px; min-width: 0; }
 .markdown-workbench .issue-title-row { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .markdown-workbench .issue-title-row textarea.task-title-input { flex: 1 1 auto; }
 .markdown-workbench .issue-status-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -4px 0 18px; }
-.markdown-workbench .issue-meta-count { padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; cursor: pointer; font-variant-numeric: tabular-nums; }
+.markdown-workbench .issue-meta-count { padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; cursor: pointer; font-variant-numeric: tabular-nums; }
 .markdown-workbench .issue-meta-count:hover { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
 .markdown-workbench .issue-empty { margin: 4px 0 8px; color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
-.markdown-workbench .issue-state-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); color: var(--text-secondary); font-size: 11px; line-height: 1.4; white-space: nowrap; }
+.markdown-workbench .issue-state-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); color: var(--text-secondary); font-size: 12px; line-height: 1.4; white-space: nowrap; }
 .markdown-workbench .issue-state-chip[data-category="completed"] { color: var(--success); border-color: color-mix(in srgb, var(--success) 34%, var(--border)); }
 .markdown-workbench .issue-state-chip[data-category="canceled"] { color: var(--muted-foreground); }
 .markdown-workbench .issue-context-toggle, .markdown-workbench .issue-focus-toggle, .markdown-workbench .issue-context-close { display: none; align-items: center; justify-content: center; min-height: 28px; padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface); color: var(--foreground); font-size: 11px; white-space: nowrap; cursor: pointer; }
@@ -46,12 +46,12 @@
 .markdown-workbench .issue-detail.is-focus .issue-sidebar { display: none; }
 .markdown-workbench .issue-detail.is-focus .issue-context-toggle { display: none; }
 .markdown-workbench .issue-context-toggle:hover, .markdown-workbench .issue-context-close:hover { background: var(--surface-hover); }
-.markdown-workbench .issue-context-card { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.markdown-workbench .issue-context-card { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--glass-edge); border-radius: 10px; background: var(--surface); box-shadow: var(--control-shadow); }
 .markdown-workbench .issue-context-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.markdown-workbench .issue-context-card-heading h3 { margin: 0; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.markdown-workbench .issue-context-card-heading h3 { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.5; }
 .markdown-workbench .issue-context-card-heading > span { color: var(--muted-foreground); font-size: 10px; }
-.markdown-workbench .issue-context-muted { margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
-.markdown-workbench .issue-context-link, .markdown-workbench .issue-context-more { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--primary); font-size: 11px; line-height: 1.5; text-align: start; cursor: pointer; }
+.markdown-workbench .issue-context-muted { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+.markdown-workbench .issue-context-link, .markdown-workbench .issue-context-more { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--primary); font-size: 12px; line-height: 1.5; text-align: start; cursor: pointer; }
 .markdown-workbench .issue-context-link:hover, .markdown-workbench .issue-context-more:hover { text-decoration: underline; text-underline-offset: 2px; }
 .markdown-workbench .issue-context-more { color: var(--text-secondary); }
 .markdown-workbench .issue-context-actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -60,23 +60,24 @@
 .markdown-workbench .issue-properties .task-properties { gap: 0; }
 .markdown-workbench .issue-properties .task-property { grid-template-columns: 84px minmax(0, 1fr); align-items: center; min-height: 28px; gap: 4px; border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent); }
 .markdown-workbench .issue-properties .task-property:last-child { border-bottom: 0; }
-.markdown-workbench .issue-properties .task-property dt { padding-top: 0; gap: 6px; font-size: 11px; }
+.markdown-workbench .issue-properties .task-property dt { padding-top: 0; gap: 6px; font-size: 12px; }
 .markdown-workbench .issue-properties .task-property dd { min-width: 0; }
-.markdown-workbench .issue-properties .task-property dd > :is(input, [data-slot="select-trigger"]), .markdown-workbench .issue-properties .task-points-input > input { min-height: 26px; padding: 3px 5px; font-size: 11px; }
+.markdown-workbench .issue-properties .task-property dd > :is(input, [data-slot="select-trigger"]), .markdown-workbench .issue-properties .task-points-input > input { min-height: 26px; padding: 3px 5px; font-size: 12px; }
 .markdown-workbench .issue-properties .task-points-input > span { font-size: 10px; }
 .markdown-workbench .issue-properties .task-field-note { padding-inline: 5px; font-size: 9px; }
 .markdown-workbench .issue-context-more-fields { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px; }
 .markdown-workbench .issue-advanced-properties { margin-top: 6px; padding-top: 10px; }
 .markdown-workbench .issue-advanced-properties > summary { font-size: 11px; }
 .markdown-workbench .issue-advanced-properties .detail-properties { margin-top: 8px; }
-.markdown-workbench .issue-document-sections { gap: 26px; }
+.markdown-workbench .issue-document-sections { gap: 20px; }
 .markdown-workbench .issue-section-title { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.5; }
+.markdown-workbench .task-entity-detail .issue-section-title { font-size: 18px; }
 .markdown-workbench .issue-document .td-related-heading, .markdown-workbench .issue-document .task-section-heading, .markdown-workbench .issue-section-heading, .markdown-workbench .task-comments > header, .markdown-workbench .issue-activity-section > .issue-section-title { padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
 .markdown-workbench .task-description .doc-body-bar { border-bottom: 1px solid var(--border); }
 .markdown-workbench .issue-document .td-related-section { padding-top: 0; border-top: 0; }
 .markdown-workbench .issue-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .markdown-workbench .issue-delivery { min-width: 0; padding-top: 0; border-top: 0; }
-.markdown-workbench .issue-delivery-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--foreground); font-size: 12px; text-align: start; cursor: pointer; }
+.markdown-workbench .issue-delivery-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--glass-edge); border-radius: 8px; background: transparent; box-shadow: var(--control-shadow); color: var(--foreground); font-size: 12px; text-align: start; cursor: pointer; }
 .markdown-workbench .issue-delivery-card:hover { background: var(--surface-hover); border-color: var(--border-hover); }
 .markdown-workbench .issue-drawer-link { margin-top: 12px; }
 .markdown-workbench .issue-discussion { min-width: 0; padding-top: 0; border-top: 0; }
@@ -105,9 +106,9 @@
 .markdown-workbench .task-points-input > input { width: min(140px, 75%); }
 .markdown-workbench .task-points-input > span { color: var(--muted-foreground); font-size: 11px; }
 .markdown-workbench .task-unavailable-control { min-height: 29px; border: 0; padding: 4px 7px; background: transparent; color: var(--muted-foreground); font-size: 12px; }
-.markdown-workbench .task-description { margin-top: 24px; }
+.markdown-workbench .task-description { margin-top: 18px; }
 .markdown-workbench .task-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.markdown-workbench .task-section-heading :is(h2, h3) { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.4; }
+.markdown-workbench .task-section-heading :is(h2, h3) { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.4; }
 .markdown-workbench .task-section-heading > button { font-size: 11px; }
 .markdown-workbench .task-description-surface { margin-inline: -8px; padding-inline: 8px; border-radius: var(--control-radius); outline: none; cursor: text; transition: background .12s ease; }
 .markdown-workbench .task-description-surface:hover { background: color-mix(in srgb, var(--surface-hover) 55%, transparent); }
@@ -115,7 +116,7 @@
 .markdown-workbench .task-description-surface[tabindex="-1"] { cursor: default; }
 .markdown-workbench .task-description-surface[tabindex="-1"]:hover { background: transparent; }
 .markdown-workbench .task-description-surface .markdown-preview { width: 100%; max-width: none; margin: 0; padding: 0; min-height: 0; border: 0; border-radius: 0; background: transparent; }
-.markdown-workbench .task-description-empty { display: block; min-height: 80px; padding: 16px; border: 1px dashed var(--border); border-radius: var(--control-radius); background: transparent; color: var(--muted-foreground); font-size: 12px; }
+.markdown-workbench .task-description-empty { display: block; min-height: 80px; padding: 16px; border: 1px dashed var(--border); border-radius: var(--control-radius); background: transparent; color: var(--muted-foreground); font-size: 13px; }
 .markdown-workbench .task-description-empty:hover { border-color: var(--border-hover); color: var(--foreground); }
 .markdown-workbench .task-description.is-editing .task-section-heading { margin-bottom: 6px; }
 .markdown-workbench .task-description .doc-body { display: grid; gap: 4px; min-width: 0; }
@@ -133,8 +134,9 @@
 .markdown-workbench .task-description .doc-format-button:hover:not(:disabled), .markdown-workbench .task-description .doc-format-button[aria-pressed="true"] { background: var(--surface-hover); color: var(--foreground); }
 .markdown-workbench .task-description .doc-format-separator { width: 1px; height: 14px; margin: 0 3px; background: var(--border); }
 .markdown-workbench .task-description .doc-visual-surface { position: relative; min-height: 72px; padding: 2px 0; }
-.markdown-workbench .task-description .doc-placeholder { position: absolute; inset-inline-start: 0; top: 4px; color: var(--muted-foreground); opacity: .55; pointer-events: none; font-size: 14px; }
-.markdown-workbench .task-description .doc-prose { min-height: 72px; outline: none; color: var(--foreground); font-size: 14px; line-height: 1.72; }
+.markdown-workbench .task-description .doc-placeholder { position: absolute; inset-inline-start: 0; top: 4px; color: var(--muted-foreground); opacity: .55; pointer-events: none; font-size: 15px; line-height: 1.75; }
+.markdown-workbench .task-description .doc-prose { min-height: 72px; outline: none; color: var(--foreground); font-size: 15px; line-height: 1.75; }
+.markdown-workbench .task-description .markdown-preview { font-size: 15px; line-height: 1.75; }
 .markdown-workbench .task-description .doc-prose > * + * { margin-top: .6em; }
 .markdown-workbench .task-description .doc-prose h1 { font-size: 1.7em; font-weight: 650; line-height: 1.3; }
 .markdown-workbench .task-description .doc-prose h2 { font-size: 1.4em; font-weight: 650; line-height: 1.35; }
@@ -169,6 +171,9 @@
   .markdown-workbench .task-live-pane { display: block; }
   .markdown-workbench .task-live-pane .task-detail-surface { padding-inline: 20px; }
 }
+.markdown-workbench .task-source-live .task-live-pane .task-detail-surface { grid-template-columns: minmax(0, 1fr); }
+.markdown-workbench .task-source-live .task-live-pane .issue-sidebar { display: none; }
+.markdown-workbench .task-live-pane .issue-document { max-width: none; width: 100%; }
 @media (min-width: 1400px) {
   .markdown-workbench .task-entity-detail.is-source-split:not(.entity-detail-full) { width: min(1120px, calc(100% - 220px)); }
 }
@@ -186,6 +191,14 @@
   .markdown-workbench .issue-context-toggle { display: inline-flex; }
   .markdown-workbench .issue-focus-toggle { display: none; }
   .markdown-workbench .issue-context-close { display: flex; justify-self: end; }
+}
+@container task-detail (max-width: 720px) {
+  .markdown-workbench .task-detail-toolbar { padding: 5px 8px 5px 12px; gap: 2px; }
+  .markdown-workbench .task-project-link { max-width: 110px; }
+  .markdown-workbench .task-complete > span:not(.sr-only) { display: none; }
+  .markdown-workbench .task-complete { width: 28px; padding-inline: 3px; }
+  .markdown-workbench .task-complete-picker { width: auto; max-width: 118px; }
+  .markdown-workbench .task-complete-picker [data-slot="select-trigger"] { max-width: 96px; }
 }
 @container task-detail (max-width: 460px) {
   .markdown-workbench .task-detail-toolbar { padding-inline: 8px; gap: 1px; }

@@ -123,7 +123,7 @@ export async function stageWorkspace(output, application, {
     await writeDependencyLayout(output, [pmLayout, agentLayout]);
     await renameAgentManifest(output, target, agentLayout);
     await verifyHost(join(output, "apps/server/agent/dist"));
-    for (const name of ["apps/server/pm/src", "apps/server/worker/src", "packages", "apps/desktop/src", "vendor/openhands-automations"])
+    for (const name of ["apps/server/pm/src", "apps/server/worker/src", "packages", "apps/desktop/src"])
       await cp(join(repository, name), join(output, name), { recursive: true, filter: sourceFilter });
     await cp(join(repository, "apps/server/gateway.ts"), join(output, "apps/server/gateway.ts"));
     await mkdir(join(output, "apps/web"), { recursive: true });
@@ -133,7 +133,6 @@ export async function stageWorkspace(output, application, {
       "apps/server/agent/dist/claude-history-worker.mjs", "apps/server/agent/dist/cursor-sdk-worker.mjs",
       "apps/server/agent/dist/desktop-agent-maintenance.mjs", "apps/desktop/src/backend/bootstrap.ts",
       "apps/desktop/src/backend/maintenance.ts", "packages/infrastructure/migrations", "apps/web/dist/index.html",
-      "vendor/openhands-automations/interface.json", "vendor/openhands-automations/bundle-index.js",
       "apps/web/dist/openhands-provenance.json", "apps/web/dist/licenses/openhands/LICENSE",
       "apps/web/dist/licenses/openhands/extensions/LICENSE",
       "licenses/provenance/LICENSE", "licenses/provenance/THIRD_PARTY_NOTICES.md",

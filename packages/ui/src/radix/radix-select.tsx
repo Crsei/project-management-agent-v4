@@ -259,7 +259,7 @@ export function RadixSelect({
       emit(ordered)
     }
     const triggerClassName = cn(
-      "flex h-control min-w-0 cursor-pointer select-none items-center justify-between gap-2 rounded-md border bg-background px-3 text-left text-sm text-foreground outline-none data-disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11",
+      "flex h-control min-w-0 cursor-pointer select-none items-center justify-between gap-2 rounded-md border bg-background px-3 text-left text-sm text-foreground shadow-[inset_0_1px_0_var(--field-rim)] outline-none data-disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11",
       className,
     )
     const trigger = (

@@ -33,7 +33,7 @@ import type { WorkItemCatalog, WorkItemRecord } from "@/lib/work-items-model"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { RichTextEditor } from "../../components/rich-text-editor"
 import { useText } from "../pm-ui"
-import { SettingsNotice, SettingsSection } from "./settings-shared"
+import { SettingsSection } from "./settings-shared"
 import styles from "./settings-design-system.module.css"
 
 function GallerySection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
@@ -328,10 +328,13 @@ export function SettingsDesignSystem() {
   const setPreferences = useWorkspaceStore(state => state.setPreferences)
   const storage = useWorkspaceStore(state => state.preferenceStorage)
   const catalog = useExampleCatalog()
-  return <SettingsSection title={t("设计系统", "Design System")} description={t("构成 Project Management 的真实令牌与组件。按参考设计系统的章节顺序展示，并适配本仓库组件。", "The real tokens and components behind Project Management, following the reference design system's section order with native PM components.")}>
+  return <SettingsSection title={t("设计系统", "Design System")} description={t("本项目的真实令牌与组件示例。", "The project’s real tokens and component examples.")}>
     <div className={styles.gallery} data-pm-design-system>
       <div className={styles.themeBar}><span className={styles.fieldLabel}>{t("切换主题以查看两套真实配色", "Switch themes to inspect both real palettes")}</span><Segmented<"light" | "dark" | "system"> aria-label={t("PM 主题", "PM theme")} value={theme} onValueChange={value => setPreferences({ theme: value })}>{([["light", t("浅色", "Light"), Sun], ["dark", t("深色", "Dark"), Moon], ["system", t("系统", "System"), Monitor]] as const).map(([value, label, Icon]) => <SegmentedItem key={value} value={value} data-value={value}><Icon aria-hidden="true" size={13} />{label}</SegmentedItem>)}</Segmented></div>
-      <SettingsNotice>{t("组件交互为本地示例：不会创建任务、删除项目、发送通知或保存业务数据；离开页面后重置。主题切换例外：使用既有 PM 外观偏好，立即应用到全站，并按现有机制尝试保存在本浏览器。", "Component interactions are local examples: no tasks, project deletion, notifications or business saves; they reset when you leave. Theme is the exception: the existing PM preference applies site-wide immediately and attempts to persist in this browser using the existing mechanism.")}{storage === "unavailable" && <p role="alert">{t("浏览器偏好存储不可用；主题仅在当前应用会话生效。", "Browser preference storage is unavailable; theme applies only in the current app session.")}</p>}</SettingsNotice>
+      <div className="space-y-2 text-sm leading-6 text-muted-foreground">
+        <p>{t("组件交互仅在本页生效；主题切换除外，立即应用到全站并保存在此浏览器。", "Component interactions are local to this page; theme changes apply site-wide and are saved in this browser.")}</p>
+        {storage === "unavailable" && <p role="alert">{t("浏览器存储不可用；主题仅在本次会话生效。", "Browser storage is unavailable; theme applies for this session only.")}</p>}
+      </div>
       <ColorGallery /><StatusGallery catalog={catalog} /><TypographyGallery /><GeometryGallery /><ButtonGallery /><InputGallery catalog={catalog} /><NavigationGallery /><DataGallery catalog={catalog} /><FeedbackGallery /><IconGallery />
     </div>
   </SettingsSection>

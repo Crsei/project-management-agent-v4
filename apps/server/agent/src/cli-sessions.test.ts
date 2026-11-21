@@ -18,7 +18,7 @@ import { startPmProviderApplication, stopPmProviderApplication } from './provide
 import { providerApplicationOptions } from './providers/t3code/production.ts';
 import { getActiveChat, getChatGeneration, listChatGenerations, stopChatRuntime, subscribeChat } from './durable/chat-runtime.ts';
 import { getThread, getThreadBranch, getThreadHistory } from './durable/threads.ts';
-import { closeStore, listRecords } from './durable/store.ts';
+import { closeStore, listRecords, writeRecord } from './durable/store.ts';
 import { initializeNativeOutput } from './durable/native-output.ts';
 import { registerLiveSteering } from './providers/t3code/live-actions.ts';
 import { grantIdentity, putGrant, type Grant } from './mcp/grants.ts';
@@ -49,6 +49,8 @@ let currentActorId: string;
 let pmWrites: { operationId: string; name: string; arguments: unknown }[];
 let pmReceipts: Map<string, { requestHash: string; record: PmToolCallRecord }>;
 let pmResultReads: string[];
+let pmResultGate: PromiseWithResolvers<void> | undefined, pmResultReached: PromiseWithResolvers<void>;
+let pmResultExpected: number;
 let beforeCancel: (() => Promise<void>) | undefined;
 let pmApprovalAuthority: PmApprovalAuthorityFixture | undefined;
 const workspaceId = randomUUID(), actorId = randomUUID();
@@ -82,6 +84,8 @@ beforeEach(async () => {
   receivedAnswer = undefined; started = Promise.withResolvers<void>(); questionReady = Promise.withResolvers<void>();
   payloadAllowed = true; loseNextWrite = false; loseNextChatReply = false; pmWrites = []; currentActorId = actorId;
   pmReceipts = new Map(); pmResultReads = []; beforeCancel = undefined;
+  pmResultGate = undefined; pmResultReached = Promise.withResolvers<void>();
+  pmResultExpected = 1;
   pmApprovalAuthority = undefined;
   const fileArea = { path: null, status: 'unconfigured', revision: 0, source: null, canManage: false };
   pmServer = createServer(async (incoming, outgoing) => {
@@ -121,6 +125,8 @@ beforeEach(async () => {
       }
       if (route.endsWith('/result')) {
         pmResultReads.push(request.operationId);
+        if (pmResultReads.length >= pmResultExpected) pmResultReached.resolve();
+        await pmResultGate?.promise;
         if (!original) { outgoing.writeHead(503).end(JSON.stringify({ error: 'Original result is unavailable' })); return; }
         outgoing.end(JSON.stringify(original.record)); return;
       }
@@ -197,6 +203,7 @@ beforeEach(async () => {
   };
 });
 afterEach(async () => {
+  pmResultGate?.resolve();
   await stopChatRuntime(); await stopPmProviderApplication();
   codexAdapter.check = originalCheck; codexAdapter.run = originalRun;
   await agentLogout().catch(() => undefined);
@@ -246,6 +253,9 @@ test('unowned prefixes are pure and closed commands reject smuggled identities b
   await assert.rejects(run(['session', 'create', '--file', await jsonFile({ id: 'forged', executionSelection: chatOnlyExecutionSelection(), actorId })]));
   await assert.rejects(run(['message', 'context', '../other', 'message']));
   await assert.rejects(run(['folder', 'list', '--endpoint', '/api/chat']));
+  await assert.rejects(run(['generation', 'lifecycle', 'original-session']));
+  await assert.rejects(run(['generation', 'lifecycle', 'original-session', '--generation', '../replacement']));
+  await assert.rejects(run(['generation', 'lifecycle', 'original-session', '--generation', 'original-generation', '--endpoint', '/api/chat']));
   assert.equal(requests.length, before);
 });
 
@@ -373,6 +383,64 @@ test('T33 detach preserves execution, exact stop observes final state and cannot
   assert.equal(getActiveChat(sessionId)?.id, replacement.generationId);
   await run(['generation', 'stop', sessionId, '--generation', replacement.generationId]);
   nextRelease.resolve();
+});
+
+test('lifecycle and exact stop never authorize retained PM content, even with result reads gated indefinitely', { timeout: 15_000 }, async () => {
+  const sessionId = await createSession(), unrelated = await createSession();
+  const release = Promise.withResolvers<void>(); gate = release.promise;
+  const accepted = await send(sessionId, 'Private original prompt', {}, true); await started.promise;
+  const active = getChatGeneration(accepted.generationId)!;
+  const secret = 'Private retained PM text must never enter a lifecycle DTO';
+  for (let index = 0; index < 128; index++) {
+    const operationId = randomUUID();
+    const request = pmToolRequestSchema.parse({ operationId, name: 'pm_query', target,
+      arguments: { entity: null, projectId: null, query: null, after: null, limit: 20 },
+      threadId: sessionId, messageId: active.messageId, generationId: active.id });
+    const record = pmToolCallRecordSchema.parse({ ...request, actorId, workspaceId, status: 'succeeded',
+      result: { kind: 'query', items: [], nextCursor: null, truncated: false, sources: [] }, error: null,
+      createdAt: active.createdAt, finishedAt: active.createdAt });
+    const requestHash = pmToolRequestHash(request, actorId);
+    pmReceipts.set(operationId, { requestHash, record });
+    writeRecord('pm-tool-calls', operationId, { request, record, requestHash });
+  }
+  writeRecord('chat:generations', active.id, { ...active, error: secret, output: { id: active.messageId, role: 'assistant', parts: [{ type: 'text', text: secret }] },
+    pmReferences: [{ ...target, kind: 'issue', id: 'TASK-001', revision, title: secret, availability: 'available', reason: null }] });
+  pmResultGate = Promise.withResolvers<void>();
+  const lifecycleArgs = ['generation', 'lifecycle', sessionId, '--generation', active.id];
+  const snapshot = (await run(lifecycleArgs))[0] as { generation: Record<string, unknown> };
+  assert.deepEqual(Object.keys(snapshot.generation).sort(), ['createdAt', 'id', 'inputMessageId', 'messageId', 'status', 'threadId']);
+  assert.equal(snapshot.generation.id, active.id); assert.equal(snapshot.generation.inputMessageId, accepted.inputId);
+  assert.equal(JSON.stringify(snapshot).includes(secret), false);
+  assert.deepEqual(pmResultReads, []);
+  assert.equal((await fetch(`${origin}/api/chat/threads/${sessionId}/generations/${active.id}/lifecycle`)).status, 401);
+  await assert.rejects(run(['generation', 'lifecycle', unrelated, '--generation', active.id]), { status: 404 });
+  await assert.rejects(run(['generation', 'lifecycle', sessionId, '--generation', randomUUID()]), { status: 404 });
+  await assert.rejects(run(['generation', 'lifecycle', sessionId]));
+  await assert.rejects(run(['generation', 'stop', unrelated, '--generation', active.id]), { status: 404 });
+  await assert.rejects(run(['generation', 'stop', sessionId, '--generation', active.id, '--message', 'wrong-input']), { status: 409 });
+  assert.equal(listRecords('chat:cancellations').length, 0);
+  assert.equal(getActiveChat(sessionId)?.id, active.id);
+  const beforeStop = requests.length;
+  const stopped = printed(z.object({ generation: z.object({ id: z.string(), status: z.literal('cancelled') }) }),
+    await run(['generation', 'stop', sessionId, '--generation', active.id, '--message', accepted.inputId]));
+  assert.equal(stopped.generation.id, active.id);
+  assert.equal(requests.slice(beforeStop).some(request => request.route.endsWith('/generations')), false);
+  assert.deepEqual(pmResultReads, [], 'Neither lifecycle nor stop may read even one retained content result');
+  assert.equal(getActiveChat(sessionId), undefined);
+  release.resolve();
+  pmResultExpected = 128;
+  // The explicit content contract must still reauthorize; it really blocks on this unresolved PM gate.
+  let contentSettled = false;
+  const content = run(['generation', 'status', sessionId, '--generation', active.id, '--pm-context', 'true'], true).finally(() => { contentSettled = true; });
+  try {
+    await pmResultReached.promise;
+    assert.equal(contentSettled, false);
+    const reads = pmResultReads.length;
+    assert.ok(reads > 0);
+    assert.equal(printed(z.object({ generation: z.object({ status: z.literal('cancelled') }) }), await run(lifecycleArgs)).generation.status, 'cancelled');
+    assert.equal(pmResultReads.length, reads);
+    assert.equal(contentSettled, false);
+  } finally { pmResultGate.resolve(); await content; }
 });
 
 test('T33 stale native questions and duplicate approvals are denied by the original broker', async () => {

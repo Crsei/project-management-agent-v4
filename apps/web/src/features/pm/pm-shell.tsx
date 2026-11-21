@@ -624,12 +624,26 @@ function ServiceFrame({ children }: { children: ReactNode }) {
   ] as const
   const navigationLinkClass = shellStyles.navigationLink
   const currentProjectId = projectDetailMatch?.params.projectId ?? projectMatch?.params.projectId
+  const entityId = pathname.match(/\/entities\/([^/?#]+)/)?.[1] ?? ""
+  const entityKind = (
+    [
+      ["TASK-", en ? "Task" : "任务"],
+      ["DOC-", en ? "Document" : "文档"],
+      ["PRJ-", en ? "Project" : "项目"],
+      ["MS-", en ? "Milestone" : "里程碑"],
+      ["CYC-", en ? "Cycle" : "迭代"],
+      ["MOD-", en ? "Module" : "模块"],
+      ["REQ-", en ? "Requirement" : "需求"],
+      ["REL-", en ? "Release" : "发布"],
+      ["GOAL-", en ? "Goal" : "目标"],
+    ] as const
+  ).find(([prefix]) => entityId.startsWith(prefix))?.[1]
   const pageLabel = documentWorkbench
     ? en ? "Document workbench" : "文档工作台"
     : pathname.endsWith("/issues/new")
     ? en ? "New task" : "新建任务"
     : pathname.includes("/entities/")
-      ? en ? "Entity details" : "对象详情"
+      ? entityKind ?? (en ? "Entity details" : "对象详情")
       : currentProjectId
         ? pathname.endsWith("/issues")
           ? graphView ? "" : en ? "Tasks" : "任务"
@@ -646,7 +660,9 @@ function ServiceFrame({ children }: { children: ReactNode }) {
             ? settingsLabel
             : pathname === `${base}/whiteboard`
               ? en ? "Personal whiteboard" : "个人白板"
-              : homePage ? homeLabel : links.find(([, , , active]) => active)?.[2] ?? (en ? "Workspace" : "工作区")
+              : pathname.endsWith("/onboarding")
+                ? en ? "Get started" : "开始使用"
+                : homePage ? homeLabel : links.find(([, , , active]) => active)?.[2] ?? (en ? "Workspace" : "工作区")
   const controls = <div className={shellStyles.headerControls}>
     {actor && <div className={shellStyles.command}><PmCommandPalette /></div>}
     {actor && <PmNoticeCenterTrigger />}

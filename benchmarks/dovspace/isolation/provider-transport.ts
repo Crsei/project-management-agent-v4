@@ -31,7 +31,7 @@ export function createProviderTransport(config: BenchmarkConfig, handle: Fixture
   const { authoritativeProviderUsage, boundedProviderRequest, publicAddress } = policy;
   const active = new Set<ClientRequest>(), redactor = new TraceRedactor(), shutdown = new AbortController();
   redactor.addSecrets([options.providerToken, handle.pm.token, ...(config.providerApiKey ? [config.providerApiKey] : []), ...(options.nativeAccountRelay ? [options.nativeAccountRelay.capability] : [])]);
-  let calls = 0, nativeTools = 0, reservedCost = 0, settledCost = 0, costBreached = false, complete = true, pinnedSettingsHash: string | null = null;
+  let calls = 0, nativeTools = 0, reservedCost = 0, settledCost = 0, costBreached = false, complete = true, pinnedSettingsHash: string | null = null, unsettledRequests = 0;
   function deny(outgoing: ServerResponse, kind: string, status = 403, details: Record<string, unknown> = {}): void { emit(status === 429 ? 'budget_exceeded' : 'safety_violation', { kind, ...details }); outgoing.writeHead(status, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'benchmark_capability_denied' })); }
   async function awaitAdmission(admission: GenerationAdmission, incoming: IncomingMessage, outgoing: ServerResponse): Promise<string | null> {
     if (shutdown.signal.aborted || admission.signal.aborted || incoming.aborted || outgoing.destroyed) return null;
@@ -49,7 +49,7 @@ export function createProviderTransport(config: BenchmarkConfig, handle: Fixture
   }
   return {
     get complete() { return complete; },
-    close() { shutdown.abort(); if (active.size) complete = false; for (const upstream of active) upstream.destroy(new Error('Provider boundary closed')); },
+    close() { shutdown.abort(); if (unsettledRequests) complete = false; for (const upstream of active) upstream.destroy(new Error('Provider boundary closed')); },
     async handle(incoming, outgoing, body, route) {
       const nativeAccount = config.hostAuthBoundary !== undefined;
       const completions = config.providerApi === 'openai-completions', expectedRoute = nativeAccount ? '/provider/v1/codex/responses' : completions ? '/provider/v1/chat/completions' : '/provider/v1/responses';
@@ -112,11 +112,12 @@ export function createProviderTransport(config: BenchmarkConfig, handle: Fixture
       const payload = Buffer.from(JSON.stringify(input)), toolSchemaBytes = Array.isArray(input.tools) ? Buffer.byteLength(JSON.stringify(input.tools)) : 0;
       const transcript = completions ? input.messages : input.input;
       const toolResults = Array.isArray(transcript) ? transcript.filter(value => value && typeof value === 'object' && ((value as Record<string, unknown>).role === 'tool' || (value as Record<string, unknown>).type === 'function_call_output')) : [];
-      let usageRecorded = false, terminal = false, finished = false, responseBytes = 0, status: number | null = null, upstreamRequestId: string | null = null, contentType: string | null = null;
+      let usageRecorded = false, terminal = false, finished = false, registered = false, responseBytes = 0, status: number | null = null, upstreamRequestId: string | null = null, contentType: string | null = null;
       function finish(reason: string): void {
         if (finished) return;
         finished = true;
-        if (!terminal || reason !== 'end' || status === null || status < 200 || status >= 300) complete = false;
+        if (registered) unsettledRequests--;
+        if (!terminal || reason !== 'end' && reason !== 'terminal-consumed' || status === null || status < 200 || status >= 300) complete = false;
         if (!usageRecorded) emit('provider_usage', { requestId, requestNumber, ...normalizeProviderUsage(undefined, config.prices, config.providerApi), missingReason: reason === 'end' ? terminal ? 'terminal-usage-absent' : 'stream-ended-without-terminal' : reason, controlled: !!options.controlledProviderSocketPath }, linkage);
         emit('provider_response', { requestNumber, requestId, upstreamRequestId, status, contentType, terminal, usageRecorded, responseBytes, streamEnd: reason, durationMs: performance.now() - startedMonotonicMs, startedMonotonicMs, endedMonotonicMs: performance.now(), clockId: options.clockId, intervalKind: 'provider', controlled: !!options.controlledProviderSocketPath }, linkage);
       }
@@ -214,8 +215,15 @@ export function createProviderTransport(config: BenchmarkConfig, handle: Fixture
         target.pathname = endpoint.pathname.replace(/\/$/, '') + (completions ? '/chat/completions' : '/responses');
         upstream = httpsRequest(target, { method: 'POST', family: selected.family, headers: { authorization: `Bearer ${config.providerApiKey}`, 'content-type': 'application/json', 'content-length': String(payload.length), accept: incoming.headers.accept ?? 'text/event-stream' }, lookup: (_hostname, _options, callback) => callback(null, selected.address, selected.family) }, receive);
       }
+      registered = true; unsettledRequests++;
       active.add(upstream); upstream.once('close', () => { active.delete(upstream); if (!finished) finish('transport-closed'); });
-      outgoing.once('close', () => { if (!outgoing.writableFinished) { finish('downstream-cancelled'); upstream.destroy(); } });
+      outgoing.once('close', () => {
+        if (outgoing.writableFinished) return;
+        // Native SDK consumers stop at the inspected terminal frame, before HTTP EOF.
+        // A pre-terminal close or missing authoritative usage remains incomplete.
+        finish(nativeAccount && terminal && usageRecorded ? 'terminal-consumed' : 'downstream-cancelled');
+        upstream.destroy();
+      });
       upstream.setTimeout(Math.max(1, options.deadline - Date.now()), () => upstream.destroy(new Error('Provider deadline')));
       upstream.once('error', () => { finish('transport-error'); emit('provider.error', { category: 'transport', requestId }, linkage); if (!outgoing.headersSent) { outgoing.writeHead(502, { 'content-type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'provider_transport_failed' })); } else outgoing.destroy(); });
       let briefWireObservations: BriefWireObservation[] = [];

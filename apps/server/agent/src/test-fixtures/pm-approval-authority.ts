@@ -4,9 +4,9 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { DomainError } from "../../../../../packages/domain/src/core.ts";
 import { Workspace, WorkspaceError } from "../../../../../packages/pm-core/index.ts";
-import { createAgentChatTools } from "../../../pm/src/agent-chat-tools.ts";
-import { registerAgentToolRoutes } from "../../../pm/src/agent-tool-routes.ts";
-import type { CoreWorkspacePool } from "../../../pm/src/core-routes.ts";
+import { createAgentChatTools } from "../../../pm/src/agent-tools/agent-chat-tools.ts";
+import { registerAgentToolRoutes } from "../../../pm/src/routes/agent-tool-routes.ts";
+import type { CoreWorkspacePool } from "../../../pm/src/routes/core-routes.ts";
 
 export type PmApprovalAuthorityFixture = {
   target: { workspaceId: string; projectId: string };

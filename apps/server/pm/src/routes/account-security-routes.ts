@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { changeOwnPassword, getAccountSecurity, getAccountSecurityAction, recoverAccountSecurityAction, revokeOwnSessions } from '../../../../packages/application/src/account-security.ts';
-import { accountSecurityActionParamsSchema } from '../../../../packages/contracts/src/account-security-schemas.ts';
+import { changeOwnPassword, getAccountSecurity, getAccountSecurityAction, recoverAccountSecurityAction, revokeOwnSessions } from '../../../../../packages/application/src/account-security.ts';
+import { accountSecurityActionParamsSchema } from '../../../../../packages/contracts/src/account-security-schemas.ts';
 
 export type AccountSecurityRouteOptions = { database: () => Pool; token: (request: FastifyRequest) => string };
 

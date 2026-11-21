@@ -28,10 +28,7 @@ const pmTemplate = z.enum([
   'pm-cross-task-failures', 'pm-next-phase-plan', 'pm-project-digest', 'pm-project-stagnation',
   'pm-milestone-readiness', 'pm-since-last-visit', 'pm-goal-drift', 'pm-next-actions',
 ]);
-const nativeTemplate = z.enum([
-  'github-pr-reviewer', 'github-issue-to-pr', 'gitlab-issue-to-mr', 'github-agents-md-maintainer',
-  'github-delivery-watchdog', 'github-issue-triage', 'news-digest', 'github-stale-ci-pr-closer', ...pmTemplate.options,
-]);
+const nativeTemplate = pmTemplate;
 const actionKind = z.enum(['prompt', 'script', 'template']);
 const actionCommon = {
   repositories: z.array(z.strictObject({ id: z.string().min(1).max(300), ref: z.string().max(300).nullable() })).max(20),
@@ -50,6 +47,7 @@ export const automationWireConfigSchema = z.strictObject({
   name: z.string().min(1).max(160), description: z.string().max(4000), projectId,
   tags: z.array(z.string().min(1).max(100)).max(30), templateId: z.string().max(300).nullable(),
   templateInputs: jsonRecord.optional(), templateVersion: z.string().max(200).nullable().optional(), quickAccess: z.boolean().optional(),
+  executionAgent: z.strictObject({ id: z.string().min(1).max(128), version: z.number().int().positive() }).optional(),
   action: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('prompt'), ...actionCommon, ...model, prompt: z.string().min(1).max(200000) }),
     z.strictObject({ kind: z.literal('script'), ...actionCommon, entrypoint: z.string().min(1).max(500), setup: z.string().max(50000), content: z.string().max(1000000), bundleRef: z.string().max(500).nullable(), files: z.array(z.strictObject({ path: z.string().min(1).max(500), content: z.string().max(1000000) })).max(200) }),

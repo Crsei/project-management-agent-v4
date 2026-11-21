@@ -23,14 +23,14 @@
 .native-change-path { display: flex; gap: .45rem; align-items: baseline; min-width: 0; color: var(--color-muted-foreground, #69717c); font-size: .72rem; }
 .native-change-path strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-family: var(--font-ibm-plex-mono); font-size: .72rem; font-weight: 500; }
 .native-before-after { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .5rem; }
-.native-command-output { position: relative; background: #17191d; color: #e9edf3; border-radius: var(--radius-agent-control, .35rem); padding: .5rem; min-width: 0; }
-.native-command-output .xterm { width: 100%; }
+.native-command-output { position: relative; background: var(--surface-raised); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-agent-control, .35rem); padding: .5rem; min-width: 0; }
 .native-command-toolbar { display: flex; justify-content: flex-end; gap: .1rem; margin-bottom: .25rem; }
-.native-command-toolbar button { color: #e9edf3 !important; opacity: .68; }
-.native-command-toolbar button:hover, .native-command-toolbar button:focus-visible, .native-command-toolbar button[data-active] { opacity: 1; background: rgb(255 255 255 / 10%) !important; }
-.native-terminal-viewport { height: 180px; max-height: 45vh; }
+.native-command-toolbar button { color: inherit !important; opacity: .68; }
+.native-command-toolbar button:hover, .native-command-toolbar button:focus-visible, .native-command-toolbar button[data-active] { opacity: 1; background: var(--surface-pressed) !important; }
+.native-terminal-viewport { height: 180px; max-height: 45vh; overflow: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
 .native-command-output[data-expanded] .native-terminal-viewport { height: min(55vh, 520px); max-height: 55vh; }
-.native-output-truncated { margin: .3rem 0 0; color: #c9cfd8; font-size: .72rem; }
+.native-output-placeholder { color: var(--muted-foreground); font-style: italic; }
+.native-output-truncated { margin: .3rem 0 0; color: var(--muted-foreground); font-size: .72rem; }
 .native-interaction button { border: 1px solid currentColor; border-radius: .3rem; padding: .25rem .55rem; margin: .3rem .4rem .1rem 0; cursor: pointer; }
 .native-interaction button:disabled { opacity: .5; cursor: not-allowed; }
 .native-interaction fieldset { border: 0; padding: .4rem 0; }
@@ -98,7 +98,7 @@
 .native-question-prompt p { margin: .2rem 0 .45rem; }
 .native-question-options { display: grid; gap: .3rem; }
 .native-question-option { display: flex; align-items: center; gap: .45rem; width: 100%; margin: 0 !important; text-align: left; }
-.native-question-option[data-selected] { border-color: var(--ring) !important; background: var(--selection); }
+.native-question-option[data-selected] { border-color: var(--glass-state-edge) !important; background: var(--glass-state); box-shadow: inset 0 1px 0 var(--glass-state-rim); }
 .native-option-key { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem; flex: none; border: 1px solid var(--border); border-radius: .25rem; color: var(--muted-foreground); font-size: .68rem; font-variant-numeric: tabular-nums; }
 .native-option-label small { margin-top: .15rem; }
 .native-option-check { width: .95rem; height: .95rem; margin-inline-start: auto; flex: none; color: var(--ring); }

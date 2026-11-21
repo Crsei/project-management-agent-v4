@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { csvCell, executionDuration, parseStudioDraftRoute, readEveryStudioPage } from "./studio-view.ts";
 
 test("Chat return local recovery IDs never masquerade as saved definitions", () => {
-  assert.deepEqual(parseStudioDraftRoute("new:github-pr-reviewer:PRJ-001"), { templateId: "github-pr-reviewer", projectId: "PRJ-001" });
+  assert.deepEqual(parseStudioDraftRoute("new:pm-requirement-review:PRJ-001"), { templateId: "pm-requirement-review", projectId: "PRJ-001" });
   assert.deepEqual(parseStudioDraftRoute("new:blank:"), { templateId: null, projectId: "" });
   assert.equal(parseStudioDraftRoute("98f6eae9-e01b-4c71-8431-b9af4aad07c5"), null);
   assert.equal(parseStudioDraftRoute("new:blank:another-workspace"), null);

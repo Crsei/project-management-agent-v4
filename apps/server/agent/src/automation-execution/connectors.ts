@@ -6,7 +6,6 @@ import { dataDirectory } from '../paths.ts';
 import { verifyAutomationServiceBearer } from '../../../../../packages/infrastructure/src/automation-execution-client.ts';
 import { resolveAutomationIntegrationDescriptors, recoverAutomationIntegrationGrants, recoverAutomationIntegrationGrantFile } from '../../../../../packages/infrastructure/src/automation-integrations-runtime.ts';
 import { automationRequestForNativeGeneration } from './context.ts';
-import { openNativeTemplateScratchTools, recoverNativeTemplateScratchTools } from './native-templates/workspace-tools.ts';
 import { assertAutomationProviderToolSupport } from './provider-tools.ts';
 
 export type AutomationGenerationConnectors = { mcpServers: ProviderRuntimeHostBinding['mcpServers']; close: () => Promise<void> };
@@ -20,7 +19,8 @@ export async function openAutomationGenerationConnectors(generation: ChatGenerat
   if (!identity || identity.executionId !== request.executionId || identity.actorId !== request.actorId || identity.workspaceId !== request.workspaceId || identity.projectId !== request.projectId || identity.requestId !== request.requestId || identity.definitionId !== request.definitionId || identity.definitionRevision !== request.definitionRevision) throw new Error('Connector injection requires the original, currently authorized PM service execution.');
   await authorizeExecution('tool');
   assertAutomationProviderToolSupport(request.config);
-  if (request.config.action.kind === 'template') return openNativeTemplateScratchTools(generation, headers, authorizeExecution);
+  // PM-native analysis is model-only: no MCP, repository or code tools are granted.
+  if (request.config.action.kind === 'template') return { mcpServers: [], close: async () => {} };
   await mkdir(grantRoot(), { recursive: true, mode: 0o700 });
   const directory = path.join(grantRoot(), generation.id);
   await mkdir(directory, { mode: 0o700 }); await chmod(directory, 0o700);
@@ -42,13 +42,12 @@ export async function openAutomationGenerationConnectors(generation: ChatGenerat
   } };
 }
 export async function recoverAutomationGenerationConnectors(): Promise<void> {
-  const results = await Promise.allSettled([
-    recoverAutomationIntegrationGrants(grantRoot(), generationId => {
+  try {
+    await recoverAutomationIntegrationGrants(grantRoot(), generationId => {
       const generation = getChatGeneration(generationId);
       return generation?.status === 'queued' || generation?.status === 'running';
-    }),
-    recoverNativeTemplateScratchTools(),
-  ]);
-  const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
-  if (failures.length) throw new AggregateError(failures, 'Scoped automation tool recovery could not be confirmed; private reconciliation records were retained.');
+    });
+  } catch (error) {
+    throw new AggregateError([error], 'Scoped automation tool recovery could not be confirmed; private reconciliation records were retained.');
+  }
 }

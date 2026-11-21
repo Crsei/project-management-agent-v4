@@ -196,14 +196,17 @@
 }
 
 .themeItem {
+  display: inline-flex;
   flex: 1;
-  min-height: 28px;
+  align-items: center;
   justify-content: center;
   gap: 5px;
+  min-height: 28px;
   padding: 0 4px;
   border-radius: var(--control-radius);
   font-size: 12px;
   line-height: 16px;
+  white-space: nowrap;
 }
 
 .themeItem svg {

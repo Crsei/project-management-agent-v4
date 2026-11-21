@@ -2,9 +2,9 @@ import type { CookieSerializeOptions } from '@fastify/cookie';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { registerAccount } from '../../../../packages/application/src/registration.ts';
-import { DomainError } from '../../../../packages/domain/src/core.ts';
-import { authenticate } from '../../../../packages/infrastructure/src/auth.ts';
+import { registerAccount } from '../../../../../packages/application/src/registration.ts';
+import { DomainError } from '../../../../../packages/domain/src/core.ts';
+import { authenticate } from '../../../../../packages/infrastructure/src/auth.ts';
 
 async function rejectAuthenticatedSession(pool: Pool, token: string | undefined): Promise<void> {
   if (!token) return;

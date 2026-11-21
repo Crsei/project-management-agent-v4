@@ -15,7 +15,7 @@ import { WorkspaceIdentityBadge } from "../pm-workspace-identity-badge"
 import { isAccessError } from "../pm-errors"
 import { FontPreferenceControl } from "./settings-font-preference"
 import { AgentSettingsStatus } from "../../agent/agent-settings-status"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 import { RadixSelect } from "@/components/ui/radix-select"
 
 type DemoBusiness = { taxId: string; address: string; logo: File | null }
@@ -56,7 +56,7 @@ function AppearancePreferences({ preferencesHref }: { preferencesHref?: string }
   return (
     <GeneralRow
       label={t("外观、字体与语言", "Appearance, font & language")}
-      description={t("立即应用并尝试保存在当前浏览器，刷新后保留；不写入账号，也不跨设备同步。", "Applied immediately and saved in this browser when storage is available, including across reloads. Not stored in your account or synced across devices.")}
+      description={t("立即应用并保存在当前浏览器；不写入账号。", "Applied immediately and saved in this browser; not stored in your account.")}
     >
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <label htmlFor={`${id}-theme`} className="grid min-w-0 gap-2 text-sm">
@@ -92,7 +92,7 @@ function FontPreference() {
   const t = useText()
   const id = useId()
   return (
-    <GeneralRow id={id} label={t("界面字体", "Interface font")} description={t("立即应用并保存在当前浏览器，不写入账号；代码与等宽内容不受影响。", "Applied immediately and saved in this browser, not in your account. Code and monospace content are unchanged.")}>
+    <GeneralRow id={id} label={t("界面字体", "Interface font")} description={t("立即应用并保存在当前浏览器；代码与等宽内容不受影响。", "Applied immediately and saved in this browser; code and monospace content are unchanged.")}>
       <FontPreferenceControl id={id} describedBy={`${id}-description`} />
     </GeneralRow>
   )
@@ -304,7 +304,7 @@ function OrganizationProfile({ identity, identityReadBlocked, refreshIdentity, d
         <p className="break-words text-destructive">{query.data ? t("组织资料刷新失败，上次快照可能已过期：", "Organization refresh failed; the previous snapshot may be stale: ") : ""}{query.error.message}</p>
         <Button type="button" variant="outline" disabled={query.isFetching} onClick={refresh}>{t("重试读取", "Retry read")}</Button>
       </div>}
-      {lostAccess && <SettingsNotice>{t("组织资料读取权限已失效；受保护的快照和草稿已清除。请先重新读取并确认当前权限。", "Organization access is no longer available. Protected snapshots and drafts have been cleared. Read again to confirm current access.")}</SettingsNotice>}
+      {lostAccess && <p role="status" className="text-sm text-muted-foreground">{t("组织资料读取权限已失效；受保护的快照和草稿已清除。", "Organization access is no longer available; protected snapshots and drafts were cleared.")}</p>}
       {!lostAccess && <>
       {recoveringOrganization && original && <div role="status" className="space-y-2 rounded-module border p-4 text-sm">
         <p>{t("组织资料原请求结果未知；现有输入保持不变，不能再次提交。请查询原命令收据，不会自动重发。", "The original organization request has an unknown outcome. Existing input is retained and saving is blocked. Check the original receipt; the request is never resent automatically.")}</p>
@@ -373,26 +373,25 @@ function ServiceGeneral() {
         </div>
         <Button variant="outline" render={<Link to={`${root}/plans`} />}>{t("查看方案支持情况", "View plan availability")}<ArrowUpRight aria-hidden="true" className="size-4" /></Button>
       </div>
-      <GeneralRow label={t("工作区资料", "Workspace identity")} description={t("名称、应用内安全图标和颜色使用正式工作区服务保存；不会改动 URL、核心目录或组织税务资料。", "Name, safe built-in icon and color save through the real workspace service. URLs, core directories and organization tax details are unchanged.")}><Link to={`${root}/workspace`} className="inline-flex items-center gap-1 text-sm text-primary hover:text-foreground">{t("管理工作区名称、图标与颜色", "Manage workspace name, icon and color")}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link></GeneralRow>
-      <GeneralRow label={t("开始使用引导", "Getting started guide")} description={t("重新打开当前工作区的现有引导，继续个人资料与 AI 配置。不会重置进度、完成状态或开始使用清单。", "Reopen the existing guide for this workspace to continue profile and AI setup. Progress, completion and checklist state are not reset.")}>
+      <GeneralRow label={t("工作区资料", "Workspace identity")} description={t("名称、图标和颜色由工作区服务保存；不改动 URL 或组织资料。", "Name, icon and color save through the workspace service; URLs and organization details are unchanged.")}><Link to={`${root}/workspace`} className="inline-flex items-center gap-1 text-sm text-primary hover:text-foreground">{t("管理工作区名称、图标与颜色", "Manage workspace name, icon and color")}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link></GeneralRow>
+      <GeneralRow label={t("开始使用引导", "Getting started guide")} description={t("重新打开当前工作区的引导；不会重置进度。", "Reopen this workspace’s guide; progress is not reset.")}>
         <Link to={`${workspaceRoot}/onboarding`} className="inline-flex items-center gap-1 rounded-control text-sm text-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t("打开当前工作区引导", "Open this workspace’s guide")}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link>
       </GeneralRow>
-      <GeneralRow label={t("设置保存范围", "Where settings are stored")} description={t("不同设置使用各自现有的保存边界，不把浏览器偏好或本机 Agent 配置称为账号同步。", "Each setting keeps its existing storage boundary. Browser preferences and local Agent configuration are not account sync.")}>
+      <GeneralRow label={t("设置保存范围", "Where settings are stored")} description={t("各设置使用现有保存边界，不等同于账号同步。", "Each setting keeps its existing storage boundary; none is account sync.")}>
         <dl className="space-y-3 text-sm leading-6">
-          <div><dt className="font-medium">{t("当前浏览器", "Browser")}</dt><dd className="text-muted-foreground">{t("主题、字体、语言及显示偏好只保存在此浏览器的网站存储中；存储不可用时仅本次会话有效。", "Theme, font, language and display preferences use this browser’s site storage only; without storage they last for this app session only.")}</dd></div>
-          <div><dt className="font-medium">{t("PM 账号", "Account")}</dt><dd className="text-muted-foreground">{t("个人资料、账号安全和引导进度由 PM 服务按账号管理，不属于当前工作区的组织资料。", "The PM service manages your profile, account security and guide progress per account, separately from workspace organization details.")}</dd></div>
-          <div><dt className="font-medium">{t("PM 工作区", "Workspace")}</dt><dd className="text-muted-foreground">{t("工作区名称、图标、颜色、组织资料和共享业务配置使用当前工作区服务及既有权限。", "Workspace identity, organization details and shared business configuration use this workspace’s services and existing permissions.")}</dd></div>
-          <div><dt className="font-medium">{t("本机 Agent 服务", "Local Agent")}</dt><dd className="text-muted-foreground">{t("Provider、MCP 和 Skills 属于现有本机 Agent；可信单操作者边界不等于 PM 账号隔离。会话与持久化统一设计尚未收口。", "Providers, MCP and Skills belong to the existing local Agent. Its trusted single-operator boundary is not PM-account isolation. Unified session and persistence design remains open.")}</dd></div>
-          <div><dt className="font-medium">{t("部署配置", "Deployment")}</dt><dd className="text-muted-foreground">{t("邮件发送、附件存储和允许的出站目标受部署配置控制；页面入口不代表这些服务已配置或验收。", "Mail delivery, attachment storage and allowed outbound destinations depend on deployment configuration. A settings entry does not prove readiness or acceptance.")}</dd></div>
+          <div><dt className="font-medium">{t("当前浏览器", "Browser")}</dt><dd className="text-muted-foreground">{t("主题、字体、语言及显示偏好保存在此浏览器；存储不可用时仅本次会话有效。", "Theme, font, language and display preferences live in this browser; without storage they last for this session only.")}</dd></div>
+          <div><dt className="font-medium">{t("PM 账号", "Account")}</dt><dd className="text-muted-foreground">{t("个人资料、账号安全和引导进度按账号管理。", "Profile, account security and guide progress are managed per account.")}</dd></div>
+          <div><dt className="font-medium">{t("PM 工作区", "Workspace")}</dt><dd className="text-muted-foreground">{t("工作区资料与共享配置使用当前工作区服务及既有权限。", "Workspace identity and shared configuration use this workspace’s services and existing permissions.")}</dd></div>
+          <div><dt className="font-medium">{t("本机 Agent 服务", "Local Agent")}</dt><dd className="text-muted-foreground">{t("Provider、MCP 和 Skills 属于本机 Agent，不是 PM 账号隔离。", "Providers, MCP and Skills belong to the local Agent, not PM-account isolation.")}</dd></div>
+          <div><dt className="font-medium">{t("部署配置", "Deployment")}</dt><dd className="text-muted-foreground">{t("邮件、附件存储和出站目标受部署配置控制。", "Mail, attachment storage and outbound targets depend on deployment configuration.")}</dd></div>
         </dl>
       </GeneralRow>
       <AgentSettingsStatus />
-      <SettingsNotice>{t("组织税号与地址仅工作区管理员可查看和编辑；普通成员无权读取，不会用空值冒充只读资料。工作区名称、图标与颜色仍可按成员权限读取。自定义 Logo 上传、账号停用与删除不可用。", "Only workspace administrators may read or edit organization tax IDs and addresses. Other members cannot read them; empty values are not substituted as read-only details. Workspace identity remains readable under membership permissions. Custom logo upload, account deactivation and deletion are unavailable.")}</SettingsNotice>
       <div>
         {identity.isPending && !identity.data && <p role="status" className="py-3 text-sm text-muted-foreground">{t("正在读取工作区资料…", "Reading workspace identity…")}</p>}
         {identity.isFetching && identity.data && <p role="status" className="py-3 text-sm text-muted-foreground">{t("正在刷新工作区资料；组织草稿保持不变。", "Refreshing workspace identity; the organization draft is retained.")}</p>}
         {identity.error && <div role="alert" className="space-y-2 py-3 text-sm"><p className="break-words text-destructive">{identity.data ? t("工作区资料刷新失败，上次快照可能已过期：", "Identity refresh failed; the previous snapshot may be stale: ") : ""}{identity.error.message}</p><Button variant="outline" disabled={identity.isFetching} onClick={() => { void identity.refetch() }}>{t("重试读取工作区资料", "Retry identity read")}</Button></div>}
-        <GeneralRow label={t("公司标志", "Company Logo")} description={t("当前以工作区名称、内置图标和颜色表示，不支持自定义图片上传。", "Represented by the workspace name, built-in icon and color. Custom image upload is not supported.")}>
+        <GeneralRow label={t("公司标志", "Company Logo")} description={t("以工作区名称、图标和颜色表示；不支持上传图片。", "Represented by the workspace name, icon and color; image upload is unsupported.")}>
           <div className="flex min-w-0 items-center gap-3">
             {identity.data
               ? <WorkspaceIdentityBadge icon={identity.data.icon} color={identity.data.color} className="size-12" />
@@ -408,7 +407,7 @@ function ServiceGeneral() {
         {canManage
           ? identity.data
             ? <OrganizationProfile key={`${actor?.id}:${actorEpoch}:${workspace?.id}`} identity={identity.data} identityReadBlocked={!!identity.error || identity.isFetching} refreshIdentity={() => { void identity.refetch() }} draft={organizationDraft} setDraft={setOrganizationDraft} />
-            : !identity.isPending && !identity.error && <SettingsNotice>{t("没有可用的工作区资料；请重新读取后编辑组织资料。", "No workspace identity is available. Read it again before editing organization details.")}</SettingsNotice>
+            : !identity.isPending && !identity.error && <p className="text-sm text-muted-foreground">{t("没有可用的工作区资料；请重新读取。", "No workspace identity is available; read it again.")}</p>
           : <div className="space-y-2 pt-5">
               <Button disabled aria-describedby={`${id}-save-reason`}>{t("保存组织资料", "Save organization details")}</Button>
               <p id={`${id}-save-reason`} className="text-sm text-muted-foreground">{t("仅工作区管理员可读取和保存企业税号与地址。上方主题、字体与语言在选择后立即生效。", "Only workspace administrators can read or save the business tax ID and address. Theme, font and language changes above apply immediately.")}</p>
@@ -493,7 +492,7 @@ function LabGeneral() {
   }
 
   return (
-    <SettingsSection title={t("常规", "General")} description={t("管理应用选项，并体验仅限本页的组织资料示例。", "Manage application options and try this page’s isolated organization demo.")}>
+    <SettingsSection title={t("常规", "General")} description={t("管理应用选项；组织资料示例仅在本页有效。", "Manage application options; the organization demo applies only to this page.")}>
       <div className="flex min-w-0 flex-col gap-4 rounded-module border bg-surface p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 gap-3">
           <Building2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
@@ -507,9 +506,8 @@ function LabGeneral() {
           <Button variant="outline" onClick={resetDemo}><RotateCcw aria-hidden="true" className="size-4" />{t("重置示例", "Reset demo")}</Button>
         </div>
       </div>
-      <SettingsNotice>{t("请仅输入示例资料。保存只更新当前页面内存中的示例快照；标志不会上传。离开页面或刷新后会重置，也可随时点击“重置示例”。主题、字体与语言是独立的浏览器偏好，不受示例重置影响。", "Use sample information only. Save updates a demo snapshot in this page’s memory; your logo is never uploaded. Leaving the page or reloading resets the demo, and Reset demo is always available. Theme, font and language are separate browser preferences and are not affected by a demo reset.")}</SettingsNotice>
       <form noValidate onSubmit={saveDemo}>
-        <GeneralRow id={`${id}-logo`} label={t("公司标志", "Company Logo")} description={t("预览公司标志；支持 PNG、JPEG 或 WebP，最大 2 MiB。", "Preview a company logo. PNG, JPEG, or WebP, up to 2 MiB.")}>
+        <GeneralRow id={`${id}-logo`} label={t("公司标志", "Company Logo")} description={t("支持 PNG、JPEG 或 WebP，最大 2 MiB。", "PNG, JPEG or WebP, up to 2 MiB.")}>
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-module border bg-surface-raised">
               {preview ? <img

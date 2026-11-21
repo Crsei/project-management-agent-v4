@@ -20,6 +20,23 @@
 		respond "Not Found" 404
 	}
 
+	# External MCP and its OAuth discovery/handshake are served by the Agent.
+	# The public origin is deployment-pinned; local no-token access is only enabled
+	# when MCP_PUBLIC_ORIGIN itself is a loopback HTTP origin.
+	@mcp path /mcp /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server
+	handle @mcp {
+		reverse_proxy {$AGENT_API_UPSTREAM:agent:4325} {
+			flush_interval -1
+		}
+	}
+
+	@mcpOAuth path /oauth/mcp/register /oauth/mcp/authorize /oauth/mcp/approval /oauth/mcp/decision /oauth/mcp/token
+	handle @mcpOAuth {
+		reverse_proxy {$AGENT_API_UPSTREAM:agent:4325} {
+			flush_interval -1
+		}
+	}
+
 	# Agent API wins over the Agent SPA. Caddy preserves Host/Origin and upgrades WS.
 	@agentApi path /agent/api /agent/api/*
 	handle @agentApi {

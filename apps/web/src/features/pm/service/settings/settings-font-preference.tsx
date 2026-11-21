@@ -14,6 +14,6 @@ export function FontPreferenceControl({ id, describedBy }: { id: string; describ
       <option value="inter">Inter</option>
       <option value="system">{t("系统字体", "System font")}</option>
     </RadixSelect>
-    <p id={`${id}-font-hint`} className="text-sm leading-6 text-muted-foreground">{t("Inter 使用随应用提供的字体；系统字体使用操作系统 UI 字体。仅调整界面字体，代码与等宽内容保持不变。", "Inter uses the font shipped with the app; System uses the operating system UI font. Only interface text changes; code and monospace content stay unchanged.")}</p>
+    <p id={`${id}-font-hint`} className="text-sm leading-6 text-muted-foreground">{t("Inter 使用内置字体；系统字体使用操作系统 UI 字体。", "Inter uses the bundled font; System uses the operating-system UI font.")}</p>
   </div>
 }

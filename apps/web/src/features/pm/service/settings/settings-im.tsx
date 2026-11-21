@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n-provider"
 import { usePmService, usePrivateQuery, pmErrorMessage } from "../pm-service"
 import { pmKeys } from "../pm-data"
 import { useText } from "../pm-ui"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 
 function formatTime(value: string, locale: string): string {
   return new Date(value).toLocaleString(locale === "en" ? "en" : "zh-CN")
@@ -136,7 +136,6 @@ function ServiceImSettings() {
     : t("未读取到机器人", "Bot not reported")
 
   return <div className="min-w-0 space-y-6 text-sm">
-    <SettingsNotice>{t("IM 网关只负责平台连接；身份、权限、任务和通知仍由 Dovspace 处理。首期仅支持私聊文字命令，不开放群聊、文件、按钮、任意命令转发或 Agent/终端能力。", "The IM gateway only handles platform connectivity. Identity, permissions, tasks and notifications remain in Dovspace. This first release supports private-chat text commands only; groups, files, buttons, arbitrary command forwarding and Agent/terminal capabilities are unavailable.")}</SettingsNotice>
     {actionError && <p role="alert" className="text-destructive">{actionError}</p>}
 
     <section className="space-y-3 rounded-module border p-4">
@@ -150,11 +149,11 @@ function ServiceImSettings() {
           <div className="space-y-1"><dt className="text-xs text-muted-foreground">{t("Satori 连接", "Satori connection")}</dt><dd className="font-medium">{connectionLabel}</dd></div>
           <div className="space-y-1"><dt className="text-xs text-muted-foreground">{t("Telegram 机器人", "Telegram bot")}</dt><dd className="font-medium">{telegramBot ? `${telegramBot.name ?? telegramBot.selfId} · ${botLabel}` : botLabel}</dd></div>
         </dl>
-        <p className="text-xs leading-5 text-muted-foreground">{t("Satori 已连接不等于 Telegram Bot 在线；网关离线不会删除历史绑定。绑定数据读取失败也不会被显示为“没有绑定”。", "Satori connected does not mean the Telegram bot is online; an offline gateway does not delete historical bindings. A binding read failure is not displayed as “no bindings”.")}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{t("Satori 已连接不代表 Bot 在线；读取失败不代表没有绑定。", "Satori connected does not mean the bot is online; a failed read does not mean no bindings.")}</p>
         {satori?.lastErrorCode && <p className="break-all text-xs text-muted-foreground">{t("最近安全错误码：", "Latest safe error code: ")}{satori.lastErrorCode}</p>}
-        {!configured && <SettingsNotice>{canManage
+        {!configured && <div className="text-muted-foreground">{canManage
           ? <details className="space-y-2"><summary className="cursor-pointer font-medium">{t("部署管理员配置", "Deployment administrator configuration")}</summary><p className="pt-2">{t("此实例尚未配置 IM 网关。请由部署管理员按部署手册启动独立 Koishi、配置 Satori 地址与私有 token，然后重启 PM API/Worker。普通成员无需操作，已有绑定不会被删除。", "This instance has no IM gateway configured. A deployment administrator should start an independent Koishi runtime, configure the Satori address and private token, then restart PM API/Worker. Members need no action, and existing bindings are not deleted.")}</p><p className="text-xs text-muted-foreground">{t("完整步骤见 deploy/koishi/README.md；本页不收集 token 或平台凭据。", "Full steps are in deploy/koishi/README.md; this page collects no token or platform credentials.")}</p></details>
-          : t("此实例尚未配置即时通讯。请联系实例管理员；已有绑定不会被删除。", "This instance has no messaging configured. Contact the instance administrator; existing bindings are not deleted.")}</SettingsNotice>}
+          : t("此实例尚未配置即时通讯。请联系实例管理员；已有绑定不会被删除。", "This instance has no messaging configured. Contact the instance administrator; existing bindings are not deleted.")}</div>}
       </>}
     </section>
 
@@ -212,7 +211,7 @@ function ServiceImSettings() {
           <div><dt className="font-mono text-xs text-foreground">/start · /done · /cancel</dt><dd>{t("按现有工作流转换状态", "Transition through the existing workflow")}</dd></div>
           <div><dt className="font-mono text-xs text-foreground">/notify on|off · /unlink · /help</dt><dd>{t("通知、解绑与帮助", "Notifications, unbinding and help")}</dd></div>
         </dl>
-        <p>{t("绑定、通知和解绑由 Dovspace 保存；Koishi 离线时仍可读取和解绑。聊天成功、HTTP 2xx 或 Satori accepted 都不等于任务完成。", "Bindings, notifications and unbinding are stored by Dovspace and remain readable and revocable while Koishi is offline. Chat success, HTTP 2xx or Satori acceptance never completes a task.")}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{t("Koishi 离线仍可读取和解绑；聊天成功不等同于任务完成。", "Bindings remain readable and removable while Koishi is offline; a successful chat message is not task completion.")}</p>
       </div>
     </details>
 
@@ -253,7 +252,7 @@ function ServiceImSettings() {
 
 export function SettingsIm({ mode }: SettingsPageProps) {
   const t = useText()
-  return <SettingsSection title={t("即时通讯", "Instant messaging")} description={t("将你的聊天账号连接到 Dovspace，接收项目通知并使用支持的命令。", "Connect your chat account to Dovspace to receive project notifications and use supported commands.")}>
-    {mode === "service" ? <ServiceImSettings /> : <SettingsNotice>{t("Lab · 静态说明，不读取真实连接、绑定或机器人状态，不生成链接码。", "Lab · Static information only; no real connection, bindings or bot state are read, and no link code is generated.")}</SettingsNotice>}
+  return <SettingsSection title={t("即时通讯", "Instant messaging")} description={t("连接聊天账号以接收项目通知。", "Connect a chat account to receive project notifications.")}>
+    {mode === "service" ? <ServiceImSettings /> : <p className="text-sm text-muted-foreground">{t("Lab 不读取真实连接或绑定。", "Lab does not read real connections or bindings.")}</p>}
   </SettingsSection>
 }

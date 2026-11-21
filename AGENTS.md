@@ -26,8 +26,9 @@
 ## 登录与工作区
 
 - 新Web安装由 `pnpm bootstrap` 仅准备私有 `.local/setup-token`（0600），数据库只存摘要；用户在 `/pm` 输入令牌、姓名、邮箱、密码和工作区名称，一次性建立账号及工作区，不生成明文密码文件。旧实例以数据库为准，账号或工作区存在即关闭设置；不读取/改写/删除旧 `.local/access.json`，不重置密码。历史副本复制不是新安装步骤。不要把密码、令牌写入日志、提交、URL、前端配置或环境文件。
-- API 登录：`POST /api/v1/auth/login`，请求 `{ "email", "password" }`，v4 使用独立 `pm_v4_session` Cookie（HttpOnly、SameSite=Strict、Path=/、有效期 8 小时）。Bearer 优先；`GET /api/v1/auth/me` 校验当前会话，`POST /api/v1/auth/logout` 注销。Agent 执行服务使用独立 `agent_v4_access`，不改变原权限规则。
-- CLI 认证优先级：`PM_SESSION_TOKEN` > 完整 `PM_EMAIL`/`PM_PASSWORD` > 当前服务 origin 的私有有限期会话；使用 `pnpm pm login --email EMAIL` 隐藏输入密码，`pnpm pm logout` 撤销会话。已移除 access.json / PM_ACCESS_FILE 回退。`PM_CLI_SESSION_DIR` 可指定绝对私有目录。`PM_WORKSPACE_ID` 指定工作区；省略时仅当账号可访问唯一工作区才自动选择，否则报错并列出可访问工作区。
+- API 登录：`POST /api/v1/auth/login`，请求 `{ "email", "password" }`，v4 使用独立 `pm_v4_session` Cookie（HttpOnly、SameSite=Strict、Path=/、默认有效期 30 天；`GET /api/v1/auth/me` 在剩余不足 23 天时顺延，浏览器 Cookie 同时续期）。Bearer 优先；`GET /api/v1/auth/me` 校验当前会话，`POST /api/v1/auth/logout` 注销。Agent 执行服务使用独立 `agent_v4_access`，不改变原权限规则。
+- CLI 认证优先级：`PM_SESSION_TOKEN` > 完整 `PM_EMAIL`/`PM_PASSWORD` > 当前服务 origin 的私有有限期会话；使用 `pnpm run pm login --email EMAIL` 隐藏输入密码，`pnpm run pm logout` 撤销会话。已移除 access.json / PM_ACCESS_FILE 回退。`PM_CLI_SESSION_DIR` 可指定绝对私有目录。`PM_WORKSPACE_ID` 指定工作区；省略时仅当账号可访问唯一工作区才自动选择，否则报错并列出可访问工作区。
+- CLI 命令统一写 `pnpm run pm`；本仓库 pnpm 11 会把 `pnpm pm` 当内置命令，不会执行仓库脚本。
 - Web 首次设置与普通登录分开；已初始化实例开放 `/pm/register` 自主建号，空实例仍须一次性设置令牌。注册不授予已有工作区权限，加入已有工作区仍需有效邀请或管理员明确授权。浏览器不读取服务器令牌或访问文件；账号安全沿用现有改密、会话撤销及独立验证的恢复邮箱，注册不验证邮箱所有权。登录后从授权列表选择实际工作区；设置/注册/会话结果不明先核对，不自动重发，服务不可用不得视作空实例。
 - 历史副本曾显式迁入工作区/项目，保留ID不代表共享数据库或目录；新安装不得要求那些历史ID，也不自动从其他副本导入。工作区/项目侧栏来自真实授权API，空组也必须可见。
 - 工作区和项目的 Agent 文件区域单独配置并服务端核验；项目可复用其原生已登记本地目录。目录位置不是新的授权或沙箱；不能因路径未配置回退源仓库根目录。

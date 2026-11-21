@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { getMembership, type Membership } from '../../../../packages/application/src/access.ts';
-import { pmToolCapabilitiesSchema, type PmToolCapabilities } from '../../../../packages/agent-contracts/src/pm-capabilities.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { getMembership, type Membership } from '../../../../../packages/application/src/access.ts';
+import { pmToolCapabilitiesSchema, type PmToolCapabilities } from '../../../../../packages/agent-contracts/src/pm-capabilities.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
-import type { AgentChatTools } from './agent-chat-tools.ts';
+import type { AgentChatTools } from '../agent-tools/agent-chat-tools.ts';
 
 const workspaceIdSchema = z.uuid().toLowerCase();
 const projectIdSchema = z.string().regex(/^PRJ-\d+$/, 'Expected a stable project ID such as PRJ-101');

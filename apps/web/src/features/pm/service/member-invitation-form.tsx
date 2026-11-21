@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from "react"
-import { CommandOutcomeUnknown, type CommandReceipt, type MemberInvitationDto, type MemberRole } from "@contracts"
+import { CommandOutcomeUnknown, MEMBER_ROLE_PRESETS, type CommandReceipt, type MemberInvitationDto, type MemberRole } from "@contracts"
 import { Button } from "@/components/ui/button"
-import { usePmCommand } from "./pm-service"
+import { usePmCommand, usePmService } from "./pm-service"
 import { Choice, Field, Form, useDraftState, useText } from "./pm-ui"
 import { useTeamDirectory } from "./pm-team-hooks"
 import { MemberCapabilityPreview, MemberScopeFields } from "./member-access-fields"
 import { prepareInvitationBatch, type InvitationAttempt } from "./member-invitation-model"
 
+const ALL_ROLES = ["admin", "member", "guest"] as const satisfies readonly MemberRole[]
+
 export function InvitationBatchForm({ disabled, enabled, defaultProjectId, defaultTeamIds = [], onInvited }: { disabled: boolean; enabled: boolean; defaultProjectId?: string; defaultTeamIds?: readonly string[]; onInvited?: () => void | Promise<void> }) {
   const t = useText()
   const command = usePmCommand()
+  const { workspace } = usePmService()
   const directory = useTeamDirectory()
+  const administrator = !!workspace && workspace.projectIds === null && workspace.capabilities.includes("access.manage")
+  const allowedRoles = ALL_ROLES.filter(role => administrator || !!workspace && workspace.capabilities.includes("planning.edit") && MEMBER_ROLE_PRESETS[role].every(capability => workspace.capabilities.includes(capability)))
+  const allowWholeWorkspace = administrator || workspace?.projectIds === null
   const scope = `member-invitation:${defaultProjectId ?? "workspace"}:${[...defaultTeamIds].sort().join(",")}`
   const [emails, setEmails] = useDraftState(scope, "emails", "")
   const [role, setRole] = useDraftState<MemberRole>(scope, "role", "member")
@@ -18,6 +24,8 @@ export function InvitationBatchForm({ disabled, enabled, defaultProjectId, defau
   const [projects, setProjects] = useDraftState<string[]>(scope, "projects", defaultProjectId ? [defaultProjectId] : [])
   const [teamIds, setTeamIds] = useDraftState<string[]>(scope, "teams", [...defaultTeamIds])
   const [attempts, setAttempts] = useDraftState<InvitationAttempt[]>(scope, "attempts", [])
+  const effectiveRole: MemberRole = allowedRoles.includes(role) ? role : allowedRoles[0] ?? "guest"
+  const wholeScope = allowWholeWorkspace && whole
   const attemptsWriter = useRef(setAttempts)
   attemptsWriter.current = setAttempts
   useEffect(() => {
@@ -33,10 +41,11 @@ export function InvitationBatchForm({ disabled, enabled, defaultProjectId, defau
   }, [command.unknownCommand, command.receipt])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
-  const projectOptions = directory.error ? [] : (directory.data?.projects ?? []).filter(project => project.canManage)
+  const projectOptions = directory.error ? [] : (directory.data?.projects ?? []).filter(project =>
+    directory.data?.canManage === true || !workspace?.projectIds || workspace.projectIds.includes(project.id))
   const teams = directory.error ? [] : (directory.data?.teams ?? []).filter(team => !team.data.archivedAt)
-  const unavailable = !directory.data?.canManage || !!directory.error
-  const invalid = role !== "admin" && !whole && (!projects.length || projects.some(id => !projectOptions.some(project => project.id === id))) || teamIds.some(id => !teams.some(team => team.id === id))
+  const unavailable = !directory.data || !!directory.error || allowedRoles.length === 0
+  const invalid = effectiveRole !== "admin" && !wholeScope && (!projects.length || projects.some(id => !projectOptions.some(project => project.id === id))) || teamIds.some(id => !teams.some(team => team.id === id))
   const locked = disabled || !enabled || unavailable || busy || command.pending || !!command.unknownCommand
   const update = (id: string, change: Partial<InvitationAttempt>) => setAttempts(rows => rows.map(row => row.command.commandId === id ? { ...row, ...change } : row))
   const settle = (id: string, receipt: CommandReceipt) => {
@@ -74,17 +83,18 @@ export function InvitationBatchForm({ disabled, enabled, defaultProjectId, defau
   return <div className="space-y-4">
     <p className="text-sm text-muted-foreground">{t("账号、工作区授权、团队归属不同。接受后才激活授权并加入所选团队；团队不额外授予项目权限。", "Accounts, workspace access and teams are separate. Access and selected team membership activate only on acceptance; teams grant no additional project access.")}</p>
     {!enabled && <p role="status">{t("SMTP 未配置或状态不可用，不能创建或重发邀请；不会伪造已发送。", "SMTP is not configured or unavailable. Invitations cannot be created or resent; no delivery is fabricated.")}</p>}
+    {allowedRoles.length === 0 && <p role="status">{t("当前授权不能授予任何邀请角色。", "Your current access cannot grant any invitation role.")}</p>}
     {directory.error && <p role="alert">{t("项目与团队读取失败，邀请已禁用。", "Projects and teams could not be read. Invitations are disabled.")}<Button variant="outline" onClick={() => { void directory.refetch() }}>{t("重试读取", "Retry read")}</Button></p>}
     <Form label={t("逐项发送邀请", "Send invitations individually")} disabled={locked || unresolved} onSubmit={async () => {
       if (invalid) throw new Error(t("请选择当前可用的项目与团队。", "Select currently available projects and teams."))
-      const batch = prepareInvitationBatch({ emails, role, projectIds: role === "admin" || whole ? null : projects, teamIds })
+      const batch = prepareInvitationBatch({ emails, role: effectiveRole, projectIds: effectiveRole === "admin" || wholeScope ? null : projects, teamIds })
       setAttempts(rows => [...rows, ...batch]); setEmails(""); setNotice(""); setBusy(true)
       try { for (const attempt of batch) if (!await send(attempt)) break } finally { setBusy(false) }
     }}>
       <Field label={t("受邀邮箱（换行、逗号或分号分隔，最多100项）", "Invitation emails (newline, comma or semicolon; maximum 100)")} value={emails} onChange={setEmails} multiline required />
-      <Choice label={t("角色模板", "Role template")} value={role} onChange={value => setRole(value as MemberRole)} options={[{ value: "admin", label: "Admin" }, { value: "member", label: "Member" }, { value: "guest", label: "Guest" }]} />
-      <MemberCapabilityPreview before={[]} role={role} />
-      <MemberScopeFields whole={whole} setWhole={setWhole} projects={projects} setProjects={setProjects} options={projectOptions} admin={role === "admin"} />
+      <Choice label={t("角色模板", "Role template")} value={effectiveRole} onChange={value => setRole(value as MemberRole)} options={allowedRoles.map(value => ({ value, label: value === "admin" ? "Admin" : value === "member" ? "Member" : "Guest" }))} />
+      <MemberCapabilityPreview before={[]} role={effectiveRole} />
+      <MemberScopeFields whole={wholeScope} setWhole={setWhole} projects={projects} setProjects={setProjects} options={projectOptions} admin={effectiveRole === "admin"} wholeAllowed={allowWholeWorkspace} />
       <fieldset className="max-h-56 space-y-2 overflow-y-auto rounded border p-3"><legend className="text-sm">{t("接受后加入团队（可选）", "Join teams upon acceptance (optional)")}</legend>{teams.map(team => <label key={team.id} className="flex gap-2 text-sm"><input type="checkbox" checked={teamIds.includes(team.id)} onChange={event => setTeamIds(event.target.checked ? [...teamIds, team.id] : teamIds.filter(id => id !== team.id))} />{team.data.name}</label>)}{teamIds.some(id => !teams.some(team => team.id === id)) && <p role="alert">{t("已选团队不再可用。", "A selected team is unavailable.")}<Button type="button" variant="outline" onClick={() => setTeamIds(teamIds.filter(id => teams.some(team => team.id === id)))}>{t("清除不可用团队", "Clear unavailable teams")}</Button></p>}</fieldset>
     </Form>
     {notice && <p role="status">{notice}</p>}

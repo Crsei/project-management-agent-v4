@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { continueMemberHandover, listMemberHandovers, readDepartureReceipt, readMemberHandover, readMemberImpact, reconcileMemberHandover, type HandoverExecutor, type LifecycleReadContext } from '../../../../packages/application/src/member-lifecycle.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { continueMemberHandover, listMemberHandovers, readDepartureReceipt, readMemberHandover, readMemberImpact, reconcileMemberHandover, type HandoverExecutor, type LifecycleReadContext } from '../../../../../packages/application/src/member-lifecycle.ts';
 
 export function registerMemberLifecycleRoutes(app: FastifyInstance, options: HandoverExecutor & {
   database(): Pool;

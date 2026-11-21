@@ -27,6 +27,17 @@ function parse<T>(validator: z.ZodType<T>, input: unknown): T {
 }
 function tokenHash(token: string): string { return createHash('sha256').update(token).digest('hex'); }
 
+/** Browser and CLI sessions stay valid for 30 days and roll forward while used. */
+export const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+const MAX_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+const SESSION_RENEW_AHEAD_SECONDS = 7 * 24 * 60 * 60;
+
+function sessionTtl(value: number | undefined): number {
+  const ttl = value ?? DEFAULT_SESSION_TTL_SECONDS;
+  if (!Number.isInteger(ttl) || ttl < 60 || ttl > MAX_SESSION_TTL_SECONDS) throw new Error('sessionTtlSeconds must be between 60 and 2592000');
+  return ttl;
+}
+
 /** Persistent, cross-process throttling. Never include a password in the key. */
 export async function consumeAuthRateLimit(pool: Pool, scope: string, limit: number, windowSeconds: number): Promise<void> {
   const key = tokenHash(scope);
@@ -76,8 +87,7 @@ export async function createWorkspace(pool: Pool, ownerId: string, name: string,
 export async function login(pool: Pool, input: { email: string; password: string }, options: { sessionTtlSeconds?: number; sourceIp?: string } = {}): Promise<{ token: string; actor: Actor; expiresAt: string }> {
   // Login accepts a short wrong password so all invalid credentials share the same rejection.
   const data = parse(z.object({ email: z.string().max(254), password: z.string().max(256) }).strict(), input);
-  const ttl = options.sessionTtlSeconds ?? 8 * 60 * 60;
-  if (!Number.isInteger(ttl) || ttl < 60 || ttl > 30 * 86400) throw new Error('sessionTtlSeconds must be between 60 and 2592000');
+  const ttl = sessionTtl(options.sessionTtlSeconds);
   if (options.sourceIp) await consumeAuthRateLimit(pool, `login-source:${options.sourceIp}`, 20, 60);
   await consumeAuthRateLimit(pool, `login-account:${data.email.trim().toLowerCase()}`, 10, 900);
   const result = await pool.query<Actor & { password_hash: string; credential_version: number; disabled_at: Date | null }>('SELECT id,email,name,password_hash,credential_version,disabled_at FROM users WHERE email=$1', [data.email.trim().toLowerCase()]);
@@ -107,6 +117,27 @@ export async function authenticate(pool: Pool, token: string): Promise<Actor> {
   if (!result.rows[0]) throw new DomainError('unauthenticated', 'Session is invalid or expired', 401);
   return result.rows[0];
 }
+/** Extends a live session once it is within the renewal window; returns the effective expiry. */
+export async function renewSession(pool: Pool, token: string, options: { sessionTtlSeconds?: number } = {}): Promise<string> {
+  const ttl = sessionTtl(options.sessionTtlSeconds);
+  const hash = tokenHash(token);
+  const renewed = await pool.query<{ expires_at: Date }>(
+    `UPDATE sessions s SET expires_at = now() + make_interval(secs => $2::double precision)
+     FROM users u
+     WHERE s.token_hash = $1 AND s.user_id = u.id AND s.expires_at > now() AND u.disabled_at IS NULL
+       AND s.expires_at < now() + make_interval(secs => $3::double precision)
+     RETURNING s.expires_at`,
+    [hash, ttl, Math.max(0, ttl - SESSION_RENEW_AHEAD_SECONDS)],
+  );
+  if (renewed.rows[0]) return renewed.rows[0].expires_at.toISOString();
+  const existing = await pool.query<{ expires_at: Date }>(
+    'SELECT s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.disabled_at IS NULL',
+    [hash],
+  );
+  if (!existing.rows[0]) throw new DomainError('unauthenticated', 'Session is invalid or expired', 401);
+  return existing.rows[0].expires_at.toISOString();
+}
+
 export async function logout(pool: Pool, token: string): Promise<void> {
   const client = await pool.connect();
   try {

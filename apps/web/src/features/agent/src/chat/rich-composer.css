@@ -24,12 +24,6 @@
 .rich-composer-context { margin-inline: 0.15em; vertical-align: baseline; }
 .rich-composer-editor pre { margin: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--secondary); padding: 8px; overflow-x: auto; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.6; white-space: pre; }
 .rich-composer-editor pre code { white-space: pre; }
-.rich-composer-tools { display: flex; align-items: center; gap: 8px; padding: 0 10px 2px; color: var(--muted-foreground); font-size: 11px; }
-.rich-composer-tools button { display: inline-flex; align-items: center; gap: 4px; border-radius: 4px; padding: 2px 5px; }
-.rich-composer-tools button:hover:not(:disabled), .rich-composer-tools button[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
-.rich-composer-tools button:focus-visible { outline: 2px solid var(--ring); }
-.rich-composer-tools button:disabled { opacity: .5; }
-.rich-composer-tools button svg { width: 13px; height: 13px; }
 .rich-composer[data-editing="true"] .rich-composer-editor { min-height: 56px; }
 .rich-composer-editor a { color: var(--ring); text-decoration: underline; text-underline-offset: 2px; }
 .rich-composer-editor a:hover { text-decoration-thickness: 2px; }
@@ -42,10 +36,6 @@
 .rich-composer-task-content { flex: 1 1 auto; min-width: 0; }
 .rich-composer-task-item[data-checked="true"] > .rich-composer-task-content > p { color: var(--muted-foreground); text-decoration: line-through; }
 .rich-composer[data-drop-active="true"] { border-radius: 8px; outline: 2px dashed var(--ring); outline-offset: 2px; }
-.rich-composer-link { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 4px 10px 2px; font-size: 11px; }
-.rich-composer-link input { min-width: 0; flex: 1 1 12rem; border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; background: var(--background); color: var(--foreground); font: inherit; }
-.rich-composer-link input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.rich-composer-link p[role="alert"] { flex-basis: 100%; margin: 0; }
 @media (max-width: 600px) {
   .rich-composer-editor { max-height: 34dvh; font-size: 16px; }
 }

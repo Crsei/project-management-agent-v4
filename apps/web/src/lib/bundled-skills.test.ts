@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  BundledSkillsError, bundledSkillProviderIdentity, bundledSkillProviderReady, bundledSkillProvidersSchema,
+  BundledSkillsError, bundledSkillProviderIdentity, bundledSkillProviderReady, bundledSkillProviderWritable, bundledSkillProvidersSchema,
   readBundledSkillsCatalog,
   type BundledSkillProvider,
 } from "./bundled-skills.ts";
@@ -31,6 +31,12 @@ test("readiness uses actual enabled/configured/native facts, not account attribu
   const projected = bundledSkillProvidersSchema.parse({ providers: [{ ...provider, config: { ignored: "not-retained" }, environment: [{ value: "not-retained" }] }] });
   assert.equal("config" in projected.providers[0]!, false);
   assert.equal("environment" in projected.providers[0]!, false);
+});
+
+test("installation requires an enabled provider and an authoritative target, not a live session", () => {
+  assert.equal(bundledSkillProviderWritable(provider), true);
+  assert.equal(bundledSkillProviderWritable({ ...provider, configured: false, nativeSessionReady: false }), true);
+  assert.equal(bundledSkillProviderWritable({ ...provider, enabled: false }), false);
 });
 
 

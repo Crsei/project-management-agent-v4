@@ -34,7 +34,7 @@ const definitions = {
   api: { cwd: root, entries: ['apps/server/pm/src/main.ts', 'dist/apps/server/pm/src/main.js'], port: apiPort },
   agent: { cwd: root, entries: ['apps/server/agent/src/index.ts', 'apps/server/agent/dist/index.mjs'], port: agentPort },
   web: { cwd: path.join(root, 'apps/web'), entries: ['apps/web/node_modules/vite/bin/vite.js'], port: devWebPort },
-  gateway: { cwd: root, entries: ['apps/server/gateway.ts'], port: webPort },
+  gateway: { cwd: root, entries: ['apps/server/gateway/src/index.ts'], port: webPort },
 };
 const activeRoles = Object.keys(definitions).filter(role => development || role !== 'web');
 async function identity(pid) {
@@ -90,7 +90,7 @@ if (action === 'start' || development) {
   const agentEnvironment = { ...process.env, ...agentConfig, HOST: '127.0.0.1', PORT: String(agentPort), PM_API_URL: apiUrl,
     AGENT_WORKSPACE_DATA_DIR: agentConfig.AGENT_WORKSPACE_DATA_DIR ?? path.join(root, '.local/agent-data'), AGENT_WORKSPACE_API_ONLY: '1' };
   const environments = {
-    worker: { ...common, ...workerConfig }, api: pmEnvironment, agent: agentEnvironment,
+    worker: { ...common, ...workerConfig, PUBLIC_ORIGIN: publicOrigin }, api: pmEnvironment, agent: agentEnvironment,
     web: { ...common, PM_API_URL: apiUrl, PM_WEB_PORT: String(devWebPort), PM_API_ORIGIN: publicOrigin, AGENT_WORKSPACE_API_URL: agentUrl, VITE_HMR_CLIENT_PORT: String(webPort) },
     gateway: { ...common, PUBLIC_HOST: '127.0.0.1', PUBLIC_PORT: String(webPort), PM_URL: apiUrl, AGENT_URL: agentUrl,
       ...(development ? { WEB_DEV_URL: `http://127.0.0.1:${devWebPort}` } : {}) },

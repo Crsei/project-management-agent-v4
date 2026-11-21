@@ -23,12 +23,13 @@ import { agentProvidersFamily } from './agent-providers.ts';
 import { agentExtensionsFamily } from './agent-extensions.ts';
 import { agentRuntimeFamily } from './agent-runtime.ts';
 import { agentDeliveryFamily } from './agent-delivery.ts';
+import { agentEvaluationFamily } from './agent-evaluation.ts';
 
 const CLI_FAMILIES: readonly CliFamily[] = [
   collaborationFamily, administrationFamily, documentsFilesFamily, dashboardFamily,
   planningRecordsFamily, automationFamily, integrationsFamily, agentAccessFamily,
   agentSessionsFamily, agentProvidersFamily, agentExtensionsFamily, agentRuntimeFamily,
-  agentDeliveryFamily,
+  agentDeliveryFamily, agentEvaluationFamily,
 ];
 
 const HELP = `Markdown PM Lab — operate the same live workspace as the browser

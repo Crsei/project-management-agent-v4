@@ -19,6 +19,7 @@ import { useOptionalPmAgentPanel } from '../agent/agent-panel-context';
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadixSelect } from '@/components/ui/radix-select';
 import './task-detail.css';
+import { InlineChangeReview } from './inline-change-review';
 
 export function TaskCompletionAction({ controller: c, en }: { controller: WorkspaceController; en: boolean }) {
   const entity = c.entity;
@@ -35,12 +36,12 @@ export function TaskCompletionAction({ controller: c, en }: { controller: Worksp
   const Icon = category === 'completed' ? CircleCheck : category === 'canceled' ? CircleX : Circle;
   if (staged && category === 'completed') return <button type="button" className="task-complete is-completed" aria-label={en ? 'Undo staged completion' : '撤销草稿中的完成状态'} disabled={!c.canEditTaskDraft} onClick={() => c.patchTaskDraft({ status: savedStatus })} title={en ? 'Undo staged completion; the draft saves automatically after edits settle' : '撤销草稿中的完成状态；停止输入后自动保存'}><Icon size={15} /><span>{en ? 'Completed · draft' : '已完成 · 草稿'}</span></button>;
   if (reopening && !candidates.length) return <span className={`task-complete is-${category}`} aria-label={category === 'completed' ? (en ? 'Completed' : '已完成') : (en ? 'Canceled' : '已取消')}><Icon size={15} /><span>{category === 'completed' ? (en ? 'Completed' : '已完成') : (en ? 'Canceled' : '已取消')}</span></span>;
-  if (candidates.length > 1) return <label className={`task-complete task-complete-picker ${reopening ? '' : 'is-completed'}`}><Icon size={15} /><span className="sr-only">{label}</span><RadixSelect aria-label={label} title={en ? 'Choose a configured state; the draft saves automatically after edits settle' : '选择配置中的状态；停止输入后自动保存'} value="" disabled={!c.canEditTaskDraft} onChange={event => { if (event.target.value) c.patchTaskDraft({ status: event.target.value }); }}><option value="" disabled>{label}…</option>{candidates.map(state => <option key={state.id} value={state.id}>{taskStateLabel(state, en)}</option>)}</RadixSelect></label>;
+  if (candidates.length > 1) return <label className={`task-complete task-complete-picker ${reopening ? '' : 'is-completed'}`}><Icon size={15} /><span className="sr-only">{label}</span><RadixSelect aria-label={label} title={en ? 'Choose a configured state; the draft saves automatically after edits settle' : '选择配置中的状态；停止输入后自动保存'} value="" disabled={!c.canEditTaskDraft} onChange={event => { if (event.target.value) c.patchTaskDraft({ status: event.target.value }); }}><option value="" disabled>{en ? 'Choose state…' : '选择状态…'}</option>{candidates.map(state => <option key={state.id} value={state.id}>{taskStateLabel(state, en)}</option>)}</RadixSelect></label>;
   return <button type="button" className="task-complete" aria-label={label} disabled={!c.canEditTaskDraft || !candidates.length} title={!candidates.length ? (en ? 'No legal transition is configured.' : '未配置合法转换。') : (en ? `Stage ${candidates[0].label}; the draft saves automatically after edits settle` : `暂存为「${candidates[0].label}」；停止输入后自动保存`)} onClick={() => { if (candidates[0]) c.patchTaskDraft({ status: candidates[0].id }); }}><Icon size={15} /><span>{label}</span></button>;
 }
 
-export function TaskDetailSurface({ controller: c, en, onOpenGraph }: { controller: WorkspaceController; en: boolean; onOpenGraph: () => void }) {
-  const { workspace } = usePmService();
+export function TaskDetailSurface({ controller: c, en, onOpenGraph, reviewEnabled = true }: { controller: WorkspaceController; en: boolean; onOpenGraph: () => void; reviewEnabled?: boolean }) {
+  const { workspace, actor } = usePmService();
   const agentPanel = useOptionalPmAgentPanel();
   const location = useLocation();
   const [briefView, setBriefView] = useState<'brief' | 'knowledge' | null>(null);
@@ -115,11 +116,13 @@ export function TaskDetailSurface({ controller: c, en, onOpenGraph }: { controll
         <div className="task-section-heading">
           <h2 id="task-description-heading" className="issue-section-title">{t('Description', '描述')}</h2>
         </div>
+        <InlineChangeReview key={task.id} workspaceId={c.session.queryKey[3]} target={{ kind: 'core', entityId: task.id }} currentRevision={task.revision} en={en} suppressCreationBy={actor?.id ?? null} enabled={reviewEnabled && !editingDescription && !task.stale && !c.accessError && !c.query.error} dirty={!!c.draft}>
         {editingDescription
           ? <div className="task-description-editor" onBlur={endDescriptionEdit}><MarkdownBodyEditor value={descriptionBody} disabled={!descriptionEditable} en={en} onChange={changeDescriptionBody} /></div>
           : <div className="task-description-surface" tabIndex={descriptionEditable ? 0 : -1} aria-label={descriptionEditable ? t('Edit description', '编辑描述') : undefined} onClick={editDescriptionFromPointer} onKeyDown={editDescriptionFromKeyboard}>
-            {entity.body.trim() ? <Preview raw={c.draftParseError ? c.selected!.raw : c.raw} body={entity.body} hideTitle viewProps={{ ...c.viewProps, files: c.files, allFiles: c.files }} disabled={disabled} onToggle={c.toggleTaskChecklist} onLink={c.wikiLink} /> : <span className="task-description-empty">{t('Add description', '添加描述')}</span>}
+            {descriptionBody.trim() ? <Preview raw={c.draftParseError ? c.selected!.raw : c.raw} body={entity.body} hideTitle viewProps={{ ...c.viewProps, files: c.files, allFiles: c.files }} disabled={disabled} onToggle={c.toggleTaskChecklist} onLink={c.wikiLink} /> : <span className="task-description-empty">{t('Add description', '添加描述')}</span>}
           </div>}
+        </InlineChangeReview>
       </section>
       <div className="task-detail-related issue-document-sections">
         <TaskChildren controller={c} en={en} />

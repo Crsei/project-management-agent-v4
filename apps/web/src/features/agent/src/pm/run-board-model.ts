@@ -112,3 +112,67 @@ export function runBoardTerminalWorkspace(
     && workspace.status === "available" && workspace.path === environment.sourcePath
     && workspace.revision >= selection.agentWorkspaceRevision!) ?? null;
 }
+
+export const RUN_BOARD_SCOPE_STORAGE_KEY = "pm-v4:run-board-scope";
+
+type ScopeStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+function browserScopeStorage(): ScopeStorage | undefined {
+  try { return typeof window === "undefined" ? undefined : window.localStorage; } catch { return undefined; }
+}
+
+/** A remembered board scope is only a preference; the server list still decides validity. */
+export function readRunBoardFolderScope(storage: ScopeStorage | undefined = browserScopeStorage()): string {
+  try {
+    const value = storage?.getItem(RUN_BOARD_SCOPE_STORAGE_KEY);
+    if (value === "chat-only" || !!value && /^folder:[^\s\u0000-\u001f\u007f]+$/.test(value)) return value;
+  } catch { /* Storage failure keeps the board usable without a remembered scope. */ }
+  return "";
+}
+
+export function writeRunBoardFolderScope(folder: string, storage: ScopeStorage | undefined = browserScopeStorage()): void {
+  try {
+    if (folder) storage?.setItem(RUN_BOARD_SCOPE_STORAGE_KEY, folder);
+    else storage?.removeItem(RUN_BOARD_SCOPE_STORAGE_KEY);
+  } catch { /* Storage failure never changes the selected scope. */ }
+}
+
+/** A registered folder can be pinned before it has any Session; archived folders cannot. */
+export function isRunBoardFolderScopeValid(folder: string, workspaces: readonly AgentWorkspace[]): boolean {
+  if (folder === "chat-only") return true;
+  if (!folder.startsWith("folder:")) return false;
+  const id = folder.slice("folder:".length);
+  return workspaces.some(workspace => workspace.id === id && !workspace.archivedAt);
+}
+
+export function isRunBoardAttentionColumn(column: RunBoardActivity["column"]): boolean {
+  return column === "waiting" || column === "attention" || column === "unknown";
+}
+
+export type RunBoardKeyboardRow = { id: string; column: RunBoardActivity["column"] };
+
+/** Kander-style card movement: j/k inside a column, h/l to the next non-empty column. */
+export function nextRunBoardKeyboardTarget(
+  rows: readonly RunBoardKeyboardRow[],
+  columns: readonly RunBoardActivity["column"][],
+  selectedId: string | null,
+  key: "j" | "k" | "h" | "l",
+): string | null {
+  const byColumn = new Map(columns.map(column => [column, rows.filter(row => row.column === column)]));
+  const nonEmpty = columns.filter(column => (byColumn.get(column)?.length ?? 0) > 0);
+  const first = nonEmpty[0] ? byColumn.get(nonEmpty[0])?.[0] : undefined;
+  if (!first) return null;
+  const selected = selectedId ? rows.find(row => row.id === selectedId) : undefined;
+  if (!selected || !nonEmpty.includes(selected.column)) return first.id;
+  const current = byColumn.get(selected.column)!;
+  const index = current.findIndex(row => row.id === selected.id);
+  if (key === "j" || key === "k") {
+    const next = Math.max(0, Math.min(current.length - 1, index + (key === "j" ? 1 : -1)));
+    return current[next]?.id ?? selected.id;
+  }
+  const position = nonEmpty.indexOf(selected.column);
+  const targetColumn = nonEmpty[Math.max(0, Math.min(nonEmpty.length - 1, position + (key === "l" ? 1 : -1)))]!;
+  if (targetColumn === selected.column) return selected.id;
+  const target = byColumn.get(targetColumn)!;
+  return target[Math.min(Math.max(index, 0), target.length - 1)]!.id;
+}

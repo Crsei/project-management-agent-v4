@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { BundledSkillsCatalog, InstallBundledSkillsResult, ProviderBundledSkillsState } from "@agent-workspace/contracts/bundled-skills";
-import { Button } from "@/components/ui/button";
 import {
-  BundledSkillsError, bundledSkillProviderIdentity, bundledSkillProviderReady,
+  BundledSkillsError, bundledSkillProviderIdentity, bundledSkillProviderReady, bundledSkillProviderWritable,
   installProviderBundledSkills, readBundledSkillProviders, readBundledSkillsCatalog, readProviderBundledSkills,
   type BundledSkillProvider,
 } from "@/lib/bundled-skills";
@@ -119,7 +118,7 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
 
   const chosen = matchingVersion ? state.skills.filter(skill => selectedSkills.includes(skill.id) && installable(skill.status)) : [];
   const canInstall = !locked && !loading && !catalogError && !providersError && !currentTarget?.loading && !currentTarget?.error
-    && !!provider && bundledSkillProviderReady(provider) && matchingVersion && !!state.targetFingerprint && chosen.length > 0 && !needsRecheck;
+    && !!provider && bundledSkillProviderWritable(provider) && matchingVersion && !!state.targetFingerprint && chosen.length > 0 && !needsRecheck;
 
   async function install() {
     if (!canInstall || !provider || !catalog || !state?.targetFingerprint || pending.current) return;
@@ -137,7 +136,7 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
       if (hostDisabled.current) throw new Error(t("管理连接或访问状态已变化；未发送安装，请先核对当前状态。", "Management connectivity or access changed; installation was not sent. Review current state first."));
       const freshProvider = freshProviders.find(item => item.instanceId === selectedProvider.instanceId);
       setProviders(freshProviders);
-      if (!freshProvider || bundledSkillProviderIdentity(freshProvider) !== selectedIdentity || !bundledSkillProviderReady(freshProvider)) {
+      if (!freshProvider || bundledSkillProviderIdentity(freshProvider) !== selectedIdentity || !bundledSkillProviderWritable(freshProvider)) {
         throw new Error(t("Provider 或账号状态已变化；未发送安装。请重新选择并核对目标。", "The provider or account changed; installation was not sent. Select and review the target again."));
       }
       sent = true;
@@ -179,7 +178,7 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
   return <section className={styles.panel} aria-labelledby={headingId} aria-busy={busy}>
     <div className={styles.heading}>
       <h2 id={headingId}>{t("Dovspace 官方内置 PM Skills", "Dovspace official bundled PM Skills")}</h2>
-      <Button type="button" variant="outline" size="sm" disabled={locked || loading} onClick={() => setRefresh(value => value + 1)}>{t("刷新来源与安装状态", "Refresh sources and installation state")}</Button>
+      <button type="button" className={styles.button} disabled={locked || loading} onClick={() => setRefresh(value => value + 1)}>{t("刷新来源与安装状态", "Refresh sources and installation state")}</button>
     </div>
     <p>{t("官方来源由内置清单、源路径和内容哈希确认，不凭 Skill 名称归属。下方是可安装资源，不是已运行或已加载目录。", "Official provenance comes from the bundled manifest, source path and content hash, not a skill name. This is an installable resource inventory, not a running or loaded catalog.")}</p>
     <p>{t("仅在明确点击后，为所选 Provider 安装所选 Skills；不为所有目标安装，不覆盖用户修改或无关同名内容。原生共享目录可能影响同目录的其他 Provider，具体范围以服务返回的警告为准。", "Only an explicit click installs the selected skills for the selected provider. No all-target installation or overwriting of user-edited or unrelated same-name content. A shared native directory may affect other providers using it; see the service warnings for the actual scope.")}</p>
@@ -188,7 +187,7 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
     {catalogError && <p className={styles.error} role="alert">{catalogError}</p>}
     {providersError && <p className={styles.error} role="alert">{providersError}</p>}
     {catalog && <p className={styles.version}>{t("内容版本（Bundle SHA-256）", "Content version (bundle SHA-256)")}: <code>{catalog.bundleDigest}</code></p>}
-    {!loading && providers && readyCount === 0 && <p role="status">{t("没有已连接且启用、配置完成、原生就绪的 Provider 可供安装。仍可查看内置来源；可稍后配置或跳过，不会写入任何目标。", "No connected provider is enabled, configured and native-ready for installation. Bundled sources remain visible; configure a provider later or skip. No target is written.")}</p>}
+    {!loading && providers && providers.length > 0 && readyCount === 0 && <p role="status">{t("没有已连接且原生就绪的 Provider。仍可选择已启用且有本机原生目标的 Provider 写入配置；安装不证明可运行或已加载。", "No connected provider is native-ready. An enabled provider with a verified native target can still receive the files; installation does not prove runtime readiness or loading.")}</p>}
     <label className={styles.provider} htmlFor={selectId}>
       <span>{t("明确选择安装目标 Provider", "Explicitly select the installation provider")}</span>
       <select id={selectId} value={selectedId} disabled={locked || loading || !providers?.length} onChange={event => {
@@ -201,15 +200,16 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
         {providers?.map(item => <option key={item.instanceId} value={item.instanceId}>{item.label} · {item.driver} · {item.instanceId}{!bundledSkillProviderReady(item) ? ` · ${t("尚未就绪", "not ready")}` : ""}</option>)}
       </select>
     </label>
-    {provider && !bundledSkillProviderReady(provider) && <p role="status">{!provider.enabled ? t("所选 Provider 未启用，不能安装。", "The selected provider is disabled; installation is blocked.") : !provider.configured ? t("所选 Provider 尚未配置完成，不能安装。", "The selected provider is not configured; installation is blocked.") : t("所选 Provider 未报告原生就绪，不能安装。配置存在不等于已连接。", "The selected provider does not report native readiness; installation is blocked. Configuration is not a connection.")}</p>}
+    {provider && !bundledSkillProviderWritable(provider) && <p role="status">{t("所选 Provider 未启用，不能安装。", "The selected provider is disabled; installation is blocked.")}</p>}
+    {provider && bundledSkillProviderWritable(provider) && !bundledSkillProviderReady(provider) && <p role="note">{t("所选 Provider 未连接或未原生就绪；仍可写入其已核验的本机目标，但安装不会使其可运行，运行中会话也不会自动加载。", "The selected provider is not connected or native-ready. Its verified local target can still receive the files, but installation does not make it runnable and does not load them into a running session.")}</p>}
     {currentTarget?.loading && <p role="status">{t("正在读取所选 Provider 的权威安装状态…", "Reading authoritative installation state for the selected provider…")}</p>}
     {currentTarget?.error && <p className={styles.error} role="alert">{currentTarget.error} {t("状态未知，禁止安装；请刷新读取。", "State is unknown; installation is blocked. Refresh to read again.")}</p>}
     {state && !matchingVersion && <p className={styles.error} role="alert">{t("内置版本发生变化；请刷新来源与目标，重新选择 Skills。", "The bundle version changed. Refresh sources and the target, then select skills again.")}</p>}
     {state && !state.targetFingerprint && state.skills.some(skill => skill.status !== "unavailable") && <p className={styles.error} role="alert">{t("未取得可核对的原生目标身份，禁止安装。请刷新后重新选择。", "No verifiable native target identity was returned. Installation is blocked; refresh and review again.")}</p>}
     {state?.warnings.map((warning, index) => <p className={styles.warning} role="note" key={`${index}:${warning}`}>{warning}</p>)}
-    {catalog && <fieldset className={styles.skills} disabled={locked || !provider || !bundledSkillProviderReady(provider) || !matchingVersion || !!currentTarget?.loading || !!currentTarget?.error || loading}>
+    {catalog && <fieldset className={styles.skills} disabled={locked || !provider || !bundledSkillProviderWritable(provider) || !matchingVersion || !!currentTarget?.loading || !!currentTarget?.error || loading}>
       <legend>{t("选择 Skills（仅未安装／可更新项可写入）", "Select skills (only missing/outdated entries can be written)")}</legend>
-      {matchingVersion && <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedSkills(state.skills.filter(skill => installable(skill.status)).map(skill => skill.id))}>{t("选择可安装／更新项", "Select installable/update entries")}</Button>}
+      {matchingVersion && <button type="button" className={`${styles.button} ${styles.buttonGhost}`} onClick={() => setSelectedSkills(state.skills.filter(skill => installable(skill.status)).map(skill => skill.id))}>{t("选择可安装／更新项", "Select installable/update entries")}</button>}
       <ul>{catalog.skills.map(skill => {
         const observation = matchingVersion ? state.skills.find(item => item.id === skill.id) : undefined;
         return <li key={skill.id}>
@@ -234,7 +234,7 @@ function BundledSkillsPanelContent({ t, disabled = false, preferredProviderId, o
     <div className={styles.confirm}>
       <p>{t("安装确认", "Installation confirmation")}: {provider ? `${provider.label} · ${provider.instanceId}` : t("未选择 Provider", "No provider selected")}</p>
       <p>{t("所选 Skills", "Selected skills")}: {chosen.length ? chosen.map(skill => skill.id).join(", ") : t("未选择", "None selected")}</p>
-      <Button type="button" disabled={!canInstall} onClick={() => { void install(); }}>{busy ? t("正在安装并核对结果…", "Installing and reconciling…") : t("为所选 Provider 安装／更新所选 Skills", "Install/update selected skills for this provider")}</Button>
+      <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} disabled={!canInstall} onClick={() => { void install(); }}>{busy ? t("正在安装并核对结果…", "Installing and reconciling…") : t("为所选 Provider 安装／更新所选 Skills", "Install/update selected skills for this provider")}</button>
     </div>
   </section>;
 }

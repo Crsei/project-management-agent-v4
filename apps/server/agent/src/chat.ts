@@ -80,6 +80,7 @@ export const publicThread = (thread: ThreadMetadata) => ({
   createdAt: thread.createdAt,
   updatedAt: thread.updatedAt,
   lastMessageAt: thread.updatedAt,
+  messageCount: getThreadHistory(thread.remoteId).messages.length,
   revision: thread.revision,
   lifecycleRevision: thread.lifecycleRevision ?? 0,
   deletionState: thread.deletionState,
@@ -111,8 +112,12 @@ export const publicChatGeneration = (generation: ChatGeneration) => ({
 });
 
 export async function publicAuthorizedThread(thread: ThreadMetadata, headers: Headers) {
-  const projector = await createPmVisibilityProjector(thread.remoteId, headers);
   const result = publicThread(thread);
+  // Only legacy titles/custom summaries need PM dependency proof. Building the
+  // full projector for every untitled Session made the list reauthorize and refetch
+  // every tool result before the sidebar could open.
+  if (thread.title === undefined && thread.custom === undefined) return result;
+  const projector = await createPmVisibilityProjector(thread.remoteId, headers, { payloads: false });
   // Legacy Session titles/custom summaries have no item-level dependency proof.
   return projector.nativeContextContaminated ? { ...result, title: "会话", custom: undefined } : result;
 }

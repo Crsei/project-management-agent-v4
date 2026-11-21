@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronsUpDown, LoaderCircle, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { Segmented, SegmentedItem } from "@/components/ui/segmented";
+import { ChevronsUpDown, Keyboard, LoaderCircle, LogOut, Monitor, Moon, Settings as SettingsIcon, Sun, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@agent/components/ui/avatar";
 import { useTheme } from "@agent/hooks/use-theme";
+import { useWorkspaceStore } from "@/providers/app-providers";
 import { pmJson, refreshIdentity, usePmChatState } from "./state";
 import { useAgentText } from "../i18n";
 import styles from "@/features/pm/service/pm-user-menu.module.css";
@@ -21,6 +23,9 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
   const t = useAgentText();
   const state = usePmChatState();
   const actor = state.identity?.actor;
+  const productWorkspaceId = useWorkspaceStore((workspace) => workspace.productWorkspaceId);
+  const identityWorkspaceId = state.identity?.workspaces.length === 1 ? state.identity.workspaces[0].id : undefined;
+  const menuWorkspaceId = workspaceId ?? (state.identity?.workspaces.some((workspace) => workspace.id === productWorkspaceId) ? productWorkspaceId ?? undefined : identityWorkspaceId);
   const { preference, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<{ workspaceId: string; name: string; avatarDataUrl: string | null }>();
@@ -29,18 +34,23 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
 
   useEffect(() => { if (open) void refreshIdentity(); }, [open]);
   useEffect(() => {
-    if (!open || !workspaceId || profile?.workspaceId === workspaceId) return;
+    if (!open || !menuWorkspaceId || profile?.workspaceId === menuWorkspaceId) return;
     let cancelled = false;
-    void pmJson<{ profile: { name: string; avatarDataUrl: string | null } }>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/dashboard/personal`)
-      .then((data) => { if (!cancelled) setProfile({ workspaceId, name: data.profile.name, avatarDataUrl: data.profile.avatarDataUrl }); })
+    void pmJson<{ profile: { name: string; avatarDataUrl: string | null } }>(`/api/v1/workspaces/${encodeURIComponent(menuWorkspaceId)}/dashboard/personal`)
+      .then((data) => { if (!cancelled) setProfile({ workspaceId: menuWorkspaceId, name: data.profile.name, avatarDataUrl: data.profile.avatarDataUrl }); })
       .catch(() => { /* The account identity remains usable without the optional profile card. */ });
     return () => { cancelled = true; };
-  }, [open, workspaceId, profile?.workspaceId]);
+  }, [open, menuWorkspaceId, profile?.workspaceId]);
 
 
   const displayName = profile?.name ?? actor?.name ?? t("本机 Agent", "Local Agent");
   const avatarDataUrl = profile?.avatarDataUrl ?? undefined;
   const avatarInitials = displayName.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]).join("").toLocaleUpperCase() || "?";
+  const base = menuWorkspaceId ? `/pm/${encodeURIComponent(menuWorkspaceId)}` : null;
+  const navigateAway = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!canLeave()) { event.preventDefault(); return; }
+    setOpen(false);
+  };
 
   const signOut = async () => {
     if (signingOut) return;
@@ -79,25 +89,40 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
             </div>
           </div>
           <div className={styles.separator} />
+          {base && <>
+            <Link className={styles.item} to={`${base}/members?tab=members&profile=me`} onClick={navigateAway}>
+              <UserRound aria-hidden="true" />
+              {t("查看个人资料", "View profile")}
+            </Link>
+            <Link className={styles.item} to={`${base}/onboarding`} onClick={navigateAway}>
+              <UserRound aria-hidden="true" />
+              {t("开始使用引导", "Getting started guide")}
+            </Link>
+          </>}
+          <div className={styles.separator} />
+          <Link className={styles.item} to="/pm/account/security" onClick={navigateAway}>
+            <SettingsIcon aria-hidden="true" />
+            {t("账号安全", "Account security")}
+          </Link>
+          <div className={styles.separator} />
           <div className={styles.sectionLabel}>{t("主题", "Theme")}</div>
-          <div className={styles.theme} role="radiogroup" aria-label={t("主题", "Theme")}>
-            {THEMES.map(({ value, zh, en, icon: Icon }) => <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={preference === value}
-              data-checked={preference === value || undefined}
-              className={styles.themeItem}
-              onClick={() => setTheme(value)}
-            >
+          <Segmented className={styles.theme} value={preference} onValueChange={setTheme} aria-label={t("主题", "Theme")}>
+            {THEMES.map(({ value, zh, en, icon: Icon }) => <SegmentedItem key={value} value={value} className={styles.themeItem}>
               <Icon aria-hidden="true" />{t(zh, en)}
-            </button>)}
-          </div>
+            </SegmentedItem>)}
+          </Segmented>
+          {base && <>
+            <div className={styles.separator} />
+            <Link className={styles.item} to={`${base}/settings/shortcuts`} onClick={navigateAway}>
+              <Keyboard aria-hidden="true" />
+              {t("键盘快捷键", "Keyboard shortcuts")}
+            </Link>
+          </>}
           <div className={styles.separator} />
           {actor ? <button type="button" className={styles.item} disabled={signingOut} onClick={() => { if (canLeave()) void signOut(); }}>
             {signingOut ? <LoaderCircle className={styles.spinner} aria-hidden="true" /> : <LogOut aria-hidden="true" />}
-            {signingOut ? t("正在退出…", "Signing out…") : t("退出 PM 登录", "Sign out of PM")}
-          </button> : <Link className={styles.item} to="/pm" onClick={event => { if (!canLeave()) event.preventDefault(); }}>{t("前往 PM 登录", "Sign in to PM")}</Link>}
+            {signingOut ? t("正在退出…", "Signing out…") : t("退出登录", "Sign out")}
+          </button> : <Link className={styles.item} to="/pm" onClick={navigateAway}>{t("前往 PM 登录", "Sign in to PM")}</Link>}
           {logoutError && <p role="alert" className={styles.error}>{logoutError}</p>}
     </PopoverContent>
   </Popover>;

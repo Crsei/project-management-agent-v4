@@ -2,7 +2,7 @@ import { useId } from "react"
 import { Link, useParams } from "react-router"
 import { ArrowUpRight, ChevronDown } from "lucide-react"
 import { useText } from "../pm-ui"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 import { UsageNavigationLink } from "../../../agent/src/usage/navigation"
 
 type LocalizedText = readonly [string, string]
@@ -90,14 +90,13 @@ export function SettingsPlans({ mode }: SettingsPageProps) {
   const id = useId()
   const { workspaceSlug = "" } = useParams()
   const root = `/pm/${encodeURIComponent(workspaceSlug)}`
-  return <SettingsSection title={t("套餐与用量", "Plans & usage")} description={t("了解当前服务边界、尚未接入的用量数据，以及未来按工作区订阅的云套餐规划。", "Understand today’s service boundaries, unavailable usage data, and future workspace-based cloud-plan proposals.")}>
-    {mode === "lab" && <SettingsNotice><p className="font-medium text-foreground">{t("Lab · 套餐与用量说明预览", "Lab · Plans & usage information preview")}</p><p>{t("与正式页使用同一份说明；不读取真实订阅或用量，不生成样例计费数据，也不模拟购买或权益生效。", "This uses the same guidance as the service page. It reads no real subscriptions or usage, invents no sample billing data, and simulates neither purchases nor entitlement activation.")}</p></SettingsNotice>}
+  return <SettingsSection title={t("套餐与用量", "Plans & usage")} description={t("查看当前服务边界与未来云套餐规划。", "Review current service boundaries and future cloud-plan proposals.")}>
     <section aria-labelledby={`${id}-current`} className="min-w-0 space-y-4 rounded-module border bg-surface p-4 sm:p-5">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <h3 id={`${id}-current`} className="font-semibold">{t("当前状态", "Current status")}</h3>
         <span className="rounded-pill border bg-surface-raised px-2 py-1 text-xs">{t("订阅与全量计量未接入", "Subscriptions & complete metering not connected")}</span>
       </div>
-      <p className="text-sm leading-6 text-muted-foreground">{t("现在交付的是说明页，不是订阅服务。当前套餐、已购席位及云附件已用空间均未知；不启用下方规划的收费或限额，也不从缺失数据推断 Free、自托管或无限用量。", "This is an information page, not a subscription service. The current plan, purchased seats, and cloud attachment usage are unknown. The planned charges and caps below are not enabled, and missing data is not interpreted as Free, self-hosted, or unlimited usage.")}</p>
+      <p className="text-sm leading-6 text-muted-foreground">{t("当前套餐、席位及云附件用量未知；下方规划尚未启用。", "Current plan, seats and attachment usage are unknown; the proposals below are inactive.")}</p>
       <dl className="grid min-w-0 gap-3 sm:grid-cols-3">
         {[
           [t("工作区套餐", "Workspace plan"), t("未知 · 订阅服务未接入", "Unknown · Subscription service not connected")],
@@ -119,7 +118,7 @@ export function SettingsPlans({ mode }: SettingsPageProps) {
     </nav>
     <section className="min-w-0 space-y-3 rounded-module border bg-surface p-4 sm:p-5">
       <h3 className="font-semibold">{t("Agent 用量 · 与订阅账单分开", "Agent usage · Separate from subscription billing")}</h3>
-      <p className="text-sm leading-6 text-muted-foreground">{t("现有 Agent Usage 可查看本机已记录的模型调用、Token 与来源覆盖；它不是供应商实时余额、工作区订阅、真人席位或云附件计量。记录缺失、价格缺失或覆盖不完整时仍为未知，不记成零，也不推断完整费用。", "Existing Agent Usage shows locally recorded model calls, tokens, and source coverage. It is not a live supplier balance or workspace subscription, human-seat, or cloud-attachment meter. Missing records, prices, or incomplete coverage remain unknown, not zero or a complete cost total.")}</p>
+      <p className="text-sm leading-6 text-muted-foreground">{t("Agent Usage 显示本机记录的模型调用与 Token，不是订阅账单。", "Agent Usage shows locally recorded model calls and tokens; it is not subscription billing.")}</p>
       {mode === "service" ? <UsageNavigationLink className={navigationClass}><span>{t("打开 Agent Usage", "Open Agent Usage")}</span><ArrowUpRight aria-hidden="true" className="size-4 shrink-0" /></UsageNavigationLink> : <p className="text-xs leading-5 text-muted-foreground">{t("Lab 不读取 Agent 用量；真实入口使用独立 Agent 访问验证。", "Lab does not read Agent usage. The live destination uses separate Agent access verification.")}</p>}
       <p className="text-xs leading-5 text-muted-foreground">{t("导航不调用付费模型、不查询供应商余额，也不改变订阅或执行权限。Agent 数据仍属于可信本机单操作者范围，不按 PM 成员隔离。", "Navigation does not call paid models, query supplier balances, or change subscriptions or execution permissions. Agent data remains scoped to one trusted local operator, not isolated per PM member.")}</p>
     </section>
@@ -153,12 +152,6 @@ export function SettingsPlans({ mode }: SettingsPageProps) {
       <h3 id={`${id}-activation-title`} className="font-semibold">{t("未来如何生效", "How future activation would work")}</h3>
       <ol className="list-decimal space-y-3 pl-5 text-sm leading-6 text-muted-foreground">{activationSteps.map(step => <li key={step[1]}>{t(...step)}</li>)}</ol>
     </section>
-
-    <SettingsNotice>
-      <h3 className="font-semibold text-foreground">{t("当前 AI 与安全边界", "Current AI & security boundaries")}</h3>
-      <p className="mt-2">{t("AI 使用自带 Provider，由供应商按你的账号与合同计费；不赠送或虚构 AI 额度。配置 Provider 不代表模型访问、余额或真实调用已验收。", "AI uses your own Provider, billed by that supplier under your account and contract. No AI credits are granted or invented. Configuring a Provider does not prove model access, available balance, or successful real calls.")}</p>
-      <p className="mt-2">{t("Agent 仅面向可信本机单操作者；PM 成员授权不等于 Agent 会话所有权隔离。文件区域和 cwd 不是文件系统沙箱，Terminal 使用服务进程的本机权限，不要直接开放到公网。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。", "Agent is for one trusted local operator. PM membership is not Agent session-ownership isolation. File areas and cwd are not filesystem sandboxes, and Terminal uses the service process’s local permissions; do not expose it directly to the public internet. Sessions and persistence still follow Agent Chat; the unified design is not finalized.")}</p>
-    </SettingsNotice>
 
     <section id={`${id}-faq`} aria-labelledby={`${id}-faq-title`} className="min-w-0 scroll-mt-5 space-y-3 border-t pt-6">
       <h3 id={`${id}-faq-title`} className="font-semibold">{t("常见问题", "Frequently asked questions")}</h3>

@@ -6,8 +6,8 @@
   "include": [
     "apps/server/pm/src/**/*.ts",
     "apps/server/worker/src/**/*.ts",
-    "apps/server/gateway.ts",
-    "apps/server/gateway.test.ts",
+    "apps/server/gateway/src/**/*.ts",
+    "apps/server/gateway/tests/**/*.ts",
     "packages/domain/src/**/*.ts",
     "packages/application/src/**/*.ts",
     "packages/contracts/src/**/*.ts",

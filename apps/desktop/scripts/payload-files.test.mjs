@@ -48,7 +48,7 @@ test("component accounting is a deterministic disjoint PM/Agent/Electron/runtime
     ["resources/workspace-runtime/node_modules/pm-dependency/index.js", "pm", 3],
     ["resources/workspace-runtime/apps/server/pm/src/main.ts", "pm", 5],
     ["resources/workspace-runtime/apps/server/worker/src/main.ts", "pm", 7],
-    ["resources/workspace-runtime/apps/server/gateway.ts", "pm", 11],
+    ["resources/workspace-runtime/apps/server/gateway/src/index.ts", "pm", 11],
     ["resources/workspace-runtime/packages/pm-core/src/index.ts", "pm", 13],
     ["resources/workspace-runtime/apps/server/agent/dist/index.mjs", "agent", 17],
     ["resources/workspace-runtime/apps/server/agent/node_modules/effect/index.js", "agent", 19],

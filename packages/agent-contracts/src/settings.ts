@@ -17,6 +17,8 @@ export const chatDefaultsUpdateSchema = chatDefaultsSchema;
 export type ChatDefaultsResponse = {
   defaults: ChatDefaults;
   availability: { status: "unset" | "available" | "unavailable"; reason?: string };
+  /** Most recent valid thread selection; used only when the explicit default is unset. */
+  lastUsed?: ChatDefaultSelection | null;
 };
 
 /** An unset conversation is configurable, but cannot send until a pair is saved. */

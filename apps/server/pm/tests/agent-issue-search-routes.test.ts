@@ -8,10 +8,10 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
 import {
   agentIssueSearchPageSchema, registerAgentIssueSearchRoutes, type AgentIssueSearchPage,
-} from '../src/agent-issue-search-routes.ts';
+} from '../src/routes/agent-issue-search-routes.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-00000000000a';
 const actor = { id: 'user-1', email: 'fixture@example.invalid', name: 'Fixture' };

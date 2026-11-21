@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { Workspace,type WorkspaceMutationCapture } from '../packages/pm-core/index.ts';
 import { coreFactSummary,coreChangeKinds,readServiceFactObservations } from '../packages/pm-core/service-facts.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
-import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/routes/core-routes.ts';
 import type { CapturedServiceFact } from '../packages/application/src/service-facts.ts';
 async function fixture() {
  const parent=await mkdtemp(join(tmpdir(),'pm-proven-facts-')),workspaceId=randomUUID(),root=join(parent,workspaceId);

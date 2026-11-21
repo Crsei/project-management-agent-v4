@@ -4,10 +4,12 @@ import {
   UNSELECTED_THREAD_SETTINGS,
   type ChatDefaults,
   type ChatDefaultsResponse,
+  type ChatDefaultSelection,
 } from "@agent-workspace/contracts/settings";
 import { probeProviderInstance, resolveCatalogModel, resolveProviderModelOptions } from "../providers/catalog.ts";
 import { getStoredInstance } from "../providers/instances.ts";
-import { readRecord, transaction, writeRecord } from "../durable/store.ts";
+import { listRecords, readRecord, transaction, writeRecord } from "../durable/store.ts";
+import type { ThreadMetadata } from "../durable/threads.ts";
 
 const SETTINGS = "settings:chat-defaults";
 const KEY = "default";
@@ -50,12 +52,39 @@ async function validateSelection(selection: NonNullable<ChatDefaults["selection"
   return instance.revision;
 }
 
+/** Most recent thread that still resolves against an enabled Provider model catalog. */
+function readLastUsedSelection(): ChatDefaultSelection | null {
+  const threads = listRecords<ThreadMetadata>("chat:threads")
+    .filter((thread) => !thread.deleted && !thread.sessionCutover
+      && thread.settings.providerInstanceId.trim() && thread.settings.model.trim())
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  for (const thread of threads) {
+    const { providerInstanceId, model, modelOptions, interactionMode } = thread.settings;
+    const instance = getStoredInstance(providerInstanceId);
+    if (!instance?.enabled) continue;
+    try {
+      resolveCatalogModel(providerInstanceId, model);
+      resolveProviderModelOptions(providerInstanceId, model, modelOptions);
+    } catch {
+      continue;
+    }
+    return {
+      providerInstanceId,
+      model,
+      ...(modelOptions?.length ? { modelOptions } : {}),
+      ...(interactionMode ? { interactionMode } : {}),
+    };
+  }
+  return null;
+}
+
 export async function getChatDefaults(): Promise<ChatDefaultsResponse> {
   const defaults = readChatDefaults();
-  if (!defaults.selection) return { defaults, availability: { status: "unset" } };
+  const lastUsed = readLastUsedSelection();
+  if (!defaults.selection) return { defaults, availability: { status: "unset" }, lastUsed };
   try {
     await validateSelection(defaults.selection);
-    return { defaults, availability: { status: "available" } };
+    return { defaults, availability: { status: "available" }, lastUsed };
   } catch (error) {
     return {
       defaults,
@@ -63,6 +92,7 @@ export async function getChatDefaults(): Promise<ChatDefaultsResponse> {
         status: "unavailable",
         reason: error instanceof Error ? error.message : "默认模型已不可用，请重新选择。",
       },
+      lastUsed,
     };
   }
 }
@@ -103,8 +133,9 @@ export async function saveChatDefaults(input: unknown): Promise<ChatDefaultsResp
 /** Copy once at thread creation; later global edits never rewrite saved threads. */
 export function newThreadSettingsSnapshot() {
   const defaults = readChatDefaults();
+  const selection = defaults.selection ?? readLastUsedSelection();
   return {
-    settings: { ...UNSELECTED_THREAD_SETTINGS, ...defaults.selection },
+    settings: { ...UNSELECTED_THREAD_SETTINGS, ...selection },
     defaultsRevision: defaults.revision,
   };
 }

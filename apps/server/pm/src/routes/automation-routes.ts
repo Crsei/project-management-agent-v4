@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { createAutomationService, automationCursorSchema } from '../../../../packages/application/src/automation.ts';
-import { automationCreateSchema, automationRevisionSchema, automationStatusSchema, automationTestSchema, automationUpdateSchema } from '../../../../packages/contracts/src/automation.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { createAutomationService, automationCursorSchema } from '../../../../../packages/application/src/automation.ts';
+import { automationCreateSchema, automationRevisionSchema, automationStatusSchema, automationTestSchema, automationUpdateSchema } from '../../../../../packages/contracts/src/automation.ts';
 
 export function registerAutomationRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; core: NotificationCorePort }): void {
   const service = createAutomationService(options);

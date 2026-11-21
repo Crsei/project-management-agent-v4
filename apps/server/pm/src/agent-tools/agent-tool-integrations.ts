@@ -1,21 +1,21 @@
 import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { z } from 'zod';
-import { DomainError, type Actor, type Command, type CommandReceipt } from '../../../../packages/domain/src/core.ts';
-import { IntegrationsToolInputSchemas, type IntegrationsToolName } from '../../../../packages/application/src/agent-tool-integrations.ts';
-import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext, type AgentChatToolName } from '../../../../packages/application/src/agent-chat-tools.ts';
-import { getMembership } from '../../../../packages/application/src/access.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import type { AutomationIntegrationsService } from '../../../../packages/application/src/automation-integrations.ts';
-import type { AutomationEventsService } from '../../../../packages/application/src/automation-events.ts';
-import type { AutomationIntegrationReceiptProof } from '../../../../packages/application/src/automation-integrations-store.ts';
-import { readWebhooks, readWebhookDeliveries, readWebhookDelivery } from '../../../../packages/application/src/webhooks.ts';
-import { listImBindings, revokeImBinding, setImNotification } from '../../../../packages/application/src/im-gateway.ts';
-import type { WebhookConfig } from '../../../../packages/infrastructure/src/webhook-config.ts';
-import type { ImConnectivity } from '../../../../packages/contracts/src/im-gateway.ts';
-import type { AutomationIntegrationReceipt } from '../../../../packages/contracts/src/automation-integrations.ts';
-import { IntegrationsToolResultSchema, integrationConnectionMetadataSchema, integrationEventEndpointMetadataSchema, integrationsToolRecoveryIdentitySchema, integrationWebhookActionResultSchema, type IntegrationsToolResult, type IntegrationsToolRecoveryIdentity } from '../../../../packages/agent-contracts/src/pm-tool-integrations.ts';
-import type { AgentChatToolReceipt } from '../../../../packages/agent-contracts/src/pm-tool-shared.ts';
+import { DomainError, type Actor, type Command, type CommandReceipt } from '../../../../../packages/domain/src/core.ts';
+import { IntegrationsToolInputSchemas, type IntegrationsToolName } from '../../../../../packages/application/src/agent-tool-integrations.ts';
+import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext, type AgentChatToolName } from '../../../../../packages/application/src/agent-chat-tools.ts';
+import { getMembership } from '../../../../../packages/application/src/access.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import type { AutomationIntegrationsService } from '../../../../../packages/application/src/automation-integrations.ts';
+import type { AutomationEventsService } from '../../../../../packages/application/src/automation-events.ts';
+import type { AutomationIntegrationReceiptProof } from '../../../../../packages/application/src/automation-integrations-store.ts';
+import { readWebhooks, readWebhookDeliveries, readWebhookDelivery } from '../../../../../packages/application/src/webhooks.ts';
+import { listImBindings, revokeImBinding, setImNotification } from '../../../../../packages/application/src/im-gateway.ts';
+import type { WebhookConfig } from '../../../../../packages/infrastructure/src/webhook-config.ts';
+import type { ImConnectivity } from '../../../../../packages/contracts/src/im-gateway.ts';
+import type { AutomationIntegrationReceipt } from '../../../../../packages/contracts/src/automation-integrations.ts';
+import { IntegrationsToolResultSchema, integrationConnectionMetadataSchema, integrationEventEndpointMetadataSchema, integrationsToolRecoveryIdentitySchema, integrationWebhookActionResultSchema, type IntegrationsToolResult, type IntegrationsToolRecoveryIdentity } from '../../../../../packages/agent-contracts/src/pm-tool-integrations.ts';
+import type { AgentChatToolReceipt } from '../../../../../packages/agent-contracts/src/pm-tool-shared.ts';
 import type { AgentChatToolFamily, AgentToolRecoveryIdentity } from './agent-chat-tools.ts';
 
 export type IntegrationsToolDependencies = {

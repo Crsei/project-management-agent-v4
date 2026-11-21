@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "source": {
+    "repository": "https://github.com/pingdotgg/t3code",
+    "commit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+    "path": "apps/web/src/terminal/ghostty",
+    "license": "MIT; Copyright (c) 2026 T3 Tools Inc.",
+    "licenseCopy": "apps/web/public/LICENSE.t3code"
+  },
+  "ghostty": {
+    "repository": "https://github.com/ghostty-org/ghostty",
+    "commit": "9f62873bf195e4d8a762d768a1405a5f2f7b1697",
+    "license": "MIT; Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors",
+    "licenseCopy": "native/libghostty-vt/LICENSE"
+  },
+  "font": {
+    "name": "Symbols Nerd Font Mono",
+    "license": "MIT; Copyright (c) 2014 Ryan L McIntyre",
+    "licenseCopy": "apps/web/src/terminal/ghostty/fonts/LICENSE"
+  },
+  "files": [
+    {
+      "path": "apps/web/src/terminal/ghostty/core.ts",
+      "sourcePath": "core.ts",
+      "sha256": "d16a54dd32bc151c9ca3a0288595651c63dcbcb4243cc15e5160d8384aecbfc5",
+      "bytes": 48272,
+      "sourceSha256": "1ad4ae2850dbe41a0a75671f8786a10f430c32309d62663df21d8b80a5e81c6d",
+      "sourceBytes": 48167
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/renderer.ts",
+      "sourcePath": "renderer.ts",
+      "sha256": "727512f91bd6666a4043132642a1550026162dbfa8957b580fb1172f4a09effc",
+      "bytes": 10734,
+      "sourceSha256": "727512f91bd6666a4043132642a1550026162dbfa8957b580fb1172f4a09effc",
+      "sourceBytes": 10734
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/runtime.ts",
+      "sourcePath": "runtime.ts",
+      "sha256": "390a2f2262fe9224fe23500695af53c690ea2cbbd7ab3dd58fed21c37925712b",
+      "bytes": 8279,
+      "sourceSha256": "390a2f2262fe9224fe23500695af53c690ea2cbbd7ab3dd58fed21c37925712b",
+      "sourceBytes": 8279
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/keyCodes.ts",
+      "sourcePath": "keyCodes.ts",
+      "sha256": "7c336c6265a5c4686f2aded84679ec063f16e5271d32102ee2fa3a2d83bad0db",
+      "bytes": 5582,
+      "sourceSha256": "544d45cb8d786e23d695c923b6fa37db99514d0054f4ee3378c57ae562220b17",
+      "sourceBytes": 5282
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/surface.ts",
+      "sourcePath": "surface.ts",
+      "sha256": "bd5105c06f4f8a388ae1d10664ad8036b9f238af7425fc1a8766eaee9ad19c78",
+      "bytes": 79238,
+      "sourceSha256": "c7c1a39407702e7888c3f2f8746d1aa48927df92a75ec8d6715a6638a2ffa896",
+      "sourceBytes": 79156
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/README.md",
+      "sourcePath": "README.md",
+      "sha256": "a8765641a83e5a64c73c2bc6aa575d18ccb0c3b641280a7c7c44f008345ddc47",
+      "bytes": 1962,
+      "sourceSha256": "e17101835f109339df7b238c2d0e4cb2e502af5807386db6c5dfa12dea06f526",
+      "sourceBytes": 1280
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/fonts/SymbolsNerdFontMono-Regular.woff2",
+      "sourcePath": "fonts/SymbolsNerdFontMono-Regular.woff2",
+      "sha256": "a8e2fc5ae3c2525812151b95da80c5beab0befa84aca84fc33aaed94317502df",
+      "bytes": 1177576,
+      "sourceSha256": "a8e2fc5ae3c2525812151b95da80c5beab0befa84aca84fc33aaed94317502df",
+      "sourceBytes": 1177576
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/vendor/ghostty-vt.wasm",
+      "sourcePath": "vendor/ghostty-vt.wasm",
+      "sha256": "51b016a6aa3c29ead71c7c8acf8c01d43b064bae19957a9c9f9e2bf469267629",
+      "bytes": 630932,
+      "sourceSha256": "51b016a6aa3c29ead71c7c8acf8c01d43b064bae19957a9c9f9e2bf469267629",
+      "sourceBytes": 630932
+    },
+    {
+      "path": "apps/web/src/terminal/ghostty/vendor/ghostty-write-pty.wasm",
+      "sourcePath": "vendor/ghostty-write-pty.wasm",
+      "sha256": "75cb147e98ede3f85f3cd6236a30f6d12565b0b237e1d8db941f5f3e8ad3d903",
+      "bytes": 112,
+      "sourceSha256": "75cb147e98ede3f85f3cd6236a30f6d12565b0b237e1d8db941f5f3e8ad3d903",
+      "sourceBytes": 112
+    },
+    {
+      "path": "apps/web/src/terminal-links.ts",
+      "sourcePath": "terminal-links.ts",
+      "sha256": "e6351f54c861cd36a009d19343282981005b0deb597593a53b110babf7a6a9a2",
+      "bytes": 6242,
+      "sourceSha256": "55239963295062a3b48dfc10eaa7439da24fa2990cfa7c979e5033dc28ec13b8",
+      "sourceBytes": 6154
+    },
+    {
+      "path": "apps/web/src/lib/platform.ts",
+      "sourcePath": "lib/platform.ts",
+      "sha256": "b9489a22c81fa94f39d79cc6363d61b234409a137c4bcf42bbef2c81303a7e53",
+      "bytes": 193
+    }
+  ]
+}

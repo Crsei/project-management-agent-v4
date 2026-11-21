@@ -11,6 +11,7 @@ import { publicExperimentConfiguration, readExperiment, readRunResult, verifiedS
 import type { ExperimentDesign, ExperimentSummary } from './reports/index.ts';
 import { prepareReportDirectory, readReportJson, writeReportFile } from './reports/files.ts';
 import { runTask } from './runners/index.ts';
+import type { RunTaskOptions } from './runners/index.ts';
 import { TraceRedactor } from './runners/telemetry.ts';
 import { ArmSchema, ControlTransportSchema } from './schemas/types.ts';
 import type { Arm, RunResult } from './schemas/types.ts';
@@ -22,9 +23,14 @@ import { runToolsStudy } from './runners/tools-study.ts';
 import { readStudyResults, writeStudyReport } from './reports/tools-study.ts';
 import { createStudyReportFixture } from './reports/tools-study-fixture.ts';
 import { readNativeAccountCatalog } from './isolation/native-account.ts';
+import { runEvaluationCli } from './evaluation/cli.ts';
+import { safeEvidenceJson } from './evaluation/archive.ts';
+import { DatasetRunSelectionSchema } from './evaluation/dataset-admission.ts';
+import { CaptureKeyOptionsSchema } from './evaluation/capture.ts';
+import { RunExperimentSelectionSchema, RunSuiteAdmissionPlanSchema, validateRunSuiteAdmissionCoverage, type RunSuiteAdmission } from './evaluation/run-admission.ts';
 
 const benchmarkRoot = resolve(repositoryRoot, 'benchmarks/dovspace');
-const stringOptions = ['config', 'task', 'arm', 'tasks', 'arms', 'repeat', 'experiment', 'output-root', 'runtime-root', 'output', 'run-id', 'control-transport', 'model', 'provider', 'provider-api', 'omp-model', 'provider-endpoint', 'provider-binary', 'model-options', 'api-key-env', 'host-auth-boundary', 'omp-sdk-root', 'omp-bun', 'omp-auth-store', 'max-cost-usd', 'max-duration-minutes', 'max-model-calls', 'max-tool-calls', 'price-input-per-million', 'price-output-per-million', 'price-cache-read-per-million', 'price-cache-write-per-million', 'price-version', 'price-basis', 'max-output-tokens', 'agent-image', 'code-image', 'postgres-image', 'manifest', 'baseline-source', 'candidate-source', 'study-results'] as const;
+const stringOptions = ['config', 'task', 'arm', 'tasks', 'arms', 'repeat', 'experiment', 'output-root', 'runtime-root', 'output', 'run-id', 'control-transport', 'model', 'provider', 'provider-api', 'omp-model', 'provider-endpoint', 'provider-binary', 'model-options', 'api-key-env', 'host-auth-boundary', 'omp-sdk-root', 'omp-bun', 'omp-auth-store', 'max-cost-usd', 'max-duration-minutes', 'max-model-calls', 'max-tool-calls', 'price-input-per-million', 'price-output-per-million', 'price-cache-read-per-million', 'price-cache-write-per-million', 'price-version', 'price-basis', 'max-output-tokens', 'agent-image', 'code-image', 'postgres-image', 'manifest', 'baseline-source', 'candidate-source', 'study-results', 'calibration', 'dataset-selection', 'capture-key', 'experiment-ledger', 'experiment-cell', 'admission-plan'] as const;
 type StringOption = (typeof stringOptions)[number];
 export interface CliArguments {
   command: 'help' | 'list' | 'fixtures' | 'run' | 'smoke' | 'compare' | 'report' | 'calibrate' | 'native-account-catalog' | 'native-account-list' | 'tools-study-prepare' | 'tools-study-validate' | 'tools-study' | 'tools-study-report' | 'tools-study-fixture';
@@ -45,6 +51,7 @@ Commands (pnpm --dir benchmarks/dovspace <script> ...):
   bench:report --experiment ab-01            Regenerate an experiment without inference
   bench:report --run-result outputs/RUN/result.json [--run-result ...] --experiment imported
   bench:calibrate [--output outputs/calibration/NAME]  Explicit independent-grader calibration
+  evaluation --help                       Offline archive/regrade, datasets, feedback and release evidence
   tools-study-prepare --manifest TEMPLATE.json --baseline-source DIR --candidate-source DIR --output outputs/STUDY/manifest.json
   tools-study-validate --manifest PATH      Rehash actual independent sources; no inference
   tools-study --manifest PATH --api-key-env NAME [--output outputs/studies/ID]
@@ -81,6 +88,11 @@ Real-model arguments:
   --config PATH                            Nonsecret JSON config; no dotenv or inherited provider home
   --agent-image IMAGE --code-image IMAGE --postgres-image IMAGE --provider-binary /container/path
   --runtime-root PATH --output-root PATH    Absolute/relative paths under benchmarks/dovspace
+  --calibration FILE                       Exact current evaluator calibration, validated before dispatch
+  --dataset-selection FILE --capture-key FILE --experiment-ledger DIR --experiment-cell ID
+      run only: explicit registered dataset/member, host key and preregistered cell; requires calibration.
+  --admission-plan FILE                    smoke/compare: exact task/arm/1-based repetition map;
+      requires calibration and unique registered ledger cells. Private host keys never enter Agent mounts.
 
 Task budgets are ceilings; CLI/config caps can only lower them. Missing endpoint/key/pricing is
 recorded as an explicit failed admitted run, never calibration, fallback inference or success.
@@ -139,6 +151,14 @@ export function parseCliArgs(argv: string[]): CliArguments {
   if (options['run-id'] && command !== 'run') throw new Error('--run-id is only valid with run');
   if (options['run-result'] && command !== 'report' && command !== 'tools-study-report') throw new Error('--run-result is only valid with report or tools-study-report');
   if (options.repeat && !['fixtures', 'smoke', 'compare'].includes(command)) throw new Error('--repeat is only valid with fixtures reset, smoke or compare');
+  if (options.calibration !== undefined && !['run', 'smoke', 'compare'].includes(command)) throw new Error('--calibration is only valid with run, smoke or compare');
+  const capturedFlags = ['dataset-selection', 'capture-key', 'experiment-ledger', 'experiment-cell'] as const;
+  if (capturedFlags.some(name => options[name] !== undefined)) {
+    if (command !== 'run') throw new Error('Single-cell capture flags are only valid with run; suites require --admission-plan');
+    if (!options.calibration || capturedFlags.some(name => !options[name])) throw new Error('Captured runs require --calibration and all dataset/key/ledger/cell flags');
+  }
+  if (options['admission-plan'] !== undefined && (!['smoke', 'compare'].includes(command) || !options.calibration)) throw new Error('--admission-plan requires smoke/compare with --calibration');
+  if ([...capturedFlags, 'calibration', 'admission-plan'].some(name => options[name as StringOption] !== undefined && !options[name as StringOption]?.trim())) throw new Error('Evaluation capture options cannot be empty');
   const taskIds = command === 'run' ? [getTaskDefinition(options.task!).id] : command === 'smoke' ? [...SMOKE_TASK_IDS] : command === 'compare'
     ? options.tasks === 'all' ? [...TASK_IDS] : !options.tasks || options.tasks === 'smoke' ? [...SMOKE_TASK_IDS] : selection(options.tasks, '--tasks').map((id) => getTaskDefinition(id).id)
     : [];
@@ -282,11 +302,25 @@ async function runModels(args: CliArguments): Promise<number> {
   }
 }
 
+type RunEvidenceOptions = Pick<RunTaskOptions, 'calibrationPath' | 'datasetSelection' | 'captureKey' | 'experiment'>;
+async function evidenceOptionsForRun(args: CliArguments): Promise<{ single: RunEvidenceOptions; plan: RunSuiteAdmission[] }> {
+  const single: RunEvidenceOptions = args.options.calibration ? { calibrationPath: resolve(args.options.calibration) } : {};
+  if (args.options['dataset-selection']) {
+    single.datasetSelection = DatasetRunSelectionSchema.parse(await safeEvidenceJson(resolve(args.options['dataset-selection'])));
+    single.captureKey = CaptureKeyOptionsSchema.parse(await safeEvidenceJson(resolve(args.options['capture-key']!)));
+    single.experiment = RunExperimentSelectionSchema.parse({ ledgerRoot: resolve(args.options['experiment-ledger']!), cellId: args.options['experiment-cell']! });
+  }
+  const plan = args.options['admission-plan'] ? RunSuiteAdmissionPlanSchema.parse(await safeEvidenceJson(resolve(args.options['admission-plan']))) : [];
+  if (args.options['admission-plan']) validateRunSuiteAdmissionCoverage(plan, args.taskIds, args.arms, args.repetitions);
+  return { single, plan };
+}
+
 async function executeModels(args: CliArguments, signal: AbortSignal): Promise<number> {
+  const evidence = await evidenceOptionsForRun(args);
   const config = await configForCommand(args);
   await prepareReportDirectory(config.outputsRoot);
   if (args.command === 'run') {
-    const options = { taskId: args.taskIds[0]!, arm: args.arms[0]!, config, signal, ...(args.options['run-id'] ? { runId: args.options['run-id'] } : {}) };
+    const options = { taskId: args.taskIds[0]!, arm: args.arms[0]!, config, signal, ...evidence.single, ...(args.options['run-id'] ? { runId: args.options['run-id'] } : {}) };
     const result = await runTask(options);
     console.log(JSON.stringify({ runId: result.runId, success: verifiedSuccess(result), failure: result.failure?.category ?? null, report: resolve(config.outputsRoot, result.runId, 'report.md') }));
     return verifiedSuccess(result) ? 0 : 1;
@@ -307,7 +341,8 @@ async function executeModels(args: CliArguments, signal: AbortSignal): Promise<n
         for (let armIndex = 0; armIndex < args.arms.length; armIndex += 1) {
           if (signal.aborted) break suite;
           const arm = args.arms[(offset + armIndex) % args.arms.length]!;
-          const result = await runTask({ taskId: args.taskIds[taskIndex]!, arm, config, signal });
+          const planned = evidence.plan.find(item => item.taskId === args.taskIds[taskIndex]! && item.arm === arm && item.repetition === repeat + 1);
+          const result = await runTask({ taskId: args.taskIds[taskIndex]!, arm, config, signal, ...evidence.single, ...(planned ? { datasetSelection: planned.datasetSelection, captureKey: planned.captureKey, experiment: planned.experiment } : {}) });
           runs.push(result);
           resultPaths[result.runId] = resolve(config.outputsRoot, result.runId, 'result.json');
           if (signal.aborted || result.failure?.category === 'interrupted') break suite;
@@ -426,6 +461,9 @@ async function toolsStudyCommand(args: CliArguments): Promise<number> {
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   let redactor = new TraceRedactor();
   try {
+    if (argv[0] === 'evaluation') {
+      return await runEvaluationCli(argv.slice(1));
+    }
     const args = parseCliArgs(argv);
     if (args.options['api-key-env']) redactor = new TraceRedactor([process.env[args.options['api-key-env']] ?? '']);
     switch (args.command) {

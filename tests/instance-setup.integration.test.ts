@@ -84,9 +84,11 @@ describe('first-use setup: real PostgreSQL and HTTP', { skip: !mailTestDatabaseU
     assert.ok(!JSON.stringify(response.body).includes(candidate)); assert.ok(!JSON.stringify(response.body).includes(password));
     const setCookie = response.headers.get('set-cookie')!;
     for (const expected of ['pm_v4_session=', 'Path=/', 'HttpOnly', 'SameSite=Strict', 'Secure', 'Expires=']) assert.ok(setCookie.includes(expected));
+    assert.ok(Math.abs(Date.parse(response.body.expiresAt) - (Date.now() + 30 * 86_400_000)) < 120_000);
     const cookie = setCookie.split(';')[0]!;
     const current = await f.request('/api/v1/auth/me', undefined, { cookie });
     assert.equal(current.status, 200); assert.deepEqual(current.body.actor, response.body.actor);
+    assert.ok(Math.abs(Date.parse(/Expires=([^;]+)/.exec(current.headers.get('set-cookie') ?? '')?.[1] ?? '') - Date.parse(response.body.expiresAt)) < 2_000);
     const workspaces = await f.request('/api/v1/workspaces', undefined, { cookie });
     assert.equal(workspaces.status, 200); assert.equal(workspaces.body.items.length, 1);
     assert.equal(workspaces.body.items[0].id, response.body.workspaceId);
@@ -108,6 +110,14 @@ describe('first-use setup: real PostgreSQL and HTTP', { skip: !mailTestDatabaseU
     await f.pool.query('UPDATE memberships SET revoked_at=clock_timestamp()');
     assert.deepEqual((await f.request('/api/v1/workspaces', undefined, { cookie })).body.items, []);
     assert.equal((await f.request(`/api/v1/workspaces/${response.body.workspaceId}/members`, undefined, { cookie })).status, 404);
+    // Browser sessions persist for 30 days and roll forward only near expiry.
+    await f.pool.query("UPDATE sessions SET expires_at=now()+interval '20 days'");
+    const refreshed = await f.request('/api/v1/auth/me', undefined, { cookie });
+    assert.equal(refreshed.status, 200);
+    assert.ok(Date.parse(/Expires=([^;]+)/.exec(refreshed.headers.get('set-cookie') ?? '')?.[1] ?? '') > Date.now() + 29 * 86_400_000);
+    assert.ok((await f.pool.query('SELECT expires_at FROM sessions')).rows[0].expires_at.getTime() > Date.now() + 29 * 86_400_000);
+    await f.pool.query("UPDATE sessions SET expires_at=now()-interval '1 second'");
+    assert.equal((await f.request('/api/v1/auth/me', undefined, { cookie })).status, 401);
   });
 
   it('rejects wrong tokens, short passwords, extra fields and secret-bearing queries before any identity write', { timeout: mailFixtureCaseTimeout }, async t => {

@@ -3,8 +3,18 @@
   overflow: hidden;
 }
 
-.dock[data-expanded="true"] {
+.dock[data-fullscreen="true"] {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   border-left: 1px solid var(--border);
+}
+
+.dock[data-fullscreen="true"] > header {
+  padding-left: 48px;
 }
 
 .title {
@@ -35,6 +45,11 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.chatContent {
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .dock[data-compact="true"] {

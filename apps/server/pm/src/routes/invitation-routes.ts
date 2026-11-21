@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError } from '../../../../packages/domain/src/core.ts';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { acceptMemberInvitation, getMemberInvitationAcceptance, inspectMemberInvitation } from '../../../../packages/application/src/invitation-acceptance.ts';
-import { listMemberInvitations } from '../../../../packages/application/src/invitations.ts';
-import type { InvitationProjectValidator } from '../../../../packages/application/src/invitations.ts';
-import type { InvitationMailConfig } from '../../../../packages/infrastructure/src/invitation-mail.ts';
+import { DomainError } from '../../../../../packages/domain/src/core.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { acceptMemberInvitation, getMemberInvitationAcceptance, inspectMemberInvitation } from '../../../../../packages/application/src/invitation-acceptance.ts';
+import { listMemberInvitations } from '../../../../../packages/application/src/invitations.ts';
+import type { InvitationProjectValidator } from '../../../../../packages/application/src/invitations.ts';
+import type { InvitationMailConfig } from '../../../../../packages/infrastructure/src/invitation-mail.ts';
 
 export type InvitationRouteOptions = {
   database: () => Pool;

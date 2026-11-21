@@ -9,9 +9,9 @@ import { DomainError, type Capability } from '../../../../packages/domain/src/co
 import { Workspace, WorkspaceError } from '../../../../packages/pm-core/index.ts';
 import type { AgentChatToolResult } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { nativeCommandId } from '../src/core-routes.ts';
+import { nativeCommandId } from '../src/routes/core-routes.ts';
 import { CoreCommandJournal } from '../src/core-journal.ts';
-import { createAgentChatTools, type AgentChatToolContext } from '../src/agent-chat-tools.ts';
+import { createAgentChatTools, type AgentChatToolContext } from '../src/agent-tools/agent-chat-tools.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Fixture' };

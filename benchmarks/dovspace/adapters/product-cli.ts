@@ -172,11 +172,10 @@ export class ProductCliAdapter implements BenchAgentAdapter {
         for (const session of this.sessions.values()) {
           try {
             if (!session.generationId && session.submissionAttempted && this.cli) {
-              // A lost submit response is reconciled by the ORIGINAL input, never by another send.
-              const listed = await this.command(['agent', 'generation', 'list', session.id, '--pm-context', 'true'], { purpose: 'observation' });
-              const matches = Array.isArray(listed.generations) ? listed.generations.map(object).filter(generation => generation?.inputMessageId === session.messageId && generation.threadId === session.id) : [];
-              if (matches.length === 1 && typeof matches[0]!.id === 'string') session.generationId = matches[0]!.id;
-              else if (this.failed) throw new AdapterError('infrastructure', 'Unknown submit could not be reconciled to one original generation; fixture shutdown must terminate it.', 'unknown_acceptance');
+              // Reconcile the ORIGINAL submission key without projecting retained content or resending.
+              const submission = await this.command(['agent', 'message', 'submission', session.id, session.idempotencyKey], { purpose: 'observation' });
+              if (submission.status === 'accepted' && typeof submission.generationId === 'string') session.generationId = submission.generationId;
+              else if (this.failed) throw new AdapterError('infrastructure', 'Unknown submit could not be reconciled to its original generation; fixture shutdown must terminate it.', 'unknown_acceptance');
             }
             if (session.generationId && !session.interrupted) {
               const generation = await this.generation(session);
@@ -230,7 +229,7 @@ export class ProductCliAdapter implements BenchAgentAdapter {
     return result.records[0]!;
   }
   private async generation(session: Session): Promise<Json> {
-    const response = await this.command(['agent', 'generation', 'status', session.id, '--generation', session.generationId, '--pm-context', 'true'], { purpose: 'observation', timeoutMs: 10_000 });
+    const response = await this.command(['agent', 'generation', 'lifecycle', session.id, '--generation', session.generationId], { purpose: 'observation', timeoutMs: 10_000 });
     this.observation(session, 'generation', response);
     const generation = object(response.generation);
     if (!generation || generation.id !== session.generationId || generation.threadId !== session.id || generation.inputMessageId !== undefined && generation.inputMessageId !== session.messageId) throw new AdapterError('infrastructure', 'Original Session/generation/input projection mismatch; never selecting a replacement.', 'cli_identity');
@@ -299,7 +298,7 @@ export class ProductCliAdapter implements BenchAgentAdapter {
         session.stopIssued = true;
         // A stop response may itself be unknown. Only read the original generation afterwards.
         try {
-          const stopped = await this.command(['agent', 'generation', 'stop', session.id, '--generation', session.generationId, '--message', session.messageId, '--pm-context', 'true'], { timeoutMs: 10_000 });
+          const stopped = await this.command(['agent', 'generation', 'stop', session.id, '--generation', session.generationId, '--message', session.messageId], { timeoutMs: 10_000 });
           this.observation(session, 'generation', stopped);
         } catch (error) {
           this.observation(session, 'generation', null, error);

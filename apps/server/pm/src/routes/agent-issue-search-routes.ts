@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { assertProjectScope, getMembership } from '../../../../packages/application/src/access.ts';
-import { workflowFor, type Entity, type FileRecord } from '../../../../packages/pm-schema/index.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { assertProjectScope, getMembership } from '../../../../../packages/application/src/access.ts';
+import { workflowFor, type Entity, type FileRecord } from '../../../../../packages/pm-schema/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
 
 const workspaceParams = z.strictObject({ workspaceId: z.uuid().toLowerCase() });

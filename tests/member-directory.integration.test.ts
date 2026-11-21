@@ -46,6 +46,7 @@ describe('member directory: explicit authority, safe personal data and existing 
     assert.deepEqual(self.members.map(member => member.userId), [reader.user.id]);
     assert.equal(self.members[0]!.email, reader.user.email);
     assert.equal(self.capabilities.canManageMembers, false);
+    assert.equal(self.capabilities.canInviteMembers, false);
     assert.equal(self.capabilities.canEditSelfProfile, false);
     assert.equal(self.capabilities.twoFactor.supported, false);
     assert.equal(self.members[0]!.twoFactorEnabled, null);
@@ -53,6 +54,7 @@ describe('member directory: explicit authority, safe personal data and existing 
     await grant(manager.user.id, ['access.manage'], null);
     const all = await directory(manager.cookie);
     assert.equal(all.capabilities.canManageMembers, true);
+    assert.equal(all.capabilities.canInviteMembers, true);
     assert.ok(all.members.some(member => member.userId === fixture.owner.id));
     const scoped = await project('Access-only manager can grant existing scope');
     const target = await fixture.member('Role grant without domain read');

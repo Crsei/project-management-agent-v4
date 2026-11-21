@@ -119,11 +119,11 @@ export async function scanOriginalTranscripts(context: UsageReadContext, input: 
     result.message = "Transcript source identity changed while scanning; mixed-source usage was withheld.";
   }
   result.distinctSessions = sessions.size;
-  const cacheLoss = cache.hasLostCoverage(context.sinceMs);
+  const cacheLoss = cache.hasLostCoverage(context.sinceMs, provider, input.binding);
   if (cacheLoss) result.message = [result.message, "Retained usage cache was unavailable, legacy or corrupt; native files were reread, but removed historical files cannot be reconstructed."].filter(Boolean).join(" ");
-  if (failed || bounded || result.malformedRecords || cacheLoss) {
+  if (failed || bounded || result.malformedRecords) {
     result.status = "partial";
     result.message = [result.message, `Transcript scan incomplete: ${result.malformedRecords} malformed or incomplete records, ${failed} unreadable, removed or oversized files${bounded ? "; scan limit reached" : ""}.`].filter(Boolean).join(" ");
-  }
+  } else if (cacheLoss) result.status = "partial";
   return { source: result, records };
 }

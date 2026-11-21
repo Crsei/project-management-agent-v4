@@ -3,20 +3,21 @@ import { ArrowLeft, Check, FlaskConical, MessageSquare, Save, Sparkles } from "l
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
 import type { Entity } from "../../../../../../../../packages/contracts/src/client";
-import { studioActionRequiresAgentWorkspace, studioConfigSchema, studioDefinitionSchema, studioExecutionSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, studioProviderOptionsSchema, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution, type StudioValidation } from "../../../../../../../../packages/contracts/src/automation-studio";
+import { studioActionRequiresAgentWorkspace, studioConfigSchema, studioDefinitionSchema, studioExecutionSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, studioProviderOptionsSchema, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution } from "../../../../../../../../packages/contracts/src/automation-studio";
 import { StudioApiError, StudioClient } from "../../../../../../../../packages/contracts/src/automation-studio-client";
 import { AutomationTransferClient } from "../../../../../../../../packages/contracts/src/automation-transfer-client";
 import { AUTOMATION_TRANSFER_LIMITS, type AutomationBundleUpload } from "../../../../../../../../packages/contracts/src/automation-transfer";
-import { automationCatalogById, automationCatalogSource, automationTemplateLaunchPrompt, automationTemplateTags } from "../../../../../../../../packages/automation-resources/catalog";
-import type { AutomationCatalogField } from "../../../../../../../../packages/contracts/src/automation-catalog";
+import { automationCatalogById, automationTemplateLaunchPrompt, automationTemplateTags } from "../../../../../../../../packages/automation-resources/catalog";
 import { automationIntegrationPlugin } from "../../../../../../../../packages/contracts/src/automation-integrations";
 import { validateNativeTemplateArguments } from "../../../../../../../../packages/automation-resources/native-template-arguments";
-import { isPmAutomationTemplateId } from "../../../../../../../../packages/contracts/src/automation-pm";
+import { isPmAutomationTemplateId, pmAutomationTemplateRequiresProvider, pmAutomationTemplateVersion } from "../../../../../../../../packages/contracts/src/automation-pm";
 import { useAgentText } from "../../i18n";
 import { studioPrerequisites, useStudioConnections } from "./studio-setup-dependencies";
-import { applyStudioAssistantPatch, clearStudioRecovery, cronEditorClock, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, localTimeInZone, normalizeStudioTemplateValues, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioFieldIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, templateDefaults, type StudioDraftState, type StudioFormValues, type StudioFrequency, type StudioPending } from "./studio-setup";
+import { applyStudioAssistantPatch, clearStudioRecovery, cronEditorClock, cronFor, emptyStudioConfig, frequencyOf, localTimeInZone, normalizeStudioTemplateValues, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioFieldIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, templateDefaults, type StudioDraftState, type StudioFormValues, type StudioFrequency, type StudioPending } from "./studio-setup";
 import { StudioSetupField as Field } from "./studio-setup-field";
 import { StudioSetupAction } from "./studio-setup-action";
+import { StudioExecutionAgent } from "./studio-execution-agent";
+import { StudioTrigger } from "./studio-trigger";
 import { StudioPmParameters } from "./studio-pm-parameters";
 import styles from "./studio-setup.module.css";
 import { RadixSelect } from "@/components/ui/radix-select"
@@ -24,14 +25,12 @@ import { ExecutionSelectionField } from "../execution-workspace";
 
 export type StudioAssistRequest = { prompt: string; projectId: string; definitionId?: string; draftId?: string; templateId?: string; config?: StudioConfig; onApply?: (patch: Partial<StudioConfig>) => void };
 export type StudioAssistCallback = (request: StudioAssistRequest) => void | Promise<void>;
-type Props = { workspaceId: string; actorId: string; membershipVersion: number; projectId?: string; draftId?: string; projects: Entity[]; definition?: StudioDefinition | null; templateId?: string | null; defaultQuickAccess?: boolean; writable: boolean; onSaved: (definition: StudioDefinition) => void; onCancel: () => void; onDirtyChange?: (dirty: boolean) => void; onExecution?: (execution: StudioExecution) => void; onAssist?: StudioAssistCallback; onIntegrations?: () => void; onAccessLost?: () => void };
+type Props = { workspaceId: string; actorId: string; membershipVersion: number; projectId?: string; draftId?: string; projects: Entity[]; definition?: StudioDefinition | null; templateId?: string | null; defaultQuickAccess?: boolean; writable: boolean; onSaved: (definition: StudioDefinition) => void; onCancel: () => void; onDirtyChange?: (dirty: boolean) => void; onExecution?: (execution: StudioExecution) => void; onAssist?: StudioAssistCallback; onAccessLost?: () => void };
 export function StudioEditor(props: Props) {
-  const { workspaceId, actorId, membershipVersion, projects, writable, onSaved, onCancel, onDirtyChange, onExecution, onAssist, onIntegrations } = props;
+  const { workspaceId, actorId, membershipVersion, projects, writable, onSaved, onCancel, onDirtyChange, onExecution, onAssist } = props;
   const t = useAgentText();
   const catalogTemplate = automationCatalogById.get(props.templateId ?? props.definition?.config.templateId ?? (props.definition?.config.action.kind === "template" ? props.definition.config.action.templateId : ""));
-  // Assisted/launch wizards create configurations; saved definitions edit their actual config without replaying wizard defaults.
-  const template = props.definition && catalogTemplate?.setup?.mode !== "direct" ? undefined : catalogTemplate;
-  const mode = template?.setup?.mode ?? (template ? "launch" : "direct");
+  const template = catalogTemplate;
   const editorId = props.definition?.id ?? props.draftId ?? `new:${template?.id ?? "blank"}:${props.projectId ?? ""}`;
   const key = studioDraftKey(actorId, workspaceId, membershipVersion, editorId);
   const api = useMemo(() => new StudioClient(workspaceId), [workspaceId]);
@@ -67,12 +66,10 @@ export function StudioEditor(props: Props) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [issues, setIssues] = useState<Record<string, string>>({});
-  const [validation, setValidation] = useState<StudioValidation | null>(null);
   const [latest, setLatest] = useState<StudioDefinition | null>(null);
   const [capabilities, setCapabilities] = useState<StudioCapabilities | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
   const [capabilityVersion, setCapabilityVersion] = useState(0);
-  const [stage, setStage] = useState<"prerequisites" | "form" | "review">(template && !props.definition ? "prerequisites" : "form");
   const [frequency, setFrequency] = useState<StudioFrequency>(() => frequencyOf(initial.state.config.trigger));
   const initialTrigger = initial.state.config.trigger;
   const [time, setTime] = useState(initial.state.recovery?.time ?? (initialTrigger.kind === "cron" ? cronEditorClock(initialTrigger.expression).time : "09:00"));
@@ -94,7 +91,7 @@ export function StudioEditor(props: Props) {
   const executionIssue = studioExecutionEnvironmentIssue(config.action, requiresReselection);
   const executionReady = !executionIssue && (!config.action.executionSelection?.agentWorkspaceId || executionAvailable);
   const executionWarning = executionIssue
-    ? t("请选择一个独立 Agent Workspace 文件夹。旧目录配置不会自动转换；脚本及仓库模板不能使用仅对话临时目录。文件夹与下方 PM 业务项目相互独立。", "Select an independent Agent Workspace folder. Old directory configuration is never converted automatically; scripts and repository templates cannot use chat-only scratch. The folder is independent of the PM business project.")
+    ? t("请选择一个独立 Agent Workspace 文件夹。旧目录配置不会自动转换；脚本不能使用仅对话临时目录。文件夹与下方 PM 业务项目相互独立。", "Select an independent Agent Workspace folder. Old directory configuration is never converted automatically; scripts cannot use chat-only scratch. The folder is independent of the PM business project.")
     : !executionReady ? t("所选文件夹不可用、已关闭或版本过期，请刷新目录并明确重新选择；不会自动替换执行目录。", "The selected folder is unavailable, closed, or stale. Refresh and explicitly reselect it; the execution directory is never replaced automatically.") : undefined;
   const saved = state.definition;
   const scopeMismatch = Boolean(props.projectId && config.projectId !== props.projectId);
@@ -174,7 +171,7 @@ export function StudioEditor(props: Props) {
   }
   function loadServerVersion(definition: StudioDefinition) {
     if (!persist({ ...live.current, config: definition.config, baseline: definition.config, definition, values: { ...templateDefaults(template), ...(definition.config.action.kind === "template" ? definition.config.action.arguments as StudioFormValues : {}), ...definition.config.templateInputs as StudioFormValues }, touched: [] })) return;
-    syncControls(definition.config); setLatest(null); setIssues({}); setValidation(null);
+    syncControls(definition.config); setLatest(null); setIssues({});
   }
   function applyAssistantPreview() {
     if (!assistantPreview || locked) return;
@@ -183,12 +180,12 @@ export function StudioEditor(props: Props) {
     if (!parsed.success) { setError(parsed.error.message); return; }
     const values = { ...live.current.values, ...(parsed.data.templateInputs as StudioFormValues | undefined), ...(parsed.data.action.kind === "template" ? parsed.data.action.arguments as StudioFormValues : {}) };
     if (!persist({ ...live.current, config: parsed.data, values })) return;
-    syncControls(parsed.data); setAssistantPreview(null); setValidation(null);
+    syncControls(parsed.data); setAssistantPreview(null);
   }
   function change(patch: Partial<StudioConfig>, paths = Object.keys(patch)) {
     if (locked) return;
     const next = { ...live.current, config: { ...live.current.config, ...patch }, touched: [...new Set([...live.current.touched, ...paths])] };
-    setValidation(null); setAssistantPreview(null); setIssues({}); setError(""); setNotice("");
+    setAssistantPreview(null); setIssues({}); setError(""); setNotice("");
     live.current = next; setState(next);
   }
   function actionChange(patch: Partial<StudioConfig["action"]>) { change({ action: { ...config.action, ...patch } as StudioConfig["action"] }, Object.keys(patch).map(path => `action.${path}`)); }
@@ -204,7 +201,7 @@ export function StudioEditor(props: Props) {
     if (value === undefined) delete values[name]; else values[name] = value;
     const current = live.current.config.action;
     const next = { ...live.current, config: current.kind === "template" ? { ...live.current.config, action: { ...current, arguments: values } } : live.current.config, values, touched: [...new Set([...live.current.touched, `template.${name}`, ...(current.kind === "template" ? [`action.arguments.${name}`] : [])])] };
-    live.current = next; setState(next); setValidation(null); setIssues({}); setError("");
+    live.current = next; setState(next); setIssues({}); setError("");
   }
   function chooseFrequency(value: StudioFrequency) {
     if (value === "event" && template?.setup?.native && !template.setup.form.triggers?.event) { setError(t("此模板未声明内部事件，请使用手动或既有后台日程。", "This template declares no internal event. Use manual dispatch or the existing background schedule.")); return; }
@@ -215,7 +212,7 @@ export function StudioEditor(props: Props) {
       const next = { kind: "event" as const, source: String(fields?.source?.default ?? "github"), key: String(fields?.on?.default ?? ""), filter: {} };
       change({ trigger: next }); setFilterText("{}");
     }
-    else if (value === "once") { if (once) { try { change({ trigger: { kind: "once", at: onceInZone(once, "UTC"), timezone: "UTC" } }); } catch (reason) { setError(String(reason)); } } else change({ trigger: { kind: "once", at: new Date().toISOString(), timezone: "UTC" } }); }
+    else if (value === "once") { if (once) { try { change({ trigger: { kind: "once", at: onceInZone(once, "UTC"), timezone: "UTC" } }); } catch (reason) { setError(String(reason)); } } else { const at = new Date().toISOString(); setOnce(localTimeInZone(at, "UTC")); change({ trigger: { kind: "once", at, timezone: "UTC" } }); } }
     else change({ trigger: { kind: "cron", expression: cronFor(value, time, weekday, config.trigger.kind === "cron" ? config.trigger.expression : "0 9 * * *"), timezone: "timezone" in config.trigger ? config.trigger.timezone : "UTC" } });
   }
   function preparedConfig(input = live.current.config): StudioConfig | null {
@@ -246,33 +243,12 @@ export function StudioEditor(props: Props) {
     }
     if (live.current.config.action.kind === "template") for (const issue of validateNativeTemplateArguments(live.current.config.action.templateId, values)) fieldIssues[issue.path] = issue.message;
     if (Object.keys(fieldIssues).length) { setIssues(fieldIssues); setError(t("请检查模板字段。", "Check the template fields.")); return null; }
-    if (template?.id === "github-repo-monitor" && state.values.authorization === "anyone" && state.values.workMode === "implement") { setError(t("允许任意用户触发时不能允许推送代码。", "Allowing anyone to trigger cannot be combined with implement/push mode.")); return null; }
     let value = live.current.config;
-    if (template) value = { ...value, templateInputs: { ...values }, templateVersion: template.version ?? automationCatalogSource.extensionsVersion };
-    const touched = new Set(live.current.touched);
+    if (template) value = { ...value, templateInputs: { ...values }, templateVersion: isPmAutomationTemplateId(template.id) ? pmAutomationTemplateVersion : template.version };
     if (value.action.kind === "template") value = { ...value, action: { ...value.action, arguments: { ...values } } };
-    if (template?.setup?.prompt && value.action.kind === "prompt" && !touched.has("action") && !touched.has("action.prompt")) value = { ...value, action: { ...value.action, prompt: String(interpolateStudioTemplate(template.setup.prompt, values)) } };
     value = withTemplatePlugins(value);
-    if (value.trigger.kind === "event" && template?.setup?.filter && (!template.setup.bundle || value.action.kind === "template") && !touched.has("trigger") && !touched.has("trigger.filter")) {
-      const expression = interpolateStudioExpression(template.setup.filter, values);
-      value = { ...value, trigger: { ...value.trigger, filter: expression ? { expression } : {} } };
-      setFilterText(JSON.stringify(value.trigger.kind === "event" ? value.trigger.filter : {}, null, 2));
-    }
     live.current = { ...live.current, config: value, values }; setState(live.current);
-    return mode === "direct" ? preparedConfig(value) : value;
-  }
-  async function review() {
-    if (inFlight.current || locked) return;
-    inFlight.current = true;
-    const value = await prepareTemplateConfig();
-    if (!value) { inFlight.current = false; return; }
-    if (mode !== "direct") { setStage("review"); inFlight.current = false; return; }
-    const parsed = studioConfigSchema.safeParse(value);
-    if (!parsed.success) { setIssues(Object.fromEntries(parsed.error.issues.map(issue => [issue.path.join("."), issue.message]))); setError(t("请补齐配置后再预检。", "Complete the configuration before preflight.")); inFlight.current = false; return; }
-    setBusy(true);
-    try { const result = await api.validate(parsed.data); setValidation(result); setIssues(Object.fromEntries(result.issues.map(issue => [issue.path, issue.message]))); setStage("review"); }
-    catch (reason) { if (reason instanceof StudioApiError && [401, 403].includes(reason.status)) revoke(); else setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setBusy(false); inFlight.current = false; }
+    return preparedConfig(value);
   }
   async function acceptResult(pending: StudioPending, result: unknown) {
     if (accessLost.current) return;
@@ -333,7 +309,7 @@ export function StudioEditor(props: Props) {
       const value = await prepareTemplateConfig(); if (!value) return;
       if (requiresReselection && studioExecutionEnvironmentIssue(value.action, true)) { setError(t("此旧配置需要先明确选择新的 Agent Workspace 文件夹，原业务配置与收据会保留。", "This old configuration requires an explicitly selected Agent Workspace folder first. Business configuration and receipts are preserved.")); return; }
       if (after || saved?.status === "enabled") {
-        if (studioExecutionEnvironmentIssue(value.action, requiresReselection) || value.action.executionSelection?.agentWorkspaceId && (!executionAvailable || JSON.stringify(value.action.executionSelection) !== selectionKey)) { setError(t("请先确认当前可用的 Agent Workspace 文件夹。脚本及仓库模板不能使用仅对话临时目录；未启用草稿可单独保存。", "Confirm an available Agent Workspace folder first. Scripts and repository templates cannot use chat-only scratch; an inactive draft can be saved separately.")); return; }
+        if (studioExecutionEnvironmentIssue(value.action, requiresReselection) || value.action.executionSelection?.agentWorkspaceId && (!executionAvailable || JSON.stringify(value.action.executionSelection) !== selectionKey)) { setError(t("请先确认当前可用的 Agent Workspace 文件夹。脚本不能使用仅对话临时目录；未启用草稿可单独保存。", "Confirm an available Agent Workspace folder first. Scripts cannot use chat-only scratch; an inactive draft can be saved separately.")); return; }
         const tools = studioProviderToolReadiness(value, capabilities);
         if (!tools.available) { setError(tools.reason ?? t("所选 Provider 不支持此操作所需工具。", "The selected Provider cannot receive the tools required for this action.")); return; }
       }
@@ -393,28 +369,19 @@ export function StudioEditor(props: Props) {
       setError((reason instanceof Error ? reason.message : String(reason)) + " " + t("上传结果未知时保留原键，请核对后再操作。", "If the upload result is unknown, keep its original key and reconcile before another upload."));
     } finally { inFlight.current = false; setBusy(false); }
   }
-  function renderTemplateField(name: string, field: AutomationCatalogField) {
-    if (template?.id === "custom-automation" && ["name", "model", "timeout"].includes(name)) return null;
-    const value = state.values[name] ?? "";
-    const help = config.action.kind === "template" && name.endsWith("TokenSecret")
-      ? `${field.help} ${t("此字段仅保留来源名称用于溯源；原生工作流使用已选择、经验证的项目 Integration，绝不查找任意环境变量秘密。", "This source name is provenance only. The native workflow authenticates through the selected, verified project Integration and never looks up arbitrary environment secrets.")}`
-      : field.help;
-    return <Field key={name} label={field.label + (field.required ? " *" : "")} help={help} issue={issues[`template.${name}`] ?? issues[`action.arguments.${name}`]}>{id =>
-      field.type === "select" ? <RadixSelect id={id} value={String(value)} onChange={event => formChange(name, event.target.value)}><option value="">—</option>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</RadixSelect>
-      : field.type === "repo-picker" ? field.multiple
-        ? <textarea id={id} rows={3} value={Array.isArray(value) ? value.join("\n") : String(value)} aria-description={t("每行一个明确的 Provider 仓库名称；执行时会按项目连接核对权限。", "One explicit Provider repository name per line; execution rechecks the project's connector authorization.")} onChange={event => formChange(name, event.target.value.split(/\r?\n/))} />
-        : <Input id={id} value={String(value)} onChange={event => formChange(name, event.target.value)} />
-      : field.type === "textarea" ? <textarea id={id} rows={4} value={String(value)} placeholder={field.placeholder} maxLength={field.constraints?.maxLength} onChange={event => formChange(name, event.target.value)} />
-      : <Input id={id} type={field.type === "number" ? "number" : "text"} value={String(value)} placeholder={field.placeholder} min={field.constraints?.min} max={field.constraints?.max} maxLength={field.constraints?.maxLength} onChange={event => formChange(name, field.type === "number" ? event.target.value === "" ? "" : Number(event.target.value) : event.target.value)} />
-    }</Field>;
-  }
   const actionAvailable = capabilities?.actions.find(action => action.id === config.action.kind);
+  const requiresModel = Boolean(template && isPmAutomationTemplateId(template.id) && pmAutomationTemplateRequiresProvider(template.id));
+  const modelAction = config.action.kind === "template" ? config.action : null;
   const timezone = "timezone" in config.trigger ? config.trigger.timezone : "UTC";
-  const renderConfiguration = mode === "direct";
-  if (props.templateId && !catalogTemplate) return <article className={styles.editor}><h1>{t("模板不存在", "Template not found")}</h1><p role="alert">{t("此 ID 不在固定的 production 目录中；不会创建空白替代规则。", "This ID is not in the pinned production catalog; no blank replacement rule is created.")}</p><Button onClick={onCancel}>{t("返回", "Back")}</Button></article>;
+  if (props.templateId && !catalogTemplate) return <article className={styles.editor}><h1>{t("模板不存在", "Template not found")}</h1><p role="alert">{t("此 ID 不在固定的 PM 模板目录中；不会创建空白替代规则。", "This ID is not in the pinned PM template catalog; no blank replacement rule is created.")}</p><Button onClick={onCancel}>{t("返回", "Back")}</Button></article>;
+  const eventTrigger = config.trigger.kind === "event" ? config.trigger : null;
+  const canSaveDraft = !locked && canWrite && !latest && !(saved?.status === "enabled" && (!providerTools.available || !executionReady));
+  const canTest = canSaveDraft && blocked.length === 0 && actionAvailable?.available === true && executionReady;
+  const canEnable = canTest && !((config.trigger.kind === "once" || config.trigger.kind === "cron") && !capabilities?.scheduler.ready);
+  const unavailableReason = !canWrite ? t("需要当前项目的编辑权限与实时能力响应。", "Current project edit permission and a live capability response are required.") : !config.projectId ? t("请先选择 PM 项目。", "Select a PM project first.") : !actionAvailable?.available ? actionAvailable?.reason ?? t("执行环境尚未就绪。", "The execution environment is not ready.") : "";
   return <article className={styles.editor} aria-label={t("执行自动化编辑器", "Execution automation editor")}>
-    <header className={styles.heading}><div><Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}><ArrowLeft size={14} />{t("返回", "Back")}</Button><h1>{saved ? t("编辑自动化", "Edit automation") : template?.name ?? t("新建自动化", "New automation")}</h1><p>{t("配置 Agent、脚本或原生模板的触发条件与执行动作。", "Configure triggers and actions for an agent, script, or native template.")}</p></div><span className={styles.badge}>{saved ? `${saved.status} · v${saved.revision}` : t("尚未保存至服务器", "Not saved to server")}</span></header>
-    {template && <><nav className={styles.steps} aria-label={t("设置步骤", "Setup steps")}>{(["prerequisites", "form", "review"] as const).map((step, index) => <button type="button" key={step} disabled={locked} aria-current={stage === step ? "step" : undefined} onClick={() => step === "review" ? void review() : setStage(step)}>{index + 1}. {step === "prerequisites" ? t("前提条件", "Prerequisites") : step === "form" ? t("配置", "Configure") : t("审查", "Review")}</button>)}</nav><p className={styles.provenance}>{isPmAutomationTemplateId(template.id) ? t("PM 原生 · agent-pm-studio 场景适配", "PM native · agent-pm-studio scenario adaptation") : `OpenHands · extensions ${automationCatalogSource.extensionsVersion} · MIT`} · {template.id}@{template.version ?? "catalog"} · {mode}</p></>}
+    <header className={styles.heading}><div><Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}><ArrowLeft size={14} />{t("返回", "Back")}</Button><h1>{saved ? t("编辑自动化", "Edit automation") : template?.name ?? t("新建自动化", "New automation")}</h1><p>{template?.description ?? t("配置 Prompt、隔离脚本或模板的触发条件与执行动作。", "Configure triggers and actions for a prompt, isolated script, or template.")}</p>{template && <div className={styles.tags}><span>{t("PM 原生", "PM native")}</span>{template.scenario && <span>#{template.scenario}</span>}<span>{requiresModel ? t("需要模型", "Needs a model") : t("无需模型", "No model")}</span><span>{template.category}</span></div>}</div><span className={styles.badge}>{saved ? `${saved.status} · v${saved.revision}` : t("尚未保存至服务器", "Not saved to server")}</span></header>
+    {template && <details className={styles.prereqBar} open={blocked.length > 0}><summary>{blocked.length ? t(`运行前提 · ${blocked.length} 项未就绪`, `Runtime prerequisites · ${blocked.length} not ready`) : t("运行前提已就绪", "Runtime prerequisites are ready")}</summary><ul className={styles.prereqList}>{prerequisites.map(item => <li key={item.id}><span className={item.available ? styles.connected : styles.dependency}>{item.available ? <Check size={13} /> : "○"} {item.id} {!item.required && t("（可选）", " (optional)")}</span><small>{item.reason}</small></li>)}</ul><div className={styles.actions}><Button type="button" variant="ghost" size="sm" onClick={() => { connections.refresh(); setCapabilityVersion(value => value + 1); }}>{t("刷新", "Refresh")}</Button></div></details>}
     {storageError && <section className={styles.error} role="alert"><p>{storageError}</p><Button variant="outline" onClick={retryStorage}>{t("重试本地恢复存储", "Retry recovery storage")}</Button></section>}
     {state.pending && <section className={styles.warning} role="status"><strong>{t("原请求的结果待核对", "Original request needs reconciliation")}</strong><p>{state.pending.kind} · <code>{state.pending.requestId}</code></p><p>{t("不会重发或以新键替代。未找到收据也不证明请求从未执行。", "This request will not be resent or replaced with a new key. A missing receipt is not proof it never executed.")}</p><Button disabled={busy} onClick={() => { void reconcile(); }}>{t("核对原请求", "Reconcile original request")}</Button></section>}
     {latest && <section className={styles.warning}>
@@ -423,95 +390,98 @@ export function StudioEditor(props: Props) {
       <div className={styles.actions}><Button variant="outline" disabled={locked} onClick={() => { persist({ ...live.current, definition: latest, baseline: latest.config }); setLatest(null); }}>{t("保留输入，采用当前 revision", "Keep input, adopt current revision")}</Button>
       <Button variant="ghost" disabled={locked} onClick={() => loadServerVersion(latest)}>{t("载入服务器配置", "Load server configuration")}</Button></div>
     </section>}
-    {!config.projectId && <p className={styles.notice} role="status">{t("请明确选择此自动化所属的 PM 项目后再保存、启用或运行；不会自动选择或跨项目执行。", "Explicitly select the automation's PM project before saving, enabling, or running. No project is selected automatically and execution never crosses projects.")}</p>}
-    <Field label={t("项目", "Project")} issue={issues.projectId}>{id => <RadixSelect id={id} disabled={locked || Boolean(saved)} value={config.projectId} onChange={event => change({ projectId: event.target.value })}><option value="">{t("选择项目", "Choose a project")}</option>{projects.map(project => <option key={project.id} value={project.id}>{typeof project.data.name === "string" ? project.data.name : project.id} ({project.id})</option>)}</RadixSelect>}</Field>
-    {renderConfiguration && <Field label={t("Agent 助手快捷入口", "Agent assistant shortcut")} help={t("在此项目的 Agent 助手箭头菜单显示已保存自动化。不会因勾选或打开菜单而运行；草稿仍不能直接运行。", "Show this saved automation in the project's Agent assistant arrow menu. Checking this or opening the menu never runs it; drafts still cannot run.")} issue={issues.quickAccess}>{id => <input id={id} type="checkbox" data-testid="automation-quick-access" checked={config.quickAccess === true} disabled={locked || !canWrite} onChange={event => change({ quickAccess: event.target.checked })} />}</Field>}
-    {scopeMismatch && <section className={styles.warning} role="alert"><strong>{t("恢复草稿与当前项目范围不一致", "Recovery draft does not match the current project scope")}</strong><p>{t(`草稿项目：${config.projectId || "未选择"}；URL 项目：${props.projectId}。输入不会自动改写。请在项目字段选择 URL 项目，或返回草稿所属项目后继续。保存、上传、测试与启用均被阻止。`, `Draft project: ${config.projectId || "not selected"}; URL project: ${props.projectId}. Your input is not rewritten. Select the URL project in the project field, or return to the draft's project. Saving, uploading, testing and enabling are blocked.`)}</p></section>}
-    <section className={styles.section}><h2>{t("Agent 执行文件夹", "Agent execution folder")}</h2>
-      <ExecutionSelectionField value={config.action.executionSelection} allowChatOnly={!requiresReselection && !studioActionRequiresAgentWorkspace(config.action)} disabled={locked} onChange={executionSelection => actionChange({ executionSelection })} onAvailabilityChange={reportExecutionAvailability} />
-      {executionWarning && <p role="status" className={styles.dependency}>{executionWarning}</p>}
-      {!executionWarning && !config.action.executionSelection?.agentWorkspaceId && <p className={styles.notice}>{t("非仓库模板、普通对话及无工具 PM 分析可使用仅对话环境；外部 API 仓库元数据不等于本机执行文件夹。PM 目标仅由上方项目字段确定。", "Non-repository templates, ordinary chat and no-tools PM analysis may remain chat-only. External API repository metadata is not a local execution folder. The project field above alone determines the PM business target.")}</p>}
-    </section>
     {(capabilityError || connections.error) && <div className={styles.error} role="alert">{capabilityError || connections.error}<Button variant="ghost" size="sm" onClick={() => { setCapabilityVersion(value => value + 1); connections.refresh(); }}>{t("刷新能力", "Refresh capabilities")}</Button></div>}
-    {!providerTools.available && <section className={styles.warning} role="status"><strong>{needsReadOnlyAnalysis ? t("无工具只读分析 Provider 尚未就绪", "No-tools read-only analysis Provider is not ready") : t("所选 Provider 的工具能力不可用", "Selected Provider tool capability is unavailable")}</strong><p>{providerTools.reason}</p><p>{needsReadOnlyAnalysis ? t("请选择明确声明 pmAnalysis 能力且已认证的 Provider；工具沙箱不等于无工具执行。没有兼容 Provider 时可保存草稿，但不能试运行或启用。无需模型的确定性模板不受影响。", "Choose an authenticated Provider explicitly advertising pmAnalysis. A tool sandbox is not a no-tools boundary. Without a compatible Provider you can save a draft, but cannot test or enable it. Deterministic templates do not require a model.") : t("未启用的配置仍可保存；已启用定义请先暂停或选择支持的 Provider。此限制只针对当前需要连接器/工作区工具的操作，不会禁用普通 Prompt、新闻摘要或确定性工作流。", "Non-enabled configurations can still be saved; pause an enabled definition or choose a supported Provider before updating it. This applies only to the current connector/workspace-tool action; ordinary prompts, news summaries and deterministic workflows remain available.")}</p><code>{providerTools.featureId}</code><Button variant="ghost" size="sm" onClick={() => setCapabilityVersion(value => value + 1)}>{t("刷新 Provider 能力", "Refresh Provider capabilities")}</Button></section>}
-    {(stage === "prerequisites" || (template && stage === "review")) && <section className={styles.section}><h2>{t("必需能力与连接", "Required capabilities and connections")}</h2>{!prerequisites.length && <p>{t("此模板不要求额外外部连接。", "This template requires no additional external integration.")}</p>}<ul className={styles.prerequisites}>{prerequisites.map(item => <li key={item.id}><span className={item.available ? styles.connected : styles.dependency}>{item.available ? <Check size={14} /> : "○"} {item.id} {!item.required && t("（可选）", " (optional)")}</span><p>{item.reason}</p><small>{item.available ? t("已就绪", "Available") : t("尚未就绪", "Not available")}</small></li>)}</ul><div className={styles.actions}><Button variant="outline" onClick={() => { connections.refresh(); setCapabilityVersion(value => value + 1); }}>{t("刷新前提条件", "Refresh prerequisites")}</Button>{onIntegrations && <Button variant="ghost" onClick={onIntegrations}>{t("管理项目连接", "Manage project integrations")}</Button>}<Button disabled={locked || !config.projectId} onClick={() => setStage("form")}>{blocked.length ? t("继续配置（尚不可运行）", "Configure (not ready to run)") : t("继续", "Continue")}</Button></div></section>}
-    {(stage === "form" || (!template && stage !== "review")) && <form onSubmit={event => { event.preventDefault(); void review(); }}>
+    {!providerTools.available && <section className={styles.warning} role="status"><strong>{needsReadOnlyAnalysis ? t("无工具只读分析 Provider 尚未就绪", "No-tools read-only analysis Provider is not ready") : t("所选 Provider 的工具能力不可用", "Selected Provider tool capability is unavailable")}</strong><p>{providerTools.reason}</p><p>{needsReadOnlyAnalysis ? t("可保存草稿，但不能试运行或启用。无需模型的确定性模板不受影响。", "You can save a draft, but cannot test or enable it. Deterministic templates are unaffected.") : null}</p></section>}
+    <form onSubmit={event => event.preventDefault()}>
       <fieldset disabled={locked} className={styles.formBody}>
-        {template?.setup?.form.note && <p className={styles.notice}>{template.setup.form.note}</p>}
-        {template && isPmAutomationTemplateId(template.id) && config.action.kind === "template" ? <StudioPmParameters values={state.values} issues={issues} templateId={template.id} allowRepository={template.id === "pm-pr-acceptance-coverage"} onChange={formChange} /> : template?.setup && (!template.setup.bundle || config.action.kind === "template") && Object.entries(template.setup.form.args).map(([name, field]) => renderTemplateField(name, field))}
-        {renderConfiguration && <>
-          <section className={styles.section}><h2>{t("内容", "Content")}</h2>
-          <Field label={t("名称", "Name")} issue={issues.name}>{id => <Input id={id} value={config.name} maxLength={160} onChange={event => change({ name: event.target.value })} />}</Field>
+        <Field label={t("名称", "Name")} issue={issues.name}>{id => <Input id={id} maxLength={160} value={config.name} onChange={event => change({ name: event.target.value })} />}</Field>
+
+        <section className={styles.section}>
+          <h2>{t("范围", "Scope")}</h2>
+          <div className={styles.twoColumns}>
+            <Field label={t("PM 项目", "PM project")} issue={issues.projectId}>{id => <RadixSelect id={id} disabled={locked || Boolean(saved)} value={config.projectId} onChange={event => change({ projectId: event.target.value })}><option value="">{t("选择项目", "Choose a project")}</option>{projects.map(project => <option key={project.id} value={project.id}>{typeof project.data.name === "string" ? project.data.name : project.id} ({project.id})</option>)}</RadixSelect>}</Field>
+            <div className={styles.field}><label>{t("执行文件夹（可选）", "Execution folder (optional)")}</label><ExecutionSelectionField value={config.action.executionSelection} allowChatOnly={!requiresReselection && !studioActionRequiresAgentWorkspace(config.action)} disabled={locked} onChange={executionSelection => actionChange({ executionSelection })} onAvailabilityChange={reportExecutionAvailability} /></div>
+          </div>
+          {executionWarning && <p role="status" className={styles.dependency}>{executionWarning}</p>}
+          {scopeMismatch && <section className={styles.warning} role="alert"><strong>{t("恢复草稿与当前项目范围不一致", "Recovery draft does not match the current project scope")}</strong><p>{t(`草稿项目：${config.projectId || "未选择"}；URL 项目：${props.projectId}。输入不会自动改写。请选择 URL 项目，或返回草稿所属项目后继续。`, `Draft project: ${config.projectId || "not selected"}; URL project: ${props.projectId}. Your input is not rewritten. Select the URL project, or return to the draft's project.`)}</p></section>}
+          <Field label={t("Agent 助手快捷入口", "Agent assistant shortcut")} help={t("在项目 Agent 助手的箭头菜单中显示；勾选不会运行。", "Show in the project Agent assistant arrow menu; checking never runs it.")} issue={issues.quickAccess}>{id => <input id={id} type="checkbox" data-testid="automation-quick-access" checked={config.quickAccess === true} disabled={locked || !canWrite} onChange={event => change({ quickAccess: event.target.checked })} />}</Field>
+        </section>
+
+        {template && requiresModel && modelAction ? <section className={styles.section}>
+          <h2>{t("执行 Agent", "Execution Agent")}</h2>
+          <StudioExecutionAgent workspaceId={workspaceId} projectId={config.projectId} value={config.executionAgent} action={config.action} capabilities={capabilities} disabled={locked || !canWrite} onSelect={agent => {
+            if (!agent) { change({ executionAgent: undefined }, ["executionAgent"]); return; }
+            const options = Object.fromEntries(agent.config.modelOptions.map(option => [option.id, option.value]));
+            change({ executionAgent: { id: agent.id, version: agent.currentVersion }, action: { ...modelAction, providerInstanceId: agent.config.providerInstanceId, model: agent.config.model, options } }, ["executionAgent", "action.providerInstanceId", "action.model", "action.options"]);
+          }} />
+          {!config.executionAgent && <div className={styles.twoColumns}><Field label="Provider" issue={issues["action.providerInstanceId"]}>{id => <RadixSelect id={id} value={modelAction.providerInstanceId ?? ""} onChange={event => change({ executionAgent: undefined, action: { ...modelAction, providerInstanceId: event.target.value, model: "" } }, ["executionAgent", "action.providerInstanceId", "action.model"])}><option value="">{t("选择已配置 Provider", "Select a configured Provider")}</option>{capabilities?.providers.map(provider => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</RadixSelect>}</Field><Field label={t("模型", "Model")} issue={issues["action.model"]}>{id => <RadixSelect id={id} value={modelAction.model ?? ""} onChange={event => change({ executionAgent: undefined, action: { ...modelAction, model: event.target.value } }, ["executionAgent", "action.model"])}><option value="">{t("选择真实模型", "Select an available model")}</option>{capabilities?.providers.find(provider => provider.id === modelAction.providerInstanceId)?.models.map(model => <option key={model} value={model}>{model}</option>)}</RadixSelect>}</Field></div>}
+        </section> : template ? <p className={styles.notice}>{t("执行方：PM 原生确定性处理器，不调用模型。", "Executed by the PM-native deterministic handler; no model is invoked.")}</p> : null}
+
+        {template && isPmAutomationTemplateId(template.id) && config.action.kind === "template" && <StudioPmParameters values={state.values} issues={issues} templateId={template.id} allowRepository={template.id === "pm-pr-acceptance-coverage"} onChange={formChange} />}
+
+        {!template && <section className={styles.section}><h2>{t("动作", "Action")}</h2><StudioSetupAction action={config.action} template={template} capabilities={capabilities} issues={issues} optionsText={optionsText} canWrite={canWrite} disabled={locked}
+          onOptions={setOptionsText} onChange={actionChange} onInvalidOptions={() => change({}, ["action.options"])}
+          onKindChange={action => { change({ action, executionAgent: undefined }, ["action.kind", "executionAgent"]); setOptionsText(action.kind === "script" ? "{}" : JSON.stringify(action.options, null, 2)); }}
+          onUpload={file => { void upload(file); }} /></section>}
+
+        {template?.id === "pm-pr-acceptance-coverage" && <section className={styles.section}><h2>{t("外部只读来源", "External read-only source")}</h2>
+          <Field label={t("已验证的只读 API 连接", "Verified read-only API connection")} help={t("仅允许读取所选 PR；未配置时报告来源缺口，不伪造结论。", "Only the selected PR may be read; without it the run reports a source gap.")} issue={issues["action.plugins"]}>{id => <RadixSelect id={id} value={config.action.plugins[0]?.id ?? ""} onChange={event => { const connection = usableConnections.find(item => `integration:${item.id}` === event.target.value); actionChange({ plugins: connection ? [automationIntegrationPlugin(connection)] : [] }); }}><option value="">{t("不使用外部连接", "No external connection")}</option>{usableConnections.filter(connection => connection.provider === "github" || connection.provider === "gitlab").map(connection => <option key={connection.id} value={`integration:${connection.id}`}>{connection.provider} · {connection.label} @v{connection.revision}</option>)}</RadixSelect>}</Field>
+        </section>}
+
+        <StudioTrigger
+          trigger={config.trigger}
+          template={template}
+          frequency={frequency}
+          time={time}
+          weekday={weekday}
+          once={once}
+          timezone={timezone}
+          filterText={filterText}
+          issues={issues}
+          disabled={locked}
+          onMode={mode => { if (mode === "event") chooseFrequency("event"); else if (config.trigger.kind === "event") chooseFrequency("daily"); }}
+          onFrequency={chooseFrequency}
+          onTime={value => { setTime(value); if (config.trigger.kind === "cron") change({ trigger: { ...config.trigger, expression: cronFor(frequency, value, weekday, config.trigger.expression) } }, ["trigger.expression"]); }}
+          onWeekday={value => { setWeekday(value); if (config.trigger.kind === "cron") change({ trigger: { ...config.trigger, expression: cronFor("weekly", time, value, config.trigger.expression) } }, ["trigger.expression"]); }}
+          onOnce={value => { setOnce(value); try { change({ trigger: { kind: "once", at: onceInZone(value, timezone), timezone } }); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); } }}
+          onTimezone={value => { if (config.trigger.kind === "cron" || config.trigger.kind === "once") change({ trigger: { ...config.trigger, timezone: value } }, ["trigger.timezone"]); }}
+          onCron={value => change({ trigger: { kind: "cron", expression: value, timezone } }, ["trigger.expression"])}
+          onEventKey={value => { if (eventTrigger) change({ trigger: { ...eventTrigger, key: value } }, ["trigger.key"]); }}
+          onFilterText={value => { setFilterText(value); if (!eventTrigger) return; try { change({ trigger: { ...eventTrigger, filter: parseStudioObject(value) } }, ["trigger.filter"]); } catch { change({}, ["trigger.filter"]); } }}
+        />
+
+        <details className={styles.section}><summary>{t("高级设置", "Advanced settings")}</summary>
+          <div className={styles.twoColumns}><Field label={t("每日运行上限", "Daily run limit")} issue={issues.dailyLimit}>{id => <Input id={id} type="number" min={1} max={100} value={config.dailyLimit} onChange={event => change({ dailyLimit: Number(event.target.value) })} />}</Field><Field label={t("冷却（分钟）", "Cooldown (minutes)")} issue={issues.cooldownMinutes}>{id => <Input id={id} type="number" min={0} max={10080} value={config.cooldownMinutes} onChange={event => change({ cooldownMinutes: Number(event.target.value) })} />}</Field></div>
+          <div className={styles.twoColumns}><Field label={t("超时（秒）", "Timeout (seconds)")} issue={issues["action.timeoutSeconds"]}>{id => <Input id={id} type="number" min={1} max={86400} value={config.action.timeoutSeconds} onChange={event => actionChange({ timeoutSeconds: Number(event.target.value) })} />}</Field><Field label={t("标签（逗号分隔）", "Tags (comma-separated)")} issue={issues.tags}>{id => <Input id={id} value={tagsText} onChange={event => { setTagsText(event.target.value); change({ tags: event.target.value.split(",").map(tag => tag.trim()).filter(Boolean) }); }} />}</Field></div>
           <Field label={t("说明", "Description")} issue={issues.description}>{id => <textarea id={id} rows={3} maxLength={4000} value={config.description} onChange={event => change({ description: event.target.value })} />}</Field>
-          <Field label={t("标签（逗号分隔）", "Tags (comma-separated)")} issue={issues.tags}>{id => <Input id={id} value={tagsText} onChange={event => { setTagsText(event.target.value); change({ tags: event.target.value.split(",").map(tag => tag.trim()).filter(Boolean) }); }} />}</Field>
-          <StudioSetupAction action={config.action} template={template} values={state.values} capabilities={capabilities} issues={issues} optionsText={optionsText} canWrite={canWrite} disabled={locked}
-            onOptions={setOptionsText} onChange={actionChange} onInvalidOptions={() => change({}, ["action.options"])}
-            onKindChange={action => { change({ action }, ["action.kind"]); setOptionsText(action.kind === "script" ? "{}" : JSON.stringify(action.options, null, 2)); }}
-            onUpload={file => { void upload(file); }} />
-          {!actionAvailable?.available && <p className={styles.dependency}>{actionAvailable?.reason ?? t("执行环境尚未就绪。草稿可保存，运行不可用。", "The execution environment is not ready. Drafts can be saved; running is unavailable.")}</p>}
-          </section>
-          <section className={styles.section}>
-            <h2>{template?.setup?.native ? t("只读执行边界", "Read-only execution boundary") : t("仓库与插件", "Repositories and plugins")}</h2><p>{template?.setup?.native ? t("PM 原生分析不暴露本机仓库或通用插件。仅 PR 覆盖模板允许一个明确版本的只读原生 API 连接。", "PM-native analysis exposes no local repository or general-purpose plugins. Only the PR coverage template accepts one explicitly versioned read-only native API connection.") : t("以下选项由当前授权运行环境返回，保存的是明确引用及版本。", "Choices below come from the authorized runtime. Explicit references and versions are persisted.")}</p>
-            {!template?.setup?.native && <><Field label={t("仓库", "Repositories")} issue={issues["action.repositories"]}>{id => <RadixSelect id={id} multiple value={config.action.repositories.map(repository => repository.id)} onChange={event => actionChange({ repositories: Array.from(event.target.selectedOptions, option => config.action.repositories.find(repository => repository.id === option.value) ?? { id: option.value, ref: null }) })}>{capabilities?.repositories.map(repository => <option value={repository.id} key={repository.id}>{repository.name}</option>)}</RadixSelect>}</Field>
-            {config.action.repositories.map(repository => <Field key={repository.id} label={`${repository.id} · ref`}>{id => <Input id={id} value={repository.ref ?? ""} onChange={event => actionChange({ repositories: config.action.repositories.map(item => item.id === repository.id ? { ...item, ref: event.target.value || null } : item) })} />}</Field>)}</>}
-            {template?.id === "pm-pr-acceptance-coverage" ? <Field label={t("已验证的只读 API 来源连接", "Verified read-only API source connection")} issue={issues["action.plugins"]}>{id => <RadixSelect id={id} value={config.action.plugins[0]?.id ?? ""} onChange={event => { const connection = usableConnections.find(item => `integration:${item.id}` === event.target.value); actionChange({ plugins: connection ? [automationIntegrationPlugin(connection)] : [] }); }}><option value="">{t("不使用外部连接", "No external connection")}</option>{usableConnections.filter(connection => connection.provider === "github" || connection.provider === "gitlab").map(connection => <option key={connection.id} value={`integration:${connection.id}`}>{connection.provider} · {connection.label} @v{connection.revision}</option>)}</RadixSelect>}</Field> : !template?.setup?.native && <Field label={config.action.kind === "template" ? t("插件与已验证原生 API 连接", "Plugins and verified native API connections") : t("插件与已验证 MCP 连接", "Plugins and verified MCP connections")} issue={issues["action.plugins"]}>{id => <RadixSelect id={id} multiple value={config.action.plugins.map(plugin => plugin.id)} onChange={event => actionChange({ plugins: Array.from(event.target.selectedOptions, option => {
-              const connection = usableConnections.find(item => `integration:${item.id}` === option.value);
-              if (connection) return automationIntegrationPlugin(connection);
-              const plugin = capabilities?.plugins.find(item => item.id === option.value);
-              return { id: option.value, version: plugin?.version ?? null };
-            }) })}>{capabilities?.plugins.map(plugin => <option value={plugin.id} key={plugin.id}>{plugin.name}{plugin.version ? ` @${plugin.version}` : ""}</option>)}{usableConnections.filter(connection => !capabilities?.plugins.some(plugin => plugin.id === `integration:${connection.id}`)).map(connection => <option key={connection.id} value={`integration:${connection.id}`}>{connection.provider} · {connection.label} @v{connection.revision}</option>)}</RadixSelect>}</Field>}
-            <Field label={t("超时（秒）", "Timeout (seconds)")} issue={issues["action.timeoutSeconds"]}>{id => <Input id={id} type="number" min={1} max={86400} value={config.action.timeoutSeconds} onChange={event => actionChange({ timeoutSeconds: Number(event.target.value) })} />}</Field>
-          </section>
-          <section className={styles.section}><h2>{t("触发器", "Trigger")}</h2><Field label={t("运行频率", "Frequency")}>{id => <RadixSelect id={id} value={frequency} onChange={event => chooseFrequency(event.target.value as StudioFrequency)}>{([ ["manual", t("仅手动", "Manual only")], ["once", t("单次", "Once")], ["hourly", t("每小时", "Hourly")], ["daily", t("每天", "Daily")], ["weekdays", t("工作日", "Weekdays")], ["weekly", t("每周", "Weekly")], ["custom", t("自定义 Cron", "Custom cron")], ["event", t("事件", "Event")] ] as const).filter(([value]) => value !== "event" || !template?.setup?.native || Boolean(template.setup.form.triggers?.event)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</RadixSelect>}</Field>
-          {config.trigger.kind === "once" && <Field label={t("日期与本地时间（含年份）", "Date and local time (including year)")} issue={issues["trigger.at"]}>{id => <Input id={id} type="datetime-local" value={once} onChange={event => { setOnce(event.target.value); try { change({ trigger: { kind: "once", at: onceInZone(event.target.value, timezone), timezone } }); } catch (reason) { setError(String(reason)); } }} />}</Field>}
-          {config.trigger.kind === "cron" && frequency !== "custom" && <Field label={frequency === "hourly" ? t("每小时的分钟", "Minute within each hour") : t("本地时间", "Local time")}>{id => <Input id={id} type="time" value={time} onChange={event => { setTime(event.target.value); change({ trigger: { kind: "cron", expression: cronFor(frequency, event.target.value, weekday, config.trigger.kind === "cron" ? config.trigger.expression : ""), timezone } }); }} />}</Field>}
-          {frequency === "weekly" && <Field label={t("星期", "Day of week")}>{id => <RadixSelect id={id} value={weekday} onChange={event => { setWeekday(event.target.value); change({ trigger: { kind: "cron", expression: cronFor("weekly", time, event.target.value, ""), timezone } }); }}>{[t("周日", "Sunday"), t("周一", "Monday"), t("周二", "Tuesday"), t("周三", "Wednesday"), t("周四", "Thursday"), t("周五", "Friday"), t("周六", "Saturday")].map((day, index) => <option value={index} key={day}>{day}</option>)}</RadixSelect>}</Field>}
-          {config.trigger.kind === "cron" && frequency === "custom" && <Field label="Cron (minute hour day month weekday)" issue={issues["trigger.expression"]}>{id => <Input id={id} value={config.trigger.kind === "cron" ? config.trigger.expression : ""} onChange={event => change({ trigger: { kind: "cron", expression: event.target.value, timezone } })} />}</Field>}
-          {(config.trigger.kind === "cron" || config.trigger.kind === "once") && <Field label={t("IANA 时区", "IANA timezone")} issue={issues["trigger.timezone"]}>{id => <Input id={id} value={timezone} onChange={event => change({ trigger: { ...config.trigger, timezone: event.target.value } as StudioConfig["trigger"] })} />}</Field>}
-          {config.trigger.kind === "event" && <>
-            <div className={styles.twoColumns}>
-              <Field label={t("事件来源", "Event source")} issue={issues["trigger.source"]}>{id => <Input id={id} readOnly={Boolean(template?.setup?.native)} value={config.trigger.kind === "event" ? config.trigger.source : ""} onChange={event => change({ trigger: { ...(config.trigger as Extract<StudioConfig["trigger"], { kind: "event" }>), source: event.target.value } }, ["trigger.source"])} />}</Field>
-              <Field label={template?.setup?.form.triggers?.event?.on?.label ?? t("事件键 / 通配符", "Event key / wildcard")} help={template?.setup?.form.triggers?.event?.on?.help} issue={issues["trigger.key"]}>{id => template?.setup?.form.triggers?.event?.on?.options
-                ? <RadixSelect id={id} value={config.trigger.kind === "event" ? config.trigger.key : ""} onChange={event => change({ trigger: { ...(config.trigger as Extract<StudioConfig["trigger"], { kind: "event" }>), key: event.target.value } }, ["trigger.key"])}><option value="">—</option>{template.setup.form.triggers.event.on.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</RadixSelect>
-                : <Input id={id} value={config.trigger.kind === "event" ? config.trigger.key : ""} onChange={event => change({ trigger: { ...(config.trigger as Extract<StudioConfig["trigger"], { kind: "event" }>), key: event.target.value } }, ["trigger.key"])} />}</Field>
-            </div>
-            <Field label={t("过滤器 JSON object", "Filter JSON object")} help={t('支持路径/相等过滤或 {"expression":"JMESPath"}，包含 glob/icontains。', 'Use path/equality filters or {"expression":"JMESPath"}, including glob/icontains.')} issue={issues["trigger.filter"]}>{id => <textarea id={id} rows={5} value={filterText} onChange={event => { setFilterText(event.target.value); try { change({ trigger: { ...(config.trigger as Extract<StudioConfig["trigger"], { kind: "event" }>), filter: parseStudioObject(event.target.value) } }, ["trigger.filter"]); } catch { change({}, ["trigger.filter"]); } }} />}</Field>
-            <p>{config.trigger.source === "pm" ? t("PM 内部信号由授权事件桥持久化投递，不要求公共 Webhook，也不依赖页面计时器。", "PM internal signals are durably delivered by the authorized event bridge. They require neither a public webhook nor browser timers.") : t("保存定义后在项目连接页注册签名 Webhook；仅填写来源并不代表连接完成。", "After saving, register its signed webhook in project integrations. Entering a source does not establish a connection.")}</p>
-          </>}
-          <div className={styles.twoColumns}><Field label={t("每日运行上限", "Daily run limit")} issue={issues.dailyLimit}>{id => <Input id={id} type="number" min={1} max={100} value={config.dailyLimit} onChange={event => change({ dailyLimit: Number(event.target.value) })} />}</Field><Field label={t("冷却（分钟）", "Cooldown (minutes)")} issue={issues.cooldownMinutes}>{id => <Input id={id} type="number" min={0} max={10080} value={config.cooldownMinutes} onChange={event => change({ cooldownMinutes: Number(event.target.value) })} />}</Field></div></section>
-        </>}
+          <Field label={t("试运行事件 Payload（JSON object）", "Test event payload (JSON object)")}>{id => <textarea id={id} rows={3} value={state.testPayload} onChange={event => { const next = { ...live.current, testPayload: event.target.value }; live.current = next; setState(next); }} />}</Field>
+          {template && template.requires.integrations && <p className={styles.provenance}>{t("模板版本", "Template version")}: {template.id}@{template.version ?? pmAutomationTemplateVersion}</p>}
+        </details>
       </fieldset>
-      <div className={styles.actions}><Button type="submit" disabled={locked || !config.projectId}>{t("预检与审查", "Preflight and review")}</Button></div>
-    </form>}
-    {stage === "review" && <section className={styles.section}>
-      <h2>{t("审查配置", "Review configuration")}</h2><p>{mode === "direct" ? t("只读预检不执行模型、不产生运行记录。保存草稿、试运行与启用是分开的动作。", "Read-only preflight does not invoke a model or create a run. Save draft, test, and enable are separate actions.") : t("这些起点将预填到现有 Chat。您仍需在对话中确认并发送，不会在此创建规则。", "These starting points prefill the existing Chat. You still review and send there; this does not create a rule.")}</p>
-      {validation && <><p className={validation.valid ? styles.connected : styles.dependency}>{validation.valid ? t("预检通过", "Preflight passed") : t("预检发现问题", "Preflight found issues")}{validation.nextDueAt && ` · ${t("下次", "Next")}: ${validation.nextDueAt}`}</p><ul>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`} className={styles.dependency}><code>{issue.path}</code>: {issue.message}</li>)}</ul></>}
-      <details open><summary>{t("冻结配置预览", "Frozen configuration preview")}</summary><pre>{JSON.stringify(mode === "direct" ? config : { templateId: template?.id, projectId: config.projectId, values: state.values, executionSelection: config.action.executionSelection }, null, 2)}</pre></details><Button variant="ghost" onClick={() => setStage("form")}>{t("返回修改", "Back to edit")}</Button>
-    </section>}
-    {renderConfiguration && <>
-      <section className={styles.section}>
-        <Field label={t("试运行事件 Payload（JSON object）", "Test event payload (JSON object)")}>{id => <textarea id={id} rows={3} value={state.testPayload} disabled={locked} onChange={event => { const next = { ...live.current, testPayload: event.target.value }; live.current = next; setState(next); }} />}</Field>
-        <div className={styles.actions}>
-          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || (saved?.status === "enabled" && (!providerTools.available || !executionReady))} onClick={() => { void save(null); }}><Save size={14} />{saved ? t("保存修改", "Save changes") : t("保存草稿", "Save draft")}</Button>
-          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available || !executionReady} onClick={() => { void save("test"); }}><FlaskConical size={14} />{t("保存并真实试运行", "Save and run real test")}</Button>
-          <Button disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available || !executionReady || ((config.trigger.kind === "once" || config.trigger.kind === "cron") && !capabilities?.scheduler.ready)} onClick={() => { void save("enable"); }}>{saved ? t("保存并启用", "Save and enable") : t("创建并启用", "Create and enable")}</Button>
-        </div>
-        {!canWrite && <p className={styles.dependency}>{t("需要当前项目的编辑权限与实时能力响应。", "Current project edit permission and a live capability response are required.")}</p>}
-      </section>
-      {state.test && <section className={styles.section}><h2>{t("真实试运行", "Real test execution")}</h2><p>{state.test.id} · {state.test.status} · v{state.test.definitionRevision}</p>{JSON.stringify(config) !== JSON.stringify(state.test.configSnapshot) && <p className={styles.warning}>{t("配置已修改；这是旧冻结版本的试运行。", "Configuration changed; this test belongs to an older frozen version.")}</p>}<p>{state.test.error ?? state.test.summary}</p><Button variant="outline" disabled={busy} onClick={() => { setBusy(true); void api.query(state.test!.id).then(execution => { persist({ ...live.current, test: execution }); onExecution?.(execution); }, reason => setError(String(reason))).finally(() => setBusy(false)); }}>{t("查询运行真实状态", "Query actual run status")}</Button></section>}
-    </>}
-    <section className={styles.assistant}>
-      <h2><Sparkles size={16} />{mode === "direct" ? t("需要配置帮助？", "Need help configuring?") : t("在现有 Chat 中继续", "Continue in existing Chat")}</h2>
-      <p>{t("只有点击此按钮才打开辅助 Chat；仅预填，不自动发送。用户改过的字段受保护。", "Only this explicit action opens assisted Chat. It prefills but never sends automatically. User-edited fields are protected.")}</p>
+    </form>
+
+    <div className={styles.footerBar}>
+      <span className={styles.footerNote}>{unavailableReason}</span>
+      <div className={styles.footerActions}>
+        <Button type="button" variant="outline" disabled={!canSaveDraft} onClick={() => { void save(null); }}><Save size={14} />{saved ? t("保存草稿", "Save draft") : t("保存草稿", "Save draft")}</Button>
+        <Button type="button" variant="outline" disabled={!canTest || !executionReady} onClick={() => { void save("test"); }}><FlaskConical size={14} />{t("试运行", "Test")}</Button>
+        <Button type="button" disabled={!canEnable || !executionReady} onClick={() => { void save("enable"); }}>{saved ? t("保存并启用", "Save and enable") : t("创建并启用", "Create and enable")}</Button>
+      </div>
+    </div>
+
+    {state.test && <section className={styles.section}><h2>{t("最近一次试运行", "Latest test execution")}</h2><p>{state.test.id} · {state.test.status} · v{state.test.definitionRevision}</p>{JSON.stringify(config) !== JSON.stringify(state.test.configSnapshot) && <p className={styles.warning}>{t("配置已修改；这是旧冻结版本的试运行。", "Configuration changed; this test belongs to an older frozen version.")}</p>}<p>{state.test.error ?? state.test.summary}</p><Button variant="outline" disabled={busy} onClick={() => { setBusy(true); void api.query(state.test!.id).then(execution => { persist({ ...live.current, test: execution }); onExecution?.(execution); }, reason => setError(String(reason))).finally(() => setBusy(false)); }}>{t("查询运行真实状态", "Query actual run status")}</Button></section>}
+
+    <details className={styles.assistant}><summary><Sparkles size={16} />{t("需要帮助？在 Chat 中继续", "Need help? Continue in Chat")}</summary>
+      <p>{t("只有点击按钮才打开辅助 Chat；仅预填，不自动发送。用户改过的字段受保护。", "Only this action opens assisted Chat. It prefills but never sends automatically. User-edited fields are protected.")}</p>
       <Button variant="outline" disabled={!onAssist || !config.projectId || scopeMismatch || locked || assisting || blocked.some(item => Object.hasOwn(template?.requires.integrations ?? {}, item.id))} onClick={() => { void assist(); }}><MessageSquare size={14} />{assisting ? t("打开中…", "Opening…") : t("打开辅助 Chat（不发送）", "Open assisted Chat (do not send)")}</Button>
       {!onAssist && <p className={styles.dependency}>{t("当前宿主未提供 Chat 打开回调。", "The host did not provide an existing-Chat callback.")}</p>}
-      {renderConfiguration && <details><summary>{t("审查并应用助手结构化建议", "Review and apply structured assistant suggestions")}</summary>
-        <p>{t("粘贴 Chat 返回的配置 JSON。先生成预览，再确认；已编辑字段绝不覆盖。不自动解析助手回复。", "Paste configuration JSON returned by Chat. Preview first, then confirm. Edited fields are never overwritten. Assistant replies are not parsed automatically.")}</p>
+      <details><summary>{t("审查并应用助手结构化建议", "Review and apply structured assistant suggestions")}</summary>
+        <p>{t("粘贴 Chat 返回的配置 JSON。先生成预览，再确认；已编辑字段绝不覆盖。", "Paste configuration JSON returned by Chat. Preview first, then confirm. Edited fields are never overwritten.")}</p>
         <textarea aria-label={t("助手配置 JSON", "Assistant configuration JSON")} rows={5} value={assistantJson} disabled={locked} onChange={event => { setAssistantJson(event.target.value); setAssistantPreview(null); }} />
         <Button variant="outline" disabled={locked} onClick={() => { try { previewAssistant(parseStudioObject(assistantJson) as Partial<StudioConfig>); } catch (reason) { setError(String(reason)); } }}>{t("预览受保护的修改", "Preview protected changes")}</Button>
         {assistantPreview && <><pre>{JSON.stringify(assistantPreview, null, 2)}</pre><Button disabled={locked} onClick={applyAssistantPreview}>{t("确认应用未编辑字段", "Apply only untouched fields")}</Button></>}
-      </details>}
-    </section>
+      </details>
+    </details>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}
   </article>;
 }

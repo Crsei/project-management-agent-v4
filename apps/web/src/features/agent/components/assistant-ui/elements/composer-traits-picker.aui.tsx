@@ -34,6 +34,10 @@ type ComposerTraitsPickerProps = {
   catalogLoading?: boolean;
   catalogError?: string | null;
   onRetry?: () => void | Promise<void>;
+  /** Show only thinking/effort descriptors; other model traits stay in session settings. */
+  reasoningOnly?: boolean;
+  /** The composer keeps interaction mode in session settings. */
+  showInteractionMode?: boolean;
 };
 
 
@@ -58,7 +62,7 @@ const defaultBadge = (t: AgentText) => (
 
 export function ComposerTraitsPicker({
   driver, model, selections, prompt, onPromptEdit, interactionMode = "default", onSettingsChange, disabled = false, saving = false,
-  saveError, catalogLoading = false, catalogError, onRetry,
+  saveError, catalogLoading = false, catalogError, onRetry, reasoningOnly = false, showInteractionMode = true,
 }: ComposerTraitsPickerProps) {
   const t = useAgentText();
   const [open, setOpen] = useState<"traits" | "interaction" | null>(null);
@@ -69,12 +73,20 @@ export function ComposerTraitsPicker({
   const latest = useRef({ driver, model, selections, prompt, onPromptEdit, onSettingsChange, onRetry, disabled, saving, catalogLoading, catalogError });
   latest.current = { driver, model, selections, prompt, onPromptEdit, onSettingsChange, onRetry, disabled, saving, catalogLoading, catalogError };
   const traits = driver && model ? getProviderModelTraits({ driver, model, options: selections, prompt }) : undefined;
-  const descriptors = traits?.descriptors ?? [];
+  const descriptors = reasoningOnly
+    ? (traits?.descriptors ?? []).filter((descriptor) => REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id) || (descriptor.type === "boolean" && descriptor.id === "thinking"))
+    : traits?.descriptors ?? [];
   const primary = descriptors.find((descriptor) => REASONING_SELECT_DESCRIPTOR_IDS.has(descriptor.id))
     ?? traits?.primarySelectDescriptor ?? descriptors[0];
-  const unavailable = traits?.invalidOptions ?? selections ?? [];
-  const triggerLabel = unavailable.length ? t("选项不可用", "Invalid options") : traits?.label || t("模型选项", "Model options");
-  const description = traits?.label || t("模型选项", "Model options");
+  const reasoningIds = new Set(descriptors.map((descriptor) => descriptor.id));
+  const unavailable = (traits?.invalidOptions ?? selections ?? []).filter((selection) => !reasoningOnly || reasoningIds.has(selection.id));
+  const currentReasoningLabel = primary?.type === "select"
+    ? primary.options.find((option) => option.id === getDescriptorStringValue(primary))?.label
+      ?? primary.options.find((option) => option.isDefault)?.label
+    : primary?.currentValue === true ? t("开启", "On") : primary?.currentValue === false ? t("关闭", "Off") : undefined;
+  const fallbackLabel = reasoningOnly ? currentReasoningLabel || t("思考程度", "Thinking level") : t("模型选项", "Model options");
+  const triggerLabel = unavailable.length ? t("选项不可用", "Invalid options") : traits?.label?.trim() || fallbackLabel;
+  const description = traits?.label?.trim() || currentReasoningLabel || fallbackLabel;
   const modeLabel = interactionMode === "plan" ? t("计划", "Plan") : t("默认", "Default");
   const error = localError ?? saveError;
   const busy = pending || saving;
@@ -205,7 +217,7 @@ export function ComposerTraitsPicker({
         </>}
       </DropdownMenuContent>
     </DropdownMenu>}
-    <DropdownMenu open={open === "interaction"} onOpenChange={(next) => {
+    {showInteractionMode && <DropdownMenu open={open === "interaction"} onOpenChange={(next) => {
       if (next) { if (!blocked) setOpen("interaction"); }
       else setOpen((current) => current === "interaction" ? null : current);
     }}>
@@ -239,7 +251,7 @@ export function ComposerTraitsPicker({
           {onRetry && <DropdownMenuItem disabled={blocked} onSelect={(event) => { event.preventDefault(); retry(); }}>{t("重试保存", "Retry save")}</DropdownMenuItem>}
         </>}
       </DropdownMenuContent>
-    </DropdownMenu>
+    </DropdownMenu>}
     {unavailable.length > 0 && !open && <p role="alert" className="min-w-0 max-w-full basis-full break-words px-2 text-xs text-destructive">{t("已保存的模型选项不可用，发送已阻止。请打开模型选项明确更正：", "Saved model options are invalid and sending is blocked. Open model options to explicitly correct: ")}{unavailable.map((selection) => `${selection.id} = ${String(selection.value)}`).join(t("、", ", "))}</p>}
     {error && !open && <p role="alert" className="min-w-0 max-w-full basis-full break-words px-2 text-xs text-destructive">{t("参数未保存：", "Parameters not saved: ")}{error}{onRetry && <> <button type="button" disabled={blocked} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50" onClick={retry}>{t("重试保存", "Retry save")}</button></>}</p>}
   </>;

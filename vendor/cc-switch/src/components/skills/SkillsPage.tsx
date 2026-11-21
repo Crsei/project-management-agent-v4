@@ -138,6 +138,8 @@ interface SkillsPageProps {
   ) => void;
   initialQuery?: string;
   renderCards?: (state: SkillsDiscoveryPresentation) => React.ReactNode;
+  /** Host-owned inventory shown above the repository / skills.sh results. */
+  renderDiscoverLeading?: () => React.ReactNode;
   onInteractionBlockedChange?: (blocked: boolean) => void;
 }
 
@@ -208,6 +210,7 @@ export function SkillsPage({
   onEnableFailures,
   initialQuery = "",
   renderCards,
+  renderDiscoverLeading,
   onInteractionBlockedChange,
 }: SkillsPageProps) {
   const { t, i18n } = useTranslation();
@@ -726,6 +729,11 @@ export function SkillsPage({
             ref={listScrollRef}
             className="min-h-0 overflow-auto scroll-stable"
           >
+            {renderDiscoverLeading ? (
+              <div className="border-b border-border p-4">
+                {renderDiscoverLeading()}
+              </div>
+            ) : null}
             {loadingList ? (
               <div className="flex items-center justify-center gap-2 py-16 text-body text-fg-2">
                 <Loader2 className="h-4 w-4 animate-spin" />

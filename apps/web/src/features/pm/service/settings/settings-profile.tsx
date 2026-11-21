@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import { ChevronDown } from "lucide-react"
+import { Camera, ChevronDown } from "lucide-react"
 import type { CommandPayloadMap, SelfProfile } from "@contracts"
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useI18n } from "@/lib/i18n-provider"
 import { usePersonalDashboard, usePmService } from "../pm-service"
 import { CommandNotice, useAction, useDraftState, useText } from "../pm-ui"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 
 type EditableProfile = { name: string; timeZone: string; jobTitle: string; phone: string; avatarDataUrl: string | null }
 type ProfileDraft = EditableProfile & { version: number; pendingCommandId: string | null }
@@ -73,6 +73,7 @@ function ProfileAvatar({ values, disabled, error, onChange, onBusyChange }: {
 }) {
   const t = useText()
   const reader = useRef<FileReader | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [imageError, setImageError] = useState<"type" | "size" | "read" | "invalid" | null>(null)
   useEffect(() => () => {
@@ -87,14 +88,38 @@ function ProfileAvatar({ values, disabled, error, onChange, onBusyChange }: {
     : imageError === "size" ? t("头像必须大于 0 且不超过 256 KiB。", "The avatar must be nonempty and no larger than 256 KiB.")
       : imageError === "read" ? t("无法读取头像，请重新选择文件。", "Could not read the avatar. Choose the file again.")
         : imageError === "invalid" || error ? t("图片内容与 PNG/JPEG/WebP 格式不匹配或已损坏；当前头像未被替换。", "The image content does not match PNG/JPEG/WebP or is damaged; the current avatar was not replaced.") : undefined
-  return <div className="space-y-3">
-    <div className="flex flex-wrap items-center gap-3">
-      <Avatar name={values.name} src={values.avatarDataUrl ?? undefined} size={40} />
-      <Button type="button" variant="outline" size="sm" disabled={disabled || busy || !values.avatarDataUrl} onClick={() => { setImageError(null); onChange(null) }}>{t("移除头像", "Remove avatar")}</Button>
-      <span className="text-xs text-muted-foreground">{t("没有上传图片时使用姓名首字母；头像颜色没有可保存的服务字段。", "Without an uploaded image, name initials are used. The service has no editable avatar-color field.")}</span>
+  const selectFile = () => {
+    setImageError(null)
+    fileInput.current?.click()
+  }
+  return <div className="space-y-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={selectFile}
+        aria-label={t("更换头像", "Change avatar")}
+        title={t("更换头像", "Change avatar")}
+        className="group relative grid size-14 shrink-0 place-items-center rounded-full border bg-surface outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Avatar name={values.name} src={values.avatarDataUrl ?? undefined} size={40} />
+        <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full border bg-surface text-muted-foreground shadow-sm group-hover:text-foreground">
+          <Camera className="size-3" />
+        </span>
+      </button>
+      {values.avatarDataUrl && <Button type="button" variant="ghost" size="sm" disabled={disabled || busy} onClick={() => { setImageError(null); onChange(null) }}>{t("移除头像", "Remove avatar")}</Button>}
+      {busy && <p role="status" className="text-xs text-muted-foreground">{t("正在读取并验证头像…", "Reading and validating the avatar…")}</p>}
     </div>
-    <Field label={t("上传头像", "Upload avatar")} description={t("PNG/JPEG/WebP，最大 256 KiB。先检查文件类型、大小和图片签名；正式模式点击保存后才提交资料服务，Lab 始终仅在内存预览。", "PNG/JPEG/WebP, maximum 256 KiB. File type, size and image signature are checked first. Service mode submits the image only on Save; Lab keeps it in memory only.")} error={message}>
-      {control => <Input {...control} type="file" accept="image/png,image/jpeg,image/webp" disabled={disabled || busy} onChange={event => {
+    {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
+    <input
+      ref={fileInput}
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      disabled={disabled || busy}
+      className="sr-only"
+      tabIndex={-1}
+      aria-hidden="true"
+      onChange={event => {
         const file = event.currentTarget.files?.[0]
         event.currentTarget.value = ""
         if (!file || disabled || busy) return
@@ -113,16 +138,15 @@ function ProfileAvatar({ values, disabled, error, onChange, onBusyChange }: {
           finish()
         }
         try { nextReader.readAsDataURL(file) } catch { setImageError("read"); finish() }
-      }} />}
-    </Field>
-    {busy && <p role="status" className="text-xs text-muted-foreground">{t("正在读取并验证头像…", "Reading and validating the avatar…")}</p>}
+      }}
+    />
   </div>
 }
 
-function LanguageField({ disabled }: { disabled: boolean }) {
+function LanguageField({ disabled, compact }: { disabled: boolean; compact?: boolean }) {
   const { locale, setLocale } = useI18n()
   const t = useText()
-  return <Field label={t("语言", "Language")} description={t("立即切换界面，并作为当前浏览器的偏好保存；不随资料命令提交，也不代表账号跨设备同步。", "Changes the interface immediately and is saved as a preference in this browser. It is not submitted with the profile or synced across devices.")}>
+  return <Field label={t("语言", "Language")} description={compact ? undefined : t("立即生效，仅保存在此浏览器。", "Applied immediately and saved in this browser only.")}>
     {control => <Select value={locale} disabled={disabled} onValueChange={value => { if (value === "zh-CN" || value === "en") setLocale(value) }}>
       <SelectTrigger {...control} className="flex w-full min-w-0 items-center justify-between gap-2 bg-surface"><SelectValue /><ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></SelectTrigger>
       <SelectContent><SelectItem value="zh-CN">{t("中文（简体）", "Chinese (Simplified)")}</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
@@ -130,7 +154,7 @@ function LanguageField({ disabled }: { disabled: boolean }) {
   </Field>
 }
 
-function ProfileFields({ values, email, errors, disabled, onChange, onAvatarBusyChange, preview }: {
+function ProfileFields({ values, email, errors, disabled, onChange, onAvatarBusyChange, preview, compact }: {
   values: EditableProfile
   email: string
   errors: ProfileErrors
@@ -144,52 +168,56 @@ function ProfileFields({ values, email, errors, disabled, onChange, onAvatarBusy
     onEmailChange: (email: string) => void
     onDateOfBirthChange: (date: string) => void
   }
+  compact?: boolean
 }) {
   const t = useText()
-  return <div className="max-w-2xl space-y-6">
+  return <div className={`${compact ? "max-w-2xl 2xl:max-w-4xl" : "max-w-2xl"} space-y-6`}>
     <ProfileAvatar values={values} disabled={disabled} error={errors.avatarDataUrl} onChange={avatarDataUrl => onChange({ avatarDataUrl })} onBusyChange={onAvatarBusyChange} />
-    <Field label={t("姓名", "Name")} required description={t("用于你的账号和项目协作中的显示名称。", "The display name used for your account and project collaboration.")} error={errors.name === "required" ? t("请输入姓名。", "Enter your name.") : errors.name === "length" ? t("姓名不能超过 200 个字符。", "Your name must be 200 characters or fewer.") : undefined}>
+    <Field label={t("姓名", "Name")} required description={compact ? undefined : t("用于你的账号和项目协作中的显示名称。", "The display name used for your account and project collaboration.")} error={errors.name === "required" ? t("请输入姓名。", "Enter your name.") : errors.name === "length" ? t("姓名不能超过 200 个字符。", "Your name must be 200 characters or fewer.") : undefined}>
       {control => <Input {...control} autoComplete="name" value={values.name} disabled={disabled} onChange={event => onChange({ name: event.target.value })} />}
     </Field>
-    <Field label={t("岗位", "Job title")} description={t("可选，最多 200 个字符；清空并保存会移除岗位信息。", "Optional, up to 200 characters. Clear and save to remove your job title.")} error={errors.jobTitle ? t("岗位不能超过 200 个字符。", "Your job title must be 200 characters or fewer.") : undefined}>
+    <Field label={t("岗位", "Job title")} description={compact ? undefined : t("可选，最多 200 个字符；清空并保存会移除岗位信息。", "Optional, up to 200 characters. Clear and save to remove your job title.")} error={errors.jobTitle ? t("岗位不能超过 200 个字符。", "Your job title must be 200 characters or fewer.") : undefined}>
       {control => <Input {...control} autoComplete="organization-title" value={values.jobTitle} disabled={disabled} onChange={event => onChange({ jobTitle: event.target.value })} />}
     </Field>
-    <Field label={t("用户名", "Username")} description={preview
-      ? t("可在此体验编辑。参考页面的“每 30 天更改一次”规则不在此预览中实施，也不代表真实服务规则。", "Try editing here. The reference page’s 30-day change restriction is not enforced in this preview or claimed as a service rule.")
-      : t("当前服务没有用户名字段或更改接口；参考页面的 30 天限制不适用于此服务。", "The service has no username field or update API; the reference page’s 30-day restriction is not a rule of this service.")} error={errors.username ? t("请输入预览用户名。", "Enter a preview username.") : undefined}>
+    {!compact && <Field label={t("用户名", "Username")} description={preview
+      ? t("可在此体验编辑，不代表真实服务规则。", "Try editing here; this is not a service rule.")
+      : t("当前服务没有用户名字段或更改接口。", "The service has no username field or update API.")} error={errors.username ? t("请输入预览用户名。", "Enter a preview username.") : undefined}>
       {control => <Input {...control} autoComplete="off" value={preview?.username ?? ""} placeholder={t("未提供", "Not provided")} disabled={!preview || disabled} onChange={preview ? event => preview.onUsernameChange(event.target.value) : undefined} />}
-    </Field>
-    <Field label={t("电子邮箱", "Email")} description={preview
-      ? t("仅在两个示例地址之间切换，不发送验证邮件或修改真实账号。", "Choose between sample addresses only. No verification email is sent and no real account changes.")
-      : t("当前登录账号的真实邮箱，只读。服务不提供邮箱更改或验证状态，不声称已验证。", "Your signed-in account's actual email, read-only. Email changes and verification status are not provided; no verified status is claimed.")}>
+    </Field>}
+    {!compact && <Field label={t("电子邮箱", "Email")} description={preview
+      ? t("仅切换示例地址，不修改真实账号。", "Switch sample addresses only; no real account changes.")
+      : t("当前登录账号的真实邮箱，只读。", "Your signed-in account’s actual email, read-only.")}>
       {control => preview ? <Select value={email} disabled={disabled} onValueChange={value => { if (value) preview.onEmailChange(value) }}>
         <SelectTrigger {...control} className="flex w-full min-w-0 items-center justify-between gap-2 bg-surface text-left [&>span:first-child]:truncate"><SelectValue /><ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></SelectTrigger>
         <SelectContent><SelectItem value="alex@example.test">alex@example.test</SelectItem><SelectItem value="alex.work@example.test">alex.work@example.test</SelectItem></SelectContent>
       </Select> : <Input {...control} type="email" value={email} readOnly placeholder={t("未提供", "Not provided")} />}
-    </Field>
-    <Field label={t("电话", "Phone")} description={t("可选，最多 80 个字符；正式资料仅本人和有权管理员可见。清空并保存会移除电话。", "Optional, up to 80 characters. In the service, only you and authorized administrators can see it. Clear and save to remove it.")} error={errors.phone ? t("电话不能超过 80 个字符。", "Your phone number must be 80 characters or fewer.") : undefined}>
+    </Field>}
+    <Field label={t("电话", "Phone")} description={compact ? undefined : t("可选，最多 80 个字符；清空并保存会移除。", "Optional, up to 80 characters; clear and save to remove.")} error={errors.phone ? t("电话不能超过 80 个字符。", "Your phone number must be 80 characters or fewer.") : undefined}>
       {control => <Input {...control} type="tel" autoComplete="tel" value={values.phone} disabled={disabled} onChange={event => onChange({ phone: event.target.value })} />}
     </Field>
-    <Field label={t("出生日期", "Date of birth")} description={preview
+    {!compact && <Field label={t("出生日期", "Date of birth")} description={preview
       ? t("可选；使用日历选择日期，仅用于内存预览。", "Optional. Choose a date with the calendar for this in-memory preview only.")
       : t("当前个人资料合同不包含出生日期，服务也没有保存接口。", "The profile contract has no date-of-birth field or save API.")} error={errors.dateOfBirth ? t("请选择有效且不晚于今天的出生日期。", "Choose a valid date of birth that is not in the future.") : undefined}>
       {control => <Input {...control} type="date" value={preview?.dateOfBirth ?? ""} max={preview ? localToday() : undefined} disabled={!preview || disabled} onChange={preview ? event => preview.onDateOfBirthChange(event.target.value) : undefined} className="max-w-xs" />}
-    </Field>
-    <Field label={t("时区", "Time zone")} required description={t("使用 IANA 时区标识，例如 Asia/Shanghai、Europe/London 或 UTC；用于个人工作台的时间显示和工时统计。", "Use an IANA identifier such as Asia/Shanghai, Europe/London or UTC for personal dashboard times and time totals.")} error={errors.timeZone ? t("请输入有效的 IANA 时区。", "Enter a valid IANA time zone.") : undefined}>
+    </Field>}
+    <Field label={t("时区", "Time zone")} required description={compact ? undefined : t("IANA 时区标识，例如 Asia/Shanghai 或 UTC。", "An IANA identifier such as Asia/Shanghai or UTC.")} error={errors.timeZone ? t("请输入有效的 IANA 时区。", "Enter a valid IANA time zone.") : undefined}>
       {control => <Input {...control} autoComplete="off" autoCapitalize="none" spellCheck={false} value={values.timeZone} disabled={disabled} onChange={event => onChange({ timeZone: event.target.value })} placeholder="Asia/Shanghai" />}
     </Field>
-    <LanguageField disabled={disabled} />
+    <LanguageField disabled={disabled} compact={compact} />
   </div>
 }
 
-export function SettingsProfile({ mode }: SettingsPageProps) {
+export function SettingsProfile({ mode, variant }: SettingsPageProps & { variant?: "default" | "onboarding" }) {
   const t = useText()
-  return <SettingsSection title={t("个人资料", "Profile")} description={t("管理本人姓名、岗位、电话、头像和时区；界面语言单独保存在当前浏览器。", "Manage your name, job title, phone, avatar and time zone. Interface language is stored separately in this browser.")}>
-    {mode === "service" ? <ServiceProfile /> : <LabProfile />}
+  const compact = variant === "onboarding"
+  const content = mode === "service" ? <ServiceProfile compact={compact} /> : <LabProfile compact={compact} />
+  if (compact) return content
+  return <SettingsSection title={t("个人资料", "Profile")} description={t("管理本人姓名、岗位、电话、头像和时区。", "Manage your name, job title, phone, avatar and time zone.")}>
+    {content}
   </SettingsSection>
 }
 
-function ServiceProfile() {
+function ServiceProfile({ compact }: { compact?: boolean }) {
   const query = usePersonalDashboard()
   const { actor, refresh, error } = usePmService()
   const t = useText()
@@ -208,11 +236,11 @@ function ServiceProfile() {
       {query.error && <div role="alert" className="space-y-2"><p className="break-words text-destructive">{query.data ? t("刷新失败，上次快照可能已过期：", "Refresh failed; the previous snapshot may be stale: ") : ""}{query.error.message}</p><Button variant="outline" size="sm" disabled={query.isFetching} onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button></div>}
       {error && <div role="alert" className="space-y-2"><p className="break-words text-destructive">{t("账号信息刷新失败：", "Account refresh failed: ")}{error.message}</p><Button variant="outline" size="sm" onClick={() => { void refresh().catch(() => undefined) }}>{t("重试账号刷新", "Retry account refresh")}</Button></div>}
     </div>
-    {profile ? <ServiceProfileEditor profile={profile} email={actor?.email ?? ""} readBlocked={!!query.error || query.isFetching} refreshAccount={refresh} /> : !query.isPending && !query.error && <SettingsNotice>{t("没有可用的个人资料；不会使用示例账号代替。", "No profile is available. No sample account is substituted.")}</SettingsNotice>}
+    {profile ? <ServiceProfileEditor profile={profile} email={actor?.email ?? ""} readBlocked={!!query.error || query.isFetching} refreshAccount={refresh} compact={compact} /> : !query.isPending && !query.error && <p className="text-sm text-muted-foreground">{t("没有可用的个人资料。", "No profile is available.")}</p>}
   </div>
 }
 
-function ServiceProfileEditor({ profile, email, readBlocked, refreshAccount }: { profile: SelfProfile; email: string; readBlocked: boolean; refreshAccount: () => Promise<void> }) {
+function ServiceProfileEditor({ profile, email, readBlocked, refreshAccount, compact }: { profile: SelfProfile; email: string; readBlocked: boolean; refreshAccount: () => Promise<void>; compact?: boolean }) {
   const t = useText()
   const action = useAction()
   const original = action.unknownCommand?.commandType === "UpdateSelfProfile" && action.unknownCommand.targetId === profile.userId ? action.unknownCommand : null
@@ -278,7 +306,6 @@ function ServiceProfileEditor({ profile, email, readBlocked, refreshAccount }: {
     }
   }
   return <div className="space-y-5">
-    <SettingsNotice>{t("姓名、岗位、电话、头像和时区通过同一真实资料服务与版本保存。未保存草稿在当前应用会话内按账号和工作区保留；刷新页面后普通草稿不保留，结果未知的原命令由收据恢复日志保留。用户名、邮箱更改、出生日期和头像颜色不受支持。", "Name, job title, phone, avatar and time zone share the real profile service and version. Unsaved drafts are retained per account and workspace during this app session, not across reloads. Unknown commands remain in the receipt-recovery journal. Username, email changes, date of birth and avatar colors are not supported.")}</SettingsNotice>
     <CommandNotice />
     {conflict && <div role="status" className="space-y-3 rounded-lg border bg-surface p-4 text-sm">
       <p>{t("服务端个人资料已更新，完整草稿及原版本仍保留。比较下列服务值与表单草稿后明确选择；“保留草稿”会在下一次保存时提交草稿中的全部五项资料，不会自动合并或重试。", "Your server profile changed; the complete draft and original version are retained. Compare the saved values below with your form before choosing. Keeping the draft submits all five profile fields on your next save; nothing is merged or retried automatically.")}</p>
@@ -294,7 +321,7 @@ function ServiceProfileEditor({ profile, email, readBlocked, refreshAccount }: {
     </div>}
     {awaitingSnapshot && <p role="status" className="text-sm text-muted-foreground">{t("草稿版本比当前快照新，正在等待服务端快照刷新；在版本一致前不会再次提交。", "The draft version is newer than the current snapshot. Waiting for a refreshed snapshot; no further submission is allowed until the versions agree.")}</p>}
     <form noValidate className="space-y-6" onSubmit={event => { void submit(event) }}>
-      <ProfileFields values={draft} email={email} errors={errors} disabled={locked} onChange={change} onAvatarBusyChange={setImageBusy} />
+      <ProfileFields values={draft} email={email} errors={errors} disabled={locked} onChange={change} onAvatarBusyChange={setImageBusy} compact={compact} />
       <div className="space-y-2" aria-live="polite">
         {Object.keys(errors).length > 0 && <p role="alert" className="text-sm text-destructive">{t("请检查上方标出的字段。", "Check the highlighted fields above.")}</p>}
         {action.localError && !action.error && <p role="alert" className="break-words text-sm text-destructive">{action.localError}</p>}
@@ -308,7 +335,7 @@ function ServiceProfileEditor({ profile, email, readBlocked, refreshAccount }: {
   </div>
 }
 
-function LabProfile() {
+function LabProfile({ compact }: { compact?: boolean }) {
   const t = useText()
   const [values, setValues] = useState<ProfileValues>({ name: "Alex Morgan", username: "alexmorgan", email: "alex@example.test", dateOfBirth: "1994-05-17", timeZone: "Asia/Shanghai", jobTitle: "Product designer", phone: "", avatarDataUrl: null })
   const [errors, setErrors] = useState<ProfileErrors>({})
@@ -331,9 +358,8 @@ function LabProfile() {
     setSaved(true)
   }
   return <div className="space-y-5">
-    <SettingsNotice>{t("Lab 示例账号的全部资料（含图片）仅在本页内存中预览；离开页面即重置，不发送资料命令，也不更改真实账号。语言选项是例外：它切换应用界面并保存在当前浏览器，不属于示例资料。", "All sample-account profile fields, including images, are an in-memory Lab preview that resets when you leave. No profile commands are sent and no real account changes. Language is separate: it changes the app interface and is stored in this browser, not in the sample profile.")}</SettingsNotice>
     <form noValidate className="space-y-6" onSubmit={submit}>
-      <ProfileFields values={values} email={values.email} errors={errors} disabled={false} onChange={change} onAvatarBusyChange={setImageBusy} preview={{ username: values.username, dateOfBirth: values.dateOfBirth, onUsernameChange: username => change({ username }), onEmailChange: email => change({ email }), onDateOfBirthChange: dateOfBirth => change({ dateOfBirth }) }} />
+      <ProfileFields values={values} email={values.email} errors={errors} disabled={false} onChange={change} onAvatarBusyChange={setImageBusy} compact={compact} preview={{ username: values.username, dateOfBirth: values.dateOfBirth, onUsernameChange: username => change({ username }), onEmailChange: email => change({ email }), onDateOfBirthChange: dateOfBirth => change({ dateOfBirth }) }} />
       <div className="space-y-2" aria-live="polite">
         {Object.keys(errors).length > 0 && <p role="alert" className="text-sm text-destructive">{t("请检查上方标出的字段。", "Check the highlighted fields above.")}</p>}
         {saved && <p role="status" className="text-sm">{t("预览资料已在本页内存中更新，没有修改任何真实账号或服务端数据。", "The profile preview is updated in page memory. No real account or server data changed.")}</p>}

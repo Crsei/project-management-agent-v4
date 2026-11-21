@@ -12,7 +12,7 @@ const receipt = z.strictObject({ ...project, requestId: uuid });
 const transfer = { ...project, document: z.union([automationBundleSchema, sourceAutomationSchema]), providerInstanceId: z.string().min(1).max(200).optional(), model: z.string().min(1).max(200).optional() };
 export const AutomationToolInputSchemas = {
   pm_automation_capabilities: z.strictObject({ ...project, actionKind: studioActionKindSchema.optional() }),
-  pm_automation_templates: z.strictObject({ ...project, templateId: z.string().min(1).max(300).optional(), source: z.enum(['pm', 'openhands']).optional() }),
+  pm_automation_templates: z.strictObject({ ...project, templateId: z.string().min(1).max(300).optional(), source: z.literal('pm').optional() }),
   pm_automation_timezones: z.strictObject({ ...project, search: z.string().max(100).optional(), after: z.string().max(100).optional() }),
   pm_automation_definitions: z.strictObject({ ...project, cursor: uuid.optional(), quickAccess: z.boolean().optional() }),
   pm_automation_definition: z.strictObject(definition),
@@ -54,7 +54,7 @@ export type AutomationToolName = keyof typeof AutomationToolInputSchemas;
 const writes: Partial<Record<AutomationToolName, true>> = { pm_automation_create: true, pm_automation_update: true, pm_automation_status: true, pm_automation_remove: true, pm_automation_run: true, pm_automation_test: true, pm_automation_query: true, pm_automation_cancel: true, pm_automation_candidate_edit: true, pm_automation_candidate_apply: true, pm_automation_candidate_ignore: true, pm_automation_import: true, pm_automation_bundle_upload: true, pm_automation_git_save: true, pm_automation_git_sync: true, pm_automation_git_reconcile: true };
 const descriptions: Record<AutomationToolName, string> = {
   pm_automation_capabilities: 'Read actual automation runtime, Provider and worker availability; unavailable is not success.',
-  pm_automation_templates: 'Read the pinned template catalog and complete setup guide; catalog presence does not prove runtime readiness.',
+  pm_automation_templates: 'Read the PM-native template catalog and complete setup guide; catalog presence does not prove runtime readiness.',
   pm_automation_timezones: 'Page supported IANA time zones. Cron uses the current native scheduler and DST semantics.',
   pm_automation_definitions: 'Page own authorized project definitions, optionally filtering quick-access before pagination.',
   pm_automation_definition: 'Read the saved automation configuration and revision.',

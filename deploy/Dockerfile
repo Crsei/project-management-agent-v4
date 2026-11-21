@@ -46,7 +46,6 @@ COPY --chown=node:node --from=build /app/vendor/t3code/LICENSE ./vendor/t3code/L
 COPY --chown=node:node --from=build /app/vendor/cc-switch/LICENSE /app/vendor/cc-switch/LICENSING.md ./vendor/cc-switch/
 COPY --chown=node:node --from=build /app/vendor/openhands-extensions/LICENSE /app/vendor/openhands-extensions/LICENSING.md ./vendor/openhands-extensions/
 COPY --chown=node:node --from=build /app/vendor/openhands-extensions/extensions/LICENSE ./vendor/openhands-extensions/extensions/LICENSE
-COPY --chown=node:node --from=build /app/vendor/openhands-automations/LICENSE.agent-canvas /app/vendor/openhands-automations/LICENSE.extensions ./vendor/openhands-automations/
 COPY --chown=node:node --from=agent-deps /agent-runtime ./apps/server/agent
 COPY --chown=node:node --from=build /app/packages/pm-cli/agent-tools.mjs ./packages/pm-cli/agent-tools.mjs
 COPY --chown=node:node --from=build /app/packages/pm-cli/pi-tools.ts ./packages/pm-cli/pi-tools.ts

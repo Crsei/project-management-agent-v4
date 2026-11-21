@@ -10,6 +10,7 @@ import { startAutomationExecutionRuntime, stopAutomationExecutionRuntime } from 
 import { recoverAutomationGenerationConnectors } from "./automation-execution/connectors.ts";
 import { closeMcpServer, startMcpServer } from "./mcp/server.ts";
 import { startCollaborationRuntime, stopCollaborationRuntime } from "./collaboration/runs.ts";
+import { startEvaluationMaintenance, stopEvaluationMaintenance } from "./evaluation-feedback/service.ts";
 
 let starting: Promise<void> | null = null;
 let stopping: Promise<void> | null = null;
@@ -28,6 +29,7 @@ export function startRuntime(): Promise<void> {
       if (stopping) return;
       await startChatRuntime();
       if (stopping) return;
+      startEvaluationMaintenance();
       await startCollaborationRuntime({ newLifecycle: true });
       if (stopping) return;
       await recoverAutomationGenerationConnectors();
@@ -41,6 +43,7 @@ export function startRuntime(): Promise<void> {
       startTaskWorkflows();
       startMcpServer();
     } catch (error) {
+      stopEvaluationMaintenance();
       const protocols = Promise.allSettled([closeMcpServer()]);
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
       const collaboration = Promise.allSettled([stopCollaborationRuntime()]);
@@ -63,6 +66,7 @@ export function startRuntime(): Promise<void> {
 
 export function stopRuntime(): Promise<void> {
   if (stopping) return stopping;
+  stopEvaluationMaintenance();
   // Fence admissions and signal HTTP/direct installers before awaiting any worker or cleanup.
   const collaboration = Promise.allSettled([stopCollaborationRuntime()]);
   const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);

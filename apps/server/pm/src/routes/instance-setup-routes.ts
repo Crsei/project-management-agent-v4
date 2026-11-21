@@ -2,9 +2,9 @@ import type { CookieSerializeOptions } from '@fastify/cookie';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { completeInstanceSetup } from '../../../../packages/application/src/instance-setup.ts';
-import { getInstanceSetupStatus } from '../../../../packages/infrastructure/src/instance-setup.ts';
-import type { WorkspaceSampleOptions } from '../../../../packages/application/src/workspace-samples.ts';
+import { completeInstanceSetup } from '../../../../../packages/application/src/instance-setup.ts';
+import { getInstanceSetupStatus } from '../../../../../packages/infrastructure/src/instance-setup.ts';
+import type { WorkspaceSampleOptions } from '../../../../../packages/application/src/workspace-samples.ts';
 
 export function registerInstanceSetupRoutes(app: FastifyInstance, options: { database: () => Pool; cookieOptions: CookieSerializeOptions; sample: WorkspaceSampleOptions }): void {
   void app.register(async routes => {

@@ -228,7 +228,7 @@ export class LocalServer {
         pm: join(this.serverRoot, "apps/server/pm/src/main.ts"),
         worker: join(this.serverRoot, "apps/server/worker/src/main.ts"),
         agent: join(this.serverRoot, "apps/server/agent/dist/index.mjs"),
-        gateway: join(this.serverRoot, "apps/server/gateway.ts"),
+        gateway: join(this.serverRoot, "apps/server/gateway/src/index.ts"),
       };
       const ccSwitchEntry = join(this.serverRoot, "apps/server/agent/dist/cc-switch/host/main.mjs");
       await access(ccSwitchEntry).catch(() => { throw new Error("Bundled configuration service is missing. Rebuild or reinstall the application."); });
@@ -330,6 +330,7 @@ export class LocalServer {
           AGENT_WORKSPACE_ALLOWED_ROOTS: JSON.stringify([...new Set([homedir(), join(dataDir, "projects"), projectRoot])]),
           CC_SWITCH_HOST_ENTRY: ccSwitchEntry,
           AGENT_WORKSPACE_PROJECT_ROOT: projectRoot, AGENT_WORKSPACE_WEB_DIST: this.webRoot, AGENT_WORKSPACE_ACCESS_TOKEN: this.token,
+          MCP_PUBLIC_ORIGIN: origin,
           PM_CHAT_SPACE_ROOT: join(dataDir, "chat-spaces"),
         },
         gateway: { ...common, PUBLIC_HOST: "127.0.0.1", PUBLIC_PORT: String(ports.public), PM_URL: pmUrl, AGENT_URL: agentUrl, WEB_DIST: this.webRoot },

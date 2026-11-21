@@ -55,6 +55,10 @@ function remote(fixture) {
       if (endpoint.startsWith('git/ref/tags/')) return { object: { type: 'commit', sha: state.movedTag ? 'b'.repeat(40) : fixture.identity.sha } };
       if (endpoint === '') return { default_branch: 'main' };
       if (endpoint.startsWith('compare/')) return { status: 'behind' };
+      if (/^actions\/runs\/[1-9]\d*\/attempts\/[1-9]\d*$/.test(endpoint)) return {
+        id: Number(endpoint.split('/')[2]), run_attempt: Number(endpoint.split('/')[4]), head_sha: fixture.identity.sha,
+        event: 'workflow_dispatch', status: 'completed', conclusion: state.ciFailure ? 'failure' : 'success',
+        head_repository: { full_name: fixture.identity.repository }, path: '.github/workflows/desktop.yml' };
       if (endpoint.startsWith('actions/runs/')) return { ...ciRun({ ...fixture.identity, ciRunId: endpoint.split('/').at(-1) }), ...(state.ciFailure ? { conclusion: 'failure' } : {}) };
       if (endpoint.startsWith('releases?')) return state.release ? [clone(state.release)] : [];
       if (endpoint.startsWith('releases/1/assets?')) return clone(state.assets);
@@ -90,7 +94,7 @@ function remote(fixture) {
 }
 
 const publish = (fixture, client, extra = {}) => publishCandidate({ client, request: fixture.identity,
-  directory: fixture.directory, action: 'publish', authorization: async () => {}, ...extra });
+  directory: fixture.directory, action: 'publish', authorization: async () => {}, evaluation: async () => {}, ...extra });
 
 test('desktop release identity binds repository, exact tag/version/SHA/channel and provenance', () => {
   assert.equal(assertReleaseRequest(request()).tag, 'v0.1.1-preview.1');
@@ -191,13 +195,13 @@ test('a later dispatch promotes the exact complete draft without rebuilding or r
   await publish(fixture, client, { action: 'draft' });
   const writes = state.writes.length, originalBody = state.release.body;
   const result = await finalizeExisting({ client, request: request({ runId: '52', attempt: '2', ciRunId: '50' }),
-    action: 'publish', authorization: async () => {} });
+    action: 'publish', authorization: async () => {}, evaluation: async () => {} });
   assert.equal(result.state, 'published');
   assert.equal(state.writes.length, writes + 1);
   assert.equal(state.writes.at(-1).method, 'PATCH');
   assert.equal(state.release.body, originalBody, 'original native build provenance remains immutable');
   const after = state.writes.length;
-  const rerun = await finalizeExisting({ client, request: request({ runId: '53', attempt: '1' }), action: 'publish', authorization: async () => {} });
+  const rerun = await finalizeExisting({ client, request: request({ runId: '53', attempt: '1' }), action: 'publish', authorization: async () => {}, evaluation: async () => {} });
   assert.equal(rerun.state, 'already-published'); assert.equal(state.writes.length, after);
 });
 
@@ -292,4 +296,45 @@ test('second updater build has a new immutable version tag and cannot replace it
   await assert.rejects(verifyCandidate(baseline.directory, candidateIdentity), /identity differs/);
   assert.equal((await lookupRelease(client, candidateIdentity)), null);
   assert.equal(state.writes.length, writes);
+});
+
+test('required evaluation gate blocks draft creation and is never replaced by engineering authorization', async t => {
+  const fixture = await candidate(t), { client, state } = remote(fixture);
+  await assert.rejects(publish(fixture, client, { evaluation: undefined }), /evaluation gate is missing/);
+  assert.equal(state.writes.length, 0);
+  await assert.rejects(publish(fixture, client, { evaluation: async () => { throw new Error('candidate evidence revoked'); } }), /evidence revoked/);
+  assert.equal(state.writes.length, 0);
+});
+
+test('evaluation is rechecked at the actual publication boundary after all assets, not only in preflight', async t => {
+  const fixture = await candidate(t), { client, state } = remote(fixture);
+  let sawCompleteDraft = false;
+  await assert.rejects(publish(fixture, client, { evaluation: async ({ manifest }) => {
+    assert.equal(manifest.sha, fixture.identity.sha);
+    assert.deepEqual(manifest.assets.map(asset => asset.name), [...fixture.contents.keys()].filter(name => !['desktop-release.json', 'SHA256SUMS'].includes(name)).sort((a, b) => a.localeCompare(b, 'en')));
+    if (state.assets.length === fixture.contents.size) { sawCompleteDraft = true; throw new Error('expired during staging'); }
+  } }), /expired during staging/);
+  assert.equal(sawCompleteDraft, true);
+  assert.equal(state.release.draft, true);
+  assert.equal(state.writes.some(write => write.method === 'PATCH'), false);
+});
+
+test('existing draft also repeats evaluation immediately before visibility mutation', async t => {
+  const fixture = await candidate(t), { client, state } = remote(fixture);
+  await publish(fixture, client, { action: 'draft' });
+  const before = state.writes.length;
+  let checks = 0;
+  await assert.rejects(finalizeExisting({ client, request: fixture.identity, action: 'publish', authorization: async () => {},
+    evaluation: async () => { if (++checks === 2) throw new Error('live deletion fence advanced'); } }), /deletion fence advanced/);
+  assert.equal(checks, 2); assert.equal(state.writes.length, before); assert.equal(state.release.draft, true);
+});
+
+test('a running or failed exact native build cannot be used as reviewed immutable delivery', async t => {
+  const fixture = await candidate(t), { client, state } = remote(fixture), originalGet = client.get;
+  client.get = async endpoint => {
+    const value = await originalGet(endpoint);
+    return endpoint.includes('/attempts/') ? { ...value, status: 'in_progress', conclusion: null } : value;
+  };
+  await assert.rejects(publish(fixture, client), /completed successful desktop build/);
+  assert.equal(state.writes.length, 0);
 });

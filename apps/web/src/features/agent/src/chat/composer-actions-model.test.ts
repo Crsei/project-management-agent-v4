@@ -50,16 +50,17 @@ test("selected context only sends when the composer is otherwise empty", () => {
   assert.equal(resolveComposerPrimaryAction({ ...empty, selectionCount: 0 }).kind, "submit");
 });
 
-test("running turns steer only with a non-interrupting steer capability", () => {
+test("running turns queue plain text instead of steering implicitly", () => {
   const running = { ...base, running: true };
   assert.equal(resolveComposerPrimaryAction(running).kind, "queue");
   assert.equal(
     resolveComposerPrimaryAction({ ...running, steer: { supported: true, interruptsTools: false } }).kind,
-    "steer",
+    "queue",
   );
-  const interrupting = resolveComposerPrimaryAction({ ...running, steer: { supported: true, interruptsTools: true } });
-  assert.equal(interrupting.kind, "queue");
-  assert.match(interrupting.reason!.zh, /打断待处理工具/);
+  assert.equal(
+    resolveComposerPrimaryAction({ ...running, steer: { supported: true, interruptsTools: true } }).kind,
+    "queue",
+  );
 });
 
 test("running with attachments or references hides instead of inventing a queue", () => {

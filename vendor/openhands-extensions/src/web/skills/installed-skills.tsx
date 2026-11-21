@@ -16,7 +16,7 @@ import {
   extensionModuleEmptyStateClassName,
 } from "@pm/openhands-source/utils/extension-module-card-classes";
 import { AgentStack } from "@pm/openhands-source/web/shared/agent-avatar";
-import { installedSkillInfo } from "./skill-presentation";
+import { foundInLabel, installedSkillInfo } from "./skill-presentation";
 import { SkillAgentDrawer } from "./skill-agent-drawer";
 import { SkillAgentMatrix } from "./skill-agent-matrix";
 
@@ -48,13 +48,33 @@ export function OpenHandsInstalledSkills({ state, mode }: {
   return <>
     {mode === "config" ? <SkillAgentMatrix state={state} onOpen={setDrawerId} /> : <div data-testid="skills-page" className="oh-skills-cards flex min-h-0 flex-1 flex-col gap-4">
     {settings?.skillStorageLocation === "unified" ? <div className="oh-skills-notice oh-skills-warning" role="note">{sourceT("skills.storageSheet.unifiedWarning")}</div> : null}
+    {(state.nativeSkills?.length || state.nativeScanning || state.nativeError) ? <section className="oh-skills-native" data-testid="skills-native-observations">
+      <header className="oh-skills-native-header">
+        <div>
+          <h3>{t("SKILLS_PM$NATIVE_OBSERVATIONS")} ({state.nativeSkills?.length ?? 0})</h3>
+          <p>{t("SKILLS_PM$NATIVE_OBSERVATIONS_DESCRIPTION")}</p>
+        </div>
+        <Button variant="neutral" size="compact" disabled={state.busy || state.nativeScanning} onClick={() => state.onOpenNativeImport?.()}>{t("SKILLS_PM$IMPORT_EXISTING")}</Button>
+      </header>
+      {state.nativeScanning && !state.nativeSkills?.length ? <p className="oh-skills-native-status" role="status">{t("SKILLS_PM$NATIVE_SCANNING")}</p> : null}
+      {state.nativeError ? <p className="oh-skill-error" role="alert">{t("SKILLS_PM$NATIVE_SCAN_FAILED")} {state.nativeError}</p> : null}
+      {!state.nativeScanning && !state.nativeError && !state.nativeSkills?.length ? <p className="oh-skills-warning">{t("SKILLS_PM$NATIVE_EMPTY")}</p> : null}
+      {state.nativeSkills?.length ? <ul className="oh-skills-native-list">{state.nativeSkills.map(skill => <li key={skill.directory} className="oh-skills-native-row">
+        <div>
+          <strong>{skill.name}</strong>
+          <code>{skill.directory}</code>
+          {skill.description ? <p>{skill.description}</p> : null}
+          <span>{t("SKILLS_PM$NATIVE_FOUND_IN")}: {(skill.foundIn ?? []).map(foundInLabel).join(" · ")}</span>
+        </div>
+      </li>)}</ul> : null}
+    </section> : null}
     <SkillsToolbar search={filter.query} onSearchChange={query => setFilter(current => ({ ...current, query }))}
       activeFilterCount={activeCount} onOpenFilters={() => setFiltersOpen(true)} />
     <div className="oh-skills-library">
       <SkillFacetRail groups={groups} onToggle={toggleFacet} className="oh-skills-facet-rail hidden w-52 shrink-0 self-start md:flex" />
       <section className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="oh-skills-result-bar">
-          <span data-testid="skills-result-summary" role="status">{t("SETTINGS$SKILLS_RESULT_COUNT", { count: visibleSkills.length })}</span>
+          <span data-testid="skills-result-summary" role="status">{t("SKILLS_PM$MANAGED_RESULT_COUNT", { count: visibleSkills.length })}</span>
           {activeCount ? <button type="button" onClick={clearFacets} className="cursor-pointer underline">{t("SETTINGS$SKILLS_CLEAR_FILTERS")}</button> : null}
         </div>
         {visibleSkills.length ? <div className={extensionModuleCardGridContainerClassName}><div className={extensionModuleCardGridClassName}>

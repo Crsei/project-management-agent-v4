@@ -114,20 +114,10 @@ async function main(mode) {
     const manifestPath = "vendor/openhands-extensions/source-manifest.json", manifest = await json(manifestPath);
     for (const relative of ["LICENSE", "extensions/LICENSE"]) await originalNotice(`vendor/openhands-extensions/${relative}`, exactRecord(manifest.files, "destination", relative, manifestPath));
   });
-  await check("OpenHands automation notices", async () => {
-    const manifestPath = "vendor/openhands-automations/source-pin.json", manifest = await json(manifestPath);
-    for (const relative of ["LICENSE.agent-canvas", "LICENSE.extensions"]) {
-      const destination = `vendor/openhands-automations/${relative}`;
-      await originalNotice(destination, exactRecord(manifest.files, "path", destination, manifestPath));
-    }
-  });
-
   for (const [original, copy] of [
     ["vendor/t3code/LICENSE", "LICENSE.t3code"],
     ["vendor/t3code/LICENSE", "apps/web/public/LICENSE.t3code"],
     ["vendor/t3code/LICENSE", "apps/marketing/public/LICENSE.t3code"],
-    ["vendor/openhands-extensions/LICENSE", "vendor/openhands-automations/LICENSE.agent-canvas"],
-    ["vendor/openhands-extensions/extensions/LICENSE", "vendor/openhands-automations/LICENSE.extensions"],
     ["LICENSE", "apps/web/public/LICENSE"],
     ["LICENSE", "apps/marketing/public/LICENSE"],
   ]) await check(`Notice copy ${copy}`, () => equalCopy(original, copy));
@@ -156,7 +146,7 @@ async function main(mode) {
   for (const relative of [
     "vendor/t3code/SYNC.md", "vendor/cc-switch/LICENSING.md", "vendor/cc-switch/SYNC.md",
     "vendor/openhands-extensions/LICENSING.md", "vendor/openhands-extensions/SYNC.md",
-    "vendor/openhands-automations/README.md", "apps/web/public/fonts/MiSans-NOTICE.txt",
+    "apps/web/public/fonts/MiSans-NOTICE.txt",
     "apps/marketing/public/THIRD_PARTY_NOTICES.txt",
   ]) await check(`Existing legal/provenance record ${relative}`, () => file(relative));
 

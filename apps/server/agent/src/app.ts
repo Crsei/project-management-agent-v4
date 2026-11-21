@@ -23,6 +23,12 @@ import { collaborationDefinitionRoutes } from "./collaboration/definition-routes
 import { runRoutes } from "./collaboration/run-routes.ts";
 import { collaborationCapabilityRoutes } from "./collaboration/capability-routes.ts";
 import { collaborationInboxRoutes } from "./collaboration/inbox-routes.ts";
+import { evaluationFeedbackRoutes } from "./evaluation-feedback/routes.ts";
+import { AGENT_API_VERSION, type AgentRuntimeInfo } from "@agent-workspace/contracts/chat";
+
+/** Optional, operator-declared build identity; omitted rather than guessed. */
+const buildMode = process.env.AGENT_WORKSPACE_BUILD_MODE?.trim();
+const runtimeInfo: AgentRuntimeInfo = { apiVersion: AGENT_API_VERSION, ...(buildMode ? { buildMode } : {}) };
 
 /** API application; imports alone never start listeners or background workers. */
 export const app = new Hono()
@@ -34,6 +40,10 @@ export const app = new Hono()
   .route("/internal/agent-workspaces", internalAgentWorkspaceRoutes)
   .route("/api", accessRoutes)
   .use("/api/*", accessGuard)
+  // Read-only Agent identity for the bundled UI; no paths, tokens or configuration.
+  .get("/api/runtime", (c) =>
+    c.json(runtimeInfo, 200, { "cache-control": "no-store" }),
+  )
   .route("/api", mcpAppRoutes)
   .route("/api", extensionRoutes)
   .route("/api", chatRoutes)
@@ -41,6 +51,7 @@ export const app = new Hono()
   .route("/api", runRoutes)
   .route("/api", collaborationCapabilityRoutes)
   .route("/api", collaborationInboxRoutes)
+  .route("/api", evaluationFeedbackRoutes)
   .route("/api", taskDeliveryRoutes)
   .route("/api", taskWorkflowRoutes)
   .route("/api", pmToolRoutes)

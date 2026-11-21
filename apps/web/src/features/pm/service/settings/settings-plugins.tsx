@@ -17,7 +17,7 @@ import { pmErrorMessage, usePmService, usePrivateQuery } from "../pm-service"
 import { pmKeys } from "../pm-data"
 import { useWebhooks } from "./use-webhooks"
 import { pluginCatalog, pluginCategories, type PluginCategory, type PluginDefinition } from "./plugin-catalog"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 import { RadixSelect } from "@/components/ui/radix-select"
 
 function PluginImplementation({ plugin }: { plugin: PluginDefinition }) {
@@ -141,21 +141,8 @@ function PluginCatalogSurface({ mode, statuses = {}, workspaceId }: SettingsPage
 
   return <SettingsSection
     title={t("集成目录", "Integration catalog")}
-    description={t("连接第三方系统、通信软件和外部服务。这里是集成目录，不是 Agent 插件市场；连接不会扩大项目权限。", "Connect third-party systems, communication software and external services. This is an integration catalog, not an Agent plugin marketplace; connecting does not expand project permissions.")}
+    description={t("连接第三方系统与服务；这里是集成目录，不扩大项目权限。", "Connect third-party systems and services; this catalog does not expand project access.")}
   >
-    <SettingsNotice>
-      <div className="space-y-2">
-        <p>{t(
-          "这是随应用发布的集成目录，不是 Agent 插件市场，也不支持上传、下载或动态执行插件代码。SMTP、安全出站 Webhook 和 Koishi/Satori 即时通讯有内置实现；服务配置、连接状态和个人账号绑定在各自设置页读取。其余连接器仍未实现、不可用，本页不提供 OAuth 或凭据表单。",
-          "This is a shipped integration catalog, not an Agent plugin marketplace; dynamic plugin code is unsupported. SMTP, safe outbound Webhooks, and Koishi/Satori messaging have built-in adapters; service configuration, connection state and personal bindings are read on their dedicated pages. Other connectors remain unimplemented and unavailable. There are no OAuth or credential forms.",
-        )}</p>
-        {mode === "lab" && <p>{t(
-          "Lab · 仅浏览同一份目录与静态接入说明，不读取真实配置或账号，不模拟已连接，也不请求业务服务。",
-          "Lab · Browse the same catalog and static integration information only. No real configuration or accounts are read, no connected states are simulated, and no business-service requests are made.",
-        )}</p>}
-      </div>
-    </SettingsNotice>
-
     <div className="min-w-0 space-y-4">
       <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,13rem)]">
         <div className="min-w-0 space-y-2">
@@ -284,14 +271,7 @@ function PluginCatalogSurface({ mode, statuses = {}, workspaceId }: SettingsPage
               <dd className="text-muted-foreground">{t(...selectedPlugin.requirements)}</dd>
             </div>
           </dl>
-          {hasAutomationIntegration(selectedPlugin) && <SettingsNotice><p>{t("自动化控制台已有 GitHub / GitLab 原生 API 与 MCP 连接，受当前账号、工作区及明确项目约束；验证、写入与执行均需原有独立授权。它不提供此目录规划的通用 PM 同步。", "The automation console has GitHub / GitLab native API and MCP connections, scoped to the current actor, workspace, and explicit project. Verification, writes, and execution retain their separate existing authorization. This does not provide the general PM synchronization planned here.")}</p>{automationIntegrationPath && <Link className="text-primary underline-offset-4 hover:underline" to={automationIntegrationPath}>{t("进入自动化连接 · 先选择项目", "Open automation connections · Choose a project first")}</Link>}</SettingsNotice>}
-          <SettingsNotice>{selectedPlugin.implementation === "builtin" ? t(
-            "这里仅展示静态产品说明，不再次查询或推断部署状态。请在对应专用设置页查看真实配置、权限与个人绑定；功能实现、服务配置、连接状态和账号绑定是不同事实。",
-            "These are static product details, not another deployment-state inference. See the dedicated settings page for actual configuration, permission and personal bindings; implementation, service configuration, connection state and account binding are distinct facts.",
-          ) : t(
-            "以上仅为本目录通用连接器的未来范围与权限评审方向，不是服务商当前的实际授权范围或已完成功能。本目录不会授权、读取、发送或同步外部数据，无需输入真实凭据；已有自动化专用连接在独立入口按其明确范围管理。",
-            "These are future scope and permission-review directions for this catalog's general connectors, not actual provider authorization scopes or completed features. The catalog authorizes, reads, sends, or synchronizes no external data and needs no real credentials; existing automation-specific connections are managed separately within their explicit scope.",
-          )}</SettingsNotice>
+          {hasAutomationIntegration(selectedPlugin) && <div className="space-y-2 text-sm text-muted-foreground"><p>{t("自动化控制台已有 GitHub / GitLab 原生连接，按其独立授权管理，不提供此目录规划的通用同步。", "The automation console has native GitHub / GitLab connections under separate authorization; it does not provide the general sync planned here.")}</p>{automationIntegrationPath && <Link className="text-primary underline-offset-4 hover:underline" to={automationIntegrationPath}>{t("进入自动化连接 · 先选择项目", "Open automation connections · Choose a project first")}</Link>}</div>}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => setSelectedPlugin(null)}>{t("关闭详情", "Close details")}</Button>

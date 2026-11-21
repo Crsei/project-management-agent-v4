@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { createIntegrationsToolFamily } from '../apps/server/pm/src/agent-tool-integrations.ts';
+import { createIntegrationsToolFamily } from '../apps/server/pm/src/agent-tools/agent-tool-integrations.ts';
 import { createAutomationIntegrationsService } from '../packages/application/src/automation-integrations.ts';
 import { createAutomationEventsService } from '../packages/application/src/automation-events.ts';
 import { inspectAutomationIntegrationReceipt } from '../packages/application/src/automation-integrations-store.ts';

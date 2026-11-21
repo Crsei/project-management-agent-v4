@@ -49,20 +49,50 @@ const allowed = new Map([
   ["apps/server/agent/src/usage/readers/transcripts.test.ts", [native + "provider/Drivers/claudeUsage.ts", native + "provider/Drivers/codexUsage.ts"]],
 ]);
 
-const catalogIds = [
-  "github-pr-reviewer", "custom-automation", "github-repo-monitor", "github-issue-to-pr", "slack-standup-digest", "slack-channel-monitor", "linear-triage-assistant", "linear-issue-to-github-pr", "gitlab-issue-to-mr", "linear-issue-to-gitlab-mr", "linear-issue-to-bitbucket-pr", "jira-issue-to-pr", "qa-changes", "jira-issue-to-gitlab-mr", "research-brief-writer", "jira-issue-to-bitbucket-pr", "github-agents-md-maintainer", "github-delivery-watchdog", "github-issue-triage", "upstream-fork-sync", "incident-retrospective-drafter", "news-digest", "github-stale-ci-pr-closer",
-];
-const bundleIds = ["github-pr-reviewer", "github-issue-to-pr", "gitlab-issue-to-mr", "github-agents-md-maintainer", "github-delivery-watchdog", "github-issue-triage", "news-digest", "github-stale-ci-pr-closer"];
-allowed.set("packages/automation-resources/catalog.ts", [
-  "vendor/openhands-automations/interface.json",
-  ...catalogIds.map(id => `vendor/openhands-automations/catalog/${id}/manifest.json`),
-  ...bundleIds.map(id => `vendor/openhands-automations/bundles/${id}/files.json`),
-]);
-
 const normalize = value => value.split(path.sep).join("/");
 const moduleKey = value => value.replace(/\.(?:[cm]?[jt]sx?)$/, "");
 const exactAllowed = new Map([...allowed].map(([importer, targets]) => [importer, new Set(targets.map(moduleKey))]));
-const sourceRoots = ["apps/server/agent/src", "apps/web/src/features/agent", "packages/ui/src", "packages/contracts/src", "packages/agent-contracts/src", "packages/agent-client-runtime/src", "packages/automation-resources"];
+
+// Backend layer rules operate on repository-relative paths resolved from the
+// import specifier, because almost every deep import is written as ../../... .
+// Module allowlists are exact leaf-module names; a new module in either layer
+// must be added to this table deliberately.
+const infrastructureForApplication = new Set([
+  "database", "auth", "automation-integrations", "automation-integrations-native", "system-mail", "blobs", "invitation-mail", "webhook-config", "account-recovery-mail", "document-sources", "document-source-history", "document-source-files", "instance-setup", "agent-file-areas", "automation-git", "automation-execution-client", "im-gateway-config", "satori-client", "mcp-service-auth", "webhook-transport", "project-blobs",
+]);
+const applicationForInfrastructure = new Set(["ports", "kernel", "local-projects", "restore-safety", "automation-integrations-definitions"]);
+const applicationForContracts = new Set(["ports"]);
+const applicationDependencies = new Set(["domain", "contracts", "pm-schema", "agent-contracts", "pm-core", "pm-markdown", "automation-resources"]);
+const infrastructureDependencies = new Set(["domain", "contracts", "pm-schema", "agent-contracts", "pm-core"]);
+const contractsDependencies = new Set(["domain", "agent-contracts", "pm-schema"]);
+const pmCoreDependencies = new Set(["pm-schema", "pm-markdown"]);
+const pmMarkdownDependencies = new Set(["pm-schema"]);
+const isolatedPackages = new Set(["pm-schema", "agent-contracts", "agent-client-runtime"]);
+// One reviewed exception while the desktop private-state helper is still shared
+// with the CLI. New package-to-application edges must fail instead of widening
+// this set silently.
+const packageAppEdges = new Set(["packages/pm-cli/agent-runtime.ts -> apps/desktop/src/private-state.mjs"]);
+
+const sourceRoots = [
+  "apps/server/agent/src",
+  "apps/server/pm/src",
+  "apps/server/worker/src",
+  "apps/web/src/features/agent",
+  "packages/domain/src",
+  "packages/application/src",
+  "packages/contracts/src",
+  "packages/infrastructure/src",
+  "packages/pm-core",
+  "packages/pm-markdown",
+  "packages/pm-schema",
+  "packages/ui/src",
+  "packages/agent-contracts/src",
+  "packages/agent-client-runtime/src",
+  "packages/automation-resources",
+  "packages/pm-cli",
+  "packages/pm-views",
+  "packages/skill-resources",
+];
 
 /** AST inspection shared by the CLI and its negative regression fixtures. */
 export function inspectImportBoundaries(filename, text) {
@@ -74,7 +104,7 @@ export function inspectImportBoundaries(filename, text) {
     const location = source.getLineAndCharacterOfPosition(node.getStart(source));
     issues.push(`${relative}:${location.line + 1}:${location.character + 1} ${message}`);
   };
-  const inspect = (literal, typeOnly = false) => {
+  const inspect = (literal, typeOnly = false, moduleReference = true) => {
     if (!literal || !ts.isStringLiteralLike(literal)) return;
     const specifier = literal.text;
     const target = specifier.startsWith(".")
@@ -93,6 +123,62 @@ export function inspectImportBoundaries(filename, text) {
     }
     if (target.startsWith("vendor/") && !exactAllowed.get(relative)?.has(moduleKey(target))) {
       report(literal, `Unapproved vendor source dependency: ${target}. Use the owning host interface or review an exact adapter/module pair.`);
+    }
+    if (moduleReference) {
+      const importerPackage = /^packages\/([^/]+)\//.exec(relative)?.[1];
+      const targetPackage = /^packages\/([^/]+)\//.exec(target)?.[1];
+      const targetModule = /^packages\/[^/]+\/(?:src\/)?([^/]+)/.exec(target)?.[1]?.replace(/\.(?:[cm]?[jt]sx?)$/, "");
+      const targetApp = target.startsWith("apps/");
+      const importerApp = /^apps\/server\/(?:pm|worker)\//.test(relative);
+      const isBare = !specifier.startsWith(".") && !specifier.startsWith("file:") && !path.isAbsolute(specifier);
+      const boundary = (rule, message) => report(literal, `Backend layer boundary (${rule}): ${relative} must not import ${target}. ${message}`);
+      const list = set => [...set].join(", ");
+
+      if (importerPackage && targetApp) {
+        if (!packageAppEdges.has(`${relative} -> ${target}`)) {
+          boundary("packages-no-apps", "Packages must not depend on applications; move the shared contract into a package or invert the dependency.");
+        }
+      } else if (importerPackage === "domain") {
+        if (isBare && !target.startsWith("node:") && specifier !== "zod") {
+          boundary("domain", "Domain may only use node:*, zod and packages/pm-schema.");
+        } else if (targetPackage && targetPackage !== "domain" && targetPackage !== "pm-schema") {
+          boundary("domain", "Domain may only use node:*, zod and packages/pm-schema.");
+        }
+      } else if (importerPackage === "application") {
+        if (targetPackage === "infrastructure") {
+          if (!infrastructureForApplication.has(targetModule)) boundary("application->infrastructure", `Only these infrastructure modules are approved: ${list(infrastructureForApplication)}.`);
+        } else if (targetPackage && targetPackage !== "application" && !applicationDependencies.has(targetPackage)) {
+          boundary("application", `Application may only use its ports layer and ${list(applicationDependencies)}.`);
+        }
+      } else if (importerPackage === "infrastructure") {
+        if (targetPackage === "application") {
+          if (!applicationForInfrastructure.has(targetModule)) boundary("infrastructure->application", `Only these application modules are approved: ${list(applicationForInfrastructure)}.`);
+        } else if (targetPackage && targetPackage !== "infrastructure" && !infrastructureDependencies.has(targetPackage)) {
+          boundary("infrastructure", `Infrastructure may only implement ${list(infrastructureDependencies)}.`);
+        }
+      } else if (importerPackage === "contracts") {
+        if (targetPackage === "application") {
+          if (!applicationForContracts.has(targetModule)) boundary("contracts->application", `Contracts may only reference the application ports module: ${list(applicationForContracts)}.`);
+        } else if (targetPackage && targetPackage !== "contracts" && !contractsDependencies.has(targetPackage)) {
+          boundary("contracts", `Contracts may only use ${list(contractsDependencies)}.`);
+        }
+      } else if (importerPackage === "pm-core") {
+        if (targetPackage && targetPackage !== "pm-core" && !pmCoreDependencies.has(targetPackage)) {
+          boundary("pm-core", `pm-core may only use ${list(pmCoreDependencies)}.`);
+        }
+      } else if (importerPackage === "pm-markdown") {
+        if (targetPackage && targetPackage !== "pm-markdown" && !pmMarkdownDependencies.has(targetPackage)) {
+          boundary("pm-markdown", `pm-markdown may only use ${list(pmMarkdownDependencies)}.`);
+        }
+      } else if (isolatedPackages.has(importerPackage)) {
+        if (targetPackage && targetPackage !== importerPackage) {
+          boundary("isolated-package", `${importerPackage} must not depend on other workspace packages.`);
+        }
+      }
+
+      if (importerApp && /^apps\/(?:server\/agent|web|desktop)(?:\/|$)/.test(target)) {
+        boundary("apps-server-backend", "apps/server/pm and apps/server/worker must not depend on agent, web or desktop sources.");
+      }
     }
   };
   const createRequireNames = new Set(["createRequire"]);
@@ -133,7 +219,7 @@ export function inspectImportBoundaries(filename, text) {
     } else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "resolve" && ts.isIdentifier(node.expression.expression) && requireNames.has(node.expression.expression.text)) {
       inspect(node.arguments[0]);
     } else if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "URL" && node.arguments?.[1]?.getText(source) === "import.meta.url") {
-      inspect(node.arguments[0]);
+      inspect(node.arguments[0], false, false);
     }
     ts.forEachChild(node, visit);
   };
@@ -144,7 +230,7 @@ export function inspectImportBoundaries(filename, text) {
 async function sourceFiles(directory) {
   const files = [];
   for (const entry of await readdir(path.join(repository, directory), { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || ["node_modules", "dist", "coverage"].includes(entry.name)) continue;
+    if (entry.name.startsWith(".") || ["node_modules", "dist", "coverage", "tests"].includes(entry.name)) continue;
     const relative = `${directory}/${entry.name}`;
     if (entry.isDirectory()) files.push(...await sourceFiles(relative));
     else if (entry.isFile() && /\.(?:[cm]?[jt]sx?)$/.test(entry.name)) files.push(relative);

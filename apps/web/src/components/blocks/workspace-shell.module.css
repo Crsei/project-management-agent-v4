@@ -21,7 +21,8 @@
   flex-shrink: 0;
   min-height: var(--workspace-header-height);
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 .headerActions {
   display: flex;
@@ -56,8 +57,9 @@
   width: var(--workspace-sidebar-collapsed);
   overflow: auto;
   scrollbar-width: none;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--glass-edge);
   background: var(--background);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
   container: workspace-navigation / inline-size;
 }
 .sidebar::-webkit-scrollbar {
@@ -71,8 +73,9 @@
   width: 48px;
   overflow: auto;
   scrollbar-width: none;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--glass-edge);
   background: var(--background);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 .activity::-webkit-scrollbar {
   display: none;
@@ -86,7 +89,8 @@
 .navigationDrawer {
   inset: 0 auto 0 0;
   border-left: 0;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 .navigationDrawer[data-starting-style],
 .navigationDrawer[data-ending-style] {
@@ -101,7 +105,7 @@
     width: 100%;
     height: 48px;
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-edge);
   }
   .shell[data-activity-bar]:not([data-layout-mode="desktop"]) .main {
     height: auto;
@@ -125,7 +129,8 @@
   min-height: 40px;
   flex-shrink: 0;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 .content {
   flex: 1;

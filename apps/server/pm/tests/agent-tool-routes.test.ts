@@ -15,9 +15,9 @@ import type { MigrationPlan } from '../../../../packages/pm-core/migrations.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import { workflowFor } from '../../../../packages/pm-schema/index.ts';
 import { createMcpServiceBearer, type McpInvocationIdentity } from '../../../../packages/infrastructure/src/mcp-service-auth.ts';
-import { createAgentChatTools } from '../src/agent-chat-tools.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
-import { registerAgentToolRoutes } from '../src/agent-tool-routes.ts';
+import { createAgentChatTools } from '../src/agent-tools/agent-chat-tools.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
+import { registerAgentToolRoutes } from '../src/routes/agent-tool-routes.ts';
 
 const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
 const otherWorkspaceId = '0196c319-8b1d-7000-8000-000000000002';

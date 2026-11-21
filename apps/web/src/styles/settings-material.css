@@ -1,0 +1,39 @@
+/* Solid Glass 材质：设置区域。只作用于带 data-settings-content 的页面，
+   不改变其他路由。卡片保留自己的语义表面与危险/虚线边框，只补实体边缘。 */
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) :where(.rounded-module.border.bg-surface):not(.border-dashed):not([class*="border-destructive"]) {
+  border-color: var(--glass-edge);
+  box-shadow: var(--edge-shadow);
+}
+
+/* 卡片内再嵌套的选项/行卡降低一层厚度，避免叠加出多层高阴影。 */
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) :where(.rounded-module.border.bg-surface) :where(.rounded-module.border.bg-surface):not(.border-dashed):not([class*="border-destructive"]) {
+  box-shadow: var(--control-shadow);
+}
+
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) :where(div, section).rounded-module.border:not(.bg-surface):not(.bg-surface-raised):not(.border-dashed):not([class*="border-destructive"]) {
+  border-color: var(--glass-edge);
+  box-shadow: var(--control-shadow);
+}
+
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) :where(.rounded-module.border.bg-surface-raised):not(.border-dashed) {
+  border-color: var(--glass-edge);
+  box-shadow: var(--control-shadow);
+}
+
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) :where(.rounded-module.border.border-dashed) {
+  box-shadow: none;
+}
+
+/* 设置侧栏当前页与 PM 主导航使用同一种“中性玻璃”选中态。
+   旧构建还没有 settings-nav-current 类时，用现有 aria-label/aria-current 命中。 */
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) nav[aria-label="设置导航"] a[aria-current="page"],
+:is([data-settings-content], [data-settings-mode], div:has(> nav[aria-label="工作区设置导航"]), div:has(> nav[aria-label="Workspace settings navigation"])) nav[aria-label="Settings navigation"] a[aria-current="page"],
+nav[aria-label="工作区设置导航"] a[aria-current="page"],
+nav[aria-label="Workspace settings navigation"] a[aria-current="page"],
+.settings-nav-current {
+  background: var(--glass-state);
+  color: var(--foreground);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
+}

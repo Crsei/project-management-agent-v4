@@ -19,7 +19,7 @@ export class ExtensionError extends Error {
     this.details = details;
   }
 }
-export type SidecarInitialization = { dataDir: string; homeDir: string; appDirs: Record<string, string>; claudeMcpFile?: string; secretKey: string };
+export type SidecarInitialization = { dataDir: string; homeDir: string; appDirs: Record<string, string>; claudeMcpFile?: string; secretKey: string; /** Native-context proxy routing; absent for project/private contexts. */ proxyEnv?: Record<string, string> };
 type Pending = { resolve(value: unknown): void; reject(error: unknown): void; timer: ReturnType<typeof setTimeout> };
 const MAX_MESSAGE_BYTES = 32 * 1024 * 1024;
 const publicError = (code: string): ExtensionError => new ExtensionError(503, code, "The configuration service could not confirm the operation. Read the authoritative state before retrying; writes are never replayed automatically.");
@@ -72,6 +72,37 @@ async function hostCommand(): Promise<HostCommand> {
     return { command: process.execPath, args: [sourceTs] };
   }
   throw publicError("sidecar_binary_missing");
+}
+
+const PROXY_ENV_KEYS = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"] as const;
+const PROXY_URL_KEYS = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"] as const;
+
+/** Native contexts may route outbound downloads through the source proxy; project
+ * contexts never inherit ambient proxy routing. Node 24 only follows these env
+ * variables for global fetch when NODE_USE_ENV_PROXY is set. */
+export function sidecarEnvironment(config: SidecarInitialization, ambient: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: ambient.PATH, HOME: config.homeDir, USERPROFILE: config.homeDir, LANG: ambient.LANG ?? "C.UTF-8", ...(ambient.SYSTEMROOT ? { SYSTEMROOT: ambient.SYSTEMROOT } : {}), ...(ambient.TMPDIR ? { TMPDIR: ambient.TMPDIR } : {}) };
+  if (config.proxyEnv === undefined) {
+    // Preserve source HTTP proxy routing for non-native callers without enabling
+    // Node's env proxy, which would violate the project-context no-proxy boundary.
+    for (const key of PROXY_ENV_KEYS) if (ambient[key] !== undefined) env[key] = ambient[key];
+    return env;
+  }
+  const merged: Record<string, string> = {};
+  for (const key of PROXY_ENV_KEYS) {
+    const value = config.proxyEnv[key] ?? ambient[key];
+    if (typeof value === "string" && value.trim()) merged[key] = value;
+  }
+  if (PROXY_URL_KEYS.some(key => merged[key] !== undefined)) {
+    // Local management/probe targets stay direct even when a source proxy is set.
+    const noProxyKey = merged.NO_PROXY === undefined && merged.no_proxy !== undefined ? "no_proxy" : "NO_PROXY";
+    const noProxy = new Set((merged[noProxyKey] ?? "").split(",").map(value => value.trim()).filter(Boolean));
+    for (const host of ["127.0.0.1", "localhost", "::1"]) noProxy.add(host);
+    merged[noProxyKey] = [...noProxy].join(",");
+    env.NODE_USE_ENV_PROXY = "1";
+  }
+  Object.assign(env, merged);
+  return env;
 }
 
 /** Owns precisely one child and its descendants; no writes are automatically retried. */
@@ -169,11 +200,7 @@ export class ExtensionSidecar {
       const executable = await hostCommand();
       const config = await this.initialize();
       if (this.stopping) { config.secretKey = ""; throw publicError("sidecar_stopping"); }
-      const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: config.homeDir, USERPROFILE: config.homeDir, LANG: process.env.LANG ?? "C.UTF-8", ...(process.env.SYSTEMROOT ? { SYSTEMROOT: process.env.SYSTEMROOT } : {}), ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}) };
-      // Preserve source HTTP proxy routing without inheriting the rest of the Agent environment.
-      for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]) {
-        if (process.env[key] !== undefined) env[key] = process.env[key];
-      }
+      const env = sidecarEnvironment(config);
       const child = spawn(executable.command, executable.args, { cwd: config.dataDir, env, stdio: "pipe", windowsHide: true, detached: process.platform !== "win32" });
       this.child = child;
       this.buffer = "";
@@ -193,7 +220,9 @@ export class ExtensionSidecar {
       child.once("error", () => { if (this.child === child) this.fail("sidecar_start_failed"); });
       child.once("exit", () => { if (this.child === child) this.fail("sidecar_disconnected"); });
       let initialized: unknown;
-      try { initialized = await this.send("host_initialize", config, 30_000); }
+      // proxyEnv configures the child process transport; it is not part of the host protocol.
+      const { proxyEnv: _proxyEnv, ...hostConfig } = config;
+      try { initialized = await this.send("host_initialize", hostConfig, 30_000); }
       finally { config.secretKey = ""; }
       if (!initialized || typeof initialized !== "object" || !("initialized" in initialized) || initialized.initialized !== true) throw publicError("sidecar_initialization_failed");
       this.state("ready");

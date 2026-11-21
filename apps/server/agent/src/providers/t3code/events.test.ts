@@ -36,7 +36,7 @@ test("messages hydrate omitted bodies without duplicating text; corrections repl
   assert.equal(events.filter((event) => event.type === "item.upsert").length, 5);
 });
 
-test("request and item ordering joins once, default-denies native approval, and observes native closure", () => {
+test("request and item ordering joins once, offers interactive native approval, and observes native closure", () => {
   const offered: NativeInteractionRequest[] = [];
   const closed: string[] = [];
   const adapter = makePmEventAdapter({ canRespond: true, onRequest: (value) => offered.push(value), onRequestClosed: (id) => closed.push(id),
@@ -58,8 +58,15 @@ test("request and item ordering joins once, default-denies native approval, and 
   adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "approval-item", type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
   adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, id: Schema.decodeUnknownSync(OrchestrationV2RuntimeRequest.fields.id)("approval"), kind: "command" } });
   assert.equal(offered[1].kind, "approval");
-  assert.equal(offered[1].respondable, false);
-  assert.match(offered[1].unavailableReason!, /PM business approvals remain separate/);
+  assert.equal(offered[1].respondable, true);
+  assert.deepEqual(offered[1].options?.map((option) => option.id), ["accept", "decline", "cancel"]);
+  assert.equal(offered[1].unavailableReason, undefined);
+  assert.equal(adapter.items.get("approval-item")?.status, "waiting");
+  adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, id: Schema.decodeUnknownSync(OrchestrationV2RuntimeRequest.fields.id)("approval"),
+    kind: "command", status: "resolved", decision: "accept", resolvedAt: now } });
+  assert.equal(adapter.items.get("approval-item")?.status, "completed");
+  assert.equal(adapter.items.get("approval-item")?.request?.resolution, "approved");
+  assert.equal(adapter.items.get("approval-item")?.request?.respondable, false);
 });
 
 test("auto-approved permissions settle only from accepted decisions and survive repeated native closure", () => {

@@ -113,7 +113,7 @@ process.on('SIGTERM',async()=>{
     "apps/server/worker/src/main.ts": service("worker"),
     "apps/server/agent/dist/index.mjs": service("agent"),
     "apps/server/agent/dist/cc-switch/host/main.mjs": "test-only presence fixture; this suite does not start the sidecar",
-    "apps/server/gateway.ts": service("gateway"),
+    "apps/server/gateway/src/index.ts": service("gateway"),
     "apps/web/dist/index.html": "<!doctype html><div id=\"root\">fixture</div>",
   };
   for (const [file, content] of Object.entries(files)) {

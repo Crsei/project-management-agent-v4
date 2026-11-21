@@ -7,7 +7,7 @@ import type { ChangeHistoryTarget, ChangeSnapshot, TaskAttentionPage } from '../
 import { MarkdownDiff } from './markdown-diff';
 import './change-history.css';
 
-function useHistoryKey(workspaceId: string | undefined) {
+export function useHistoryKey(workspaceId: string | undefined) {
   const { actor, coreEvents } = usePmService();
   const queryClient = useQueryClient();
   const actorId = actor?.id;

@@ -8,7 +8,7 @@ import { chatOnlyExecutionSelection, type RemoteThread } from "@agent-workspace/
 import type { ChatDefaultsResponse } from "@agent-workspace/contracts/settings";
 import { chatRoutes } from "../chat.ts";
 import { closeStore, writeRecord } from "../durable/store.ts";
-import { ensureThread, forkThreadHistory, getThread, listThreads } from "../durable/threads.ts";
+import { ensureThread, forkThreadHistory, getThread, listThreads, updateThread } from "../durable/threads.ts";
 import { createProviderInstance, deleteProviderInstance, getStoredInstance, updateProviderInstance } from "../providers/instances.ts";
 import { getNativeProviderAdapter } from "../providers/driver-registry.ts";
 import { resolveProviderRuntime } from "../providers/runtime.ts";
@@ -47,11 +47,20 @@ async function put(path: string, body: unknown): Promise<Response> {
 test("unset defaults never auto-select the sole native provider or create a thread", async () => {
   const response = await app.request("http://localhost/api/settings/chat-defaults");
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { defaults: { revision: 0, selection: null }, availability: { status: "unset" } });
+  assert.deepEqual(await response.json(), { defaults: { revision: 0, selection: null }, availability: { status: "unset" }, lastUsed: null });
   assert.equal(listThreads().length, 0);
   seedThread("unselected");
   assert.deepEqual(getThread("unselected")!.settings, { providerInstanceId: "", model: "", systemPrompt: "", temperature: 1 });
   assert.equal(getThread("unselected")!.defaultsRevision, 0);
+});
+
+test("new threads reuse the latest valid selection when no explicit default exists", async () => {
+  seedThread("used");
+  updateThread("used", { settings: { ...pair, systemPrompt: "", temperature: 1 } });
+  assert.deepEqual((await getChatDefaults()).lastUsed, pair);
+  seedThread("next");
+  assert.deepEqual(getThread("next")!.settings, { ...pair, systemPrompt: "", temperature: 1 });
+  assert.equal(getThread("next")!.defaultsRevision, 0);
 });
 
 test("explicit native defaults survive SQLite reopen and snapshot only newly created threads", async () => {

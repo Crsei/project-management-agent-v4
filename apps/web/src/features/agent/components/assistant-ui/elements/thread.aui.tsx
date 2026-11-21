@@ -79,7 +79,6 @@ import { ComposerUsage } from "@agent/src/usage/ComposerUsage";
 import { consumeUsageLimitsCommand } from "@agent/src/usage/ComposerUsageModel";
 import { useComposerSuggestions } from "@agent/src/chat/composer-suggestions";
 import { RichComposerInput } from "@agent/src/chat/rich-composer";
-import { ComposerDraftActions } from "@agent/src/chat/composer-draft-actions";
 import { QueuedMessages, ThreadMessageActions } from "@agent/src/chat/message-actions";
 import { ComposerPendingRequests } from "@agent/src/chat/composer-pending-requests";
 import { ThreadHistoryMessage, ThreadHistoryNavigation } from "@agent/src/chat/history-navigation";
@@ -167,6 +166,8 @@ export type ThreadProps = {
   onSettingsChange?: (settings: { modelOptions?: ProviderOptionSelection[]; interactionMode?: "default" | "plan" }) => Promise<void>;
   catalog: ComposerModelPickerCatalog;
   disabled?: boolean;
+  /** Model selection only needs loaded settings and the catalog, not conversation history or an execution environment. */
+  modelPickerDisabled?: boolean;
   saving?: boolean;
   saveError?: string;
   onRetry?: () => void | Promise<void>;
@@ -768,7 +769,6 @@ const Composer: FC<ThreadProps & ComposerFanoutProps & {
             interactionMode={props.interactionMode}
             onInteractionModeChange={(mode) => props.onSettingsChange?.({ interactionMode: mode })}
           />
-          <ComposerDraftActions key={threadId} disabled={actionsBlocked || queueEdit.active} />
           <ComposerCompactionControls controls={compactionControls} onCompact={() => void compaction.start(false)} onCompactAndSend={() => void compaction.start(true)} />
           <ComposerAction
             {...props}
@@ -808,7 +808,7 @@ const ComposerAction: FC<ThreadProps & ComposerFanoutProps & ComposerSessionActi
 };
 
 const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSessionActionProps & { historyBlocked: boolean; draftBlocked?: boolean; onUsageCommand: () => boolean; latestGenerationId?: string; generation?: { status?: GenerationOutputStatus } }> = (props) => {
-  const { providerInstanceId, model, modelOptions, interactionMode, onSettingsChange, onModelChange, catalog, disabled, saving, saveError, onRetry, composerActions, historyBlocked, draftBlocked, onUsageCommand, sendUnavailable, generation, latestGenerationId,
+  const { providerInstanceId, model, modelOptions, interactionMode, onSettingsChange, onModelChange, catalog, disabled, modelPickerDisabled, saving, saveError, onRetry, composerActions, historyBlocked, draftBlocked, onUsageCommand, sendUnavailable, generation, latestGenerationId,
     fanoutActive, fanoutPending, fanoutEpoch, fanoutBlocker, onFanoutChange, onFanoutSend } = props;
   const t = useAgentText();
   const aui = useAui();
@@ -816,7 +816,6 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
   const attachmentCount = useAuiState((state) => state.composer.attachments.length);
   const hasQuote = useAuiState((state) => !!state.composer.quote);
   const threadRunning = useAuiState((state) => state.thread.isRunning);
-  const threadBusy = useAuiState((s) => s.thread.isRunning || s.thread.isLoading || s.threads.isLoading);
   const threadId = useAuiState((s) => s.threads.mainThreadId);
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
   const { preferences } = useChatBrowserPreferences();
@@ -825,7 +824,6 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
   const selection = resolveProviderModelSelection(catalog.providers, providerInstanceId, model);
   const provider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : undefined;
-  const effectiveOptions = modelOptions ?? provider?.modelPreferences?.options[model];
   const tooLong = composerPromptTooLong(prompt);
   const [steer, setSteer] = useState<{ supported: boolean; interruptsTools: boolean; generationId?: string }>({ supported: false, interruptsTools: false });
   const [pending, setPending] = useState<"steer" | "queue" | "resume">();
@@ -918,7 +916,7 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
   const queueMessage = async () => {
     if (!remoteId || !prompt.trim() || pending) return;
     if (!isPlainTextDraft({ hasText: true, attachmentCount, hasQuote, selectionCount: contextDraft.items.length + pmWorkspace.references.length })) {
-      setActionError(t("队列按钮只接管纯文字；附件或引用请在“草稿与队列”中保存。", "The queue button takes plain text only; save attachments or references from “Draft and queue”."));
+      setActionError(t("队列只接管纯文字；附件或引用会保留在当前草稿中，执行结束后再发送。", "The queue takes plain text only; attachments or references stay in the current draft for sending after the turn ends."));
       return;
     }
     setPending("queue");
@@ -959,22 +957,6 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
     }
   };
 
-  const traitsPicker = onSettingsChange ? <ComposerTraitsPicker
-    key={`${threadId}:${providerInstanceId}:${model}`}
-    driver={provider?.driver}
-    prompt={prompt}
-    onPromptEdit={(edit) => aui.composer.setText(edit(aui.composer.getState().text))}
-    model={activeModel}
-    selections={effectiveOptions}
-    interactionMode={interactionMode}
-    onSettingsChange={onSettingsChange}
-    disabled={disabled || threadBusy || props.queueUpdatePending || props.compactionPending}
-    saving={saving}
-    saveError={saveError}
-    catalogLoading={catalog.loading}
-    catalogError={catalog.error}
-    onRetry={onRetry}
-  /> : null;
   const dictation = <AuiIf condition={(s) => s.thread.capabilities.dictation}>
     <AuiIf condition={(s) => s.composer.dictation == null}>
       <ComposerPrimitive.Dictate asChild>
@@ -1070,14 +1052,32 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
           model={model}
           onChange={onModelChange}
           catalog={catalog}
-          disabled={disabled || threadBusy || fanoutPending || props.editingQueue || props.compactionPending}
+          disabled={(modelPickerDisabled ?? disabled) || threadRunning || fanoutPending || props.editingQueue || props.compactionPending}
           saving={saving}
           saveError={saveError}
           onRetry={onRetry}
           modelOptions={modelOptions}
           onFanoutChange={onFanoutChange}
+          showStackControl={false}
         />
-        {!collapsed.has("traits") && traitsPicker}
+        {onSettingsChange && <ComposerTraitsPicker
+          key={`effort:${threadId}:${providerInstanceId}:${model}`}
+          reasoningOnly
+          showInteractionMode={false}
+          driver={provider?.driver}
+          prompt={prompt}
+          onPromptEdit={(edit) => aui.composer.setText(edit(aui.composer.getState().text))}
+          model={activeModel}
+          selections={modelOptions}
+          interactionMode={interactionMode}
+          onSettingsChange={onSettingsChange}
+          disabled={(modelPickerDisabled ?? disabled) || threadRunning || props.queueUpdatePending || props.compactionPending}
+          saving={saving}
+          saveError={saveError}
+          catalogLoading={catalog.loading}
+          catalogError={catalog.error}
+          onRetry={onRetry}
+        />}
       </div>
       <div className={styles.rightControls}>
         {!collapsed.has("contextActions") && composerActions}
@@ -1097,7 +1097,6 @@ const ComposerActionBody: FC<ThreadProps & ComposerFanoutProps & ComposerSession
           </PopoverTrigger>
           <PopoverContent side="top" align="end" className="composer-more-menu w-60 space-y-2 p-2 text-xs">
             <PopoverTitle className="text-xs font-medium text-muted-foreground">{t("更多控件", "More controls")}</PopoverTitle>
-            {collapsed.has("traits") && traitsPicker}
             {collapsed.has("contextActions") && composerActions && <div className="composer-more-row">{composerActions}</div>}
             {collapsed.has("contextMeter") && <div className="composer-more-row"><ContextMeter /></div>}
             {collapsed.has("attachment") && <div className="composer-more-row"><ComposerAddAttachment /></div>}

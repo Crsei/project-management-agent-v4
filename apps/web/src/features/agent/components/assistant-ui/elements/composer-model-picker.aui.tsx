@@ -305,7 +305,7 @@ export function ComposerModelPicker({
         <span className={cn("min-w-0 truncate", stackedSummary.count ? "text-foreground/80" : "text-muted-foreground")}>{stackedSummary.count ? stackedSummary.short : t("选择模型", "Select model")}</span>
       </> : <>
         {activeProvider && <Glyph provider={activeProvider} providers={catalog.providers} small />}
-        <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel) ?? activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
+        <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel)?.trim() || activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
       </>}
       {(saving || pending) && <Loader2Icon aria-label={t("保存中", "Saving")} className="size-3 shrink-0 animate-spin" />}
       <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />

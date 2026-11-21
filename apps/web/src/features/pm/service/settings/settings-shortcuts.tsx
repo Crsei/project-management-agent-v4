@@ -1,5 +1,5 @@
 import { useText } from "../pm-ui"
-import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { SettingsSection, type SettingsPageProps } from "./settings-shared"
 
 type Shortcut = { label: string; keys: string[]; scope: string; availability: "service" | "unbound"; sequence?: boolean; alternatives?: boolean }
 type ShortcutGroup = { title: string; description: string; rows: Shortcut[] }
@@ -70,11 +70,7 @@ export function SettingsShortcuts({ mode }: SettingsPageProps) {
       ],
     },
   ]
-  return <SettingsSection title={t("键盘快捷键", "Keyboard shortcuts")} description={t("已接入按键、准确作用域与完整参考对照。此页仅提供说明，不注册新的快捷键。", "Implemented bindings, their exact scopes and the complete reference comparison. This page documents keys; it does not register new shortcuts.")}>
-    <SettingsNotice>
-      {t("⌘ 对应 macOS Command，其他系统使用 Ctrl。按键受当前页面、焦点、权限与草稿状态约束；输入法组合输入和浏览器 / 操作系统快捷键不应当作应用命令。当前不支持自定义、重新绑定或一键启用参考快捷键。", "⌘ means Command on macOS; use Ctrl on other systems. Keys depend on the current page, focus, permissions and draft state. IME composition and browser or OS shortcuts are not application commands. Customization, rebinding and enabling the reference shortcuts are not supported.")}
-      {mode === "lab" && <p className="mt-2">{t("当前是 Lab：下面的“仅正式工作区”描述正式产品已有实现，不代表本 Lab 页面绑定了它们。", "You are in Lab. Entries marked Service workspace only describe existing product behavior, not bindings on this Lab page.")}</p>}
-    </SettingsNotice>
+  return <SettingsSection title={t("键盘快捷键", "Keyboard shortcuts")} description={t("已接入按键及其作用域；此页不注册新快捷键。", "Implemented bindings and their scopes; this page registers no shortcuts.")}>
     <div className="grid min-w-0 gap-6 xl:grid-cols-2">
       {groups.map(group => <section key={group.title} className="min-w-0 rounded-module border bg-surface p-4">
         <h3 className="font-medium">{group.title}</h3>
@@ -95,6 +91,5 @@ export function SettingsShortcuts({ mode }: SettingsPageProps) {
         </dl>
       </section>)}
     </div>
-    <SettingsNotice>{t("输入区冲突说明：/ 搜索会避开文本输入；⌘ / Ctrl + K 在正式工作区的表单输入中仍可打开命令菜单；⌘ / Ctrl + S 仅在 Markdown 编辑工作区接管保存。普通 Tab / Shift + Tab 用于焦点移动，Enter / Space 按当前控件语义操作，不会自动启用 N、P、? 或 G 序列。", "Input conflicts: / search skips text entry, while ⌘ / Ctrl + K can still open the service command menu in form inputs. ⌘ / Ctrl + S overrides Save only in a Markdown editor workspace. Tab / Shift + Tab move focus and Enter / Space follow the current control's semantics; they do not enable N, P, ? or G sequences.")}</SettingsNotice>
   </SettingsSection>
 }

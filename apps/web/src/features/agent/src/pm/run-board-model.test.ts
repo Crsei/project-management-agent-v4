@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AgentWorkspace, ChatGenerationView, ExecutionEnvironment, RemoteThread, ThreadSidebar } from "@agent-workspace/contracts/chat";
-import { readRunBoardSelection, runBoardActivity, runBoardGenerationFacts, runBoardStopTargetMatches, runBoardTerminalWorkspace, updateRunBoardSelection } from "./run-board-model.ts";
+import { isRunBoardAttentionColumn, isRunBoardFolderScopeValid, nextRunBoardKeyboardTarget, readRunBoardFolderScope, readRunBoardSelection, runBoardActivity, runBoardGenerationFacts, runBoardStopTargetMatches, runBoardTerminalWorkspace, updateRunBoardSelection, writeRunBoardFolderScope } from "./run-board-model.ts";
 import { runBoardChatHref } from "./run-board-navigation.ts";
 
 function thread(activity: unknown, running = false): RemoteThread {
@@ -147,4 +147,60 @@ test("a new active generation cannot inherit the old generation's successful res
   assert.equal(reconciled.state, "running");
   assert.equal(reconciled.generation, current);
   assert.equal(reconciled.consistent, true);
+});
+
+test("remembered board scope is validated and survives storage failures as a preference only", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  };
+  const workspace = { id: "folder-a", archivedAt: null } as AgentWorkspace;
+  assert.equal(readRunBoardFolderScope(storage), "");
+  writeRunBoardFolderScope("folder:folder-a", storage);
+  assert.equal(readRunBoardFolderScope(storage), "folder:folder-a");
+  assert.equal(isRunBoardFolderScopeValid("folder:folder-a", [workspace]), true);
+  assert.equal(isRunBoardFolderScopeValid("folder:folder-b", [workspace]), false);
+  assert.equal(isRunBoardFolderScopeValid("folder:folder-a", [{ ...workspace, archivedAt: "2026-11-01" }]), false);
+  assert.equal(isRunBoardFolderScopeValid("chat-only", []), true);
+  assert.equal(isRunBoardFolderScopeValid("folder:", [workspace]), false);
+  values.set("pm-v4:run-board-scope", "folder:bad path");
+  assert.equal(readRunBoardFolderScope(storage), "");
+  values.set("pm-v4:run-board-scope", "not-a-scope");
+  assert.equal(readRunBoardFolderScope(storage), "");
+  writeRunBoardFolderScope("", storage);
+  assert.equal(values.has("pm-v4:run-board-scope"), false);
+  const broken = { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); }, removeItem: () => { throw new Error("denied"); } };
+  assert.equal(readRunBoardFolderScope(broken), "");
+  assert.doesNotThrow(() => writeRunBoardFolderScope("folder:folder-a", broken));
+});
+
+test("keyboard movement clamps inside a column and skips empty columns", () => {
+  const columns = ["queued", "running", "waiting", "attention", "idle", "unknown"] as const;
+  const rows = [
+    { id: "r1", column: "running" as const },
+    { id: "r2", column: "running" as const },
+    { id: "w1", column: "waiting" as const },
+    { id: "i1", column: "idle" as const },
+    { id: "i2", column: "idle" as const },
+  ];
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, null, "j"), "r1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "missing", "j"), "r1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "r1", "j"), "r2");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "r2", "j"), "r2");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "r2", "k"), "r1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "r1", "l"), "w1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "w1", "l"), "i1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "i2", "l"), "i2");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "i1", "h"), "w1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "w1", "h"), "r1");
+  assert.equal(nextRunBoardKeyboardTarget(rows, columns, "r1", "h"), "r1");
+  assert.equal(nextRunBoardKeyboardTarget([], columns, null, "j"), null);
+  assert.equal(nextRunBoardKeyboardTarget([{ id: "u1", column: "unknown" }], columns, null, "l"), "u1");
+});
+
+test("attention columns include waiting, failure and unknown but never running or idle", () => {
+  for (const [column, expected] of [["waiting", true], ["attention", true], ["unknown", true], ["queued", false], ["running", false], ["idle", false]] as const)
+    assert.equal(isRunBoardAttentionColumn(column), expected);
 });

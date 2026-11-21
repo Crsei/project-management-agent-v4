@@ -134,6 +134,32 @@ for (const file of files.filter(file => file.startsWith(`${design}${path.sep}`))
     if (!definitions.has(reference[0])) errors.push(`${repositoryPath(file)}: unknown ${reference[0]}`);
   }
 }
+const repositoryMap = path.join(root, 'docs/architecture/repository-map.md');
+const directoryEntries = async relative => (await readdir(path.join(root, relative), { withFileTypes: true }))
+  .filter(entry => entry.isDirectory())
+  .map(entry => `${relative}/${entry.name}`)
+  .sort();
+const requiredDirectories = [
+  ...await directoryEntries('apps'),
+  ...await directoryEntries('apps/server'),
+  ...await directoryEntries('packages'),
+  ...await directoryEntries('vendor'),
+  'benchmarks/dovspace',
+  'plugins/dovspace-pm',
+  'scripts',
+  'tests',
+];
+let repositoryMapText = '';
+try {
+  repositoryMapText = await readFile(repositoryMap, 'utf8');
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+  errors.push('docs/architecture/repository-map.md: missing repository map');
+}
+for (const directory of requiredDirectories) {
+  if (!repositoryMapText.includes(`\`${directory}\``)) errors.push(`docs/architecture/repository-map.md: missing directory ${directory}`);
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;

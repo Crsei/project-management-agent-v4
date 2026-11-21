@@ -1,18 +1,18 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { getMembership } from '../../../../packages/application/src/access.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { getMembership } from '../../../../../packages/application/src/access.ts';
 import {
   pmReferenceResolveRequestSchema,
   pmReferenceResolveResponseSchema,
   type PmReferenceInput,
   type PmReferenceKind,
   type PmReferenceResolution,
-} from '../../../../packages/agent-contracts/src/pm-references.ts';
-import type { FileRecord } from '../../../../packages/pm-schema/index.ts';
+} from '../../../../../packages/agent-contracts/src/pm-references.ts';
+import type { FileRecord } from '../../../../../packages/pm-schema/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
-import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
+import { mcpRequestIdentity, recheckMcpRequest } from '../../../../../packages/application/src/mcp-service-auth.ts';
 
 const params = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
 

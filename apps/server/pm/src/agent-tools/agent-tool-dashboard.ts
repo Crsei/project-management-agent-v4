@@ -1,18 +1,18 @@
-import type { Actor, Command, CommandReceipt } from '../../../../packages/domain/src/core.ts';
-import { DomainError } from '../../../../packages/domain/src/core.ts';
-import type { CoreAccess, SqlExecutor } from '../../../../packages/application/src/ports.ts';
-import type { DashboardReadContext } from '../../../../packages/application/src/dashboard-read.ts';
-import { readPersonalDashboard } from '../../../../packages/application/src/dashboard-personal.ts';
-import { readTimeDashboard } from '../../../../packages/application/src/dashboard-time.ts';
-import { readPortfolioDashboard } from '../../../../packages/application/src/dashboard-portfolio.ts';
-import { scopePortfolioDashboard } from '../../../../packages/domain/src/dashboard-portfolio.ts';
-import { readPlanningDashboard } from '../../../../packages/application/src/dashboard-planning.ts';
-import { readSprintsDashboard } from '../../../../packages/application/src/dashboard-sprints.ts';
-import { DashboardToolInputSchemas, DashboardCommandActions, type DashboardToolName, type DashboardWriteToolName } from '../../../../packages/application/src/agent-tool-dashboard.ts';
-import { projectDashboardRead, projectDashboardReceipt, type DashboardReadData } from '../../../../packages/application/src/dashboard-tool-projection.ts';
-import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext } from '../../../../packages/application/src/agent-chat-tools.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { DashboardToolResultSchema } from '../../../../packages/agent-contracts/src/pm-tool-dashboard.ts';
+import type { Actor, Command, CommandReceipt } from '../../../../../packages/domain/src/core.ts';
+import { DomainError } from '../../../../../packages/domain/src/core.ts';
+import type { CoreAccess, SqlExecutor } from '../../../../../packages/application/src/ports.ts';
+import type { DashboardReadContext } from '../../../../../packages/application/src/dashboard-read.ts';
+import { readPersonalDashboard } from '../../../../../packages/application/src/dashboard-personal.ts';
+import { readTimeDashboard } from '../../../../../packages/application/src/dashboard-time.ts';
+import { readPortfolioDashboard } from '../../../../../packages/application/src/dashboard-portfolio.ts';
+import { scopePortfolioDashboard } from '../../../../../packages/domain/src/dashboard-portfolio.ts';
+import { readPlanningDashboard } from '../../../../../packages/application/src/dashboard-planning.ts';
+import { readSprintsDashboard } from '../../../../../packages/application/src/dashboard-sprints.ts';
+import { DashboardToolInputSchemas, DashboardCommandActions, type DashboardToolName, type DashboardWriteToolName } from '../../../../../packages/application/src/agent-tool-dashboard.ts';
+import { projectDashboardRead, projectDashboardReceipt, type DashboardReadData } from '../../../../../packages/application/src/dashboard-tool-projection.ts';
+import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext } from '../../../../../packages/application/src/agent-chat-tools.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import { DashboardToolResultSchema } from '../../../../../packages/agent-contracts/src/pm-tool-dashboard.ts';
 import type { AgentChatToolFamily, AgentChatToolName } from './agent-chat-tools.ts';
 
 export type DashboardToolDependencies = {

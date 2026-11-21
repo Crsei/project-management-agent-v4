@@ -12,7 +12,7 @@ import type { AutomationDefinitionMigrationTarget } from '../packages/infrastruc
 import type { ResolvedAutomationMcpDefinition } from '../packages/application/src/automation-integrations-definitions.ts';
 import { createAutomationIntegrationsService } from '../packages/application/src/automation-integrations.ts';
 import { createAutomationIntegrationRuntimeService } from '../packages/application/src/automation-integrations-runtime.ts';
-import { registerAutomationEventsRoutes } from '../apps/server/pm/src/automation-events-routes.ts';
+import { registerAutomationEventsRoutes } from '../apps/server/pm/src/routes/automation-events-routes.ts';
 import { automationServiceHeaders } from '../packages/infrastructure/src/automation-execution-client.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
 import { readonlyCorePort } from '../packages/pm-core/readonly.ts';

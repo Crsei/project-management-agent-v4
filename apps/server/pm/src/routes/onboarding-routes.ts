@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { getOnboarding, updateOnboarding } from '../../../../packages/application/src/onboarding.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { getOnboarding, updateOnboarding } from '../../../../../packages/application/src/onboarding.ts';
 
 export function registerOnboardingRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor> }): void {
   app.get('/api/v1/auth/onboarding', async (request, reply) => {

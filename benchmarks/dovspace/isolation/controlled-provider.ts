@@ -31,16 +31,27 @@ export function createControlledOmpProvider(fixture: FixtureHandle): Server {
       if (calls.length === 2) {
         const returned = JSON.stringify(input.messages.filter(message => message.role === 'tool'));
         if (!returned.includes(target.revision)) throw new Error('Actual PM Host Tool did not return the original revision');
-        tool('pm_update_task', { target: explicit, arguments: { id: target.entityId, revision: target.revision, title: null, description: null, assigneeId: null, priority: 'high', startDate: null, dueDate: null, labels: null } }); return;
+        const transport = JSON.stringify(lastUser?.content).match(/'([^']*\/agent-tools\.mjs)'\s+'(http:\/\/127\.0\.0\.1:\d+)'/);
+        if (!transport) throw new Error('The actual generation-scoped PM CLI was not supplied');
+        const script = [
+          'const fs=require("node:fs"),cp=require("node:child_process"),crypto=require("node:crypto");',
+          `const cli=${JSON.stringify(transport[1])},bridge=${JSON.stringify(transport[2])};`,
+          'const catalog=cp.spawnSync(process.execPath,[cli,bridge,"tools","list"],{encoding:"utf8"});',
+          'if(catalog.status!==0||!JSON.parse(catalog.stdout).tools.some(t=>t.name==="pm_update_task"))throw Error("Generation tool discovery unavailable");',
+          `const invocation={operationId:crypto.randomUUID(),name:"pm_update_task",target:${JSON.stringify(explicit)},arguments:${JSON.stringify({ id: target.entityId, revision: target.revision, title: null, description: null, assigneeId: null, priority: 'high', startDate: null, dueDate: null, labels: null })}};`,
+          `const handoff={workspaceId:${JSON.stringify(target.workspaceId)},projectId:${JSON.stringify(target.projectId)},targetId:${JSON.stringify(target.entityId)},operationId:invocation.operationId,observedRevision:${JSON.stringify(target.revision)},outcome:"not dispatched; preserve original identity"};`,
+          'fs.mkdirSync("artifacts",{recursive:true});',
+          'fs.writeFileSync("artifacts/original-invocation.json",JSON.stringify(invocation),{flag:"wx"});',
+          'fs.writeFileSync("artifacts/handoff.json",JSON.stringify(handoff),{flag:"wx"});',
+          'const called=cp.spawnSync(process.execPath,[cli,bridge,"tools","call"],{input:JSON.stringify(invocation),encoding:"utf8"});',
+          'process.stdout.write(called.stdout||"");process.stderr.write(called.stderr||"");if(called.status!==0)process.exitCode=1;',
+        ].join('');
+        tool('bash', { command: `node -e '${script.replaceAll("'", "'\\''")}'`, timeout: 20 }); return;
       }
       if (calls.length === 3) { tool('pm_read', read); return; }
       if (calls.length === 4) {
-        const mutation = calls.find(call => call.function.name === 'pm_update_task');
-        const result = input.messages.find(message => message.role === 'tool' && message.tool_call_id === mutation?.id);
-        const encoded = JSON.stringify(result?.content).replaceAll('\\"', '"');
-        const operationId = /"operationId"\s*:\s*"([a-f0-9-]{36})"/.exec(encoded)?.[1];
-        if (!operationId) throw new Error('Real lost-response tool result lacks original operation identity');
-        tool('write', { path: 'artifacts/handoff.json', content: JSON.stringify({ workspaceId: target.workspaceId, projectId: target.projectId, targetId: target.entityId, operationId, observedRevision: target.revision, outcome: 'unknown; reconcile original receipt only', priorRead: 'pm_read after mutation; fresh Session must revalidate' }) }); return;
+        // The caller-selected identity and handoff were persisted BEFORE the original CLI write.
+        tool('read', { path: 'artifacts/handoff.json' }); return;
       }
       // Hold an actual provider stream open. Product cancellation must abort it, not finish a fake RPC turn.
       outgoing.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }); outgoing.flushHeaders();

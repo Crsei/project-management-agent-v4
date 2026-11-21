@@ -7,8 +7,7 @@ import type { InvitationAcceptDto, InvitationInspectDto, InvitationReceiptDto } 
 import { memberRoleCapabilities } from '../../domain/src/members.ts';
 import { hashPassword, verifyPassword } from '../../infrastructure/src/auth.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
-import { requireCapability } from './access.ts';
-import { invitationTokenHash } from './invitations.ts';
+import { requireInvitationAuthority, invitationTokenHash } from './invitations.ts';
 import type { InvitationProjectValidator, InvitationRow } from './invitations.ts';
 import { joinInvitationTeams, readInvitationTeams } from './invitation-teams.ts';
 
@@ -56,10 +55,10 @@ async function invitedAccount(sql: PoolClient, email: string): Promise<Invitatio
 }
 async function currentInviter(sql: PoolClient, row: InvitationRow, options: InvitationAcceptanceOptions): Promise<void> {
   const result = await sql.query<Actor>('SELECT id,email,name FROM users WHERE id=$1 AND disabled_at IS NULL', [row.invited_by]);
-  if (!result.rows[0]) throw new DomainError('invitation_authority_revoked', 'The invitation no longer has administrator authorization', 403);
-  try { await requireCapability(sql, result.rows[0], row.workspace_id, 'access.manage'); }
+  if (!result.rows[0]) throw new DomainError('invitation_authority_revoked', 'The invitation no longer has sufficient authorization', 403);
+  try { await requireInvitationAuthority(sql, result.rows[0], row.workspace_id, { role: row.role, projectIds: row.project_ids }); }
   catch (error) {
-    if (error instanceof DomainError) throw new DomainError('invitation_authority_revoked', 'The invitation no longer has administrator authorization', 403);
+    if (error instanceof DomainError) throw new DomainError('invitation_authority_revoked', 'The invitation no longer has sufficient authorization', 403);
     throw error;
   }
   if (row.role === 'admin' && row.project_ids !== null) throw new DomainError('invitation_invalid', 'Invitation scope is invalid', 409);

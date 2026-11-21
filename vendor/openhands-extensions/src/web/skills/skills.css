@@ -139,9 +139,6 @@
 /* Skills catalog/config presentation adapted from mcp-skill-page. */
 :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-catalog-tabs { display: flex; flex-wrap: wrap; gap: 4px; align-self: flex-start; border: 1px solid var(--oh-border); border-radius: 9px; padding: 3px; background: var(--oh-color-base-secondary); }
 :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-coverage { display: flex; align-items: center; gap: 8px; min-width: 0; }
-:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-stack { display: inline-flex; flex-shrink: 0; }
-:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-stack .oh-skill-agent-avatar + .oh-skill-agent-avatar { margin-inline-start: -5px; }
-:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-avatar { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--oh-border); border-radius: 50%; background: var(--oh-surface-raised); color: var(--oh-foreground); font-size: 9px; font-weight: 600; line-height: 1; }
 :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-heading > div { min-width: 0; overflow-wrap: anywhere; }
 :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-body { display: flex; flex-direction: column; gap: 16px; }
@@ -240,3 +237,17 @@
   :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar .oh-enum-filter { flex: 1; }
   :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar .oh-enum-filter-trigger { width: 100%; justify-content: space-between; }
 }
+
+/* Read-only native observations are shown in the installed catalog, not as a page-level block. */
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--oh-border); border-radius: 10px; background: var(--oh-color-base-secondary); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-header > div { min-width: 0; flex: 1 1 320px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-header h3 { margin: 0; color: var(--oh-foreground); font-size: 14px; font-weight: 600; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-header p { margin: 4px 0 0; color: var(--oh-muted); font-size: 12px; line-height: 1.6; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-status { margin: 0; color: var(--oh-muted); font-size: 12px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-row { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-color-base); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-row strong { color: var(--oh-foreground); font-size: 13px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-row code { color: var(--oh-muted); font-size: 11px; overflow-wrap: anywhere; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-row p { margin: 0; color: var(--oh-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-native-row span { color: var(--oh-text-dim, var(--oh-muted)); font-size: 11px; }

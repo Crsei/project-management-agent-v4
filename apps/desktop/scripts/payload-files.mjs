@@ -68,7 +68,7 @@ function componentFor(path) {
         || workspace === "apps/server/gateway.ts" || under(workspace, "node_modules")
         || pmPackages.some((name) => under(workspace, `packages/${name}`))) return "pm";
       if (under(workspace, "apps/web") || under(workspace, "apps/desktop/src")
-        || under(workspace, "licenses") || under(workspace, "vendor/openhands-automations")
+        || under(workspace, "licenses")
         || under(workspace, ".agents/skills") || under(workspace, "plugins/dovspace-pm")
         || sharedPackages.some((name) => under(workspace, `packages/${name}`))
         || workspaceMetadata.has(workspace)) return "shared";

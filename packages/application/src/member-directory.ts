@@ -43,6 +43,8 @@ export type MemberDirectoryReadContext = Pick<DashboardReadContext, 'sql' | 'act
 export async function readMemberDirectory(ctx: MemberDirectoryReadContext): Promise<MemberDirectory> {
   const membership = await getMembership(ctx.sql, ctx.actor, ctx.workspaceId);
   const canManage = membership.projectIds === null && membership.capabilities.includes('access.manage');
+  const canInvite = canManage || (membership.capabilities.includes('planning.edit') && MEMBER_ROLES.some(role =>
+    role !== 'admin' && memberRoleCapabilities(role).every(capability => membership.capabilities.includes(capability))));
   if (!canManage && !membership.capabilities.includes('directory.read')) throw new DomainError('permission_denied', 'Capability directory.read or workspace access.manage is required', 403);
   const canReadProjects = membership.capabilities.includes('domain.read');
   // No domain.read means no common project evidence: expose only one's own row.
@@ -99,7 +101,7 @@ export async function readMemberDirectory(ctx: MemberDirectoryReadContext): Prom
   });
   return {
     serverNow: ctx.now.toISOString(), presenceTtlMs: PRESENCE_TTL_MS,
-    capabilities: { canReadDirectory: true, canManageMembers: canManage, canEditSelfProfile: canReadProjects, twoFactor: { supported: false } },
+    capabilities: { canReadDirectory: true, canManageMembers: canManage, canInviteMembers: canInvite, canEditSelfProfile: canReadProjects, twoFactor: { supported: false } },
     selfProfile: await readSelfProfile(ctx), members,
   };
 }

@@ -5,7 +5,7 @@ import { appendProjectAudit } from '../../../../packages/application/src/project
 import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { insertServiceFact,freezeTaskWatchCandidates,type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { CoreCommandJournal } from './core-journal.ts';
-import type { CoreWorkspacePool } from './core-routes.ts';
+import type { CoreWorkspacePool } from './routes/core-routes.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { recoverPreparedCoreCreations } from './core-facts.ts';
 import { insertPmAutomationObservationSignals } from '../../../../packages/application/src/automation-pm-signals.ts';

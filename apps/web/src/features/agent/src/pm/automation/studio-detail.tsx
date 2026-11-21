@@ -8,7 +8,7 @@ import { isPmAutomationTemplateId } from "../../../../../../../../packages/contr
 import { useAgentText } from "../../i18n";
 import { automationDateTime } from "./format";
 import { useAutomationQuery } from "./query";
-import { csvCell, downloadStudioFile, executionDuration, readEveryStudioPage, studioExecutionNeedsRefresh, studioStatusLabel, studioTriggerLabel } from "./studio-view";
+import { csvCell, downloadStudioFile, executionDuration, readEveryStudioPage, studioExecutionNeedsRefresh, studioStatusLabel, studioTriggerLabel, studioTriggerModeLabel } from "./studio-view";
 import type { StudioCommand } from "./studio-actions";
 import { StudioPmResults, type StudioPmReviewContext } from "./studio-pm-results";
 import { studioExecutionEnvironmentIssue } from "./studio-setup";
@@ -22,7 +22,8 @@ export function StudioConfiguration({ config, historicalExecutionSelection, requ
   return <dl className={styles.metadata}>
     <div><dt>{t("PM 业务项目", "PM business project")}</dt><dd>{config.projectId}</dd></div>
     <div><dt>{t("Agent 助手快捷入口", "Agent assistant shortcut")}</dt><dd>{config.quickAccess === true ? t("已显示", "Shown") : t("未显示", "Not shown")}</dd></div>
-    <div><dt>{t("触发器", "Trigger")}</dt><dd>{studioTriggerLabel(config.trigger, t)}</dd></div>
+    <div><dt>{t("触发方式", "Trigger type")}</dt><dd>{studioTriggerModeLabel(config.trigger, t)}</dd></div><div><dt>{t("触发条件", "Trigger")}</dt><dd>{studioTriggerLabel(config.trigger, t)}</dd></div>
+    {config.executionAgent && <div><dt>{t("执行 Agent", "Execution Agent")}</dt><dd>{config.executionAgent.id} · v{config.executionAgent.version}</dd></div>}
     <div><dt>{t("动作", "Action")}</dt><dd>{config.action.kind === "prompt" ? t("Agent Prompt", "Agent prompt") : config.action.kind === "script" ? t("隔离 Python 脚本", "Isolated Python script") : t("原生模板", "Native template")}</dd></div>
     {config.action.kind !== "script" && <><div><dt>{t("Provider", "Provider")}</dt><dd>{config.action.providerInstanceId ?? t("不需要（确定性模板）", "Not required (deterministic template)")}</dd></div><div><dt>{t("模型", "Model")}</dt><dd>{config.action.model ?? t("不需要（确定性模板）", "Not required (deterministic template)")}</dd></div></>}
     <div><dt>{t("超时", "Timeout")}</dt><dd>{config.action.timeoutSeconds}s</dd></div>
@@ -44,7 +45,7 @@ function StudioActionSource({ action }: { action: StudioConfig["action"] }) {
   if (action.kind === "prompt") return <pre className={styles.prose}>{action.prompt}</pre>;
   if (action.kind === "template") return <div className={styles.stack}>
     <code>{action.templateId}</code>
-    <p className={styles.muted}>{t("使用当前项目授权的原生处理器，不执行来源 Python 代码。", "Uses the native handler authorized for this project; source Python is not executed.")}</p>
+    <p className={styles.muted}>{t("使用当前项目授权的 PM 原生只读处理器。", "Uses the PM-native read-only handler authorized for this project.")}</p>
     <pre className={styles.code}>{JSON.stringify(action.arguments, null, 2)}</pre>
   </div>;
   return <div className={styles.stack}>

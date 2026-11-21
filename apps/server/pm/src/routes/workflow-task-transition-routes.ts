@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { workflowTransitionRequestSchema, type WorkflowTransitionResult } from '../../../../packages/contracts/src/task-workflow.ts';
-import { workflowTransitionChanges } from '../../../../packages/application/src/workflow-task-transition.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
+import { workflowTransitionRequestSchema, type WorkflowTransitionResult } from '../../../../../packages/contracts/src/task-workflow.ts';
+import { workflowTransitionChanges } from '../../../../../packages/application/src/workflow-task-transition.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
 import { authorizeCoreScope, executeAuditedCoreMutation, recoverAuditedCoreMutation, nativeCommandId, type CoreWorkspacePool } from './core-routes.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };

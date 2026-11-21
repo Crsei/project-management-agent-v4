@@ -1,13 +1,10 @@
 import { validateNativeTemplateArguments } from '../../../../../../packages/automation-resources/native-template-arguments.ts'
 import { pmAutomationTemplateIds } from '../../../../../../packages/contracts/src/automation-pm.ts';
 import { pmAutomationHandlers } from './pm-runtime.ts';
-import { contentHandlers } from './content.ts';
-import { githubAgentHandlers } from './github-agent.ts';
-import { githubMaintenanceHandlers } from './github-maintenance.ts';
 import type { NativeTemplateHandler, NativeTemplateId } from './ports.ts';
 
-export const nativeTemplateIds: readonly NativeTemplateId[] = ['github-issue-to-pr', 'github-issue-triage', 'github-pr-reviewer', 'github-delivery-watchdog', 'github-stale-ci-pr-closer', 'news-digest', 'github-agents-md-maintainer', 'gitlab-issue-to-mr', ...pmAutomationTemplateIds];
-const handlers: Partial<Record<NativeTemplateId, NativeTemplateHandler>> = { ...githubAgentHandlers, ...githubMaintenanceHandlers, ...contentHandlers, ...pmAutomationHandlers };
+export const nativeTemplateIds: readonly NativeTemplateId[] = pmAutomationTemplateIds;
+const handlers: Partial<Record<NativeTemplateId, NativeTemplateHandler>> = { ...pmAutomationHandlers };
 export function resolveNativeTemplateHandler(id: NativeTemplateId, arguments_: Readonly<Record<string, unknown>>): NativeTemplateHandler {
   const issues = validateNativeTemplateArguments(id, arguments_);
   if (issues.length) throw new Error(issues.map(issue => `${issue.path}: ${issue.message}`).join('\n'));

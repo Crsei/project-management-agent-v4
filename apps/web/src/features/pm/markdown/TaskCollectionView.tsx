@@ -7,6 +7,7 @@ import { usePmService } from '../service/pm-service';
 import { HumanIdentity } from '../service/human-identity';
 import { useWorkspaceStore } from '@/providers/app-providers';
 import { useDisplayDateTime } from '@/features/workspace/preference-format';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CollectionContextMenu, renderCollectionContextMenu } from './CollectionContextMenu';
 import { TaskMoreActions, TaskTableContextMenu, useTaskRowActions } from './TaskPersonalFields';
 import { TaskPersonalList } from './TaskPersonalList';
@@ -27,10 +28,10 @@ function TaskRow({ file, controller: c, en, workflow, dueLabel, attention }: { f
   const statusLabel = status ? taskStateLabel(status, en) : file.entity.status;
   const project = c.projects.find(project => project.id === file.entity.project)?.entity.title || file.entity.project || (en ? 'Unassigned' : '未关联');
   return <CollectionContextMenu actions={actions} trigger={<li tabIndex={0} className={`task-native-row${c.selectedId === file.id ? ' selected' : ''}`} data-testid={`task-${file.id}`}>
-    <button type="button" className="task-list-title" title={file.entity.title} onClick={() => c.select(file.id)}>
+    <Tooltip><TooltipTrigger asChild><button type="button" className="task-list-title" aria-label={`${file.id} · ${file.entity.title}`} onClick={() => c.select(file.id)}>
       <StatusIcon category={status?.category} />
       <span className="task-list-identity"><span className="mono">{file.id}</span><strong>{file.entity.title}</strong>{c.draftIds.has(file.id) && <small className="draft-pill">{en ? 'Local draft' : '本地草稿'}</small>}</span>
-    </button>
+    </button></TooltipTrigger><TooltipContent side="top" align="start" className="max-w-sm whitespace-normal">{file.entity.title}</TooltipContent></Tooltip>
     <span className="task-row-status" title={statusLabel}><span className="sr-only">{en ? 'Status: ' : '状态：'}</span>{statusLabel}</span>
     <span className="task-row-assignee"><span className="sr-only">{en ? 'Assignee: ' : '负责人：'}</span><HumanIdentity userId={file.entity.assignee} projectId={file.entity.project} /></span>
     <span className={`task-row-priority priority-${file.entity.priority}`}><span className="sr-only">{en ? 'Priority: ' : '优先级：'}</span>{file.entity.priority ? en ? file.entity.priority : priorityLabels[file.entity.priority] || file.entity.priority : '—'}</span>
@@ -66,13 +67,13 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
     const label = en
       ? `${item.pendingCount} pending changes for ${file.id}: ${item.ownPendingCount} task, ${item.relatedPendingCount} related`
       : `${file.id} 有 ${item.pendingCount} 项待审阅变更：任务 ${item.ownPendingCount}，关联文档 ${item.relatedPendingCount}`;
-    return <button type="button" className="task-attention-badge" aria-label={label} title={label} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={event => {
+    return <button type="button" className="task-attention-badge" data-count={item.pendingCount} aria-label={label} title={label} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={event => {
       event.stopPropagation();
       if (!workspace) return;
       const returnTo = `${location.pathname}${location.search}${location.hash}`;
       const root = `/pm/${encodeURIComponent(workspaceSlug || workspace.id)}${file.entity.project ? `/projects/${encodeURIComponent(file.entity.project)}` : ''}`;
       navigate(`${root}/entities/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo, panel: 'changes' })}`, { state: { returnTo } });
-    }}>{en ? 'Review' : '待审阅'} · {item.pendingCount}</button>;
+    }}><span className="task-attention-full">{en ? 'Review' : '待审阅'} · {item.pendingCount}</span><span className="task-attention-compact" aria-hidden="true">{item.pendingCount}</span></button>;
   }
   const attentionNotice = attention.error || incomplete
     ? <p className="task-scope-notice" role="alert">{en ? 'Pending changes could not be loaded.' : '无法读取待审阅变更。'} <button type="button" onClick={() => { void attention.refetch(); }}>{en ? 'Retry' : '重试'}</button></p>
@@ -108,13 +109,13 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
   function render(files: FileRecord[], terminal = false) {
     if (!terminal && (c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt')) return renderSchedule({ files, layout: c.prefs.layout, contextFiles: c.files, configuration: c.configuration, projectId: c.projectId || c.prefs.project || undefined, toolbarTarget, onSelect: c.select, onPatch: c.patch, canEdit: c.canEdit, ...(c.canWrite && !c.writesBlocked && !c.configurationInvalid && !c.busy && (!personal || personal.actorId) ? { onCreate: (due: string) => c.openCreate(workflow?.initial, undefined, { due }) } : {}) });
     if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} renderContextMenu={renderContextMenu} renderItemAdornment={adornment} />;
-    return <div className={`task-native-table${c.projectId ? ' task-native-table-project' : ''}`}><div className="task-list-columns" aria-hidden="true"><span>{en ? 'Task' : '任务'}</span><span>{en ? 'Status' : '状态'}</span><span>{en ? 'Assignee' : '负责人'}</span><span>{en ? 'Priority' : '优先级'}</span><span>{en ? 'Due' : '截止'}</span>{!c.projectId && <span>{en ? 'Project' : '项目'}</span>}<span /></div><ul className="task-native-list">{files.map(file => <TaskRow key={file.id} file={file} controller={c} en={en} workflow={workflow} dueLabel={file.entity.due ? display.date(file.entity.due) : undefined} attention={adornment(file)} />)}</ul></div>;
+    return <TooltipProvider delayDuration={300}><div className={`task-native-table${c.projectId ? ' task-native-table-project' : ''}`}><div className="task-list-columns" aria-hidden="true"><span>{en ? 'Task' : '任务'}</span><span>{en ? 'Status' : '状态'}</span><span>{en ? 'Assignee' : '负责人'}</span><span>{en ? 'Priority' : '优先级'}</span><span>{en ? 'Due' : '截止'}</span>{!c.projectId && <span>{en ? 'Project' : '项目'}</span>}<span /></div><ul className="task-native-list">{files.map(file => <TaskRow key={file.id} file={file} controller={c} en={en} workflow={workflow} dueLabel={file.entity.due ? display.date(file.entity.due) : undefined} attention={adornment(file)} />)}</ul></div></TooltipProvider>;
   }
   if (personal && c.prefs.layout === 'calendar') return <div className="task-collection-content">{notice}<TaskAssignmentPanel controller={c} files={collection.files} en={en} />{render(collection.files)}</div>;
   // The graph owns its own entity navigation and node inspector.
   if (c.prefs.layout === 'graph') return <div className="task-collection-content task-collection-graph">{notice}<PMView {...c.viewProps} graphQuery={graphQuery} files={collection.files} graphScopeTarget={graphScopeTarget} graphToggleTarget={graphToggleTarget} /></div>;
   return <div className={`task-collection-content${timeline ? ' task-timeline-content' : ''}${board ? ' task-collection-board' : ''}`}>{notice}
-    <TaskAssignmentPanel controller={c} files={collection.files} en={en} />
+    {!board && <TaskAssignmentPanel controller={c} files={collection.files} en={en} />}
     {grouped.map(group => {
       const heading = group.label
         ? `${taskStateLabel({ id: group.id, label: group.label }, en)}${group.category === 'canceled' ? (en ? ' (not completed)' : '（不计入完成）') : ''}`

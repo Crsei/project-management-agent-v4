@@ -192,7 +192,7 @@ export function SelectTrigger({
         else if (ref) ref.current = element
       }}
       className={cn(
-        "h-control rounded-md border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
+        "h-control rounded-md border bg-background px-3 text-sm text-foreground shadow-[inset_0_1px_0_var(--field-rim)] outline-none focus-visible:ring-2 focus-visible:ring-ring data-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
         className,
       )}
     >

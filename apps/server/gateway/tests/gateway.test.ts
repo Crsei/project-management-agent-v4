@@ -6,7 +6,7 @@ import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createGateway } from './gateway.ts';
+import { createGateway } from '../src/index.ts';
 
 async function listen(server: http.Server) {
   server.listen(0, '127.0.0.1');

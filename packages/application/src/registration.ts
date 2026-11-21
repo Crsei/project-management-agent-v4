@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { registerRequestSchema, type RegisterResponse } from '../../contracts/src/registration.ts';
 import { DomainError } from '../../domain/src/core.ts';
-import { consumeAuthRateLimit, hashPassword } from '../../infrastructure/src/auth.ts';
+import { consumeAuthRateLimit, DEFAULT_SESSION_TTL_SECONDS, hashPassword } from '../../infrastructure/src/auth.ts';
 import { getInstanceSetupStatus, lockInstanceSetup } from '../../infrastructure/src/instance-setup.ts';
 
 export async function registerAccount(pool: Pool, input: unknown, sourceIp: string): Promise<RegisterResponse & { token: string }> {
@@ -24,7 +24,7 @@ export async function registerAccount(pool: Pool, input: unknown, sourceIp: stri
       throw error;
     }
     const token = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + DEFAULT_SESSION_TTL_SECONDS * 1000).toISOString();
     const digest = createHash('sha256').update(token).digest('hex');
     await client.query('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)', [digest, id, expiresAt]);
     await client.query('COMMIT');

@@ -18,6 +18,7 @@
   line-height: 1;
   letter-spacing: -0.02em;
 }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-brand { border-radius: 6px; background: var(--oh-color-base-secondary); color: var(--oh-foreground); }
 :is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-xs { width: 16px; height: 16px; font-size: 8px; }
 :is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-sm { width: 20px; height: 20px; font-size: 9px; }
 :is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-md { width: 28px; height: 28px; font-size: 10px; }

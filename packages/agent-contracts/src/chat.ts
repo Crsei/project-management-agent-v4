@@ -196,6 +196,8 @@ export type RemoteThread = {
   settings: RemoteSettings;
   defaultsRevision?: number;
   lastMessageAt?: string;
+  /** Public thread list signal; absent on older callers. */
+  messageCount?: number;
 };
 /** Content-free exact-generation control-plane view; never a PM visibility projection. */
 export const chatGenerationLifecycleSchema = z.strictObject({

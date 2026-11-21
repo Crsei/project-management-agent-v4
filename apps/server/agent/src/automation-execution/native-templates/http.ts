@@ -1,83 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import * as https from 'node:https';
-import { isIP } from 'node:net';
-import type { TLSSocket } from 'node:tls';
 import type { StudioExecutionRequest } from '../../../../../../packages/contracts/src/automation-studio.ts';
 import { createAutomationProviderJsonClient } from '../../../../../../packages/infrastructure/src/automation-integrations-runtime.ts';
-import { resolveWebhookAddresses } from '../../../../../../packages/infrastructure/src/webhook-transport.ts';
 import { NativeTemplateUnknownOutcome, type NativeTemplateContext } from './ports.ts';
 import { admitNativeOperation, finishNativeOperation, nativeDefinitionScope, nativeHash } from './state.ts';
-
-export function validatePublicFeedUrl(input: string): URL {
-  const url = new URL(input);
-  if (input.length > 4000 || url.protocol !== 'https:' || url.port && url.port !== '443' || url.username || url.password || url.hash || isIP(url.hostname.replace(/^\[|\]$/g, '')) || !url.hostname.includes('.') || /[\u0000-\u0020\\]/.test(input)) throw new Error('Feeds require a public HTTPS URL without credentials, custom ports or fragments.');
-  return url;
-}
-/** ElementTree's source byte-decoding semantics, including XML-declared legacy encodings. */
-export function decodeNativeFeed(bytes: Buffer, contentType: string): string {
-  const bom = bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 'utf-8' : null;
-  const inferred = bytes[0] === 0x3c && bytes[1] === 0 && bytes[2] === 0x3f && bytes[3] === 0 ? 'utf-16le' : bytes[0] === 0 && bytes[1] === 0x3c && bytes[2] === 0 && bytes[3] === 0x3f ? 'utf-16be' : null;
-  const declaration = bytes.subarray(0, 512).toString('latin1').match(/^\s*<\?xml\b[^>]*\bencoding\s*=\s*['"]([A-Za-z0-9._-]+)['"]/i)?.[1];
-  const charset = contentType.match(/\bcharset\s*=\s*["']?([A-Za-z0-9._-]+)/i)?.[1];
-  const encoding = bom ?? inferred ?? declaration ?? charset ?? 'utf-8';
-  if (/^(?:iso-8859-1|latin-?1)$/i.test(encoding)) return bytes.toString('latin1');
-  try { return new TextDecoder(encoding, { fatal: true }).decode(bytes); }
-  catch { throw new Error(`Public feed declares an unsupported or invalid character encoding: ${encoding}.`); }
-}
-/** DNS is checked once, then the socket is pinned: no DNS-rebinding window, proxy or redirects. */
-export async function fetchNativePublicFeed(input: string, signal?: AbortSignal): Promise<{ text: string; contentType: string }> {
-  const url = validatePublicFeedUrl(input);
-  const deadline = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(20_000)]);
-  const addresses = await resolveWebhookAddresses(url.hostname, deadline);
-  deadline.throwIfAborted();
-  const pinned = addresses[0]!;
-  const { promise, resolve, reject } = Promise.withResolvers<{ text: string; contentType: string }>();
-    let settled = false;
-    const finish = (error?: Error, value?: { text: string; contentType: string }) => {
-      if (settled) return;
-      settled = true;
-      deadline.removeEventListener('abort', abort);
-      if (error) reject(error); else resolve(value!);
-    };
-    const request = https.request(url, {
-      method: 'GET', agent: false, servername: url.hostname, rejectUnauthorized: true,
-      family: pinned.family,
-      lookup: (_hostname, _options, callback) => callback(null, pinned.address, pinned.family),
-      maxHeaderSize: 16_384,
-      headers: { accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain;q=0.8', 'accept-encoding': 'identity', 'user-agent': 'PM-Native-Automations/1', connection: 'close' },
-    }, response => {
-      if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300 || response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity') {
-        response.destroy(); finish(new Error(`Public feed refused (HTTP ${response.statusCode ?? 0}); redirects and compressed bodies are not followed.`)); return;
-      }
-      const chunks: Buffer[] = []; let size = 0;
-      response.on('data', (chunk: Buffer) => {
-        size += chunk.length;
-        if (size > 4 * 1024 * 1024) { response.destroy(); finish(new Error('Public feed exceeds 4 MiB.')); }
-        else chunks.push(chunk);
-      });
-      response.once('error', () => finish(new Error('Public feed response was interrupted.')));
-      response.once('aborted', () => finish(new Error('Public feed response was interrupted.')));
-      response.once('end', () => {
-        try {
-          const contentType = String(response.headers['content-type'] ?? '');
-          finish(undefined, { text: decodeNativeFeed(Buffer.concat(chunks, size), contentType), contentType });
-        } catch (error) { finish(error instanceof Error ? error : new Error('Public feed character decoding failed.')); }
-      });
-    });
-    const abort = () => { request.destroy(); finish(new Error('Public feed deadline or cancellation reached.')); };
-    deadline.addEventListener('abort', abort, { once: true });
-    request.once('socket', socket => {
-      const tls = socket as TLSSocket;
-      tls.once('secureConnect', () => {
-        if (!tls.authorized || tls.remoteAddress !== pinned.address && tls.remoteAddress !== `::ffff:${pinned.address}`) {
-          request.destroy(); finish(new Error('Public feed TLS peer did not match its approved public address.'));
-        }
-      });
-    });
-    request.once('error', () => finish(new Error('Public feed HTTPS request failed.')));
-    if (deadline.aborted) abort(); else request.end();
-  return promise;
-}
 
 function safePath(provider: 'github' | 'gitlab', apiPath: string, method: string): void {
   if (!apiPath.startsWith('/') || apiPath.startsWith('//') || apiPath.length > 8000 || /[\u0000-\u0020\\#]/.test(apiPath)) throw new Error('Connector requests require a bounded relative API path.');
@@ -89,7 +14,6 @@ function safePath(provider: 'github' | 'gitlab', apiPath: string, method: string
 export interface NativeTemplateHttp {
   requestJson: NativeTemplateContext['requestJson'];
   close(): Promise<void>;
-  assertProviderOrigin(provider: 'github' | 'gitlab', url: string): Promise<void>;
 }
 export function createNativeTemplateHttp(request: StudioExecutionRequest, authorize: () => Promise<void>, signal: AbortSignal): NativeTemplateHttp {
   const client = createAutomationProviderJsonClient(request);
@@ -129,6 +53,5 @@ export function createNativeTemplateHttp(request: StudioExecutionRequest, author
       }
     },
     close: () => client.close(),
-    assertProviderOrigin: (provider, url) => client.assertProviderOrigin(provider, url),
   };
 }

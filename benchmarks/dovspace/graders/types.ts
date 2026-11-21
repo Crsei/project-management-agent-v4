@@ -32,4 +32,4 @@ export function stable(value: unknown): string {
   if (value && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`).join(',')}}`;
   return JSON.stringify(value) ?? 'undefined';
 }
-export function trustedEvents(input: GradeInput): BenchEvent[] { return input.events.filter((event) => event.source === 'runner' || event.source === 'transport' || event.source === 'isolation'); }
+export function trustedEvents(input: Pick<GradeInput, 'events'>): BenchEvent[] { return input.events.filter((event) => event.source === 'runner' || event.source === 'transport' || event.source === 'isolation'); }

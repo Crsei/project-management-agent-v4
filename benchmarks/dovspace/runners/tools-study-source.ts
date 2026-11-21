@@ -7,17 +7,18 @@ import { StudyManifestSchema, type StudyManifest } from '../schemas/tools-study.
 import { parseBenchmarkConfig, repositoryRoot } from '../benchmark.config.ts';
 import { hashValue } from './telemetry.ts';
 
-export async function collectStudyHarnessHash(): Promise<string> {
-  const root = resolve(repositoryRoot, 'benchmarks/dovspace');
+export async function collectStudyHarnessHash(benchmarkRoot = resolve(repositoryRoot, 'benchmarks/dovspace')): Promise<string> {
+  const root = resolve(benchmarkRoot);
   const files: Array<{ path: string; sha256: string }> = [];
   async function visit(path: string): Promise<void> {
+    if (path === 'evaluation/release-policy-registry.json') return;
     const absolute = resolve(root, path), info = await lstat(absolute);
     if (info.isSymbolicLink() || !info.isDirectory() && (!info.isFile() || info.nlink !== 1)) throw new Error('Harness inputs must be regular independent files');
     if (info.isDirectory()) {
       for (const name of await readdir(absolute)) if (!name.startsWith('.') && !name.endsWith('.test.ts') && name !== 'node_modules') await visit(`${path}/${name}`);
     } else files.push({ path, sha256: createHash('sha256').update(await readFile(absolute)).digest('hex') });
   }
-  for (const path of ['adapters', 'fixtures', 'graders', 'isolation', 'pm-tools', 'reports', 'runners', 'schemas', 'tasks', 'benchmark.config.ts', 'cli.ts']) await visit(path);
+  for (const path of ['adapters', 'calibration', 'evaluation', 'fixtures', 'graders', 'isolation', 'pm-tools', 'reports', 'runners', 'schemas', 'tasks', 'benchmark.config.ts', 'cli.ts']) await visit(path);
   files.sort((a, b) => a.path.localeCompare(b.path));
   return hashValue(files);
 }

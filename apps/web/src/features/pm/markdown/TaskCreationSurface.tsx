@@ -72,7 +72,7 @@ function CreationContent({ project, children }: { project: boolean; children: Re
 export function EntityCreationSurface({ mode, initial, projectId, draftId, onCreated, onClose, onExpand }: EntityCreationSurfaceProps) {
   const session = useCoreSession();
   const c = useEntityCreation({ initial, projectId, draftId, onCreated: file => {
-    if (mode === 'page') session.detail.update(() => ({ entityId: file.id, tab: 'source' }));
+    if (mode === 'page') session.detail.update(() => ({ entityId: file.id, tab: 'content' }));
     onCreated(file);
   } });
   const [creationDrafts] = useCreationDrafts();

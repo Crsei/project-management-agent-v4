@@ -1,11 +1,11 @@
 import { useAui, useAuiState, type QuoteInfo } from "@assistant-ui/react";
 import {
   EditorContent, Mark, Node, NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer,
-  useEditor, useEditorState, type Editor, type NodeViewProps,
+  useEditor, type Editor, type NodeViewProps,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type AriaAttributes, type MutableRefObject } from "react";
-import { CheckSquareIcon, FileIcon, LinkIcon, MessageCircleIcon, QuoteIcon, XIcon } from "lucide-react";
+import { FileIcon, MessageCircleIcon, QuoteIcon, XIcon } from "lucide-react";
 import { useAgentText } from "../i18n";
 import {
   composerDocumentCursor, composerInlineSource, composerPasteSlice, composerSourceCursor, normalizeComposerReferences,
@@ -291,12 +291,7 @@ function RichComposerEditor(props: Props) {
   const keymap = useMemo(() => resolveComposerKeymap(preferences.composerKeymap, props.submitMode), [preferences.composerKeymap, props.submitMode]);
   const apple = useMemo(() => isApplePlatform(), []);
   const [planNotice, setPlanNotice] = useState<string>();
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [linkValue, setLinkValue] = useState("");
-  const [linkError, setLinkError] = useState<string>();
-  const linkRange = useRef<{ from: number; to: number } | undefined>(undefined);
   const [dragActive, setDragActive] = useState(false);
-  const linkButton = useRef<HTMLButtonElement>(null);
 
   function togglePlanMode() {
     const current = live.current.props;
@@ -612,9 +607,6 @@ function RichComposerEditor(props: Props) {
       if (!composing.current) live.current.props.suggestions?.onInput(composerSourceCursor(current.state.doc, current.state.selection.head), current.isActive("codeBlock"));
     },
   });
-  const state = useEditorState({ editor, selector: ({ editor: current }) => current ? {
-    link: current.isActive("link"), task: current.isActive("taskItem"),
-  } : null });
 
   useEffect(() => {
     if (!editor) return;
@@ -746,31 +738,6 @@ function RichComposerEditor(props: Props) {
   const removeAttachment = (id: string) => {
     void aui.composer.attachment({ id }).remove().catch(cause => setContextError(cause instanceof Error ? cause.message : String(cause)));
   };
-  const applyLink = () => {
-    if (!editor) return;
-    const href = linkValue.trim();
-    if (!/^(?:https?:\/\/|mailto:)[^\s]+$/iu.test(href)) {
-      setLinkError(t("请输入 http(s):// 或 mailto: 链接。", "Enter an http(s):// or mailto: link."));
-      return;
-    }
-    const range = linkRange.current ?? { from: editor.state.selection.from, to: editor.state.selection.to };
-    if (range.from === range.to) {
-      setLinkError(t("先选中要链接的文字。", "Select the text to link first."));
-      return;
-    }
-    editor.chain().focus().setTextSelection(range).setMark("link", { href }).run();
-    setLinkOpen(false);
-    setLinkValue("");
-    setLinkError(undefined);
-  };
-  const removeLink = () => {
-    if (!editor) return;
-    const range = linkRange.current ?? { from: editor.state.selection.from, to: editor.state.selection.to };
-    editor.chain().focus().setTextSelection(range).unsetMark("link").run();
-    setLinkOpen(false);
-    setLinkValue("");
-    setLinkError(undefined);
-  };
   const acceptsContextDrop = (types: readonly string[]) => types.includes(COMPOSER_CONTEXT_DRAG_TYPE);
   return <div className="rich-composer" data-editing={props.editing || undefined} data-drop-active={dragActive ? "true" : undefined}
     onDragEnter={(event) => { if (acceptsContextDrop(event.dataTransfer.types)) { event.preventDefault(); setDragActive(true); } }}
@@ -791,41 +758,5 @@ function RichComposerEditor(props: Props) {
     {composerPromptTooLong(text) && <p role="alert" className="px-2 text-xs text-destructive">{t(`消息超过 ${COMPOSER_PROMPT_LIMIT.toLocaleString()} 字符，请缩短后发送。`, `Message exceeds ${COMPOSER_PROMPT_LIMIT.toLocaleString()} characters; shorten it before sending.`)}</p>}
     {contextError && <p role="alert" className="px-2 text-xs text-destructive">{contextError}</p>}
     {planNotice && <p role="status" className="px-2 text-xs text-muted-foreground">{planNotice}</p>}
-    <div className="rich-composer-tools">
-      <button type="button" disabled={disabled || !editor} aria-pressed={!!state?.task} title={t("插入任务清单；勾选后序列化为 - [x]", "Insert a task list; checked items serialize as - [x]")}
-        onClick={() => {
-          if (!editor) return;
-          if (editor.isActive("taskItem")) { editor.chain().focus().splitListItem("taskItem").run(); return; }
-          editor.chain().focus().insertContent({ type: "taskList", content: [{ type: "taskItem", attrs: { checked: false, space: "" }, content: [{ type: "paragraph" }] }] }).run();
-        }}>
-        <CheckSquareIcon aria-hidden="true" />{t("任务", "Task")}
-      </button>
-      <button ref={linkButton} type="button" disabled={disabled || !editor} aria-pressed={!!state?.link} aria-expanded={linkOpen} title={t("把选中的文字变成 Markdown 链接", "Turn the selected text into a Markdown link")}
-        onClick={() => {
-          if (!editor) return;
-          const { from, to } = editor.state.selection;
-          linkRange.current = { from, to };
-          const href = editor.getAttributes("link").href;
-          setLinkValue(typeof href === "string" ? href : "");
-          setLinkOpen(true);
-          setLinkError(from === to ? t("先选中要链接的文字。", "Select the text to link first.") : undefined);
-        }}>
-        <LinkIcon aria-hidden="true" />{t("链接", "Link")}
-      </button>
-    </div>
-    {linkOpen && <div className="rich-composer-link">
-      <input autoFocus type="url" value={linkValue} maxLength={2048} spellCheck={false} aria-label={t("链接地址", "Link address")}
-        placeholder="https://…" onChange={(event) => { setLinkValue(event.currentTarget.value); setLinkError(undefined); }}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
-          if (event.key === "Enter") { event.preventDefault(); applyLink(); }
-          if (event.key === "Escape") { event.preventDefault(); setLinkOpen(false); setLinkError(undefined); linkButton.current?.focus(); }
-        }} />
-      <button type="button" className="text-xs underline" onClick={applyLink}>{t("应用", "Apply")}</button>
-      {state?.link && <button type="button" className="text-xs underline" onClick={removeLink}>{t("移除链接", "Remove link")}</button>}
-      <button type="button" className="text-xs underline" onClick={() => { setLinkOpen(false); setLinkError(undefined); linkButton.current?.focus(); }}>{t("取消", "Cancel")}</button>
-      {linkError && <p role="alert" className="text-xs text-destructive">{linkError}</p>}
-    </div>}
   </div>;
 }

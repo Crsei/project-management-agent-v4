@@ -44,7 +44,6 @@ import { listRuns, withThreadExecution } from "./engine.ts";
 import { consumeTransfers, getThreadFork, TRANSFERS } from "./transfers.ts";
 import type { ChatRecoveryCandidate } from "../automation/service.ts";
 import { openAutomationGenerationConnectors, type AutomationGenerationConnectors } from "../automation-execution/connectors.ts";
-import { assertNativeTemplateChatSnapshot } from "../automation-execution/native-templates/repository.ts";
 import { automationRequestForNativeGeneration, getNativeGenerationPmTargetCeiling, isPmAnalysisGeneration } from "../automation-execution/context.ts";
 import { queuePmAgentTerminal, startPmAgentSignals, stopPmAgentSignals } from "../automation-execution/pm-signals.ts";
 import { resolvePmAnalysisChatSnapshot } from "../automation-execution/native-templates/pm-analysis-chat.ts";
@@ -994,7 +993,6 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           assertLiveAuthorization();
           if (resolved.path !== snapshot.path || !sameExecutionIdentity(resolved.environment, snapshot.environment))
             throw new DurableError(409, "execution_environment_changed", "Current execution directory differs from the accepted versioned environment.");
-          if (!analysis) await assertNativeTemplateChatSnapshot(generation, resolved);
           if (admittedModelContexts.length) {
             const projection = await createPmVisibilityProjector(generation.threadId, requestHeaders ?? new Headers());
             const current = projection.history(getThreadHistory(generation.threadId).messages);

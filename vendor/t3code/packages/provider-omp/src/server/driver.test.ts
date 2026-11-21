@@ -50,6 +50,7 @@ it.layer(layer)("OMP driver lifecycle boundary", (it) => {
     assert.equal(instance.continuationIdentity.continuationKey, "omp:instance:omp-independent");
     assert.isNull((yield* instance.snapshot.resolveMaintenance()).update);
     assert.isUndefined(instance.auth);
-    assert.isUndefined(OmpDriver.usage);
+    assert.equal(OmpDriver.usage?.kind, "transcripts");
+    assert.equal(OmpDriver.usage?.provider, "omp");
   }).pipe(Effect.scoped));
 });

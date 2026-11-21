@@ -8,7 +8,7 @@ import { canonicalProviderModelId } from "./t3code/config-mapping.ts";
 import { beginProviderStatus, isProviderAccountBusy } from "./auth.ts";
 import { OMP_STATUS_TIMEOUT_MS } from "@t3tools/provider-omp/server/status";
 
-type ProviderObservation = { revision: number; checkedAt: number; models: ProviderModel[] } & ({ status: ProviderDriverStatus } | { error: string });
+type ProviderObservation = { revision: number; checkedAt: number; models: ProviderModel[]; verified: boolean } & ({ status: ProviderDriverStatus } | { error: string });
 // Directory browsing alone may reuse observations; execution and explicit checks stay fresh.
 export const PROVIDER_DIRECTORY_FRESHNESS_MS = 30_000;
 const observations = new Map<string, ProviderObservation>();
@@ -26,12 +26,21 @@ export function invalidateProviderStatus(instanceId: string): void {
   checks.delete(key);
 }
 
+/** A failed check must not erase the last catalog: keep it for browsing while send stays blocked. */
+function lastKnownModels(instance: StoredProviderInstance): ProviderModel[] {
+  const previous = observations.get(cacheKey(instance.instanceId));
+  // A verified result is authoritative even when empty: never resurrect a catalog it just cleared.
+  if (previous?.revision === instance.revision && previous.verified) return previous.models;
+  const persisted = instance.observations?.instanceRevision === instance.revision ? instance.observations.discoveredModels ?? [] : [];
+  if (persisted.length > 0) return persisted;
+  return previous?.revision === instance.revision ? previous.models : [];
+}
+
 function failedObservation(instance: StoredProviderInstance, error: unknown): ProviderObservation {
   const previous = observations.get(cacheKey(instance.instanceId));
   return {
-    revision: instance.revision, checkedAt: Date.now(),
-    models: previous?.revision === instance.revision ? previous.models
-      : instance.observations?.instanceRevision === instance.revision ? instance.observations.discoveredModels ?? [] : [],
+    revision: instance.revision, checkedAt: Date.now(), models: lastKnownModels(instance),
+    verified: previous?.revision === instance.revision && previous.verified === true,
     error: sanitizeProviderMessage(instance, error instanceof Error ? error.message : "原生 Agent 检查失败；未推断安装或登录状态。"),
   };
 }
@@ -131,8 +140,14 @@ export async function readNativeProviderStatus(instanceId: string, insideAccount
         ...(status.installation.error ? { error: sanitizeProviderMessage(instance, status.installation.error) } : {}),
       },
     };
-    observations.set(key, { revision: instance.revision, checkedAt: Date.now(), models: safe.models, status: safe });
-    return safe;
+    // A not-ready result with no models is a failed refresh, not proof the catalog is empty.
+    const previous = observations.get(key);
+    const freshCatalog = safe.nativeSessionReady === true || safe.models.length > 0;
+    const models = freshCatalog ? safe.models : lastKnownModels(instance);
+    const observed = models === safe.models ? safe : { ...safe, models };
+    observations.set(key, { revision: instance.revision, checkedAt: Date.now(), models, status: observed,
+      verified: freshCatalog || (previous?.revision === instance.revision && previous.verified === true) });
+    return observed;
   }).catch(error => {
     if (isCurrent()) observations.set(key, failedObservation(instance, error));
     throw error;

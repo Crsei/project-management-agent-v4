@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import type { WebhookConfig } from '../../../../packages/infrastructure/src/webhook-config.ts';
-import { webhookParamsSchema, webhookPageQuerySchema } from '../../../../packages/contracts/src/webhook-schemas.ts';
-import { readWebhooks, readWebhookDeliveries, readWebhookDelivery } from '../../../../packages/application/src/webhooks.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import type { WebhookConfig } from '../../../../../packages/infrastructure/src/webhook-config.ts';
+import { webhookParamsSchema, webhookPageQuerySchema } from '../../../../../packages/contracts/src/webhook-schemas.ts';
+import { readWebhooks, readWebhookDeliveries, readWebhookDelivery } from '../../../../../packages/application/src/webhooks.ts';
 
 export function registerWebhookRoutes(app: FastifyInstance, options: { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config?: WebhookConfig }): void {
   void app.register(async routes => {

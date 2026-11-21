@@ -67,6 +67,16 @@ test("terminal snapshots preserve exact text and reread moving buffer positions"
   assert.equal(terminalSelectionSnapshot({ getSelection: () => "selected", getSelectionPosition: () => undefined }), null);
 });
 
+test("Ghostty selections use absolute scrollback rows, not viewport rows", () => {
+  const terminal = {
+    getSelection: () => "x\ny",
+    getSelectionPosition: () => ({ start: { x: 0, y: 1 }, end: { x: 2, y: 2 } }),
+    getSelectionBufferPosition: () => ({ start: { x: 0, y: 10 }, end: { x: 2, y: 11 } }),
+  };
+  assert.deepEqual(terminalSelectionSnapshot(terminal), { text: "x\ny", selection: { startLine: 11, endLine: 12 } });
+  assert.equal(terminalSelectionSnapshot({ getSelection: () => "x", getSelectionPosition: () => null }), null);
+});
+
 test("content freshness digests bind exact UTF-8 bytes including newline and Unicode", async () => {
   const contents = "选择的内容\r\nline\n";
   assert.equal(await inspectorContentDigest(contents), createHash("sha256").update(contents, "utf8").digest("hex"));

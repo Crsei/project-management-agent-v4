@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import { stringify as stringifyYAML } from 'yaml';
 import { pathToFileURL } from 'node:url';
 import { DESKTOP_UPDATE_REPOSITORY, updateInstallStampAssetName } from '../apps/desktop/src/update-policy.mjs';
+import { validateDesktopEvaluation } from './desktop-release-evaluation.mjs';
 
 const repository = `${DESKTOP_UPDATE_REPOSITORY.owner}/${DESKTOP_UPDATE_REPOSITORY.repo}`;
 const root = path.resolve(import.meta.dirname, '..');
@@ -196,14 +197,14 @@ export function createGitHubClient(token, fetcher = fetch) {
       for await (const chunk of response.body) hash.update(chunk);
       return hash.digest('hex');
     },
-    readAsset: async asset => {
-      if (asset.size > 1024 * 1024) throw new Error('Release index exceeds the bounded metadata size');
+    readAsset: async (asset, { maximumBytes = 1024 * 1024 } = {}) => {
+      if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 32 * 1024 * 1024 || asset.size > maximumBytes) throw new Error('Release metadata exceeds the bounded material size');
       const response = await request(`/repos/${repository}/releases/assets/${asset.id}`, { binary: true });
       const chunks = [];
       let bytes = 0;
       for await (const chunk of response.body) {
         bytes += chunk.byteLength;
-        if (bytes > 1024 * 1024) throw new Error('Release index exceeds the bounded metadata size');
+        if (bytes > maximumBytes) throw new Error('Release metadata exceeds the bounded material size');
         chunks.push(chunk);
       }
       if (bytes !== asset.size) throw new Error('Downloaded release index size differs from GitHub asset');
@@ -222,6 +223,11 @@ export async function verifyRemoteIdentity(client, request) {
   const comparison = await client.get(`compare/${encodeURIComponent(repositoryInfo.default_branch)}...${request.sha}`);
   if (!['identical', 'behind'].includes(comparison.status)) throw new Error('Release commit is not in default-branch history');
   assertSuccessfulChecks(await client.get(`actions/runs/${request.ciRunId}`), request);
+  const native = await client.get(`actions/runs/${request.runId}/attempts/${request.attempt}`);
+  if (String(native?.id) !== String(request.runId) || String(native.run_attempt) !== String(request.attempt)
+    || native.head_sha !== request.sha || native.event !== 'workflow_dispatch' || native.status !== 'completed'
+    || native.conclusion !== 'success' || native.head_repository?.full_name !== repository || native.path !== '.github/workflows/desktop.yml')
+    throw new Error('Native delivery must come from the exact completed successful desktop build run/attempt; rebuild/review explicitly before release');
 }
 
 async function listRelease(client, tag) {
@@ -294,14 +300,16 @@ export async function lookupRelease(client, request) {
   if (release.body !== releaseBody(manifest, assets)) throw new Error('Existing release provenance marker differs from its exact asset index');
   await verifyRemoteIdentity(client, manifest);
   await assertRemoteAssets(client, actual, assets);
-  return { state: release.draft ? 'draft' : 'already-published', visible: !release.draft, url: release.html_url, tag: request.tag };
+  return { state: release.draft ? 'draft' : 'already-published', visible: !release.draft, url: release.html_url, tag: request.tag, manifest, remoteAssets: actual };
 }
 
-export async function finalizeExisting({ client, request, action, authorization }) {
+export async function finalizeExisting({ client, request, action, authorization, evaluation }) {
+  if (typeof evaluation !== 'function') throw new Error('Mandatory candidate-bound evaluation gate is missing');
   await authorization();
   await verifyRemoteIdentity(client, request);
   const existing = await lookupRelease(client, request);
   if (!existing) return null;
+  await evaluation({ client, request, manifest: existing.manifest, remoteAssets: existing.remoteAssets });
   if (existing.visible) {
     if (action !== 'publish') throw new Error('Existing release is already published, not a draft');
     return existing;
@@ -310,23 +318,26 @@ export async function finalizeExisting({ client, request, action, authorization 
   if (action !== 'publish') throw new Error('Explicit publication action required');
   await authorization();
   await verifyRemoteIdentity(client, request);
-  await lookupRelease(client, request);
+  const checked = await lookupRelease(client, request);
   const release = await listRelease(client, request.tag);
   if (!release?.draft || release.tag_name !== request.tag || release.target_commitish !== request.sha
     || release.prerelease !== (request.channel === 'preview')) throw new Error('Draft state changed before explicit publication');
+  await evaluation({ client, request, manifest: checked?.manifest, remoteAssets: checked?.remoteAssets });
   await client.patch(`releases/${release.id}`, { draft: false, make_latest: request.channel === 'stable' ? 'true' : 'false' });
   const published = await lookupRelease(client, request);
   if (!published?.visible) throw new Error('Release visibility was not confirmed; inspect the exact tag before retrying');
   return { ...published, state: 'published' };
 }
 
-export async function publishCandidate({ client, request, directory, action, authorization }) {
+export async function publishCandidate({ client, request, directory, action, authorization, evaluation }) {
   if (!['draft', 'publish'].includes(action)) throw new Error('Explicit draft or publish action required');
+  if (typeof evaluation !== 'function') throw new Error('Mandatory candidate-bound evaluation gate is missing');
   // This callback executes the real --release gate in the CLI. It is deliberately
   // before any draft mutation and again immediately before visibility changes.
   await authorization();
   await verifyRemoteIdentity(client, request);
-  const { assets } = await verifyCandidate(directory, request);
+  const { assets, manifest } = await verifyCandidate(directory, request);
+  await evaluation({ client, request, manifest, directory });
   const body = releaseBody(request, assets);
   let release = await listRelease(client, request.tag);
   if (release) {
@@ -339,6 +350,7 @@ export async function publishCandidate({ client, request, directory, action, aut
       return { state: 'already-published', visible: true, url: release.html_url, tag: request.tag };
     }
   } else {
+    await evaluation({ client, request, manifest, directory });
     release = await client.post('releases', { tag_name: request.tag, target_commitish: request.sha, name: request.tag,
       body, draft: true, prerelease: request.channel === 'preview', make_latest: 'false' });
   }
@@ -350,7 +362,10 @@ export async function publishCandidate({ client, request, directory, action, aut
       || current.prerelease !== (request.channel === 'preview')) throw new Error('Release state changed while staging; refusing mutation');
     const uploaded = await releaseAssets(client, current);
     await assertRemoteAssets(client, uploaded, assets, { complete: false });
-    if (!uploaded.some(file => file.name === asset.name)) await client.upload(current, asset, directory);
+    if (!uploaded.some(file => file.name === asset.name)) {
+      await evaluation({ client, request, manifest: (await verifyCandidate(directory, request)).manifest, directory });
+      await client.upload(current, asset, directory);
+    }
   }
   await authorization();
   await verifyRemoteIdentity(client, request);
@@ -358,6 +373,7 @@ export async function publishCandidate({ client, request, directory, action, aut
   if (!current.draft || current.body !== body || current.target_commitish !== request.sha || current.tag_name !== request.tag
     || current.prerelease !== (request.channel === 'preview')) throw new Error('Draft changed before publication');
   await assertRemoteAssets(client, await releaseAssets(client, current), assets);
+  await evaluation({ client, request, manifest: (await verifyCandidate(directory, request)).manifest, directory });
   if (action === 'draft') return { state: 'draft', visible: false, url: release.html_url, tag: request.tag };
   const published = await client.patch(`releases/${release.id}`, { draft: false, make_latest: request.channel === 'stable' ? 'true' : 'false' });
   if (published.draft || published.tag_name !== request.tag || published.prerelease !== (request.channel === 'preview'))
@@ -376,10 +392,16 @@ async function requestFromEnvironment(env) {
   const version = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')).version;
   const desktopVersion = JSON.parse(await readFile(path.join(root, 'apps/desktop/package.json'), 'utf8')).version;
   if (desktopVersion !== version) throw new Error('Root and desktop application versions differ');
+  if (env.DESKTOP_RELEASE_ACTION !== 'none') {
+    for (const name of ['DESKTOP_NATIVE_RUN_ID', 'DESKTOP_NATIVE_RUN_ATTEMPT', 'DESKTOP_EVALUATION_RUN_ID']) {
+      if (!/^[1-9]\d*$/.test(env[name] ?? '')) throw new Error(`Draft/publish requires exact ${name}; build and review immutable native artifacts first`);
+    }
+    if (!safeName(env.DESKTOP_EVALUATION_ARTIFACT) || !/^[a-f0-9]{64}$/.test(env.DESKTOP_EVALUATION_SHA256 ?? '')) throw new Error('Draft/publish requires an exact private evaluation artifact and independently reviewed material SHA256');
+  }
   const request = { repository: env.GITHUB_REPOSITORY, tag: env.DESKTOP_RELEASE_TAG, sha: env.DESKTOP_RELEASE_SHA,
     version, channel: env.DESKTOP_RELEASE_CHANNEL, distribution: env.DESKTOP_DISTRIBUTION,
     targets: env.DESKTOP_WINDOWS_ONLY === 'true' ? ['win32-x64'] : ['win32-x64', 'darwin-x64', 'darwin-arm64'],
-    runId: env.GITHUB_RUN_ID, attempt: env.GITHUB_RUN_ATTEMPT, ciRunId: env.DESKTOP_CI_RUN_ID };
+    runId: env.DESKTOP_NATIVE_RUN_ID || env.GITHUB_RUN_ID, attempt: env.DESKTOP_NATIVE_RUN_ATTEMPT || env.GITHUB_RUN_ATTEMPT, ciRunId: env.DESKTOP_CI_RUN_ID };
   assertReleaseRequest(request);
   const checked = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
   if (checked.status !== 0 || checked.stdout.trim() !== request.sha || env.GITHUB_SHA !== request.sha)
@@ -404,11 +426,11 @@ async function main(command) {
     }
     return;
   }
-  let result = await finalizeExisting({ client, request, action: process.env.DESKTOP_RELEASE_ACTION, authorization: requireAuthorization });
+  let result = await finalizeExisting({ client, request, action: process.env.DESKTOP_RELEASE_ACTION, authorization: requireAuthorization, evaluation: validateDesktopEvaluation });
   if (!result) {
     await stageCandidate({ request, deliveries: process.env.DESKTOP_RELEASE_DELIVERIES, output: process.env.DESKTOP_RELEASE_STAGE });
     result = await publishCandidate({ client, request, directory: process.env.DESKTOP_RELEASE_STAGE,
-      action: process.env.DESKTOP_RELEASE_ACTION, authorization: requireAuthorization });
+      action: process.env.DESKTOP_RELEASE_ACTION, authorization: requireAuthorization, evaluation: validateDesktopEvaluation });
   }
   console.log(json(result));
   if (process.env.GITHUB_STEP_SUMMARY) await writeFile(process.env.GITHUB_STEP_SUMMARY,

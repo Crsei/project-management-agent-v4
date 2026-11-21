@@ -213,14 +213,8 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
         {service.loading && !busy && <p role="status" className={styles.hint}>{t("正在读取当前会话，请稍候。", "Reading your current session. Please wait.")}</p>}
       </div>
       <div className={styles.accountGuidance}>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-          <Link to="/pm/account/recovery" className="text-sm text-primary hover:text-foreground">{t("忘记密码 / 查看邮件找回状态", "Forgot password / email recovery availability")}</Link>
-          <Link to="/pm/account/security" className="text-sm text-primary hover:text-foreground">{t("本人账号安全", "Account security")}</Link>
-        </div>
         <div className={styles.registerAttribution}>
           <p className={styles.registerTitle}>{t("还没有账号？", "No account yet?")}{" "}<Link to="/pm/register" className={styles.registerLink}>{t("注册账号", "Create an account")}</Link></p>
-          <p>{t("注册后可创建工作区；加入已有工作区仍需管理员邀请。", "After signup you can create a workspace; joining an existing workspace still requires an administrator's invitation.")}</p>
-          <p>{t("全新实例的初始账号与第一个工作区由首次设置页创建：实例未初始化时该页替换本登录表单，桌面端自动带入本机一次性设置令牌。", "A fresh instance creates its initial account and first workspace on the first-use setup page: while the instance is uninitialized that page replaces this sign-in form, and the desktop app supplies this machine's one-time setup token automatically.")}</p>
         </div>
       </div>
     </section>

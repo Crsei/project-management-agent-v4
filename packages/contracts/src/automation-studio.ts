@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema, pmAutomationTemplateIds, pmAutomationTemplateVersion } from './automation-pm.ts';
-import { pmAutomationTemplateCapabilities, pmAutomationTemplateRequiresProvider } from './automation-pm.ts';
+import { pmAutomationTemplateRequiresProvider } from './automation-pm.ts';
 import { executionSelectionSchema, type ExecutionEnvironment, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 const uuid = z.uuid().toLowerCase();
@@ -28,25 +28,16 @@ export const studioProviderOptionsSchema = z.record(studioOptionId, z.union([z.s
 const modelSelection = { providerInstanceId: z.string().min(1).max(200), model: z.string().min(1).max(200), options: studioProviderOptionsSchema };
 export const studioActionKindSchema = z.enum(['prompt', 'script', 'template']);
 export type StudioActionKind = z.infer<typeof studioActionKindSchema>;
-export const studioNativeTemplateIdSchema = z.enum(['github-pr-reviewer', 'github-issue-to-pr', 'gitlab-issue-to-mr', 'github-agents-md-maintainer', 'github-delivery-watchdog', 'github-issue-triage', 'news-digest', 'github-stale-ci-pr-closer', ...pmAutomationTemplateIds]);
+export const studioNativeTemplateIdSchema = z.enum([...pmAutomationTemplateIds]);
 export type StudioNativeTemplateId = z.infer<typeof studioNativeTemplateIdSchema>;
 /** Deterministic PM rules and source maintenance never invoke a model; semantic analysis requires an explicit no-tools Provider. */
 export function studioNativeTemplateRequiresProvider(id: StudioNativeTemplateId): boolean {
-  if (isPmAutomationTemplateId(id)) return pmAutomationTemplateRequiresProvider(id);
-  return id !== 'github-delivery-watchdog' && id !== 'github-stale-ci-pr-closer';
+  return pmAutomationTemplateRequiresProvider(id);
 }
-/** Provider workspace-tool transport is required for these five; OCI command support is a separate runtime prerequisite. */
-export function studioNativeTemplateRequiresWorkspace(id: StudioNativeTemplateId): boolean {
-  if (isPmAutomationTemplateId(id)) return pmAutomationTemplateCapabilities[id].requiresWorkspace;
-  switch (id) {
-    case 'github-pr-reviewer':
-    case 'github-issue-to-pr':
-    case 'github-issue-triage':
-    case 'github-agents-md-maintainer':
-    case 'gitlab-issue-to-mr': return true;
-    default: return false;
-  }
-}
+/** PM-native analysis is deterministic or uses enforced no-tools Provider stages; no workspace tools are granted. */
+export function studioNativeTemplateRequiresWorkspace(_id: StudioNativeTemplateId): boolean { return false; }
+/** A pinned workspace Agent identity is configuration provenance; launch rechecks state and project scope. */
+export const studioExecutionAgentSchema = z.strictObject({ id: z.string().trim().min(1).max(128), version: z.number().int().positive() });
 export const studioActionSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('prompt'), ...actionCommon, ...modelSelection, prompt: z.string().trim().min(1).max(200000) }),
   z.strictObject({ kind: z.literal('script'), ...actionCommon, entrypoint: z.string().min(1).max(500), setup: z.string().max(50000), content: z.string().max(1000000), bundleRef: z.string().max(500).nullable(), files: z.array(z.strictObject({ path: z.string().min(1).max(500), content: z.string().max(1000000) })).max(200) }),
@@ -75,6 +66,7 @@ export const studioConfigSchema = z.strictObject({
   tags: z.array(z.string().trim().min(1).max(100)).max(30), templateId: z.string().max(300).nullable(),
   templateInputs: z.record(z.string(), z.unknown()).optional(), templateVersion: z.string().max(200).nullable().optional(),
   quickAccess: z.boolean().optional().describe('Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no execution authority.'),
+  executionAgent: studioExecutionAgentSchema.optional().describe('Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when the definition selects a Provider directly.'),
   action: studioActionSchema, trigger: studioTriggerSchema,
   dailyLimit: z.number().int().min(1).max(100), cooldownMinutes: z.number().int().min(0).max(10080),
 }).superRefine((config, context) => {
@@ -89,9 +81,9 @@ export const studioConfigSchema = z.strictObject({
   if (!inputs.success || !args.success || JSON.stringify(inputs.data) !== JSON.stringify(args.data)) context.addIssue({ code: 'custom', path: ['templateInputs'], message: 'Freeze the same validated arguments in templateInputs and action.arguments' });
 });
 export type StudioConfig = z.infer<typeof studioConfigSchema>;
-/** Repository-materializing templates and scripts cannot execute in chat-only scratch. */
+/** Isolated scripts cannot execute in chat-only scratch. */
 export function studioActionRequiresAgentWorkspace(action: StudioConfig['action']): boolean {
-  return action.kind === 'script' || action.kind === 'template' && studioNativeTemplateRequiresWorkspace(action.templateId);
+  return action.kind === 'script';
 }
 /**
  * UI confirmation policy only: registered PM handlers persist analysis/candidates, never apply them.
@@ -108,7 +100,6 @@ export function studioRequiredProviderToolFeature(config: StudioConfig): string 
   const action = config.action;
   if (action.kind === 'prompt' && action.plugins.length > 0) return `provider:${action.providerInstanceId}:promptConnectors`;
   if (action.kind === 'template' && isPmAutomationTemplateId(action.templateId) && studioNativeTemplateRequiresProvider(action.templateId)) return `provider:${action.providerInstanceId ?? ''}:pmAnalysis`;
-  if (action.kind === 'template' && studioNativeTemplateRequiresWorkspace(action.templateId)) return `provider:${action.providerInstanceId ?? ''}:templateWorkspace`;
   return null;
 }
 /** Historical selections are forensic data only, never valid input to an execution. */
@@ -136,7 +127,7 @@ export const studioRuntimeCapabilitiesSchema = z.strictObject({
   providers: z.array(z.strictObject({ id: z.string(), name: z.string(), models: z.array(z.string()) })),
   repositories: z.array(z.strictObject({ id: z.string(), name: z.string() })),
   plugins: z.array(z.strictObject({ id: z.string(), name: z.string(), version: z.string().nullable() })),
-  features: z.array(z.strictObject({ id: z.string(), available: z.boolean(), reason: z.string().nullable() })).optional().describe('Actual runtime prerequisites. Provider-specific native tool gates use provider:<instanceId>:promptConnectors and provider:<instanceId>:templateWorkspace; missing required features fail closed. Template workspace-tool transport is distinct from OCI command support.'),
+  features: z.array(z.strictObject({ id: z.string(), available: z.boolean(), reason: z.string().nullable() })).optional().describe('Actual runtime prerequisites. Provider-specific native tool gates use provider:<instanceId>:promptConnectors and provider:<instanceId>:pmAnalysis; missing required features fail closed.'),
 });
 export type StudioRuntimeCapabilities = z.infer<typeof studioRuntimeCapabilitiesSchema>;
 export const studioCapabilitiesSchema = studioRuntimeCapabilitiesSchema.extend({ canWrite: z.boolean(), scheduler: z.strictObject({ authority: z.literal('worker'), ready: z.boolean(), reason: z.string().nullable() }) });

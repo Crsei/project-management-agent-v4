@@ -81,9 +81,8 @@ function SettingsLayout({ mode }: SettingsPageProps) {
       </nav>
       <header className="mb-7 space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{t("设置", "Settings")}</h1>
-        <p className="text-sm leading-6 text-muted-foreground">{t("管理浏览器偏好、账号安全、工作区与应用连接。各页会标明保存范围及服务可用性。", "Manage browser preferences, account security, your workspace and integrations. Each page identifies its storage scope and service availability.")}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{t("管理浏览器偏好、账号安全、工作区与集成。", "Manage browser preferences, account security, your workspace and integrations.")}</p>
       </header>
-      {mode === "lab" && <p role="note" className="mb-6 rounded-control border border-dashed px-3 py-2 text-xs leading-5 text-muted-foreground">{t("组件演示 · 业务表单只在当前页面预览，离开后重置，不写业务服务。浏览器外观与操作偏好会真实生效并尝试保存在本机；不会付款、投递通知或启用认证。", "Component showcase · Business forms preview only this page and reset when you leave, without service writes. Browser appearance and interaction preferences really apply and attempt to persist on this device. No payments, notification delivery or authentication setup occurs.")}</p>}
       <div className="grid min-w-0 gap-8 md:grid-cols-[180px_minmax(0,1fr)] lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-12">
         <aside className="min-w-0">
           <label className="grid gap-2 text-sm md:hidden">
@@ -101,7 +100,7 @@ function SettingsLayout({ mode }: SettingsPageProps) {
                 const Icon = groupIcons[group.id]
                 return <section key={group.id} aria-labelledby={`settings-group-${group.id}`}>
                   <h2 id={`settings-group-${group.id}`} className="mb-1 flex items-center gap-2 px-3 text-xs font-medium text-muted-foreground"><Icon aria-hidden="true" className="size-3.5" />{t(group.zh, group.en)}</h2>
-                  <div className="space-y-0.5">{settingsPages.filter(item => item.group === group.id).map(({ slug, zh, en }) => <Link key={slug} to={`${root}/${slug}`} aria-current={slug === settingsPage ? "page" : undefined} className={`flex min-h-9 items-center rounded-control px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring ${slug === settingsPage ? "bg-selection font-medium text-foreground" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"}`}>{t(zh, en)}</Link>)}</div>
+                  <div className="space-y-0.5">{settingsPages.filter(item => item.group === group.id).map(({ slug, zh, en }) => <Link key={slug} to={`${root}/${slug}`} aria-current={slug === settingsPage ? "page" : undefined} className={`flex min-h-9 items-center rounded-control px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring ${slug === settingsPage ? "settings-nav-current font-medium" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"}`}>{t(zh, en)}</Link>)}</div>
                 </section>
               })}
             </nav>
@@ -110,11 +109,11 @@ function SettingsLayout({ mode }: SettingsPageProps) {
               {workspaceSettingsPages.map(({ section, zh, en }) => mode === "service"
                 ? <Link key={section} to={`${root}?section=${section}`} className="rounded-control py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t(zh, en)}</Link>
                 : <span key={section} aria-disabled="true" className="py-1">{t(zh, en)}</span>)}
-              {mode === "lab" && <p className="w-full leading-5">{t("以上管理编辑器需要登录真实工作区；Lab 不提供模拟迁移或备份。", "These administration editors require a real workspace session. Lab does not simulate migrations or backups.")}</p>}
+              {mode === "lab" && <p className="w-full leading-5">{t("管理编辑器需登录真实工作区。", "Administration editors require a real workspace session.")}</p>}
             </nav>
           </div>
         </aside>
-        <main className="w-full min-w-0 max-w-[1160px]" key={`${mode}:${workspaceSlug}:${settingsPage}`}>
+        <main className="w-full min-w-0 max-w-[1160px]" data-settings-content key={`${mode}:${workspaceSlug}:${settingsPage}`}>
           {Page ? <Page mode={mode} /> : <div role="alert" className="space-y-3"><h2 className="text-lg font-semibold">{t("设置页面不存在", "Settings page not found")}</h2><Link to={`${root}/general`} className="text-primary hover:text-foreground">{t("返回设置概览", "Return to settings overview")}</Link></div>}
         </main>
       </div>

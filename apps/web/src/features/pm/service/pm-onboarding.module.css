@@ -1,23 +1,116 @@
-.page { min-height: 100%; padding: clamp(20px, 4vw, 56px); background: var(--background); }
-.shell { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); max-width: 1100px; min-height: 600px; margin: auto; overflow: hidden; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); }
-.rail { padding: 32px; border-right: 1px solid var(--border); background: var(--surface-hover); }
-.rail h1 { margin: 12px 0; font-size: 24px; line-height: 1.25; font-weight: 650; }
-.rail p, .content > p, .checklist p { color: var(--muted-foreground); font-size: 14px; line-height: 1.6; }
-.eyebrow { font-size: 11px !important; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.rail ol { display: grid; gap: 10px; margin: 36px 0; padding: 0; list-style: none; }
-.rail li button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 10px; text-align: left; font-size: 14px; }
-.rail li button[aria-current] { background: var(--surface); font-weight: 650; }
-.rail li button:disabled { opacity: .45; }
-.rail li button span { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--border); border-radius: 50%; }
-.rail a, .checklist a { text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
-.content { min-width: 0; padding: clamp(24px, 5vw, 56px); }
-.content h2 { margin: 8px 0; font-size: clamp(24px, 3vw, 32px); font-weight: 650; letter-spacing: -.02em; }
-.actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 28px; }
-.error { margin-top: 16px; color: var(--destructive) !important; }
-.checklist { margin: 20px 0; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+/* This route owns its scrolling: the PM agent host clips page overflow, and a
+   fixed-height flex item would otherwise hide everything below the fold. */
+.page { display: flex; flex: 1; width: 100%; min-width: 0; min-height: 0; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: clamp(20px, 4vw, 56px); background: var(--background); }
+.frame { display: flex; width: 100%; max-width: 960px; flex-direction: column; gap: clamp(14px, 1.8vw, 22px); margin: 0 auto; padding-bottom: 24px; }
+
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.heading { max-width: 42rem; }
+.heading h1 { margin: 6px 0 8px; font-size: clamp(26px, 2.4vw, 38px); line-height: 1.15; font-weight: 650; letter-spacing: -.03em; }
+.lede { color: var(--muted-foreground); font-size: clamp(14px, .8vw, 16px); line-height: 1.6; }
+.eyebrow { color: var(--accent); font-size: 11px !important; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.headerActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.backLink { display: inline-flex; align-items: center; gap: 6px; padding: 6px 2px; color: var(--muted-foreground); font-size: 13px; }
+.backLink:hover { color: var(--foreground); }
+.backLink svg { width: 14px; height: 14px; }
+.backLink:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Horizontal three-step indicator. Each step keeps an icon + label; the line
+   only marks the relationship, it does not add another navigation column. */
+.stepper { padding: clamp(12px, 1.4vw, 18px) clamp(12px, 2vw, 22px); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--edge-shadow); }
+.stepper ol { display: flex; align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.step { position: relative; flex: 1 1 0; min-width: 0; }
+.connector { position: absolute; z-index: 0; top: 22px; left: calc(50% + 18px); width: calc(100% - 36px); height: 2px; background: var(--border); }
+.step[data-state="done"] .connector { background: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.step button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 6px 4px; border-radius: var(--radius-control); text-align: center; }
+.step button:hover:not(:disabled) .stepIcon { border-color: var(--border-hover); color: var(--foreground); }
+.step button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.step button:disabled { cursor: not-allowed; opacity: .5; }
+.stepIcon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted-foreground); transition: color var(--motion-hover) ease-out, border-color var(--motion-hover) ease-out, background var(--motion-hover) ease-out, box-shadow var(--motion-hover) ease-out; }
+.stepIcon svg { width: 15px; height: 15px; }
+.stepText { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.stepName { overflow: hidden; color: var(--foreground); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.stepMeta { color: var(--muted-foreground); font-size: 11px; line-height: 1.35; }
+.step[data-state="current"] .stepIcon { border-color: var(--accent); background: var(--accent); color: var(--accent-foreground); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.step[data-state="current"] .stepMeta { color: var(--accent); font-weight: 600; }
+.step[data-state="done"] .stepIcon { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent); }
+.step[data-state="done"] .stepName { color: var(--muted-foreground); }
+
+.busyNote { margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border)); border-radius: var(--radius-module); background: color-mix(in srgb, var(--warning) 7%, var(--surface)); color: var(--warning); font-size: 12px; line-height: 1.5; }
+
+/* Workspace binding is part of the page instead of a separate full-panel
+   confirmation screen. It stays visible while every step is edited. */
+.workspaceCard { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--edge-shadow); }
+.workspaceCard:not([data-selected]) { border-color: color-mix(in srgb, var(--accent) 34%, var(--border)); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.workspaceIcon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-module); background: var(--surface-raised); color: var(--muted-foreground); }
+.workspaceIcon svg { width: 18px; height: 18px; }
+.workspaceCopy { flex: 1 1 auto; min-width: 0; }
+.workspaceCopy h2 { font-size: 14px; font-weight: 650; line-height: 1.35; }
+.workspaceCopy p { margin-top: 2px; color: var(--muted-foreground); font-size: 12px; line-height: 1.55; }
+.workspaceCopy strong { color: var(--foreground); font-weight: 600; }
+.workspaceActions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; flex-wrap: wrap; }
+.workspaceActions a { color: var(--muted-foreground); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.workspaceActions a:hover { color: var(--foreground); }
+.workspaceState { display: inline-flex; align-items: center; gap: 5px; color: var(--success); font-size: 12px; font-weight: 600; }
+.workspaceState svg { width: 15px; height: 15px; }
+
+.panel { min-width: 0; padding: clamp(20px, 3vw, 36px); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--edge-shadow); }
+.stepBody { width: 100%; min-width: 0; }
+.stepBody h2 { margin: 6px 0 8px; font-size: clamp(22px, 1.7vw, 30px); line-height: 1.25; font-weight: 650; letter-spacing: -.02em; }
+.kicker { color: var(--accent) !important; font-size: 11px !important; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.stepLead { max-width: 46rem; color: var(--muted-foreground); font-size: 14px; line-height: 1.65; }
+.profileStep { max-width: 46rem; margin-top: 22px; }
+.actions { display: flex; max-width: 46rem; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 46rem; margin: 22px 0 0; }
+.summary > div { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-module); background: var(--surface-raised); }
+.summary dt { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.summary dt svg { width: 14px; height: 14px; }
+.summary dd { margin-top: 6px; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+
+.inlineNote { margin-top: 12px; color: var(--muted-foreground); font-size: 12px; line-height: 1.55; }
+.error { margin-top: 16px; color: var(--destructive) !important; font-size: 13px; }
+.errorPanel { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.errorPanel h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
+.errorPanel p { color: var(--muted-foreground); font-size: 13px; line-height: 1.55; }
+
+/* Home checklist (kept separate from the guide route). */
+.checklist { margin: 20px 0; padding: 20px; border: 1px solid var(--glass-edge); border-radius: 16px; background: var(--surface); box-shadow: var(--edge-shadow); }
 .checklistHeader { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .checklist h2 { font-size: 17px; font-weight: 650; }
+.checklist p { color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
 .checklist ul { display: grid; gap: 10px; margin-top: 16px; list-style: none; padding: 0; }
 .checklist li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .checklist li span { color: var(--muted-foreground); text-align: right; }
-@media (max-width: 700px) { .page { padding: 16px; } .shell { grid-template-columns: 1fr; } .rail { border-right: 0; border-bottom: 1px solid var(--border); padding: 24px; } .rail ol { margin: 18px 0; display: flex; flex-wrap: wrap; } .rail li button { width: auto; } .content { padding: 24px; } }
+.checklist a { text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+
+@media (max-width: 720px) {
+  .page { padding: 12px; }
+  .frame { gap: 12px; padding-bottom: 12px; }
+  .header { gap: 12px; }
+  .heading h1 { font-size: 24px; }
+  .headerActions { width: 100%; justify-content: space-between; }
+  .stepper { padding: 8px 6px; border-radius: var(--radius-module); }
+  .step button { gap: 4px; padding: 6px 2px; }
+  .stepIcon { width: 26px; height: 26px; }
+  .stepIcon svg { width: 13px; height: 13px; }
+  .stepName { font-size: 12px; }
+  .stepMeta { display: none; }
+  .connector { top: 19px; left: calc(50% + 15px); width: calc(100% - 30px); }
+  .workspaceCard { align-items: flex-start; flex-wrap: wrap; padding: 12px; }
+  .workspaceCopy { flex-basis: calc(100% - 54px); }
+  .workspaceActions { width: 100%; justify-content: space-between; padding-left: 54px; }
+  .panel { padding: 18px; border-radius: var(--radius-module); }
+  .stepBody h2 { font-size: 22px; }
+  .actions { flex-direction: column-reverse; align-items: stretch; margin-top: 22px; }
+  .actions > * { width: 100%; }
+  .summary { grid-template-columns: 1fr; }
+  .profileStep { margin-top: 16px; }
+  .checklist { padding: 16px; }
+  .checklist li { flex-direction: column; gap: 2px; }
+  .checklist li span { text-align: left; }
+}
+
+@media (min-width: 1400px) {
+  .frame { max-width: 1040px; }
+  .profileStep, .stepLead, .actions, .summary { max-width: 52rem; }
+}

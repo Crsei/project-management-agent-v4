@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Duplex } from 'node:stream';
 
-const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
+const repositoryRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -109,7 +109,7 @@ export function createGateway(options: GatewayOptions = {}) {
     if (pathname === '/connect-agent' || pathname === '/pm/account' || pathname.startsWith('/pm/account/')) {
       headers['cache-control'] = 'no-store';
       headers['referrer-policy'] = 'no-referrer';
-      headers['content-security-policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+      headers['content-security-policy'] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
     }
     res.writeHead(200, headers);
     if (req.method === 'HEAD') { res.end(); return; }
@@ -137,6 +137,8 @@ export function createGateway(options: GatewayOptions = {}) {
     if (!destination) { socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); return; }
     const transport = destination.target.protocol === 'https:' ? https : http;
     const outgoing = transport.request(destination.target, { method: req.method, path: destination.path, headers: req.headers });
+    // A client may reset during the handshake before the upstream upgrade lands.
+    socket.on('error', () => outgoing.destroy());
     outgoing.on('upgrade', (response, upstreamSocket, upstreamHead) => {
       socket.write(`HTTP/${response.httpVersion} ${response.statusCode} ${response.statusMessage}\r\n`);
       for (let i = 0; i < response.rawHeaders.length; i += 2) socket.write(`${response.rawHeaders[i]}: ${response.rawHeaders[i + 1]}\r\n`);

@@ -1,4 +1,4 @@
-import { registerProductRoadmapRoutes } from './product-roadmap-routes.ts';
+import { registerProductRoadmapRoutes } from './routes/product-roadmap-routes.ts';
 import { lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -12,17 +12,17 @@ import { createPool, checkDatabase, lockWorkspace } from '../../../../packages/i
 import { createBlobStore, type BlobStorageProvider } from '../../../../packages/infrastructure/src/blob-storage-provider.ts';
 import { bindBlobStore } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
 import type { BlobStorageLocator } from '../../../../packages/infrastructure/src/blob-storage-config.ts';
-import { login, authenticate, logout } from '../../../../packages/infrastructure/src/auth.ts';
+import { login, authenticate, logout, renewSession } from '../../../../packages/infrastructure/src/auth.ts';
 import { authorizeMcpService, mcpRequestIdentity } from '../../../../packages/application/src/mcp-service-auth.ts';
 import { createRegistry } from '../../../../packages/application/src/registry.ts';
 import { runCommand, getCommandReceipt } from '../../../../packages/application/src/kernel.ts';
 import { listEntities, readEntity } from '../../../../packages/application/src/queries.ts';
-import { getMembership, listMembers, requireCapability } from '../../../../packages/application/src/access.ts';
+import { getMembership, listMembers } from '../../../../packages/application/src/access.ts';
 import { downloadArtifactVersion } from '../../../../packages/application/src/delivery.ts';
 import { readChanges } from '../../../../packages/application/src/changes.ts';
 import { buildOpenApi } from '../../../../packages/contracts/src/openapi.ts';
 import { registerEventStream } from './events.ts';
-import { registerCoreRoutes, CoreScope, CoreWorkspacePool, authorizeCoreScope } from './core-routes.ts';
+import { registerCoreRoutes, CoreScope, CoreWorkspacePool, authorizeCoreScope } from './routes/core-routes.ts';
 import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from './core-adapter.ts';
 import { readExternalReceipt, recordExternalReceipt, requestHash } from '../../../../packages/application/src/core-bridge.ts';
 import { CoreCommandJournal } from './core-journal.ts';
@@ -39,17 +39,17 @@ import { readProjectDirectory } from '../../../../packages/application/src/proje
 import { projectAuditOptionsSchema, readProjectAudit, type ProjectAuditWrite } from '../../../../packages/application/src/project-audit.ts';
 import { readMemberDirectory } from '../../../../packages/application/src/member-directory.ts';
 import type { InvitationMailConfig } from '../../../../packages/infrastructure/src/invitation-mail.ts';
-import { registerInvitationRoutes } from './invitation-routes.ts';
-import { registerInstanceSetupRoutes } from './instance-setup-routes.ts';
-import { registerRegistrationRoutes } from './registration-routes.ts';
-import { registerWorkspaceCreationRoutes } from './workspace-creation-routes.ts';
-import { registerOnboardingRoutes } from './onboarding-routes.ts';
+import { registerInvitationRoutes } from './routes/invitation-routes.ts';
+import { registerInstanceSetupRoutes } from './routes/instance-setup-routes.ts';
+import { registerRegistrationRoutes } from './routes/registration-routes.ts';
+import { registerWorkspaceCreationRoutes } from './routes/workspace-creation-routes.ts';
+import { registerOnboardingRoutes } from './routes/onboarding-routes.ts';
 import { readTeamDirectory } from '../../../../packages/application/src/team-directory.ts';
 import { readTeamWorkload } from '../../../../packages/application/src/team-workload.ts';
-import { registerWorkspaceIdentityRoutes } from './workspace-identity-routes.ts';
-import { registerPeopleRoutes } from './people-routes.ts';
-import { registerMemberLifecycleRoutes } from './member-lifecycle-routes.ts';
-import { registerAccountSecurityRoutes } from './account-security-routes.ts';
+import { registerWorkspaceIdentityRoutes } from './routes/workspace-identity-routes.ts';
+import { registerPeopleRoutes } from './routes/people-routes.ts';
+import { registerMemberLifecycleRoutes } from './routes/member-lifecycle-routes.ts';
+import { registerAccountSecurityRoutes } from './routes/account-security-routes.ts';
 import { readTaskComments, readTaskCommentHistory, taskCommentsOptionsSchema, taskCommentHistoryOptionsSchema } from '../../../../packages/application/src/task-comments.ts';
 import { taskCommentIdSchema } from '../../../../packages/domain/src/task-comments.ts';
 import type { AccountRecoveryMailConfig } from '../../../../packages/infrastructure/src/account-recovery-mail.ts';
@@ -57,21 +57,21 @@ import type { WebhookConfig } from '../../../../packages/infrastructure/src/webh
 import type { CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { readonlyCorePort } from '../../../../packages/pm-core/readonly.ts';
 import { CoreFactImporter } from './core-fact-importer.ts';
-import { registerNotificationRoutes } from './notification-routes.ts';
-import { registerAccountRecoveryRoutes } from './account-recovery-routes.ts';
-import { registerWebhookRoutes } from './webhook-routes.ts';
-import { registerArtifactFilesRoutes } from './artifact-files-routes.ts';
-import { registerAgentToolRoutes } from './agent-tool-routes.ts';
-import { registerAgentCoreFilesRoutes } from './agent-core-files-routes.ts';
-import { registerAgentReferenceRoutes } from './agent-reference-routes.ts';
-import { registerAgentCapabilityRoutes } from './agent-capability-routes.ts';
-import { registerAgentIssueSearchRoutes } from './agent-issue-search-routes.ts';
-import { registerAgentPreviewRoutes } from './agent-preview-routes.ts';
-import { registerAutomationRoutes } from './automation-routes.ts';
-import { registerAutomationStudioRoutes } from './automation-studio-routes.ts';
-import { registerAutomationGitSyncRoutes } from './automation-git-sync-routes.ts';
-import { registerAutomationEventsRoutes } from './automation-events-routes.ts';
-import { registerPmAutomationRoutes } from './automation-pm-routes.ts';
+import { registerNotificationRoutes } from './routes/notification-routes.ts';
+import { registerAccountRecoveryRoutes } from './routes/account-recovery-routes.ts';
+import { registerWebhookRoutes } from './routes/webhook-routes.ts';
+import { registerArtifactFilesRoutes } from './routes/artifact-files-routes.ts';
+import { registerAgentToolRoutes } from './routes/agent-tool-routes.ts';
+import { registerAgentCoreFilesRoutes } from './routes/agent-core-files-routes.ts';
+import { registerAgentReferenceRoutes } from './routes/agent-reference-routes.ts';
+import { registerAgentCapabilityRoutes } from './routes/agent-capability-routes.ts';
+import { registerAgentIssueSearchRoutes } from './routes/agent-issue-search-routes.ts';
+import { registerAgentPreviewRoutes } from './routes/agent-preview-routes.ts';
+import { registerAutomationRoutes } from './routes/automation-routes.ts';
+import { registerAutomationStudioRoutes } from './routes/automation-studio-routes.ts';
+import { registerAutomationGitSyncRoutes } from './routes/automation-git-sync-routes.ts';
+import { registerAutomationEventsRoutes } from './routes/automation-events-routes.ts';
+import { registerPmAutomationRoutes } from './routes/automation-pm-routes.ts';
 import { createPmAutomationMutationPort } from './automation-pm-mutations.ts';
 import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
 import { authorizeAutomationStudioService } from '../../../../packages/application/src/automation-studio-auth.ts';
@@ -80,24 +80,24 @@ import { createAutomationDefinitionClient } from '../../../../packages/infrastru
 import type { StudioExecutionPort, StudioWorkspaceExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
 import type { ImGatewayConfig } from '../../../../packages/infrastructure/src/im-gateway-config.ts';
 import { findImTaskWatch } from '../../../../packages/application/src/im-gateway.ts';
-import { registerImRoutes } from './im-routes.ts';
+import { registerImRoutes } from './routes/im-routes.ts';
 import { createImSatoriRuntime, type ImRuntime } from './im-satori.ts';
-import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
-import { registerDocumentSourceRoutes } from './document-source-routes.ts';
-import { registerWorkflowTaskTransitionRoutes } from './workflow-task-transition-routes.ts';
-import { registerChangeHistoryRoutes } from './change-history-routes.ts';
-import { registerTaskBriefRoutes } from './task-brief-routes.ts';
+import { registerAgentFileAreaRoutes } from './routes/agent-file-area-routes.ts';
+import { registerDocumentSourceRoutes } from './routes/document-source-routes.ts';
+import { registerWorkflowTaskTransitionRoutes } from './routes/workflow-task-transition-routes.ts';
+import { registerChangeHistoryRoutes } from './routes/change-history-routes.ts';
+import { registerTaskBriefRoutes } from './routes/task-brief-routes.ts';
 import { recordExternalDocumentHistory } from '../../../../packages/application/src/change-history.ts';
 import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
 import { currentPmAutomationOrigin } from '../../../../packages/application/src/automation-pm-signals.ts';
-import { createAgentChatTools } from './agent-chat-tools.ts';
-import { createCollaborationToolFamily } from './agent-tool-collaboration.ts';
-import { createAdministrationToolFamily } from './agent-tool-administration.ts';
-import { createDocumentsFilesToolFamily } from './agent-tool-documents-files.ts';
-import { createDashboardToolFamily } from './agent-tool-dashboard.ts';
-import { createPlanningRecordsToolFamily } from './agent-tool-planning-records.ts';
-import { createAutomationToolFamily } from './agent-tool-automation.ts';
-import { createIntegrationsToolFamily } from './agent-tool-integrations.ts';
+import { createAgentChatTools } from './agent-tools/agent-chat-tools.ts';
+import { createCollaborationToolFamily } from './agent-tools/agent-tool-collaboration.ts';
+import { createAdministrationToolFamily } from './agent-tools/agent-tool-administration.ts';
+import { createDocumentsFilesToolFamily } from './agent-tools/agent-tool-documents-files.ts';
+import { createDashboardToolFamily } from './agent-tools/agent-tool-dashboard.ts';
+import { createPlanningRecordsToolFamily } from './agent-tools/agent-tool-planning-records.ts';
+import { createAutomationToolFamily } from './agent-tools/agent-tool-automation.ts';
+import { createIntegrationsToolFamily } from './agent-tools/agent-tool-integrations.ts';
 import { createAutomationIntegrationsService } from '../../../../packages/application/src/automation-integrations.ts';
 import { createAutomationEventsService } from '../../../../packages/application/src/automation-events.ts';
 import { inspectAutomationIntegrationReceipt } from '../../../../packages/application/src/automation-integrations-store.ts';
@@ -276,7 +276,12 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   }
   function params(request: FastifyRequest) { return z.object({ workspaceId: uuid, id: z.string().min(1).max(80).optional(), commandId: uuid.optional() }).parse(request.params); }
   async function validateInvitationProjects(sql: SqlExecutor, principal: Actor, workspaceId: string, projectIds: string[]): Promise<void> {
-    await requireCapability(sql, principal, workspaceId, 'access.manage');
+    const member = await getMembership(sql, principal, workspaceId);
+    const administrator = member.projectIds === null && member.capabilities.includes('access.manage');
+    if (!administrator && (!member.capabilities.includes('planning.edit') ||
+        member.projectIds !== null && !projectIds.every(id => member.projectIds!.includes(id)))) {
+      throw new DomainError('permission_denied', 'Invitation projects exceed the inviter authority', 403);
+    }
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
     const workspace = await coreWorkspaces.get(workspaceId, sql);
     for (const projectId of projectIds) {
@@ -417,7 +422,17 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     return { actor: session.actor, expiresAt: session.expiresAt };
   });
   app.post('/api/v1/auth/logout', async (request, reply) => { reply.header('Cache-Control', 'no-store'); await actor(request); await logout(database(), token(request)); reply.clearCookie('pm_v4_session', cookieOptions); return { loggedOut: true }; });
-  app.get('/api/v1/auth/me', async (request, reply) => { reply.header('Cache-Control', 'no-store'); return { actor: await actor(request) }; });
+  app.get('/api/v1/auth/me', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const current = await actor(request);
+    // Browser session checks roll the cookie forward; bearer credentials stay stateless.
+    const session = request.headers.authorization ? undefined : request.cookies.pm_v4_session;
+    if (session) {
+      const expiresAt = await renewSession(database(), session);
+      reply.setCookie('pm_v4_session', session, { ...cookieOptions, expires: new Date(expiresAt) });
+    }
+    return { actor: current };
+  });
   registerAccountSecurityRoutes(app, { database, token });
   registerAccountRecoveryRoutes(app, { database, token, ...(options.accountRecoveryMail ? { mailConfig: options.accountRecoveryMail } : {}) });
   registerOnboardingRoutes(app, { database, actor });

@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import type { CoreAccess, SqlExecutor } from '../../../../packages/application/src/ports.ts';
-import { readArtifactCopyOrigin } from '../../../../packages/application/src/artifact-copy-origins.ts';
-import { DomainError } from '../../../../packages/domain/src/core.ts';
-import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import type { CoreAccess, SqlExecutor } from '../../../../../packages/application/src/ports.ts';
+import { readArtifactCopyOrigin } from '../../../../../packages/application/src/artifact-copy-origins.ts';
+import { DomainError } from '../../../../../packages/domain/src/core.ts';
+import { WorkspaceError } from '../../../../../packages/pm-core/index.ts';
 
 export type ArtifactFilesRouteOptions = {
   database: () => Pool;

@@ -211,9 +211,9 @@ export const makeOmpRpcConnection = Effect.fnUntraced(function* (options: OmpRpc
   );
   yield* child.stdout.pipe(
     Stream.runForEach((bytes) => Effect.gen(function* () {
-      const records = yield* Effect.try({
+      const records: OmpRpcRecord[] = [];
+      const decoded = yield* Effect.try({
         try: () => {
-          const decoded: OmpRpcRecord[] = [];
           decoder.push(bytes, (record) => {
             if (!didReady) {
               if (record.type !== "ready" || record.protocolVersion !== 1 ||
@@ -230,13 +230,17 @@ export const makeOmpRpcConnection = Effect.fnUntraced(function* (options: OmpRpc
               decoder.enableV2();
               didNegotiate = true;
             }
-            decoded.push(record);
+            records.push(record);
           });
-          return decoded;
+          return undefined;
         },
         catch: (cause) => new OmpRpcError({ operation: "read", detail: "Invalid OMP RPC framing", cause }),
-      });
+      }).pipe(Effect.result);
+      // A later corrupt frame must not erase an already decoded prefix merely
+      // because the OS coalesced both into one stdout read. The decoder stays
+      // poisoned; deliver the valid prefix in wire order, then fail closed.
       for (const record of records) yield* route(record);
+      if (decoded._tag === "Failure") return yield* Effect.fail(decoded.failure);
     })),
     Effect.andThen(Effect.try({
       try: () => decoder.finish(),

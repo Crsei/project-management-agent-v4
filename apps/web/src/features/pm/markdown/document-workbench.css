@@ -14,8 +14,9 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
   background: var(--surface);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
 }
 
 .document-workbench-label {
@@ -51,6 +52,7 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--glass-edge);
 }
 
 .document-workbench-sidebar[hidden] {
@@ -65,7 +67,8 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-inner);
   font-size: 12px;
 }
 
@@ -77,7 +80,7 @@
   z-index: 1;
   width: 5px;
   flex: 0 0 5px;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--glass-edge);
   cursor: col-resize;
   touch-action: none;
 }
@@ -386,4 +389,90 @@
   .document-workbench-context-resize {
     display: none;
   }
+}
+
+/* Document reading column.
+   The shared full-page preview is 960px wide (markdown.css); the workbench
+   content pane is often narrower, so the column is capped to the pane and
+   centered here instead of overflowing and being clipped. */
+.document-workbench .document-workbench-content .detail-content {
+  min-width: 0;
+}
+
+.document-workbench .document-workbench-content .document-editing-panel,
+.document-workbench .document-workbench-content .document-content-editor,
+.document-workbench .document-workbench-content .document-editing-workspace,
+.document-workbench .document-workbench-content .document-preview-pane,
+.document-workbench .document-workbench-content .document-body-pane,
+.document-workbench .document-workbench-content .document-outline {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.document-workbench .document-workbench-content > .entity-detail .markdown-preview {
+  width: 100%;
+  min-width: 0;
+  max-width: min(860px, 100%);
+  flex: 0 1 auto;
+  margin-inline: auto;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.document-workbench .document-workbench-content > .entity-detail .md-diff .markdown-preview {
+  max-width: min(860px, 100%);
+  margin-inline: auto;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.document-workbench .document-workbench-content > .entity-detail .markdown-preview > * {
+  max-width: 100%;
+}
+
+.document-workbench .document-workbench-content > .entity-detail .detail-heading h2 {
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+/* Align the non-focus title with the centered reading column while keeping the
+   heading border full-width. The title text sits 40px (32px back button + 8px
+   gap) after the heading content edge and the preview body starts 24px after
+   the 860px column edge, so the heading inset is 16px less than the column
+   inset; 16px stays the minimum when the pane is narrower than 860px. */
+.document-workbench .document-workbench-content > .entity-detail > .detail-heading {
+  padding-inline: max(16px, calc((100% - 860px) / 2 - 16px));
+}
+
+/* Focus mode: one centered reading column, with the document chrome removed so
+   the body starts directly under its title. */
+.document-workbench[data-focus-mode] .document-tabs-bar,
+.document-workbench[data-focus-mode] .document-workbench-content .detail-tabs-row,
+.document-workbench[data-focus-mode] .document-workbench-content .detail-save-state,
+.document-workbench[data-focus-mode] .document-workbench-content .document-format-toolbar,
+.document-workbench[data-focus-mode] .document-workbench-content .document-block-controls,
+.document-workbench[data-focus-mode] .document-workbench-content .detail-back {
+  display: none;
+}
+
+.document-workbench[data-focus-mode] .document-workbench-content > .entity-detail > .detail-heading {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 20px 24px 12px;
+  border-bottom: 0;
+}
+
+.document-workbench[data-focus-mode] .document-workbench-content > .entity-detail .detail-heading h2 {
+  font-size: 30px;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+}
+
+.document-workbench[data-focus-mode] .document-workbench-content > .entity-detail .markdown-preview,
+.document-workbench[data-focus-mode] .document-workbench-content > .entity-detail .md-diff .markdown-preview {
+  max-width: min(760px, 100%);
+  padding-inline: 24px;
+  font-size: 16px;
+  line-height: 1.8;
 }

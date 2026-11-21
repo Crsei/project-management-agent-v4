@@ -18,10 +18,11 @@ type AiStatus = {
   configured: boolean
   providers: z.infer<typeof providersSchema>["providers"]
 }
+export type OnboardingAiStatus = AiStatus & { refresh: () => void }
 const loading: AiStatus = { status: "loading", configured: false, providers: [] }
 
 /** Reads existing Agent access and provider facts. Never starts auth, a test, or a model call. */
-export function useOnboardingAiStatus(enabled = true) {
+export function useOnboardingAiStatus(enabled = true): OnboardingAiStatus {
   const { actor, actorEpoch } = usePmService()
   const owner = actor ? `${actor.id}:${actorEpoch}` : null
   const [request, setRequest] = useState(0)
@@ -62,7 +63,8 @@ export function useOnboardingAiStatus(enabled = true) {
   return { ...current, refresh }
 }
 
-export function OnboardingAi({ onContinue, busy, returnTo, onInstallBusyChange }: {
+export function OnboardingAi({ ai, onContinue, busy, returnTo, onInstallBusyChange }: {
+  ai: OnboardingAiStatus
   onContinue: (configured: boolean) => void
   busy: boolean
   returnTo: string
@@ -70,7 +72,6 @@ export function OnboardingAi({ onContinue, busy, returnTo, onInstallBusyChange }
 }) {
   const t = useText()
   const { actor, actorEpoch } = usePmService()
-  const ai = useOnboardingAiStatus()
   const available = ai.providers.filter(provider => provider.enabled && provider.configured && provider.nativeSessionReady)
   const [installBusy, setInstallBusy] = useState(false)
   const locked = busy || installBusy
@@ -78,7 +79,7 @@ export function OnboardingAi({ onContinue, busy, returnTo, onInstallBusyChange }
     setInstallBusy(value)
     onInstallBusyChange(value)
   }, [onInstallBusyChange])
-  return <section className="space-y-5" aria-label={t("连接 AI（可选）", "Connect AI (optional)")}>
+  return <section className="space-y-5" aria-label={t("连接 AI（可选）", "Connect AI (optional)")} data-tour="onboarding-ai">
     <div className="rounded-xl border bg-surface p-5">
       <Plug className="mb-3 size-6 text-primary" aria-hidden="true" />
       <h2 className="text-lg font-semibold">{t("让 AI 成为你的助手", "Bring AI into your workspace")}</h2>
@@ -98,7 +99,7 @@ export function OnboardingAi({ onContinue, busy, returnTo, onInstallBusyChange }
     </div>
     <BundledSkillsPanel t={t} ownerKey={`${actor?.id ?? "anonymous"}:${actorEpoch}`} disabled={busy || ai.status !== "available"} onBusyChange={reportInstallBusy} />
     <p className="text-xs leading-5 text-muted-foreground">{t("配置状态不是实际模型调用验证。Agent 配置适用于本机服务，不是当前 PM 工作区的私有配置；会话与持久化仍沿用 Agent Chat，统一设计尚未收口。", "Configuration status is not a verified model call. Agent settings apply to the local service, not privately to this PM workspace. Sessions and persistence still use Agent Chat; the unified design is not finalized.")}</p>
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap gap-3" data-tour="onboarding-ai-actions">
       {ai.configured && <Button type="button" disabled={locked} onClick={() => onContinue(true)}>{t("继续", "Continue")}<ArrowRight className="size-4" aria-hidden="true" /></Button>}
       <Button type="button" variant="outline" disabled={locked} onClick={() => onContinue(false)}>{t("稍后配置 AI", "Set up AI later")}</Button>
     </div>

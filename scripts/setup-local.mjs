@@ -9,6 +9,7 @@ const projects = path.join(root, '.local', 'projects');
 await mkdir(projects, { recursive: true, mode: 0o700 });
 await mkdir(path.join(root, '.local', 'backups'), { recursive: true, mode: 0o700 });
 await mkdir(path.join(root, '.local', 'agent-data'), { recursive: true, mode: 0o700 });
+await mkdir(path.join(root, '.local', 'chat-spaces'), { recursive: true, mode: 0o700 });
 try {
   await writeFile(path.join(root, '.local', 'local-projects.json'), JSON.stringify({
     enabled: true, dataRoot: path.join(root, '.local'), allowedRoots: [projects],
@@ -39,6 +40,7 @@ try {
     'POSTGRES_PORT=55444', `POSTGRES_IMAGE=${image}`, `POSTGRES_PASSWORD=${password}`,
     `DATABASE_URL=${databaseUrl}`,
     'BLOB_PROVIDER=local', 'BLOB_ROOT=.local/blobs', 'CORE_WORKSPACE_ROOT=.local/pm-workspaces',
+    `PM_CHAT_SPACE_ROOT=${path.join(root, '.local', 'chat-spaces')}`,
     'COOKIE_SECURE=false', 'WORKER_INTERVAL_MS=500',
     'EVENT_RETENTION_DAYS=7', '',
   ].join('\n'), { flag: 'wx', mode: 0o600 });
@@ -46,6 +48,7 @@ try {
   try {
     await writeFile(path.join(root, '.env.worker'), [
       `DATABASE_URL=${databaseUrl}`, 'CORE_WORKSPACE_ROOT=.local/pm-workspaces',
+      'PUBLIC_ORIGIN=http://127.0.0.1:3224',
       'WORKER_INTERVAL_MS=500', 'EVENT_RETENTION_DAYS=7', '',
     ].join('\n'), { flag: 'wx', mode: 0o600 });
     console.log('Created private .env.worker without API storage credentials.');
@@ -58,7 +61,9 @@ try {
   await writeFile(path.join(root, '.env.agent'), [
     'HOST=127.0.0.1', 'AGENT_WORKSPACE_API_PORT=4325', 'AGENT_WEB_PORT=4326',
     'PM_API_URL=http://127.0.0.1:4194', 'AGENT_WORKSPACE_API_ONLY=1',
-    `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`, '',
+    `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`,
+    `AGENT_WORKSPACE_PROJECT_ROOT=${projects}`,
+    `AGENT_WORKSPACE_ALLOWED_ROOTS='${JSON.stringify([root, projects])}'`, '',
   ].join('\n'), { flag: 'wx', mode: 0o600 });
   console.log('Created private .env.agent with isolated v4 data; no Provider credentials or global CLI homes were imported.');
 } catch (error) {

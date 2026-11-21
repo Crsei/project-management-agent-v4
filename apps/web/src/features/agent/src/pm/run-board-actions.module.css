@@ -1,0 +1,15 @@
+.dialog {
+  max-width: min(520px, calc(100vw - 32px));
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.actions a,
+.actions button {
+  justify-content: flex-start;
+}

@@ -7,6 +7,11 @@
   ],
   "type": "module",
   "exports": {
+    "./evaluation-feedback": {
+      "types": "./dist/evaluation-feedback.d.ts",
+      "development": "./src/evaluation-feedback.ts",
+      "default": "./dist/evaluation-feedback.js"
+    },
     "./message-context": {
       "types": "./dist/message-context.d.ts",
       "development": "./src/message-context.ts",

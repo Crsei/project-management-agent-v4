@@ -31,9 +31,9 @@
 .quickActions, .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .quickActions > button, .statCard, .panel, .projectCard {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-module-value);
   background: var(--surface);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
+  box-shadow: var(--edge-shadow);
 }
 .quickActions > button { height: 70px; min-width: 0; justify-content: flex-start; gap: 12px; padding: 16px; font-size: 14px; font-weight: 500; white-space: normal; text-align: left; line-height: 18px; }
 .actionIcon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 4px; color: var(--text-secondary); background: color-mix(in srgb, var(--foreground) 2%, var(--surface)); }
@@ -56,7 +56,7 @@
 .schedule .panelHeader p { margin-top: 4px; }
 .rangeTabs, .windowGroup { display: inline-flex; align-items: center; flex-shrink: 0; gap: 0; padding: 4px; border: 0; border-radius: 6px; background: var(--surface-raised); }
 .rangeTabs button, .windowGroup button { min-width: 0; min-height: 24px; height: 24px; padding: 0 8px; border: 0; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; white-space: nowrap; }
-.rangeTabs button[data-active], .windowGroup button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 10%, transparent); }
+.rangeTabs button[data-active], .windowGroup button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); box-shadow: var(--control-shadow); }
 .timeline { min-width: 0; position: relative; --sidebar-width: 128px; --timeline-width: 0px; }
 .timeline::after { content: ""; position: absolute; pointer-events: none; z-index: 1; top: 34px; bottom: 0; left: calc(128px + (100% - 128px) * var(--today-ratio, .5)); width: 1px; background: color-mix(in srgb, var(--foreground) 65%, transparent); }
 .timeline::before { content: ""; position: absolute; pointer-events: none; z-index: 2; top: 33px; left: calc(128px + (100% - 128px) * var(--today-ratio, .5) - 4px); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--foreground); }
@@ -68,7 +68,7 @@
 .timeline [data-timeline-row] > :last-child::before { content: ""; position: absolute; left: 0; right: 0; top: 31px; border-top: 1px solid var(--border); }
 .timelineLabel { display: flex; min-width: 0; flex-direction: column; font-size: 14px; line-height: 18px; }
 .timelineLabel > :first-child { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .1em; color: var(--text-secondary); }
-.timelineBar, .timeline [data-schedule-start] { position: absolute; z-index: 3; top: 11px; display: flex; align-items: center; gap: 8px; height: 40px; min-width: 38px; max-width: 100%; overflow: hidden; padding: 5px 12px; border: 1px solid color-mix(in srgb, #06b6d4 18%, var(--surface)); border-radius: 999px; background: color-mix(in srgb, #06b6d4 6%, var(--surface)); color: var(--foreground); box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 6%, transparent); cursor: pointer; text-align: left; }
+.timelineBar, .timeline [data-schedule-start] { position: absolute; z-index: 3; top: 11px; display: flex; align-items: center; gap: 8px; height: 40px; min-width: 38px; max-width: 100%; overflow: hidden; padding: 5px 12px; border: 1px solid color-mix(in srgb, #06b6d4 18%, var(--surface)); border-radius: 999px; background: color-mix(in srgb, #06b6d4 6%, var(--surface)); color: var(--foreground); box-shadow: var(--control-shadow); cursor: pointer; text-align: left; }
 .timelineBar[data-issue-state="progress"] { border-color: color-mix(in srgb, #eab308 25%, var(--surface)); background: color-mix(in srgb, #eab308 6%, var(--surface)); }
 .timelineBar[data-issue-state="review"] { border-color: color-mix(in srgb, #d946ef 18%, var(--surface)); background: color-mix(in srgb, #d946ef 6%, var(--surface)); }
 .timelineBar[data-issue-state="backlog"] { border-color: var(--border); background: var(--surface-raised); }
@@ -167,7 +167,7 @@
 .identifier { flex: none; font-size: 12px; color: var(--text-secondary); }
 .issueText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .missingScope { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 13px; line-height: 20px; }
-.projectDialog { width: calc(100vw - 32px); max-width: 860px; max-height: 90dvh; padding: 0; border-radius: 8px; }
+.projectDialog { width: calc(100vw - 32px); max-width: 860px; max-height: 90dvh; padding: 0; border-radius: var(--radius-panel-value); }
 .projectDialog > :first-child { overflow: hidden; }
 .projectDialogHeader { flex: none; padding: 20px 48px 20px 20px; border-bottom: 1px solid var(--border); }
 .projectDialogHeader h2 { font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
@@ -179,7 +179,7 @@
 .projectDialogTabs [role="tab"][data-active] { background: var(--surface); }
 .projectDialogTabs [role="tabpanel"] { padding: 20px 0 0; }
 .projectDialogTabs [data-pm-project-meta] { width: auto; padding: 0; border: 0; }
-.projectDialogTabs [data-pm-comment-list] li { padding: 12px; border: 0; border-radius: 8px; background: var(--surface-raised); }
+.projectDialogTabs [data-pm-comment-list] li { padding: 12px; border: 0; border-radius: var(--radius-module-value); background: var(--surface-raised); }
 .projectDialogTabs [data-pm-comment-list] li > div { justify-content: flex-start; }
 .projectDialogRail { min-width: 0; padding: 20px; border-left: 1px solid var(--border); }
 .projectDialogRail dl { display: grid; gap: 20px; }
@@ -190,7 +190,7 @@
 .projectDialogFooter > div { display: flex; gap: 8px; }
 :global([data-overlay-backdrop="dialog"]):has(+ .projectDialog),
 :global([data-overlay-backdrop="dialog"]):has(+ .noteDialog) { background: rgb(0 0 0 / .8); backdrop-filter: none; }
-.noteDialog { border-radius: 8px; }
+.noteDialog { border-radius: var(--radius-panel-value); }
 @media (max-width: 1279px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .quickActions, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

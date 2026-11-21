@@ -9862,9 +9862,8 @@ paths:
                       additionalProperties: false
                   features:
                     description: Actual runtime prerequisites. Provider-specific native tool gates use
-                      provider:<instanceId>:promptConnectors and provider:<instanceId>:templateWorkspace; missing
-                      required features fail closed. Template workspace-tool transport is distinct from OCI command
-                      support.
+                      provider:<instanceId>:promptConnectors and provider:<instanceId>:pmAnalysis; missing required
+                      features fail closed.
                     type: array
                     items:
                       type: object
@@ -10027,6 +10026,23 @@ paths:
                               description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                                 execution authority.
                               type: boolean
+                            executionAgent:
+                              description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                                the definition selects a Provider directly.
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 128
+                                version:
+                                  type: integer
+                                  exclusiveMinimum: 0
+                                  maximum: 9007199254740991
+                              required:
+                                - id
+                                - version
+                              additionalProperties: false
                             action:
                               oneOf:
                                 - type: object
@@ -10341,14 +10357,6 @@ paths:
                                     templateId:
                                       type: string
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-delivery-watchdog
-                                        - github-issue-triage
-                                        - news-digest
-                                        - github-stale-ci-pr-closer
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-stalled-tasks
@@ -10397,12 +10405,6 @@ paths:
                                         properties:
                                           templateId:
                                             enum:
-                                              - github-pr-reviewer
-                                              - github-issue-to-pr
-                                              - gitlab-issue-to-mr
-                                              - github-agents-md-maintainer
-                                              - github-issue-triage
-                                              - news-digest
                                               - pm-duplicate-tasks
                                               - pm-requirement-review
                                               - pm-session-followups
@@ -10648,6 +10650,23 @@ paths:
                       description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                         execution authority.
                       type: boolean
+                    executionAgent:
+                      description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                        the definition selects a Provider directly.
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                        version:
+                          type: integer
+                          exclusiveMinimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - version
+                      additionalProperties: false
                     action:
                       oneOf:
                         - type: object
@@ -10962,14 +10981,6 @@ paths:
                             templateId:
                               type: string
                               enum:
-                                - github-pr-reviewer
-                                - github-issue-to-pr
-                                - gitlab-issue-to-mr
-                                - github-agents-md-maintainer
-                                - github-delivery-watchdog
-                                - github-issue-triage
-                                - news-digest
-                                - github-stale-ci-pr-closer
                                 - pm-duplicate-tasks
                                 - pm-requirement-review
                                 - pm-stalled-tasks
@@ -11017,12 +11028,6 @@ paths:
                                 properties:
                                   templateId:
                                     enum:
-                                      - github-pr-reviewer
-                                      - github-issue-to-pr
-                                      - gitlab-issue-to-mr
-                                      - github-agents-md-maintainer
-                                      - github-issue-triage
-                                      - news-digest
                                       - pm-duplicate-tasks
                                       - pm-requirement-review
                                       - pm-session-followups
@@ -11192,6 +11197,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -11506,14 +11528,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -11561,12 +11575,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -11801,6 +11809,23 @@ paths:
                       description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                         execution authority.
                       type: boolean
+                    executionAgent:
+                      description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                        the definition selects a Provider directly.
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                        version:
+                          type: integer
+                          exclusiveMinimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - version
+                      additionalProperties: false
                     action:
                       oneOf:
                         - type: object
@@ -12115,14 +12140,6 @@ paths:
                             templateId:
                               type: string
                               enum:
-                                - github-pr-reviewer
-                                - github-issue-to-pr
-                                - gitlab-issue-to-mr
-                                - github-agents-md-maintainer
-                                - github-delivery-watchdog
-                                - github-issue-triage
-                                - news-digest
-                                - github-stale-ci-pr-closer
                                 - pm-duplicate-tasks
                                 - pm-requirement-review
                                 - pm-stalled-tasks
@@ -12170,12 +12187,6 @@ paths:
                                 properties:
                                   templateId:
                                     enum:
-                                      - github-pr-reviewer
-                                      - github-issue-to-pr
-                                      - gitlab-issue-to-mr
-                                      - github-agents-md-maintainer
-                                      - github-issue-triage
-                                      - news-digest
                                       - pm-duplicate-tasks
                                       - pm-requirement-review
                                       - pm-session-followups
@@ -12426,6 +12437,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -12740,14 +12768,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -12795,12 +12815,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -13048,6 +13062,23 @@ paths:
                       description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                         execution authority.
                       type: boolean
+                    executionAgent:
+                      description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                        the definition selects a Provider directly.
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                        version:
+                          type: integer
+                          exclusiveMinimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - id
+                        - version
+                      additionalProperties: false
                     action:
                       oneOf:
                         - type: object
@@ -13362,14 +13393,6 @@ paths:
                             templateId:
                               type: string
                               enum:
-                                - github-pr-reviewer
-                                - github-issue-to-pr
-                                - gitlab-issue-to-mr
-                                - github-agents-md-maintainer
-                                - github-delivery-watchdog
-                                - github-issue-triage
-                                - news-digest
-                                - github-stale-ci-pr-closer
                                 - pm-duplicate-tasks
                                 - pm-requirement-review
                                 - pm-stalled-tasks
@@ -13417,12 +13440,6 @@ paths:
                                 properties:
                                   templateId:
                                     enum:
-                                      - github-pr-reviewer
-                                      - github-issue-to-pr
-                                      - gitlab-issue-to-mr
-                                      - github-agents-md-maintainer
-                                      - github-issue-triage
-                                      - news-digest
                                       - pm-duplicate-tasks
                                       - pm-requirement-review
                                       - pm-session-followups
@@ -13593,6 +13610,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -13907,14 +13941,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -13962,12 +13988,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -14321,6 +14341,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -14635,14 +14672,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -14690,12 +14719,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -14974,6 +14997,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -15288,14 +15328,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -15343,12 +15375,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -15659,6 +15685,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -15973,14 +16016,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -16028,12 +16063,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -16337,6 +16366,23 @@ paths:
                               description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                                 execution authority.
                               type: boolean
+                            executionAgent:
+                              description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                                the definition selects a Provider directly.
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 128
+                                version:
+                                  type: integer
+                                  exclusiveMinimum: 0
+                                  maximum: 9007199254740991
+                              required:
+                                - id
+                                - version
+                              additionalProperties: false
                             action:
                               oneOf:
                                 - type: object
@@ -16651,14 +16697,6 @@ paths:
                                     templateId:
                                       type: string
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-delivery-watchdog
-                                        - github-issue-triage
-                                        - news-digest
-                                        - github-stale-ci-pr-closer
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-stalled-tasks
@@ -16707,12 +16745,6 @@ paths:
                                         properties:
                                           templateId:
                                             enum:
-                                              - github-pr-reviewer
-                                              - github-issue-to-pr
-                                              - gitlab-issue-to-mr
-                                              - github-agents-md-maintainer
-                                              - github-issue-triage
-                                              - news-digest
                                               - pm-duplicate-tasks
                                               - pm-requirement-review
                                               - pm-session-followups
@@ -17006,6 +17038,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -17320,14 +17369,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -17375,12 +17416,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -17780,6 +17815,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -18094,14 +18146,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -18149,12 +18193,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -18455,6 +18493,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -18769,14 +18824,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -18824,12 +18871,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -20247,6 +20288,23 @@ paths:
                         description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                           execution authority.
                         type: boolean
+                      executionAgent:
+                        description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                          the definition selects a Provider directly.
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                          version:
+                            type: integer
+                            exclusiveMinimum: 0
+                            maximum: 9007199254740991
+                        required:
+                          - id
+                          - version
+                        additionalProperties: false
                       action:
                         oneOf:
                           - type: object
@@ -20561,14 +20619,6 @@ paths:
                               templateId:
                                 type: string
                                 enum:
-                                  - github-pr-reviewer
-                                  - github-issue-to-pr
-                                  - gitlab-issue-to-mr
-                                  - github-agents-md-maintainer
-                                  - github-delivery-watchdog
-                                  - github-issue-triage
-                                  - news-digest
-                                  - github-stale-ci-pr-closer
                                   - pm-duplicate-tasks
                                   - pm-requirement-review
                                   - pm-stalled-tasks
@@ -20616,12 +20666,6 @@ paths:
                                   properties:
                                     templateId:
                                       enum:
-                                        - github-pr-reviewer
-                                        - github-issue-to-pr
-                                        - gitlab-issue-to-mr
-                                        - github-agents-md-maintainer
-                                        - github-issue-triage
-                                        - news-digest
                                         - pm-duplicate-tasks
                                         - pm-requirement-review
                                         - pm-session-followups
@@ -20905,6 +20949,23 @@ paths:
                                 description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                                   execution authority.
                                 type: boolean
+                              executionAgent:
+                                description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                                  the definition selects a Provider directly.
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 128
+                                  version:
+                                    type: integer
+                                    exclusiveMinimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - id
+                                  - version
+                                additionalProperties: false
                               action:
                                 oneOf:
                                   - type: object
@@ -21219,14 +21280,6 @@ paths:
                                       templateId:
                                         type: string
                                         enum:
-                                          - github-pr-reviewer
-                                          - github-issue-to-pr
-                                          - gitlab-issue-to-mr
-                                          - github-agents-md-maintainer
-                                          - github-delivery-watchdog
-                                          - github-issue-triage
-                                          - news-digest
-                                          - github-stale-ci-pr-closer
                                           - pm-duplicate-tasks
                                           - pm-requirement-review
                                           - pm-stalled-tasks
@@ -21275,12 +21328,6 @@ paths:
                                           properties:
                                             templateId:
                                               enum:
-                                                - github-pr-reviewer
-                                                - github-issue-to-pr
-                                                - gitlab-issue-to-mr
-                                                - github-agents-md-maintainer
-                                                - github-issue-triage
-                                                - news-digest
                                                 - pm-duplicate-tasks
                                                 - pm-requirement-review
                                                 - pm-session-followups
@@ -21559,6 +21606,23 @@ paths:
                                 description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
                                   execution authority.
                                 type: boolean
+                              executionAgent:
+                                description: Pinned collaboration Agent version used for Provider/model identity and bounded instructions. Omitted when
+                                  the definition selects a Provider directly.
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 128
+                                  version:
+                                    type: integer
+                                    exclusiveMinimum: 0
+                                    maximum: 9007199254740991
+                                required:
+                                  - id
+                                  - version
+                                additionalProperties: false
                               action:
                                 oneOf:
                                   - type: object
@@ -21873,14 +21937,6 @@ paths:
                                       templateId:
                                         type: string
                                         enum:
-                                          - github-pr-reviewer
-                                          - github-issue-to-pr
-                                          - gitlab-issue-to-mr
-                                          - github-agents-md-maintainer
-                                          - github-delivery-watchdog
-                                          - github-issue-triage
-                                          - news-digest
-                                          - github-stale-ci-pr-closer
                                           - pm-duplicate-tasks
                                           - pm-requirement-review
                                           - pm-stalled-tasks
@@ -21929,12 +21985,6 @@ paths:
                                           properties:
                                             templateId:
                                               enum:
-                                                - github-pr-reviewer
-                                                - github-issue-to-pr
-                                                - gitlab-issue-to-mr
-                                                - github-agents-md-maintainer
-                                                - github-issue-triage
-                                                - news-digest
                                                 - pm-duplicate-tasks
                                                 - pm-requirement-review
                                                 - pm-session-followups
@@ -86679,6 +86729,21 @@ components:
                               - type: "null"
                           quickAccess:
                             type: boolean
+                          executionAgent:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                minLength: 1
+                                maxLength: 128
+                              version:
+                                type: integer
+                                exclusiveMinimum: 0
+                                maximum: 9007199254740991
+                            required:
+                              - id
+                              - version
+                            additionalProperties: false
                           action:
                             oneOf:
                               - type: object
@@ -86993,14 +87058,6 @@ components:
                                   templateId:
                                     type: string
                                     enum:
-                                      - github-pr-reviewer
-                                      - github-issue-to-pr
-                                      - gitlab-issue-to-mr
-                                      - github-agents-md-maintainer
-                                      - github-delivery-watchdog
-                                      - github-issue-triage
-                                      - news-digest
-                                      - github-stale-ci-pr-closer
                                       - pm-duplicate-tasks
                                       - pm-requirement-review
                                       - pm-stalled-tasks
@@ -87426,6 +87483,21 @@ components:
                             - type: "null"
                         quickAccess:
                           type: boolean
+                        executionAgent:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            version:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - id
+                            - version
+                          additionalProperties: false
                         action:
                           oneOf:
                             - type: object
@@ -87740,14 +87812,6 @@ components:
                                 templateId:
                                   type: string
                                   enum:
-                                    - github-pr-reviewer
-                                    - github-issue-to-pr
-                                    - gitlab-issue-to-mr
-                                    - github-agents-md-maintainer
-                                    - github-delivery-watchdog
-                                    - github-issue-triage
-                                    - news-digest
-                                    - github-stale-ci-pr-closer
                                     - pm-duplicate-tasks
                                     - pm-requirement-review
                                     - pm-stalled-tasks
@@ -88384,6 +88448,21 @@ components:
                               - type: "null"
                           quickAccess:
                             type: boolean
+                          executionAgent:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                minLength: 1
+                                maxLength: 128
+                              version:
+                                type: integer
+                                exclusiveMinimum: 0
+                                maximum: 9007199254740991
+                            required:
+                              - id
+                              - version
+                            additionalProperties: false
                           action:
                             oneOf:
                               - type: object
@@ -88698,14 +88777,6 @@ components:
                                   templateId:
                                     type: string
                                     enum:
-                                      - github-pr-reviewer
-                                      - github-issue-to-pr
-                                      - gitlab-issue-to-mr
-                                      - github-agents-md-maintainer
-                                      - github-delivery-watchdog
-                                      - github-issue-triage
-                                      - news-digest
-                                      - github-stale-ci-pr-closer
                                       - pm-duplicate-tasks
                                       - pm-requirement-review
                                       - pm-stalled-tasks
@@ -89171,6 +89242,21 @@ components:
                             - type: "null"
                         quickAccess:
                           type: boolean
+                        executionAgent:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            version:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - id
+                            - version
+                          additionalProperties: false
                         action:
                           oneOf:
                             - type: object
@@ -89485,14 +89571,6 @@ components:
                                 templateId:
                                   type: string
                                   enum:
-                                    - github-pr-reviewer
-                                    - github-issue-to-pr
-                                    - gitlab-issue-to-mr
-                                    - github-agents-md-maintainer
-                                    - github-delivery-watchdog
-                                    - github-issue-triage
-                                    - news-digest
-                                    - github-stale-ci-pr-closer
                                     - pm-duplicate-tasks
                                     - pm-requirement-review
                                     - pm-stalled-tasks
@@ -90208,6 +90286,21 @@ components:
                                     - type: "null"
                                 quickAccess:
                                   type: boolean
+                                executionAgent:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    version:
+                                      type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                  required:
+                                    - id
+                                    - version
+                                  additionalProperties: false
                                 action:
                                   oneOf:
                                     - type: object
@@ -90522,14 +90615,6 @@ components:
                                         templateId:
                                           type: string
                                           enum:
-                                            - github-pr-reviewer
-                                            - github-issue-to-pr
-                                            - gitlab-issue-to-mr
-                                            - github-agents-md-maintainer
-                                            - github-delivery-watchdog
-                                            - github-issue-triage
-                                            - news-digest
-                                            - github-stale-ci-pr-closer
                                             - pm-duplicate-tasks
                                             - pm-requirement-review
                                             - pm-stalled-tasks
@@ -90757,6 +90842,21 @@ components:
                                     - type: "null"
                                 quickAccess:
                                   type: boolean
+                                executionAgent:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    version:
+                                      type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                  required:
+                                    - id
+                                    - version
+                                  additionalProperties: false
                                 action:
                                   oneOf:
                                     - type: object
@@ -91071,14 +91171,6 @@ components:
                                         templateId:
                                           type: string
                                           enum:
-                                            - github-pr-reviewer
-                                            - github-issue-to-pr
-                                            - gitlab-issue-to-mr
-                                            - github-agents-md-maintainer
-                                            - github-delivery-watchdog
-                                            - github-issue-triage
-                                            - news-digest
-                                            - github-stale-ci-pr-closer
                                             - pm-duplicate-tasks
                                             - pm-requirement-review
                                             - pm-stalled-tasks
@@ -102642,6 +102734,21 @@ components:
                             - type: "null"
                         quickAccess:
                           type: boolean
+                        executionAgent:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              minLength: 1
+                              maxLength: 128
+                            version:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 9007199254740991
+                          required:
+                            - id
+                            - version
+                          additionalProperties: false
                         action:
                           oneOf:
                             - type: object
@@ -102956,14 +103063,6 @@ components:
                                 templateId:
                                   type: string
                                   enum:
-                                    - github-pr-reviewer
-                                    - github-issue-to-pr
-                                    - gitlab-issue-to-mr
-                                    - github-agents-md-maintainer
-                                    - github-delivery-watchdog
-                                    - github-issue-triage
-                                    - news-digest
-                                    - github-stale-ci-pr-closer
                                     - pm-duplicate-tasks
                                     - pm-requirement-review
                                     - pm-stalled-tasks
@@ -103410,6 +103509,21 @@ components:
                                     - type: "null"
                                 quickAccess:
                                   type: boolean
+                                executionAgent:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    version:
+                                      type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                  required:
+                                    - id
+                                    - version
+                                  additionalProperties: false
                                 action:
                                   oneOf:
                                     - type: object
@@ -103724,14 +103838,6 @@ components:
                                         templateId:
                                           type: string
                                           enum:
-                                            - github-pr-reviewer
-                                            - github-issue-to-pr
-                                            - gitlab-issue-to-mr
-                                            - github-agents-md-maintainer
-                                            - github-delivery-watchdog
-                                            - github-issue-triage
-                                            - news-digest
-                                            - github-stale-ci-pr-closer
                                             - pm-duplicate-tasks
                                             - pm-requirement-review
                                             - pm-stalled-tasks
@@ -104184,6 +104290,21 @@ components:
                                     - type: "null"
                                 quickAccess:
                                   type: boolean
+                                executionAgent:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    version:
+                                      type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                  required:
+                                    - id
+                                    - version
+                                  additionalProperties: false
                                 action:
                                   oneOf:
                                     - type: object
@@ -104498,14 +104619,6 @@ components:
                                         templateId:
                                           type: string
                                           enum:
-                                            - github-pr-reviewer
-                                            - github-issue-to-pr
-                                            - gitlab-issue-to-mr
-                                            - github-agents-md-maintainer
-                                            - github-delivery-watchdog
-                                            - github-issue-triage
-                                            - news-digest
-                                            - github-stale-ci-pr-closer
                                             - pm-duplicate-tasks
                                             - pm-requirement-review
                                             - pm-stalled-tasks
@@ -113522,6 +113635,8 @@ components:
               const: true
             canManageMembers:
               type: boolean
+            canInviteMembers:
+              type: boolean
             canEditSelfProfile:
               type: boolean
             twoFactor:
@@ -113535,6 +113650,7 @@ components:
           required:
             - canReadDirectory
             - canManageMembers
+            - canInviteMembers
             - canEditSelfProfile
             - twoFactor
           additionalProperties: false

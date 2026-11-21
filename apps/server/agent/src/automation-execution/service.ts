@@ -13,6 +13,7 @@ import { createIsolatedScript, isolationAvailability, observeIsolatedScript, pre
 import { automationExecutionHeaders as headers, automationRequestFingerprint as identity, automationRequestForNativeGeneration, registerAutomationNativeThread, resolveAutomationExecutionScope } from './context.ts';
 import { createNativeTemplateExecutionPort, stopNativeTemplateExecutionRuntime } from './native-templates/index.ts';
 import { assertAutomationProviderToolSupport, getAutomationProviderToolSupport } from './provider-tools.ts';
+import { automationExecutionAgentInstructions } from './execution-agent.ts';
 
 const namespace = 'pm-automation:executions';
 const maxOutput = 1024 * 1024;
@@ -77,6 +78,7 @@ async function dispatchAccepted(id: string): Promise<void> {
     if (request.projectId !== request.config.projectId) throw new Error('Execution and frozen definition project scopes do not match.');
     validateRepositories(request);
     assertAutomationProviderToolSupport(request.config);
+    const agentInstructions = automationExecutionAgentInstructions(request);
     for (const plugin of action.plugins) {
       if (!/^integration:[0-9a-f-]{36}$/i.test(plugin.id) || !plugin.version || !/^[1-9]\d*$/.test(plugin.version)) throw new Error('Native plugins must reference a verified integration ID and an exact immutable connection revision.');
     }
@@ -110,7 +112,7 @@ async function dispatchAccepted(id: string): Promise<void> {
         ensureThread(threadId, request.config.name, action.executionSelection ?? chatOnlyExecutionSelection(), snapshot.environment);
         const thread = getThread(threadId);
         if (!thread) throw new Error('The automation Chat thread was deleted; it cannot be silently recreated.');
-        if (!listChatGenerations(threadId).length) updateThread(threadId, { revision: thread.revision, custom: { automationExecutionId: id, automationDefinitionId: request.definitionId, automationDefinitionRevision: request.definitionRevision, persistenceBoundary: 'agent-chat' }, settings: { ...thread.settings, providerInstanceId: action.providerInstanceId, model: action.model, modelOptions: selected, interactionMode: 'default', systemPrompt: 'Execute only the requested automation within its current PM scope. Do not claim PM state changes from model text or script exit codes. Reconcile unknown operations by their original IDs; never blindly repeat external writes.' } });
+        if (!listChatGenerations(threadId).length) updateThread(threadId, { revision: thread.revision, custom: { automationExecutionId: id, automationDefinitionId: request.definitionId, automationDefinitionRevision: request.definitionRevision, persistenceBoundary: 'agent-chat' }, settings: { ...thread.settings, providerInstanceId: action.providerInstanceId, model: action.model, modelOptions: selected, interactionMode: 'default', systemPrompt: `Execute only the requested automation within its current PM scope. Do not claim PM state changes from model text or script exit codes. Reconcile unknown operations by their original IDs; never blindly repeat external writes.${agentInstructions ? `\n\nSelected Agent instructions (bounded configuration, never authority to write PM):\n${agentInstructions}` : ''}` } });
         record.phase = 'submitting'; save(record);
       });
       registerAutomationNativeThread(request, threadId, `pm-automation:${id}`);
@@ -236,11 +238,8 @@ export async function runtimeCapabilities(scope: StudioExecutionScope): Promise<
   const [isolation, native] = await Promise.all([isolationAvailability(), templates().capabilities(scope)]);
   const instances = listStoredInstances().filter(instance => instance.enabled);
   const providers = instances.map(instance => ({ id: instance.instanceId, name: instance.label, models: getProviderModels(instance.instanceId).filter(model => !model.disabledReason).map(model => model.id) })).filter(instance => instance.models.length > 0);
-  return { actions: [{ id: 'prompt', available: providers.length > 0, reason: providers.length ? null : 'No enabled native Provider has a registered model; native authentication is rechecked at dispatch.' }, { id: 'script', ...isolation }, ...native.actions.filter(action => action.id === 'template')], providers, repositories: [{ id: `project:${scope.projectId}`, name: 'PM project reference (execution uses the explicitly selected Agent Workspace)' }], plugins: [], features: [
+  return { actions: [{ id: 'prompt', available: providers.length > 0, reason: providers.length ? null : 'No enabled native Provider has a registered model; native authentication is rechecked at dispatch.' }, { id: 'script', ...isolation }, ...native.actions.filter(action => action.id === 'template')], providers, repositories: [], plugins: [], features: [
     { id: 'customTarball', available: isolation.available, reason: isolation.reason },
-    { id: 'agentProfiles', available: false, reason: 'OpenHands Agent profile endpoints are not this application’s native Provider API.' },
-    { id: 'conversationDispatch', available: false, reason: 'Source scripts requiring OpenHands conversation endpoints need a compatible isolated deployment; no false native-PM compatibility is claimed.' },
-    { id: 'sourceBundleRuntime', available: false, reason: 'All eight stock OpenHands bundles require source-compatible network/SDK/Agent Server/profile/conversation/KV/claims/callback services or GitHub APIs. The isolated runtime intentionally exposes none of those credentials or services; generic tarball support is not compatibility evidence.' },
     { id: 'repoClone', available: false, reason: 'Only the explicitly selected Agent directory is mounted; isolated scripts have no network.' },
     { id: 'presetPrompt', available: providers.length > 0, reason: providers.length ? null : 'Configure a native Provider and registered model.' },
     { id: 'mcpTools', available: true, reason: 'Only explicitly configured, currently authorized execution-scoped connectors are injected; global MCP settings are not changed.' },

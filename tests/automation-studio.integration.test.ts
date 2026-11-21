@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import Fastify from 'fastify';
 import { ZodError } from 'zod';
-import { registerAutomationStudioRoutes } from '../apps/server/pm/src/automation-studio-routes.ts';
+import { registerAutomationStudioRoutes } from '../apps/server/pm/src/routes/automation-studio-routes.ts';
 import { createAutomationStudioService } from '../packages/application/src/automation-studio.ts';
 import { runAutomationStudioBatch } from '../packages/application/src/automation-studio-worker.ts';
 import { authorizeAutomationStudioService } from '../packages/application/src/automation-studio-auth.ts';
@@ -227,7 +227,7 @@ describe('PostgreSQL Studio definitions, immutable results and unknown-safe disp
     const f = await fixture(t.signal); t.after(f.scope.close);
     const at = new Date(Date.now() + 600000), now = new Date(at.getTime() + 1000);
     const script: StudioConfig = { ...config, name: 'Pre-cutover script', trigger: { kind: 'once', at: at.toISOString(), timezone: 'UTC' }, action: { kind: 'script', entrypoint: 'main.py', setup: '', content: 'print("legacy")', bundleRef: null, files: [], repositories: [], plugins: [], timeoutSeconds: 60 } };
-    const repository: StudioConfig = { ...config, name: 'Pre-cutover repository', trigger: { kind: 'cron', expression: '* * * * *', timezone: 'UTC' }, action: { kind: 'template', templateId: 'github-pr-reviewer', arguments: { repositories: ['org/repository'], githubTokenSecret: 'GITHUB_TOKEN_REFERENCE' }, providerInstanceId: 'test-provider', model: 'test-model', options: {}, repositories: [], plugins: [], timeoutSeconds: 60 } };
+    const repository: StudioConfig = { ...config, name: 'Pre-cutover template', trigger: { kind: 'cron', expression: '* * * * *', timezone: 'UTC' }, action: { kind: 'template', templateId: 'pm-pr-acceptance-coverage', arguments: { repository: { provider: 'github', repository: 'org/repository', ref: null, pullRequestNumber: 7 } }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [], timeoutSeconds: 60 } };
     const legacy = [];
     for (const saved of [script, repository]) legacy.push(await f.service.create(f.owner, f.workspaceId, { requestId: randomUUID(), config: saved }));
     const oldSelection = { version: 1, codeWorkspaceId: 'retired-code', codeWorkspaceRevision: 2, rootIds: ['source'], primaryRootId: 'source' };
@@ -416,13 +416,11 @@ describe('PostgreSQL Studio definitions, immutable results and unknown-safe disp
       await assert.rejects(authorizeAutomationStudioService(f.pool, f.core, identity, { method: 'POST', url: toolUrl, body }), rejected('automation_service_scope_forbidden'));
     assert.equal((await f.service.query(f.owner, f.workspaceId, queued.id)).status, 'completed');
   });
-  it('validates and enables deterministic native maintenance with explicit None and no configured model', { timeout: 60000 }, async t => {
+  it('validates and enables deterministic PM templates with explicit None and no configured model', { timeout: 60000 }, async t => {
     const f = await fixture(t.signal); t.after(f.scope.close);
     f.runtime.capabilities = async () => ({ actions: [{ id: 'template', available: true, reason: null }], providers: [], repositories: [], plugins: [] });
-    for (const templateId of ['github-delivery-watchdog', 'github-stale-ci-pr-closer'] as const) {
-      const arguments_: Record<string, unknown> = { repositories: ['org/repository'], githubTokenSecret: 'GITHUB_TOKEN_REFERENCE' };
-      if (templateId === 'github-delivery-watchdog') arguments_.branchPrefix = 'openhands/issue';
-      const native: StudioConfig = { ...config, action: { kind: 'template', templateId, arguments: arguments_, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [], timeoutSeconds: 60 } };
+    for (const templateId of ['pm-stalled-tasks', 'pm-ready-dependencies'] as const) {
+      const native: StudioConfig = { ...config, action: { kind: 'template', templateId, arguments: {}, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [], timeoutSeconds: 60 } };
       const validation = await f.service.validate(f.owner, f.workspaceId, native);
       assert.equal(validation.valid, true);
       const draft = await f.service.create(f.owner, f.workspaceId, { requestId: randomUUID(), config: native });

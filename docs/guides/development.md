@@ -34,9 +34,9 @@ PM_WORKSPACE_ID=<workspace-uuid> pnpm run pm migration list
 pnpm run pm logout
 ```
 
-CLI 默认连接 `http://127.0.0.1:4194`，可用 `PM_API_URL` 覆盖；远程要求 HTTPS，HTTP 仅允许回环。`pnpm run pm <args>` 直接传参（不要额外加 `--`）。`login` 仅保存有期限的会话，不保存密码，默认私有目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`，可用绝对路径 `PM_CLI_SESSION_DIR` 覆盖。会话按 origin 隔离，过期要求重新登录，`logout` 在服务端撤销确认后清除对应文件；已移除 `access.json` 和 `PM_ACCESS_FILE` 回退。更新默认先读取当前 revision；冲突返回非零退出码且不自动重试。
+CLI 默认连接 `http://127.0.0.1:4194`，可用 `PM_API_URL` 覆盖；远程要求 HTTPS，HTTP 仅允许回环。`pnpm run pm <args>` 直接传参（不要额外加 `--`）。`login` 仅保存有期限的会话，不保存密码，默认私有目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`，可用绝对路径 `PM_CLI_SESSION_DIR` 覆盖；默认目录及其祖先须由当前用户拥有且不可被组/其他用户写入，否则应指定 0700 私有目录。pnpm 11 会截获 `pnpm pm`，统一使用 `pnpm run pm`。会话按 origin 隔离，过期要求重新登录，`logout` 在服务端撤销确认后清除对应文件；已移除 `access.json` 和 `PM_ACCESS_FILE` 回退。更新默认先读取当前 revision；冲突返回非零退出码且不自动重试。
 
-完整资源命令、Agent 本机直连／令牌登录、原结果核对及机器消费见 [CLI 操作指南](cli.md)。`pnpm pm` 的现有脚本会加载本仓库 `.env`；隔离检查使用 `node packages/pm-cli/index.ts ...` 配合干净环境、独立 HOME 和临时服务，不继承真实账号／Provider 凭据。`plugin call/result` 的退出 0 不代表业务成功，脚本继续前必须使用 `plugin check --file RESULT.json` 校验可见且已成功的结果。
+完整资源命令、Agent 本机直连／令牌登录、原结果核对及机器消费见 [CLI 操作指南](cli.md)。`pnpm run pm` 的现有脚本会加载本仓库 `.env`；隔离检查使用 `node packages/pm-cli/index.ts ...` 配合干净环境、独立 HOME 和临时服务，不继承真实账号／Provider 凭据。`plugin call/result` 的退出 0 不代表业务成功，脚本继续前必须使用 `plugin check --file RESULT.json` 校验可见且已成功的结果。
 
 `smoke` 使用显式环境凭据或上述 CLI 会话（通过 `PUBLIC_ORIGIN` 选择同一 origin），从真实授权目录确定 `PM_WORKSPACE_ID`，不读取旧访问文件。它在实际服务创建人工交付/审核/关闭/归档验收数据并保存 `.local/evidence/service-smoke.json`；只应对隔离实例运行。`smoke:verify` 复读原对象、收据和成果摘要。`backup:verify --stopped` 使用实际 provider 备份 SQL、共享核心、全部已登记项目托管目录和引用 blob，在新数据库、新核心/项目目录和新 Local 存储根恢复并设置认证、通知与外发围栏，再通过真实 API 校验授权下载字节；不修改源库或归档。恢复旧凭据信任与生产切换必须另行批准，详见[部署手册](../../deploy/README.md)。
 
@@ -61,7 +61,7 @@ Worker 事件发布达到 10 次失败后保留原事件并隔离该工作区。
 | `apps/server/pm` | HTTP、认证、下载、变更查询与 SSE |
 | `apps/server/worker` | 持久事件发布、保留维护与心跳 |
 | `apps/server/agent` | Agent API、持久会话、Provider 与 CLI 执行；目录由 PM resolve |
-| `apps/server/gateway.ts` | 公共同源网关、API/WS 代理和统一静态托管 |
+| `apps/server/gateway` | 公共同源网关、API/WS 代理和统一静态托管 |
 | `apps/web` | 统一 Vite SPA；`/pm`、`/agent`、隔离 `/lab/pm` 与 Storybook |
 | `apps/desktop` / `apps/marketing` | 完整本地服务组的 Electron 宿主 / 静态营销站 |
 | `packages/agent-contracts` / `agent-client-runtime` | Agent 协议与 same-origin 前缀 HTTP/WS 客户端 |

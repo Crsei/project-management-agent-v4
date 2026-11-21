@@ -20,11 +20,11 @@ import type { AgentChatToolContext } from '../packages/application/src/agent-cha
 import { emptyRoadmap } from '../packages/contracts/src/product-roadmap.ts';
 import type { Actor, Command, Entity } from '../packages/domain/src/core.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
-import { CoreWorkspacePool, authorizeCoreScope } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool, authorizeCoreScope } from '../apps/server/pm/src/routes/core-routes.ts';
 import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity, coreVersion } from '../apps/server/pm/src/core-adapter.ts';
-import { createPlanningRecordsToolFamily } from '../apps/server/pm/src/agent-tool-planning-records.ts';
+import { createPlanningRecordsToolFamily } from '../apps/server/pm/src/agent-tools/agent-tool-planning-records.ts';
 import { createProductRoadmapService } from '../apps/server/pm/src/product-roadmap-service.ts';
-import { registerProductRoadmapRoutes } from '../apps/server/pm/src/product-roadmap-routes.ts';
+import { registerProductRoadmapRoutes } from '../apps/server/pm/src/routes/product-roadmap-routes.ts';
 import { PlanningRecordsToolResultSchema } from '../packages/agent-contracts/src/pm-tool-planning-records.ts';
 import { PlanningRecordsToolInputSchemas } from '../packages/application/src/agent-tool-planning-records.ts';
 

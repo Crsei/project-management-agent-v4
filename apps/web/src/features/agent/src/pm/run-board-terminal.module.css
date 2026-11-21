@@ -1,0 +1,49 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.header strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close {
+  display: grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-inline-start: auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.close:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}

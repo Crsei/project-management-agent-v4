@@ -4,7 +4,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGateway } from '../apps/server/gateway.ts';
+import { createGateway } from '../apps/server/gateway/src/index.ts';
 import type { DocumentSource } from '../packages/contracts/src/document-sources.ts';
 import { CAPABILITIES } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';

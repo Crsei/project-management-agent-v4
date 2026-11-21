@@ -89,7 +89,7 @@ PM API 启动时连接 `IM_SATORI_WS_URL`；Worker 消费 `im_delivery_jobs`。�
 
 ```bash
 # 先使用本实例真实 PM 会话，并选择已授权的 PM_API_URL / PM_WORKSPACE_ID。
-pnpm pm im status
+pnpm run pm im status
 # 只读聚合队列计数与最旧待处理时间；不输出消息正文或逐条 deliveryId。
 node --env-file=.env.worker scripts/im-delivery-admin.ts status
 ```

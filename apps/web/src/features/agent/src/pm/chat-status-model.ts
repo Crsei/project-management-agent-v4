@@ -53,7 +53,15 @@ export function providerStatusItem(
   t: AgentText,
 ): ChatStatusItem {
   const name = input.name?.trim() || input.instanceId;
-  const base = { id: `provider:${input.instanceId}:${input.issue}`, category: "provider" as const, actions: providerActions };
+  const base = { id: input.issue === "unselected" ? "provider:unselected" : `provider:${input.instanceId}:${input.issue}`, category: "provider" as const, actions: input.issue === "unselected" ? ["session-settings"] as const : providerActions };
+  if (input.issue === "unselected") {
+    return {
+      ...base,
+      tone: "warning",
+      title: t("尚未选择模型", "No model selected"),
+      message: t("当前会话还没有选择 Provider 与模型；请在输入框或会话参数中选择后再发送。", "This session has no Provider or model selected yet. Choose one in the composer or session settings before sending."),
+    };
+  }
   if (input.issue === "missing") {
     return {
       ...base,

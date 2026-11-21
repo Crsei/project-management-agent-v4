@@ -55,6 +55,10 @@ export function usePmChatState() {
     return () => { listeners.delete(listener); };
   }, () => state, () => state);
 }
+/** Read the latest authoritative thread metadata after an async refresh. */
+export function remoteThread(id: string): RemoteThread | undefined {
+  return state.threads.get(id);
+}
 export function acceptAgentWorkspace(workspace: AgentWorkspace) {
   workspaceRefreshSequence++;
   update({ workspaces: [...state.workspaces.filter(item => item.id !== workspace.id), workspace], loading: false, error: undefined });

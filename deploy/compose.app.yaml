@@ -41,16 +41,20 @@ services:
       MCP_INTERNAL_HTTP_ORIGINS: '["http://agent:4325"]'
       BLOB_ROOT: /var/lib/pm/blobs
       CORE_WORKSPACE_ROOT: /var/lib/pm/core
+      PM_CHAT_SPACE_ROOT: /var/lib/pm/chat-spaces
       LOCAL_PROJECTS_ENABLED: ${PM_LOCAL_PROJECTS_ENABLED:-false}
       LOCAL_DATA_ROOT: /var/lib/pm
       LOCAL_PROJECT_ALLOWED_ROOTS: '["/var/lib/pm/projects"]'
       LOCAL_PROJECT_DEFAULT_PARENT: /var/lib/pm/projects
+      PM_AUTOMATION_AGENT_URL: http://agent:4325
+      PM_MCP_AGENT_URL: http://agent:4325
     depends_on:
       migrate:
         condition: service_completed_successfully
     volumes:
       - blob-data:/var/lib/pm/blobs
       - core-data:/var/lib/pm/core
+      - chat-data:/var/lib/pm/chat-spaces
       - project-data:/var/lib/pm/projects
       - ${PM_WEBHOOK_CONFIG_DIRECTORY:-../.local/webhook-config}:/run/pm-webhook-config:ro
     networks: [default, database]
@@ -67,6 +71,8 @@ services:
       - ${PM_WORKER_ENV_FILE:?Set a separate private Worker env file without S3/AWS/blob credentials}
     environment:
       CORE_WORKSPACE_ROOT: /var/lib/pm/core
+      PUBLIC_ORIGIN: ${PM_PUBLIC_ORIGIN:?Set the exact browser-visible origin}
+      PM_AUTOMATION_AGENT_URL: http://agent:4325
     volumes:
       - core-data:/var/lib/pm/core:ro
       - project-data:/var/lib/pm/projects:ro
@@ -129,6 +135,7 @@ services:
       AGENT_WORKSPACE_API_ONLY: "1"
       AGENT_WORKSPACE_DATA_DIR: /var/lib/agent
       AGENT_WORKSPACE_PROJECT_ROOT: /var/lib/pm/projects
+      AGENT_WORKSPACE_ALLOWED_ROOTS: ${PM_AGENT_ALLOWED_ROOTS:-["/var/lib/pm/projects"]}
     volumes:
       - agent-data:/var/lib/agent
       # Exact paths returned by PM resolve must also exist in the execution container.
@@ -187,5 +194,6 @@ networks:
 volumes:
   blob-data:
   core-data:
+  chat-data:
   project-data:
   agent-data:

@@ -10,8 +10,8 @@ import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
 import { pmReferenceResolveResponseSchema } from '../../../../packages/agent-contracts/src/pm-references.ts';
 import { createMcpServiceBearer, type McpInvocationIdentity } from '../../../../packages/infrastructure/src/mcp-service-auth.ts';
-import type { CoreWorkspacePool } from '../src/core-routes.ts';
-import { registerAgentReferenceRoutes } from '../src/agent-reference-routes.ts';
+import type { CoreWorkspacePool } from '../src/routes/core-routes.ts';
+import { registerAgentReferenceRoutes } from '../src/routes/agent-reference-routes.ts';
 
 test('agent reference resolution reports available, stale, forbidden and deleted references per actor scope', async () => {
   const base = await mkdtemp(path.join(tmpdir(), 'pm-agent-references-'));

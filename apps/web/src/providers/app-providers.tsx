@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
+import { TitleHintLayer } from "@/components/ui/title-hint"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useStore, type StoreApi } from "zustand"
 import { I18nProvider } from "@/lib/i18n-provider"
@@ -32,6 +33,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <WorkspaceContext.Provider value={store}>
         <TooltipProvider>
           <RowStagger />
+          <TitleHintLayer />
           <Preferences>{children}</Preferences>
         </TooltipProvider>
       </WorkspaceContext.Provider>

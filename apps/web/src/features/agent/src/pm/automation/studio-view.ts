@@ -17,6 +17,11 @@ export function studioTriggerLabel(trigger: StudioConfig["trigger"], t: AgentTex
   if (trigger.kind === "event") return `${trigger.source} · ${trigger.key}`;
   return `${trigger.expression} · ${trigger.timezone}`;
 }
+export function studioTriggerModeLabel(trigger: StudioConfig["trigger"], t: AgentText): string {
+  if (trigger.kind === "event") return t("事件驱动", "Event-driven");
+  if (trigger.kind === "manual") return t("仅手动", "Manual only");
+  return t("时间驱动", "Time-driven");
+}
 export function studioStatusLabel(status: string, t: AgentText): string {
   const copy: Record<string, [string, string]> = { draft: ["已存草稿", "Saved draft"], enabled: ["已启用", "Active"], paused: ["已暂停", "Inactive"], queued: ["排队中", "Queued"], running: ["运行中", "Running"], completed: ["完成", "Completed"], failed: ["失败", "Failed"], skipped: ["已跳过", "Skipped"], cancelled: ["已取消", "Cancelled"], cancel_requested: ["取消待核对", "Cancellation requested"], outcome_unknown: ["结果未知", "Outcome unknown"] };
   const value = copy[status]; return value ? t(...value) : status;

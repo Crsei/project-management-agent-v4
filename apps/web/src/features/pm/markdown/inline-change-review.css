@@ -1,0 +1,86 @@
+.inline-change-review {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: var(--foreground);
+  container-type: inline-size;
+}
+.inline-change-review:focus-visible,
+.inline-change-review :is(button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.inline-change-review-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 12px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+.inline-change-review-count { flex: 1 1 160px; font-weight: 500; }
+.inline-change-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.inline-change-review-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius, 6px);
+  background: var(--background);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.inline-change-review-toolbar button:hover:not(:disabled) { background: var(--surface-hover); }
+.inline-change-review-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
+.inline-change-review-toolbar .inline-change-review-accept {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--background));
+  font-weight: 600;
+}
+.inline-change-review-toolbar .inline-change-review-accept:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 20%, var(--background)); }
+.inline-change-review-accept kbd { color: var(--muted-foreground); font-family: var(--font-sans); font-size: 10px; white-space: nowrap; }
+.inline-change-review-scope { flex-basis: 100%; margin: 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+.inline-change-review-notice {
+  margin: 8px 12px;
+  padding: 8px 10px;
+  border-inline-start: 2px solid var(--ring);
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.inline-change-review-toolbar > .inline-change-review-notice { flex-basis: 100%; margin: 0; }
+.inline-change-review-diff { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; background: var(--background); }
+.inline-change-review-diff > p:not(.inline-change-review-notice) { margin: 10px 12px; color: var(--muted-foreground); font-size: 12px; }
+.inline-change-review-diff pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inline-change-review-diff details { padding: 8px 12px; }
+.inline-change-review-diff summary { cursor: pointer; font-size: 12px; }
+.inline-change-review-diff [role="status"] { font-size: 12px; }
+.inline-change-review-original { display: contents; }
+.inline-change-review-original[hidden] { display: none !important; }
+.inline-change-review-authors { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-block-end: 1px solid var(--border); font-size: 12px; }
+.inline-change-review-authors-label { color: var(--muted-foreground); }
+.inline-change-review-authors-list { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+.inline-change-review-unknown-author { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
+.inline-change-review-unknown-author > span[aria-hidden] { display: inline-grid; place-items: center; inline-size: 20px; block-size: 20px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; }
+.inline-change-review-endpoint { min-width: 0; padding: 8px 12px; }
+.inline-change-review-endpoint p { margin: 0 0 6px; color: var(--muted-foreground); font-size: 12px; }
+.inline-change-review-endpoint pre { margin: 0; padding: 10px; background: var(--muted); font-family: var(--font-mono); font-size: 12px; line-height: 1.6; }
+@container (max-width: 560px) {
+  .inline-change-review-actions { width: 100%; }
+}
+@container (max-width: 340px) {
+  .inline-change-review-actions button { flex: 1 1 auto; }
+  .inline-change-review-accept { flex-wrap: wrap; }
+}

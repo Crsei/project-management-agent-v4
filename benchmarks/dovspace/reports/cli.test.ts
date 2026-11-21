@@ -39,6 +39,18 @@ test('invalid tasks arms duplicate options and budgets fail before runtime mutat
   ]) assert.throws(() => parseCliArgs(argv), Error, argv.join(' '));
 });
 
+test('capture selectors cannot be silently ignored or partially enable a billable run', () => {
+  for (const argv of [
+    ['run', 'K02', '--dataset-selection', '/private/member.json'],
+    ['run', 'K02', '--calibration', '/private/calibration.json', '--capture-key', '/private/key.json'],
+    ['compare', '--tasks', 'K02', '--calibration', '/private/calibration.json', '--experiment-cell', 'cell-1'],
+    ['smoke', '--admission-plan', '/private/plan.json'],
+    ['run', 'K02', '--calibration', '/private/calibration.json', '--admission-plan', '/private/plan.json'],
+    ['report', '--calibration', '/private/calibration.json'],
+    ['smoke', '--calibration', ''],
+  ]) assert.throws(() => parseCliArgs(argv), Error, argv.join(' '));
+});
+
 test('real inference never silently chooses the config default model or an unlimited cost', async () => {
   await assert.rejects(configForCommand(parseCliArgs(['run', 'K02', '--max-cost-usd', '2']), {}), /explicit --model/);
   await assert.rejects(configForCommand(parseCliArgs(['run', 'K02', '--model', 'explicit-versioned-model']), {}), /positive --max-cost-usd/);

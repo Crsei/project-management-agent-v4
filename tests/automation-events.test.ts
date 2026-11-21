@@ -7,7 +7,6 @@ import { createAutomationPrivateStore, validateAutomationPrivateHeaders } from '
 import { automationNativeRequestUrl, probeAutomationNativeApi } from '../packages/infrastructure/src/automation-integrations-native.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
 import { automationIntegrationConfigSchema, automationIntegrationSupportsMcp, automationIntegrationSupportsNativeApi, type AutomationIntegrationConfig } from '../packages/contracts/src/automation-integrations.ts';
-import { automationCatalogById } from '../packages/automation-resources/catalog.ts'
 
 const rejected = (code: string) => (error: unknown) => error instanceof DomainError && error.code === code;
 describe('automation event authentication, isolation and source filters', () => {
@@ -47,7 +46,7 @@ describe('automation event authentication, isolation and source filters', () => 
     await assert.rejects(matchesAutomationEventFilter(payload, { expression: 'exit()' }), rejected('event_filter_invalid'));
   });
   it('QA template admits an eligible PR but rejects draft, already-processed and other-repository events', async () => {
-    const expression = automationCatalogById.get('qa-changes')!.setup!.filter!.replace('{{form.repository}}', 'OpenHands/project');
+    const expression = "!(pull_request.draft) && !icontains(pull_request.body, 'QA Agent') && glob(repository.full_name, 'OpenHands/project') && contains(keys(@), 'pull_request')";
     const payload = { repository: { full_name: 'OpenHands/project' }, pull_request: { draft: false, body: 'Please review this change' } };
     assert.equal(await matchesAutomationEventFilter(payload, { expression }), true);
     assert.equal(await matchesAutomationEventFilter({ ...payload, pull_request: { ...payload.pull_request, draft: true } }, { expression }), false);

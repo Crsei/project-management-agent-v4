@@ -3,7 +3,7 @@ import { lstat, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
-import { ompModelSelector, parseBenchmarkConfig, type BenchmarkConfig } from '../benchmark.config.ts';
+import { ompModelSelector, parseBenchmarkConfig, repositoryRoot, type BenchmarkConfig } from '../benchmark.config.ts';
 import { AdapterError, createAdapter } from '../adapters/index.ts';
 import { createFixtureManager } from '../fixtures/manager.ts';
 import { gradeTask } from '../graders/index.ts';
@@ -22,9 +22,17 @@ import { changedLines, RETRY_REQUIREMENT, REUSE_FORMAT, REVISED_REQUIREMENT_FORM
 import { collectStudyHarnessHash } from './tools-study-source.ts';
 import { summarizeCliObservations } from './cli-observations.ts';
 import { renderCliObservationReport } from '../reports/cli-observations.ts';
+import { admitEvidence, freezeGradeInput, sealEvidence } from '../evaluation/archive.ts';
+import type { GradeInput, GradeResult } from '../graders/types.ts';
+import { loadEvaluatorCalibration } from '../evaluation/calibration.ts';
+import { assertRegisteredDatasetFixture, resolveRegisteredDatasetAdmission, type DatasetRunSelection } from '../evaluation/dataset-admission.ts';
+import { loadCaptureSigner, type CaptureKeyOptions } from '../evaluation/capture.ts';
+import { RunExperimentSelectionSchema, RunSuiteAdmissionPlanSchema, validateRunSuiteAdmissionCoverage, type RunExperimentSelection, type RunSuiteAdmission } from '../evaluation/run-admission.ts';
+import { captureGradingPopulations, type GradingPopulationProof } from '../evaluation/populations.ts';
+import { collectSourceManifest } from '../isolation/source.ts';
 
-export interface RunTaskOptions { taskId: string; arm: Arm; runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal; sourceStage?: { root: string; manifest: SourceManifest }; study?: Pick<StudyRunEvidence, 'version' | 'studyId' | 'manifestHash' | 'variant' | 'blockId' | 'repeat' | 'order'>; requiredTools?: string[] }
-export interface RunSuiteOptions { taskIds: string[]; arms?: Arm[]; repetitions?: number; outputRoot?: string; config?: Partial<BenchmarkConfig>; suiteId?: string; signal?: AbortSignal }
+export interface RunTaskOptions { taskId: string; arm: Arm; runId?: string; outputRoot?: string; config?: Partial<BenchmarkConfig>; signal?: AbortSignal; sourceStage?: { root: string; manifest: SourceManifest }; study?: Pick<StudyRunEvidence, 'version' | 'studyId' | 'manifestHash' | 'variant' | 'blockId' | 'repeat' | 'order'>; requiredTools?: string[]; calibrationPath?: string; datasetSelection?: DatasetRunSelection; captureKey?: CaptureKeyOptions; experiment?: RunExperimentSelection }
+export interface RunSuiteOptions { taskIds: string[]; arms?: Arm[]; repetitions?: number; outputRoot?: string; config?: Partial<BenchmarkConfig>; suiteId?: string; signal?: AbortSignal; calibrationPath?: string; admissionPlan?: RunSuiteAdmission[] }
 
 export function boundedBudget(task: { maxDurationMinutes: number; maxModelCalls: number; maxToolCalls: number; maxCostUsd?: number | null }, cap: Budget): Budget {
   const costs = [task.maxCostUsd, cap.maxCostUsd].filter((value): value is number => typeof value === 'number');
@@ -32,11 +40,22 @@ export function boundedBudget(task: { maxDurationMinutes: number; maxModelCalls:
 }
 
 export function nativeToolPolicy(taskId: string, generic: readonly string[]): string[] {
-  const names = new Set(['pm_list_workspaces', 'pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations', 'pm_task_brief', 'pm_search_knowledge']);
+  const names = new Set(['pm_list_workspaces', 'pm_get_operation_result', 'pm_query', 'pm_read', 'pm_read_workflow', 'pm_read_comments', 'pm_read_relations', 'pm_task_brief', 'pm_search_knowledge']);
   if (generic.includes('pm_update')) for (const name of ['pm_update_task', 'pm_transition_task', 'pm_add_relation', 'pm_remove_relation']) names.add(name);
   if (generic.includes('pm_create') || taskId === 'D01' || taskId === 'L04') names.add('pm_create_task');
   for (const name of generic) if (name.startsWith('pm_') && !['pm_update', 'pm_receipt', 'pm_create'].includes(name)) names.add(name);
   return [...names].sort();
+}
+
+const TOOL_BOUNDARY = { filesystem: 'same-original-public-fixture', network: 'none+fixed-provider-and-owned-pm-broker' } as const;
+const TOOL_POLICY_SHA256 = hashValue({ taskPolicies: RUNNABLE_TASK_IDS.map(id => { const task = getTaskDefinition(id); return { task: id, genericTools: task.allowedTools, nativeTools: nativeToolPolicy(id, task.allowedTools), targets: task.targetKeys }; }), ...TOOL_BOUNDARY });
+export interface RunVersionIdentity { budget: Budget; budgetSha256: string; modelConfigSha256: string; toolPolicySha256: string; permissionsSha256: string }
+/** Offline preregistration uses the same exact formulas as actual admission; no model/account/runtime is contacted. */
+export function runVersionIdentity(definition: { id: string; budget: Budget; allowedTools: readonly string[]; targetKeys: readonly string[] }, config: BenchmarkConfig): RunVersionIdentity {
+  const budget = boundedBudget(definition.budget, config.budget);
+  const modelConfigSha256 = hashValue({ provider: config.provider, model: config.model, modelOptions: config.modelOptions, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, providerApi: config.providerApi, ompModel: config.ompModel ?? null, ...(config.hostAuthBoundary ? { hostAuthBoundary: config.hostAuthBoundary } : {}), temperature: 1, prices: config.prices ?? null });
+  const permissionsSha256 = hashValue({ task: definition.id, tools: nativeToolPolicy(definition.id, definition.allowedTools), targets: definition.targetKeys, ...TOOL_BOUNDARY });
+  return { budget, budgetSha256: hashValue(budget), modelConfigSha256, toolPolicySha256: TOOL_POLICY_SHA256, permissionsSha256 };
 }
 
 const eventAliases: Record<string, string> = { 'provider.request': 'provider_request', 'provider.usage': 'provider_usage', 'provider.response': 'provider_response', 'provider.error': 'provider_error', 'pm.tool.request': 'pm_request', 'pm.tool.result': 'pm_response', 'pm.reconcile.request': 'receipt_lookup', 'pm.reconcile.result': 'receipt_reconciled', 'pm.response.dropped': 'response_lost', 'budget.exhausted': 'budget_exceeded', 'safety.violation': 'safety_violation', 'transport.error': 'transport_error' };
@@ -47,10 +66,16 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
   if (!RUNNABLE_TASK_IDS.includes(definition.id)) throw new Error(`Task ${options.taskId} has a complete definition but is not executable in Lite v0.2.`);
   const arm = ArmSchema.parse(options.arm);
   const config = parseBenchmarkConfig({ ...options.config, ...(options.outputRoot ? { outputsRoot: options.outputRoot } : {}) });
+  if ((options.datasetSelection || options.captureKey || options.experiment) && (!options.calibrationPath || !options.datasetSelection || !options.captureKey || !options.experiment)) throw new Error('Captured evaluation requires calibration, registered dataset selection, explicit capture key and experiment cell together');
+  const calibration = await loadEvaluatorCalibration(config.codeImage, options.calibrationPath, { taskId: definition.id, taskVersion: definition.taskVersion });
+  const registeredDataset = options.datasetSelection ? await resolveRegisteredDatasetAdmission(options.datasetSelection, definition) : null;
+  const captureSigner = options.captureKey ? await loadCaptureSigner(options.captureKey) : null;
+  const experiment = options.experiment ? RunExperimentSelectionSchema.parse(options.experiment) : null;
+  const productSha256 = options.sourceStage?.manifest.sourceHash ?? (captureSigner ? (await collectSourceManifest(repositoryRoot)).sourceHash : null);
   const runId = options.runId ?? `${options.taskId}-${arm}-${randomUUID()}`;
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(runId)) throw new Error('Run identity must be 1–100 filesystem-safe characters.');
   for (const [key, value] of Object.entries(config.modelOptions)) if (typeof value !== 'string' && typeof value !== 'boolean') throw new Error(`Model option ${key} must be a native string or boolean.`);
-  const budget = boundedBudget(definition.budget, config.budget);
+  const versions = runVersionIdentity(definition, config), budget = versions.budget;
   const runDirectory = path.join(config.outputsRoot, runId);
   let ancestor = path.parse(config.outputsRoot).root;
   for (const part of path.resolve(config.outputsRoot).split(path.sep).filter(Boolean)) {
@@ -76,12 +101,15 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
   let auditCursor = 0;
   const nativeCalls = new Set<string>();
   let failure: RunResult['failure'] = null;
+  let initialGrade: GradeResult | undefined;
+  let gradingEvents: BenchEvent[] | undefined, gradingPopulationProof: GradingPopulationProof | undefined;
+  let gradingInfrastructureComplete = false;
   let result: RunResult = {
     runId, taskId: definition.id, taskVersion: definition.taskVersion, fixtureVersion: definition.fixtureVersion, arm, agent: `Dovspace Agent Chat / native ${config.provider}`, model: config.model || 'unavailable', success: false,
     safetyGate: { passed: false, checks: [{ id: 'execution-isolated', passed: false, required: true, score: 0, evidence: [], reason: 'Isolated execution has not been established.' }], violations: [] }, checkpointScore: 0,
     phaseResults: definition.phases.map(phase => ({ id: phase.id, passed: false, checks: [{ id: 'independent-evidence', passed: false, required: true, score: 0, evidence: [], reason: 'No independent task evidence available.' }], evidence: [] })), usage: emptyUsage(), timeMs: 0, unexpectedMutations: [],
     artifacts: { result: path.join(runDirectory, 'result.json'), trace: trace.file, report: path.join(runDirectory, 'report.md'), pmDiff: path.join(runDirectory, 'pm-diff.json'), gitDiff: path.join(runDirectory, 'git.diff'), directory: path.join(runDirectory, 'artifacts'), configuration: path.join(runDirectory, 'artifacts', 'run-config.json') },
-    reproducibility: { controlTransport: config.controlTransport, providerAuthentication: config.hostAuthBoundary ? 'explicit-host-sdk-account' : 'explicit-api-key', ...(config.hostAuthBoundary ? { hostAuthBoundaryHash: hashValue(config.hostAuthBoundary) } : {}), fixtureId: 'unavailable', fixtureSemanticHash: 'unavailable', environmentHash: 'unavailable', effectiveModelSettingsHash: null, modelConfigHash: hashValue({ provider: config.provider, model: config.model, modelOptions: config.modelOptions, providerEndpoint: config.providerEndpoint ?? null, providerBinary: config.providerBinary, providerApi: config.providerApi, ompModel: config.ompModel ?? null, ...(config.hostAuthBoundary ? { hostAuthBoundary: config.hostAuthBoundary } : {}), temperature: 1, prices: config.prices ?? null }), budgetHash: hashValue(budget), permissionsHash: hashValue({ task: definition.id, tools: nativeToolPolicy(definition.id, definition.allowedTools), targets: definition.targetKeys, filesystem: 'same-original-public-fixture', network: 'none+fixed-provider-and-owned-pm-broker' }) }, failure: null,
+    reproducibility: { controlTransport: config.controlTransport, providerAuthentication: config.hostAuthBoundary ? 'explicit-host-sdk-account' : 'explicit-api-key', ...(config.hostAuthBoundary ? { hostAuthBoundaryHash: hashValue(config.hostAuthBoundary) } : {}), fixtureId: 'unavailable', fixtureSemanticHash: 'unavailable', environmentHash: 'unavailable', effectiveModelSettingsHash: null, modelConfigHash: versions.modelConfigSha256, budgetHash: versions.budgetSha256, permissionsHash: versions.permissionsSha256 }, failure: null,
     humanInterventions: { count: 0, definition: 'Additional corrective human input beyond the fixed scenario interventions; this unattended runner supplies none.', reason: null },
     rework: { count: null, denominator: null, proportion: null, definition: 'Repeated failed revision-bound PM mutations with identical normalized arguments and independently observed unchanged authority, divided by attributable PM mutation attempts; excludes receipt lookup and injected loss, not general semantic/code rework.', reason: 'No complete attributable PM trace is available yet.' },
   };
@@ -89,6 +117,11 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     if (!options.sourceStage) throw new Error('Study execution requires an independently verified source stage.');
     result.study = { ...options.study, harnessHash: await collectStudyHarnessHash(), admittedAt: new Date().toISOString(), sourceManifest: options.sourceStage.manifest, environmentEvidence: null, sessions: [], generations: [], operationIds: [] };
   }
+  const evidence = await admitEvidence({ root: path.join(runDirectory, 'evaluation'), runId, task: definition, arm, producer: 'host-runner', modelConfigSha256: versions.modelConfigSha256, toolPolicySha256: versions.toolPolicySha256, harnessSha256: await collectStudyHarnessHash(), productSha256, codeImage: config.codeImage, evaluator: calibration.evaluator, ...(calibration.calibrationBytes ? { calibrationBytes: calibration.calibrationBytes } : {}), ...(registeredDataset ? { registeredDataset } : {}), ...(captureSigner ? { captureSigner } : {}), ...(experiment ? { experiment } : {}) }).catch(error => { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); throw error; });
+  result.evaluation = { archiveRoot: evidence.root, admissionId: evidence.admission.admissionId, attemptId: evidence.admission.attemptId, evaluatorSha256: evidence.evaluator.sha256 };
+  result.artifacts.initialGrade = `${evidence.root}-initial-grade/grade.json`;
+  result.artifacts.initialGradeManifest = `${evidence.root}-initial-grade/grade-manifest.json`;
+  if (captureSigner) result.artifacts.captureAttestation = `${evidence.root}-initial-grade/capture-attestation.json`;
 
   async function append(event: BenchEvent): Promise<void> {
     const normalized: BenchEvent = { ...event, type: eventAliases[event.type] ?? event.type, taskId: definition.id, scenarioId: definition.id, provider: config.provider, model: config.model || 'unavailable', ...(event.sessionId ? { threadId: event.sessionId } : {}), ...(typeof event.data.generationId === 'string' ? { generationId: event.data.generationId } : {}) };
@@ -128,6 +161,8 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     await prepareGuidanceScenario(definition.id, fixture);
     task.budget = budget;
     before = await manager.snapshot(fixture);
+    if (registeredDataset) assertRegisteredDatasetFixture(registeredDataset, before);
+    if (evidence.admission.versions.productSha256 !== null && fixture.productSource?.manifest.sourceHash !== evidence.admission.versions.productSha256) throw new AdapterError('infrastructure', 'Actual staged product differs from preregistered admission; no model request was made.', 'source_identity_mismatch');
     result.fixtureVersion = fixture.fixtureVersion;
     result.reproducibility.fixtureId = fixture.fixtureId;
     result.reproducibility.fixtureSemanticHash = before.semanticHash;
@@ -232,7 +267,7 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
     if (fixture) {
       try { await manager.stopRuntime(fixture); } catch (error) { establishFailure(error); }
       if (observer) await observer.catch(error => establishFailure(error));
-      await drainAudit();
+      try { await drainAudit(); } catch (error) { establishFailure(error); }
       try {
         after = await manager.snapshot(fixture);
         if (before) {
@@ -243,12 +278,19 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
           Object.assign(result.artifacts, await writeAuthorityArtifacts(before, after, path.join(runDirectory, 'artifacts'), redactor));
           try {
             const validationStarted = performance.now();
-            const graded = await gradeTask({ task: resolveTaskDefinition(definition.id, fixture), fixture, before, after, events: trace.events, outputDir: runDirectory, diff, codeExecutor: createCodeExecutor({ ...config, codeImage: fixture.imageIds?.code ?? config.codeImage }) });
+            gradingEvents = structuredClone(trace.events);
+            const gradeInput: GradeInput = { task: resolveTaskDefinition(definition.id, fixture), fixture, before, after, events: gradingEvents, outputDir: runDirectory, diff };
+            gradingPopulationProof = captureGradingPopulations(gradeInput);
+            gradingInfrastructureComplete = true;
+            const execute = createCodeExecutor({ ...config, codeImage: evidence.evaluator.runtime.codeImageDigest ?? fixture.imageIds?.code ?? config.codeImage });
+            gradeInput.codeExecutor = async request => { const execution = await execute(request); if (!execution.isolationVerified) gradingInfrastructureComplete = false; return execution; };
+            const graded = await gradeTask(gradeInput);
+            initialGrade = graded;
             result = { ...result, success: graded.success && !failure, safetyGate: graded.safetyGate, checkpointScore: graded.checkpointScore, phaseResults: graded.phaseResults, unexpectedMutations: graded.unexpectedMutations };
             failure ??= graded.failure;
             await append(makeEvent(runId, 'grader', 'independent_grade', { success: graded.success, safetyGate: graded.safetyGate, checks: graded.checks }));
             await append(makeEvent(runId, 'grader', 'validation_interval', { intervalKind: 'validation', clockId: `runner:${runId}`, startedMonotonicMs: validationStarted, endedMonotonicMs: performance.now() }));
-          } catch (error) { establishFailure(error, 'grader'); await append(makeEvent(runId, 'grader', 'grader_failed', { message: redactor.text(error instanceof Error ? error.message : String(error)) })); }
+          } catch (error) { gradingInfrastructureComplete = false; establishFailure(error, 'grader'); await append(makeEvent(runId, 'grader', 'grader_failed', { message: redactor.text(error instanceof Error ? error.message : String(error)) })); }
         }
         const collected = await collectArtifacts(fixture.publicRoot, path.join(runDirectory, 'artifacts', 'agent'), redactor);
         Object.assign(result.artifacts, collected.files);
@@ -294,6 +336,7 @@ export async function runTask(options: RunTaskOptions): Promise<RunResult> {
       result = RunResultSchema.parse(redactor.value(result));
       await writeFile(result.artifacts.result!, JSON.stringify(result, null, 2) + '\n', { mode: 0o600 });
       await writeRunReport(result, runDirectory);
+      await sealEvidence({ ...evidence, result, events: trace.events, gradingInfrastructureComplete, ...(gradingPopulationProof ? { populationProof: gradingPopulationProof } : {}), ...(fixture?.productSource ? { actualProductSha256: fixture.productSource.manifest.sourceHash } : {}), ...(fixture?.imageIds?.code ? { actualCodeImageDigest: evidence.evaluator.runtime.codeImageDigest ?? fixture.imageIds.code } : {}), ...(fixture && before && after ? { inputs: freezeGradeInput({ task: resolveTaskDefinition(definition.id, fixture), fixture, before, after, events: gradingEvents ?? trace.events, outputDir: runDirectory }) } : {}), ...(initialGrade ? { grade: initialGrade } : {}) });
     } finally { process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt); }
   }
   return result;
@@ -305,10 +348,13 @@ export async function runSuite(options: RunSuiteOptions): Promise<RunResult[]> {
   if (!options.taskIds.length || !arms.length || new Set(arms).size !== arms.length) throw new Error('Suite task IDs and unique arms are required.');
   for (const taskId of options.taskIds) { const definition = getTaskDefinition(taskId); if (!RUNNABLE_TASK_IDS.includes(definition.id)) throw new Error(`Task ${taskId} is not executable in Lite v0.2.`); }
   for (const arm of arms) ArmSchema.parse(arm);
+  const plan = options.admissionPlan ? RunSuiteAdmissionPlanSchema.parse(options.admissionPlan) : null;
+  if (plan) { if (!options.calibrationPath) throw new Error('Captured suite admission plan requires explicit calibration'); validateRunSuiteAdmissionCoverage(plan, options.taskIds, arms, repetitions); }
   const results: RunResult[] = [];
   suite: for (let repetition = 0; repetition < repetitions; repetition++) for (const taskId of options.taskIds) for (const arm of arms) {
     if (options.signal?.aborted) break suite;
-    results.push(await runTask({ taskId, arm, ...(options.outputRoot ? { outputRoot: options.outputRoot } : {}), ...(options.config ? { config: options.config } : {}), ...(options.signal ? { signal: options.signal } : {}), ...(options.suiteId ? { runId: `${options.suiteId}-${taskId}-${arm}-${repetition + 1}` } : {}) }));
+    const admission = plan?.find(item => item.taskId === taskId && item.arm === arm && item.repetition === repetition + 1);
+    results.push(await runTask({ taskId, arm, ...(options.outputRoot ? { outputRoot: options.outputRoot } : {}), ...(options.config ? { config: options.config } : {}), ...(options.signal ? { signal: options.signal } : {}), ...(options.suiteId ? { runId: `${options.suiteId}-${taskId}-${arm}-${repetition + 1}` } : {}), ...(options.calibrationPath ? { calibrationPath: options.calibrationPath } : {}), ...(admission ? { datasetSelection: admission.datasetSelection, captureKey: admission.captureKey, experiment: admission.experiment } : {}) }));
   }
   return results;
 }

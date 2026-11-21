@@ -82,29 +82,6 @@ export function studioFieldIssue(field: AutomationCatalogField, value: StudioFor
   if (field.options && !field.options.some(option => option.value === value)) return "Select an available option";
   return null;
 }
-/** A whole-value placeholder retains arrays/numbers; substitutions in text are never evaluated as code. */
-export function interpolateStudioTemplate(value: unknown, values: StudioFormValues): unknown {
-  if (typeof value === "string") {
-    const whole = /^\{\{form\.([A-Za-z0-9_]+)\}\}$/.exec(value);
-    if (whole) return values[whole[1]!] ?? "";
-    return value.replace(/\{\{form\.([A-Za-z0-9_]+)\}\}/g, (_match, key: string) => {
-      const item = values[key] ?? "";
-      return Array.isArray(item) ? JSON.stringify(item) : String(item);
-    });
-  }
-  if (Array.isArray(value)) return value.map(item => interpolateStudioTemplate(item, values));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, interpolateStudioTemplate(item, values)]));
-  return value;
-}
-
-/** JMESPath raw-string escaping, including list literals used by the pinned review template. */
-export function interpolateStudioExpression(template: string, values: StudioFormValues): string {
-  return template.replace(/\{\{form\.([A-Za-z0-9_]+)\}\}/g, (_match, key: string) => {
-    const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const value = values[key] ?? "";
-    return Array.isArray(value) ? `[${value.map(item => `'${escape(item)}'`).join(", ")}]` : escape(String(value));
-  });
-}
 export function frequencyOf(trigger: StudioConfig["trigger"]): StudioFrequency {
   if (trigger.kind !== "cron") return trigger.kind;
   const parts = trigger.expression.trim().split(/\s+/);

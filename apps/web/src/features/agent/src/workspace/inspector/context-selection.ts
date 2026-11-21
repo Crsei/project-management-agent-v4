@@ -47,13 +47,14 @@ export function fileSelection(contents: string, range: SelectedLineRange): ChatC
   return Number.isInteger(startLine) && Number.isInteger(endLine) && startLine > 0 && endLine <= lineCount ? { startLine, endLine } : null;
 }
 
-/** xterm end coordinates are exclusive; buffer row labels are 1-based, not command line numbers. */
+/** Terminal end coordinates are exclusive; buffer row labels are 1-based, not command line numbers. */
 export function terminalSelectionSnapshot(terminal: {
   getSelection(): string;
-  getSelectionPosition(): { start: { x: number; y: number }; end: { x: number; y: number } } | undefined;
+  getSelectionPosition(): { start: { x: number; y: number }; end: { x: number; y: number } } | null | undefined;
+  getSelectionBufferPosition?(): { start: { x: number; y: number }; end: { x: number; y: number } } | null;
 }) {
   const text = terminal.getSelection();
-  const position = terminal.getSelectionPosition();
+  const position = terminal.getSelectionBufferPosition?.() ?? terminal.getSelectionPosition();
   if (!position || !text.trim()) return null;
   const startLine = position.start.y + 1;
   const endLine = Math.max(startLine, position.end.y + (position.end.x === 0 ? 0 : 1));

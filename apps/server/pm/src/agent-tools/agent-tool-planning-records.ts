@@ -1,21 +1,21 @@
 import { z } from 'zod';
 import type { Pool } from 'pg';
-import { DomainError, type Actor, type Command, type CommandReceipt, type Entity } from '../../../../packages/domain/src/core.ts';
-import { PlanningRecordsToolInputSchemas, PlanningRecordsToolMetadata, planningRecordsToolCommands, type PlanningRecordsToolName } from '../../../../packages/application/src/agent-tool-planning-records.ts';
-import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext } from '../../../../packages/application/src/agent-chat-tools.ts';
-import { getMembership, requireCapability } from '../../../../packages/application/src/access.ts';
-import { listEntities, readEntity } from '../../../../packages/application/src/queries.ts';
-import { readExternalReceipt } from '../../../../packages/application/src/core-bridge.ts';
-import { requestHash } from '../../../../packages/application/src/kernel.ts';
-import { roadmapDependencyClosure, taskInput } from '../../../../packages/application/src/product-roadmap.ts';
-import { PlanningRecordsToolResultSchema, planningRecordsRecordSchema, type PlanningRecordsRecord, type PlanningRecordsToolResult } from '../../../../packages/agent-contracts/src/pm-tool-planning-records.ts';
-import type { AgentChatToolReceipt } from '../../../../packages/agent-contracts/src/pm-tool-shared.ts';
-import type { RoadmapAction, RoadmapRead } from '../../../../packages/contracts/src/product-roadmap.ts';
-import { createProductRoadmapService, type ProductRoadmapMutationContext } from './product-roadmap-service.ts';
-import { nativeCommandId, type CoreWorkspacePool } from './core-routes.ts';
-import { coreVersion } from './core-adapter.ts';
-import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
-import { CoreCommandJournal } from './core-journal.ts';
+import { DomainError, type Actor, type Command, type CommandReceipt, type Entity } from '../../../../../packages/domain/src/core.ts';
+import { PlanningRecordsToolInputSchemas, PlanningRecordsToolMetadata, planningRecordsToolCommands, type PlanningRecordsToolName } from '../../../../../packages/application/src/agent-tool-planning-records.ts';
+import { assertAgentToolNotAborted, assertAgentToolProject, type AgentChatToolContext } from '../../../../../packages/application/src/agent-chat-tools.ts';
+import { getMembership, requireCapability } from '../../../../../packages/application/src/access.ts';
+import { listEntities, readEntity } from '../../../../../packages/application/src/queries.ts';
+import { readExternalReceipt } from '../../../../../packages/application/src/core-bridge.ts';
+import { requestHash } from '../../../../../packages/application/src/kernel.ts';
+import { roadmapDependencyClosure, taskInput } from '../../../../../packages/application/src/product-roadmap.ts';
+import { PlanningRecordsToolResultSchema, planningRecordsRecordSchema, type PlanningRecordsRecord, type PlanningRecordsToolResult } from '../../../../../packages/agent-contracts/src/pm-tool-planning-records.ts';
+import type { AgentChatToolReceipt } from '../../../../../packages/agent-contracts/src/pm-tool-shared.ts';
+import type { RoadmapAction, RoadmapRead } from '../../../../../packages/contracts/src/product-roadmap.ts';
+import { createProductRoadmapService, type ProductRoadmapMutationContext } from '../product-roadmap-service.ts';
+import { nativeCommandId, type CoreWorkspacePool } from '../routes/core-routes.ts';
+import { coreVersion } from '../core-adapter.ts';
+import { WorkspaceError } from '../../../../../packages/pm-core/index.ts';
+import { CoreCommandJournal } from '../core-journal.ts';
 import type { AgentChatToolFamily, AgentToolRecoveryIdentity } from './agent-chat-tools.ts';
 
 export type PlanningRecordsToolDependencies = {

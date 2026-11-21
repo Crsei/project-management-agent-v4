@@ -110,13 +110,7 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
           const connection = matching[0]!;
           const targetUrl = automationNativeRequestUrl(connection.row.config, call);
           assertPmProviderRead(row.config_snapshot, call, targetUrl);
-          if (automationNativeRequestIsWrite(call) || targetUrl.pathname === '/search/issues') await requireCapability(sql, actor, row.workspace_id, 'access.manage', row.project_id);
-          if (targetUrl.pathname === '/search/issues') {
-            if (row.config_snapshot.action.templateId !== 'github-pr-reviewer') throw new DomainError('integration_owner_load_search_forbidden', 'Owner-wide load counts are restricted to the selected reviewer template', 403);
-            const maintainers = row.config_snapshot.action.arguments.maintainers;
-            const requested = /review-requested:([a-zA-Z0-9-]+)$/.exec(targetUrl.searchParams.get('q') ?? '')?.[1]?.toLowerCase();
-            if (typeof maintainers === 'string' && maintainers.trim() && !maintainers.split(',').map(value => value.trim().toLowerCase()).includes(requested ?? '')) throw new DomainError('integration_owner_load_search_forbidden', 'The requested reviewer is outside the frozen explicit maintainer list', 403);
-          }
+          if (automationNativeRequestIsWrite(call)) await requireCapability(sql, actor, row.workspace_id, 'access.manage', row.project_id);
           const prior = (await sql.query<OperationRow>('SELECT * FROM automation_integration_operations WHERE id=$1', [call.operationId])).rows[0];
           if (prior) {
             if (prior.request_hash !== hash || prior.connection_id !== connection.row.id || prior.connection_revision !== connection.row.revision || prior.project_id !== row.project_id) throw new DomainError('idempotency_conflict', 'Provider operation ID represents a different immutable call', 409);

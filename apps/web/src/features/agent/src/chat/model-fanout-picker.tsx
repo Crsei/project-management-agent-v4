@@ -24,13 +24,15 @@ export type ModelFanoutPickerProps = Omit<ComposerModelPickerProps, "selectedMod
   onFanoutChange?: (selections: FanoutModelSelection[] | null) => void;
   /** Options that belong to the model checked when stacking begins; newly stacked models use provider defaults. */
   modelOptions?: ProviderOptionSelection[];
+  /** The composer can hide the stacking entry point while the fanout contract remains available elsewhere. */
+  showStackControl?: boolean;
 };
 
 /**
  * Wraps the single-model picker with an explicit stacking mode. The underlying
  * picker keeps its single-select contract whenever stacking has not started.
  */
-export function ModelFanoutPicker({ onFanoutChange, modelOptions, ...picker }: ModelFanoutPickerProps) {
+export function ModelFanoutPicker({ onFanoutChange, modelOptions, showStackControl = true, ...picker }: ModelFanoutPickerProps) {
   const t = useAgentText();
   const [state, setState] = useState<ModelFanoutPickerState>(() => fanoutPickerSingle({
     providerInstanceId: picker.providerInstanceId,
@@ -84,7 +86,7 @@ export function ModelFanoutPicker({ onFanoutChange, modelOptions, ...picker }: M
       {...picker}
       {...(state.mode === "stacking" ? { selectedModels: state.selections, onToggleModel: toggleStacked } : {})}
     />
-    {state.mode === "single"
+    {showStackControl && (state.mode === "single"
       ? <button type="button" className="model-fanout-picker-enter" disabled={picker.disabled || !picker.model} aria-label={t("叠选多个模型并行发送", "Stack multiple models for one message")} title={t("叠选多个模型并行发送", "Stack multiple models for one message")} onClick={enterStacking}>
         <LayersIcon aria-hidden="true" />
         <span>{t("多选", "Stack")}</span>
@@ -102,6 +104,6 @@ export function ModelFanoutPicker({ onFanoutChange, modelOptions, ...picker }: M
           <XIcon aria-hidden="true" />
           <span>{t("退出多选", "Exit stacking")}</span>
         </button>
-      </div>}
+      </div>)}
   </div>;
 }

@@ -19,7 +19,7 @@ export { default as McpFormModal } from "../components/mcp/McpFormModal";
 export { default as UnifiedMcpPanel } from "../components/mcp/UnifiedMcpPanel";
 export { V7Dialog } from "../components/mcp/formBits";
 export { uniqueId } from "../components/mcp/mcpDraft";
-export { APP_DISPLAY_NAME } from "../components/shell/AppGlyph";
+export { AppGlyph, APP_DISPLAY_NAME } from "../components/shell/AppGlyph";
 export { default as UnifiedSkillsPanel } from "../components/skills/UnifiedSkillsPanel";
 export type { SkillsInstalledPresentation } from "../components/skills/UnifiedSkillsPanel";
 export type { SkillsDiscoveryPresentation, DiscoverRow } from "../components/skills/SkillsPage";

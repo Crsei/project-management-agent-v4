@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import { inspectMarkdown } from '../../../../packages/pm-markdown/index.ts';
-import { FileRepository } from '../../../../packages/pm-core/repository.ts';
-import { ProjectLocations } from '../../../../packages/pm-core/project-locations.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import { inspectMarkdown } from '../../../../../packages/pm-markdown/index.ts';
+import { FileRepository } from '../../../../../packages/pm-core/repository.ts';
+import { ProjectLocations } from '../../../../../packages/pm-core/project-locations.ts';
 import { authorizeCoreScope, type CoreWorkspacePool } from './core-routes.ts';
-import { recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
+import { recheckMcpRequest } from '../../../../../packages/application/src/mcp-service-auth.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };
 const params = z.strictObject({ workspaceId: z.uuid().toLowerCase() });

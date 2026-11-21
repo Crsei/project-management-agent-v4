@@ -1,15 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { listAgentContexts, authorizeAgentContext, saveAgentFileArea, type AgentFileAreaContext } from '../../../../packages/application/src/agent-file-areas.ts';
-import { agentStorageSettings, saveAgentStorageSettings, type AgentDirectoryConfiguration } from '../../../../packages/application/src/agent-storage.ts';
-import { agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsUpdateSchema, type AgentScope } from '../../../../packages/contracts/src/agent-file-areas.ts';
-import type { Actor } from '../../../../packages/domain/src/core.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
-import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
-import type { Workspace } from '../../../../packages/pm-core/index.ts';
-import { getMembership } from '../../../../packages/application/src/access.ts';
-import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
+import { listAgentContexts, authorizeAgentContext, saveAgentFileArea, type AgentFileAreaContext } from '../../../../../packages/application/src/agent-file-areas.ts';
+import { agentStorageSettings, saveAgentStorageSettings, type AgentDirectoryConfiguration } from '../../../../../packages/application/src/agent-storage.ts';
+import { agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsUpdateSchema, type AgentScope } from '../../../../../packages/contracts/src/agent-file-areas.ts';
+import type { Actor } from '../../../../../packages/domain/src/core.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
+import type { SqlExecutor } from '../../../../../packages/application/src/ports.ts';
+import type { Workspace } from '../../../../../packages/pm-core/index.ts';
+import { getMembership } from '../../../../../packages/application/src/access.ts';
+import { mcpRequestIdentity, recheckMcpRequest } from '../../../../../packages/application/src/mcp-service-auth.ts';
 
 type RouteContext = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string, sql?: SqlExecutor) => Promise<Workspace> };
 const workspaceParams = agentScopeSchema.pick({ workspaceId: true });

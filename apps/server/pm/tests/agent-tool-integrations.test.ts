@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Pool } from 'pg';
-import { createIntegrationsToolFamily, type IntegrationsToolDependencies } from '../src/agent-tool-integrations.ts';
+import { createIntegrationsToolFamily, type IntegrationsToolDependencies } from '../src/agent-tools/agent-tool-integrations.ts';
 import { IntegrationsToolResultSchema } from '../../../../packages/agent-contracts/src/pm-tool-integrations.ts';
 import { IntegrationsToolInputSchemas } from '../../../../packages/application/src/agent-tool-integrations.ts';
 import { automationIntegrationProviders } from '../../../../packages/contracts/src/automation-integrations.ts';

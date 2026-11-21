@@ -15,7 +15,7 @@ import { ThreadId, ProviderDriverKind, ProviderInstanceId, OrchestrationV2AppThr
 import { AcpProviderCapabilitiesV2 } from "@t3tools/provider-acp/server/adapter";
 import type { ProviderAdapterV2Event, ProviderAdapterV2ForkThreadInput, ProviderAdapterV2SessionRuntime, ProviderAdapterV2TurnInput } from "@t3tools/provider-core/server/ProviderAdapter";
 import { makeSubagentChildThread } from "@t3tools/provider-core/server/subagentProjection";
-import type { NativeOutputEvent } from "@agent-workspace/contracts/output";
+import type { NativeInteractionRequest, NativeOutputEvent } from "@agent-workspace/contracts/output";
 import type { ProviderInstance } from "@t3tools/provider-core/server/driver";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
 import type { PmProviderHostService, PmProviderLease } from "./contract.ts";
@@ -493,6 +493,7 @@ for (const mode of ["auto-approve", "ask"] as const) {
       process.env.AGENT_APPROVAL_MODE = mode;
       const acknowledged = Promise.withResolvers<void>();
       const decisions: unknown[] = [];
+      const offered: NativeInteractionRequest[] = [];
       const f = await harness((input, emit) => Effect.gen(function* () {
         yield* offerNativePermission(input, emit);
         yield* Effect.promise(() => acknowledged.promise);
@@ -507,18 +508,29 @@ for (const mode of ["auto-approve", "ask"] as const) {
       initializeNativeOutput(generationId, "permission-thread", "running");
       try {
         const running = f.service.run(f.context, { model: "explicit", prompt: "native permission",
-          onRequest: () => assert.fail("native permission must not offer an interactive approval"),
+          onRequest: (request) => {
+            if (mode === "auto-approve") {
+              assert.fail("auto-approved native permission must not offer an interactive approval");
+              return Promise.resolve({});
+            }
+            offered.push(request);
+            return Promise.resolve({ optionId: "accept" });
+          },
           onEvent: event => emitNativeOutput(generationId, event) });
         if (terminal === "completed") assert.equal((await running).text, "original answer");
         else await assert.rejects(running, { terminalStatus: "interrupted" });
         endNativeOutput(generationId, terminal);
         const permission = getNativeOutput(generationId)!.items.find(item => item.id === "permission-item")!;
-        assert.deepEqual(decisions, [mode === "auto-approve" ? "accept" : "decline"]);
-        assert.equal(permission.status, mode === "auto-approve" ? "completed" : "cancelled");
+        assert.deepEqual(decisions, ["accept"]);
+        assert.equal(permission.status, "completed");
         assert.equal(permission.request?.respondable, false);
-        assert.equal(permission.request?.title, mode === "auto-approve" ? "Native permission auto-approved" : "Native permission denied");
+        assert.equal(permission.request?.title, mode === "auto-approve" ? "Native permission auto-approved" : "Native permission approved");
         assert.ok(permission.completedAt);
         assert.equal(f.counts().closed, 1);
+        if (mode === "ask") {
+          assert.equal(offered.length, 1);
+          assert.deepEqual(offered[0]?.options?.map((option) => option.id), ["accept", "decline", "cancel"]);
+        } else assert.equal(offered.length, 0);
       } finally {
         acknowledged.resolve();
         f.releaseProbe();
@@ -527,6 +539,39 @@ for (const mode of ["auto-approve", "ask"] as const) {
     });
   }
 }
+
+test("headless native permissions are denied without offering an approval", { timeout: 5000 }, async () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "ask";
+  const acknowledged = Promise.withResolvers<void>();
+  const decisions: unknown[] = [];
+  const f = await harness((input, emit) => Effect.gen(function* () {
+    yield* offerNativePermission(input, emit);
+    yield* Effect.promise(() => acknowledged.promise);
+    yield* finish(input, emit);
+  }), undefined, { configure: runtime => Object.assign(runtime, {
+    respondToRuntimeRequest: (response: Parameters<typeof runtime.respondToRuntimeRequest>[0]) => Effect.sync(() => {
+      decisions.push(response.decision);
+      acknowledged.resolve();
+    }),
+  }) });
+  const generationId = "headless-permission-generation";
+  initializeNativeOutput(generationId, "permission-thread", "running");
+  try {
+    const running = f.service.run(f.context, { model: "explicit", prompt: "native permission", onEvent: event => emitNativeOutput(generationId, event) });
+    assert.equal((await running).text, "original answer");
+    endNativeOutput(generationId, "completed");
+    const permission = getNativeOutput(generationId)!.items.find(item => item.id === "permission-item")!;
+    assert.deepEqual(decisions, ["decline"]);
+    assert.equal(permission.status, "cancelled");
+    assert.equal(permission.request?.respondable, false);
+    assert.equal(permission.request?.title, "Native permission denied");
+  } finally {
+    acknowledged.resolve();
+    f.releaseProbe();
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
 
 test("failed native permission responses never publish or persist an approved card", { timeout: 2000 }, async () => {
   const previousMode = process.env.AGENT_APPROVAL_MODE;

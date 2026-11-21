@@ -13,6 +13,7 @@ import { assertPrivatePath, makePrivatePath } from "../../../../../packages/pm-c
 import { assertCanonicalAbsolute, directoryIdentity, pathContains, safePathComponent, safeRelativePath, sameFileIdentity, samePath } from "../../../../../packages/pm-core/platform.ts";
 import { assertNoWindowsReparsePath, cacheWindowsPathAttributes } from "../../../../../packages/pm-core/windows-reparse.ts";
 import { getStoreIdentity, initializePersistence, inventoryPersistence, PERSISTENCE_NAMESPACE, preflightPersistence, registerPersistenceWriter, restorePersistenceIdentity, type PersistenceInventory, type StoreIdentity } from "../durable/persistence-schema.ts";
+import { EVALUATION_NAMESPACES, fenceEvaluationCopy } from "../evaluation-feedback/persistence.ts";
 
 type SecretPolicy = "include" | "exclude";
 type JsonObject = Record<string, unknown>;
@@ -502,6 +503,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
       sourceIdentity = initializePersistence(snapshot, { migrationId: "offline-backup-copy-v1", planHash: inventory.fingerprint });
       legacyWarnings = inventory.legacyWarnings;
       revokeCopiedMcpAuthority(snapshot);
+      fenceEvaluationCopy(snapshot, sourceIdentity);
       if (options.secrets === "exclude") excludeNativeSessions(snapshot);
       snapshot.exec("COMMIT;");
     } finally { snapshot.close(); }
@@ -542,6 +544,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
         "workspace.lock and worker_owner execution ownership; provider probe observations",
         "rebuildable provider-cache probes, transcript/database usage scan caches and interrupted atomic-write temporary files",
         "MCP OAuth codes/tokens/consent challenges and live App context; copied client grants retain audit metadata but are revoked in both secret modes and require fresh consent",
+        "Collected evaluation observations and derived denominators are omitted in both modes; minimal deletion/epoch fences remain, sampling policies are OFF and release observation windows invalidated",
         "Extension project decryption key PM_AUTOMATION_INTEGRATIONS_KEY remains deployment-owned and must match the separate PM restore; native context bindings require explicit rebind after restore; external native roots/Unified Skills outside Agent data are references only",
         ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; all cc-switch encrypted definitions, native encryption key, registry, Skills and backups are omitted together; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
     };
@@ -605,6 +608,10 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
       throw new Error("Backup contains live nonportable MCP/App authority.");
     for (const row of copied.prepare("SELECT value FROM records WHERE namespace='mcp:grants'").iterate())
       if (!parseObject(String(row.value)).revokedAt) throw new Error("Copied MCP grants must be revoked.");
+    if (copied.prepare("SELECT 1 FROM records WHERE namespace=? LIMIT 1").get(EVALUATION_NAMESPACES.admissions))
+      throw new Error("Portable backups must not retain collected evaluation observations.");
+    for (const row of copied.prepare("SELECT value FROM records WHERE namespace=?").iterate(EVALUATION_NAMESPACES.policies))
+      if (parseObject(String(row.value)).enabled !== false) throw new Error("Copied sampling policies must be OFF.");
     if (manifest.secrets === "exclude") {
       if (copied.prepare("SELECT 1 FROM records WHERE namespace='provider:t3code:continuations' LIMIT 1").get())
         throw new Error("Credential-excluded backup retains executable native continuations.");

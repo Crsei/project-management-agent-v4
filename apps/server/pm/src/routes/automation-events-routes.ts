@@ -1,17 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
-import type { NotificationCorePort } from '../../../../packages/pm-core/readonly.ts';
-import { automationEventSaveSchema, automationIntegrationMutationSchema, automationIntegrationSaveSchema, automationIntegrationRuntimeSchema } from '../../../../packages/contracts/src/automation-integrations.ts';
-import { createAutomationIntegrationsService, type AutomationIntegrationsOptions } from '../../../../packages/application/src/automation-integrations.ts';
-import { createAutomationEventsService } from '../../../../packages/application/src/automation-events.ts';
-import { createAutomationIntegrationRuntimeService } from '../../../../packages/application/src/automation-integrations-runtime.ts';
-import { verifyAutomationServiceBearer, verifyAutomationServiceRequest } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
-import { createAutomationPrivateStore, assertAutomationIntegrationsAvailable } from '../../../../packages/infrastructure/src/automation-integrations.ts';
-import { createAutomationDefinitionClient } from '../../../../packages/infrastructure/src/automation-integrations-definitions.ts';
-import { authorizeAutomationIntegration } from '../../../../packages/application/src/automation-integrations-store.ts';
-import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
+import { DomainError, type Actor } from '../../../../../packages/domain/src/core.ts';
+import type { NotificationCorePort } from '../../../../../packages/pm-core/readonly.ts';
+import { automationEventSaveSchema, automationIntegrationMutationSchema, automationIntegrationSaveSchema, automationIntegrationRuntimeSchema } from '../../../../../packages/contracts/src/automation-integrations.ts';
+import { createAutomationIntegrationsService, type AutomationIntegrationsOptions } from '../../../../../packages/application/src/automation-integrations.ts';
+import { createAutomationEventsService } from '../../../../../packages/application/src/automation-events.ts';
+import { createAutomationIntegrationRuntimeService } from '../../../../../packages/application/src/automation-integrations-runtime.ts';
+import { verifyAutomationServiceBearer, verifyAutomationServiceRequest } from '../../../../../packages/infrastructure/src/automation-execution-client.ts';
+import { createAutomationPrivateStore, assertAutomationIntegrationsAvailable } from '../../../../../packages/infrastructure/src/automation-integrations.ts';
+import { createAutomationDefinitionClient } from '../../../../../packages/infrastructure/src/automation-integrations-definitions.ts';
+import { authorizeAutomationIntegration } from '../../../../../packages/application/src/automation-integrations-store.ts';
+import { lockWorkspace } from '../../../../../packages/infrastructure/src/database.ts';
 
 const workspaceParams = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
 const resourceParams = workspaceParams.extend({ id: z.uuid().toLowerCase() });

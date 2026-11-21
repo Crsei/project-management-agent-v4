@@ -38,7 +38,6 @@ async function fixture(t) {
     'vendor/t3code/LICENSE', 'vendor/cc-switch/LICENSE', 'vendor/cc-switch/LICENSING.md',
     'vendor/openhands-extensions/LICENSE', 'vendor/openhands-extensions/LICENSING.md',
     'vendor/openhands-extensions/extensions/LICENSE',
-    'vendor/openhands-automations/LICENSE.agent-canvas', 'vendor/openhands-automations/LICENSE.extensions',
   ]) await put(legal);
   git(repo, ['init', '-b', 'main']);
   git(repo, ['add', '.']);

@@ -72,8 +72,11 @@
 }
 
 .railLink[aria-current="page"] {
-  background: var(--selection);
+  background: var(--glass-state);
   color: var(--foreground);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
 }
 
 .railLink:focus-visible {
@@ -112,8 +115,11 @@
 }
 
 .navigationLink[aria-current="page"] {
-  background: var(--selection);
+  background: var(--glass-state);
   color: var(--foreground);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    inset 0 0 0 1px var(--glass-state-edge);
 }
 
 .navigationLink:focus-visible,

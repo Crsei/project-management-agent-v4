@@ -8,7 +8,7 @@ import type { StudioDefinition, StudioExecution } from "../../../../../../../../
 import { useAgentText } from "../../i18n";
 import { useAutomationQuery } from "./query";
 import { automationDateTime } from "./format";
-import { executionDuration, studioExecutionNeedsRefresh, studioStatusLabel, studioTriggerLabel } from "./studio-view";
+import { executionDuration, studioExecutionNeedsRefresh, studioStatusLabel, studioTriggerLabel, studioTriggerModeLabel } from "./studio-view";
 import styles from "./studio.module.css";
 import { RadixSelect } from "@/components/ui/radix-select"
 
@@ -109,7 +109,7 @@ function DashboardCard({ item, api, onAction, writable, locked, onAccessFailure 
       </div>
     </header>
     <p className={styles.cardDescription}>{config.description || (config.action.kind === "prompt" ? config.action.prompt : config.action.kind === "script" ? config.action.entrypoint : config.action.templateId)}</p>
-    <div className={styles.pills}><span className={styles.badge}>{config.action.kind === "prompt" ? "Agent" : config.action.kind === "script" ? "Python" : t("原生模板", "Native template")}</span><span className={styles.badge} title={studioTriggerLabel(config.trigger, t)}>{config.trigger.kind === "manual" ? t("手动", "Manual") : config.trigger.kind === "cron" ? "Cron" : config.trigger.kind === "once" ? t("单次", "Once") : t("事件", "Event")}</span>{config.tags.slice(0, 3).map(tag => <span className={styles.badge} key={tag}>#{tag}</span>)}</div>
+    <div className={styles.pills}><span className={styles.badge}>{config.action.kind === "prompt" ? "Agent" : config.action.kind === "script" ? "Python" : t("原生模板", "Native template")}</span><span className={styles.badge} title={studioTriggerLabel(config.trigger, t)}>{studioTriggerModeLabel(config.trigger, t)}</span>{config.tags.slice(0, 3).map(tag => <span className={styles.badge} key={tag}>#{tag}</span>)}</div>
     {!!runs.length && !sample.error && <div className={styles.activityStrip} role="img" aria-label={t(`最近 ${runs.length} 次运行状态，由旧到新`, `Latest ${runs.length} run outcomes, oldest to newest`)}>{[...runs].reverse().map(run => <span key={run.id} data-status={run.status} title={`${studioStatusLabel(run.status, t)} · ${automationDateTime(run.startedAt ?? run.createdAt)}`} />)}</div>}
     <div className={styles.cardStatus}>{sample.loading ? <span>{t("读取近期运行…", "Loading recent runs…")}</span> : sample.error ? <button type="button" onClick={sample.refetch}>{t("运行摘要不可用，重试", "Run summary unavailable; retry")}</button> : latest ? <><span className={styles.statusDot} data-status={latest.status} /><span>{studioStatusLabel(latest.status, t)}</span><time dateTime={latest.startedAt ?? latest.createdAt}>{automationDateTime(latest.startedAt ?? latest.createdAt)}</time></> : <span>{t("尚未运行", "Not run yet")}</span>}</div>
     {latest && "error" in latest && latest.error && <p className={styles.cardError} title={latest.error}>{latest.error}</p>}

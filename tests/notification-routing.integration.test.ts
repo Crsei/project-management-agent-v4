@@ -4,7 +4,7 @@ import { readFile,unlink,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe,it } from 'node:test';
 import { z } from 'zod';
-import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/routes/core-routes.ts';
 import { CoreFactImporter } from '../apps/server/pm/src/core-fact-importer.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
 import { routeNotificationBatch,retryNotificationFact,fenceRestoredNotifications } from '../packages/application/src/notification-routing.ts';

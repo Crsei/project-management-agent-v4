@@ -28,6 +28,7 @@ function readActiveThread(entry?: URLSearchParams): string | undefined {
 type AssistantProps = { entry?: URLSearchParams; runBoard?: ReactNode; onExpand?: (params: URLSearchParams) => void; onClose?: () => void; onThreadChange?: (id: string | null) => void };
 function PersistentAssistant({ dictation, speak, entry, runBoard, onExpand, onClose, onThreadChange }: AssistantProps & { dictation: boolean; speak: boolean }) {
   const boardMode = runBoard !== undefined;
+  const boardSessionId = boardMode && typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("sessionId") ?? undefined : undefined;
   const [historyStatus] = useState(createHistoryLoadStore);
   const adapter = useMemo(() => createServerThreadAdapter(historyStatus), [historyStatus]);
   const transport = useMemo(() => new DurableChatTransport(), []);
@@ -39,11 +40,11 @@ function PersistentAssistant({ dictation, speak, entry, runBoard, onExpand, onCl
       const { ready, settings, saving, error } = useChatSettings(remoteId, undefined, localId);
       usePmChatState();
       return useChatRuntime({
-        sendAutomaticallyWhen: boardMode ? undefined : lastAssistantMessageIsCompleteWithToolCalls,
+        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
         // Each durable assistant message carries its own generation timeline.
         joinStrategy: "none",
         transport,
-        isSendDisabled: boardMode || !ready || saving || !!error || history.status === "loading" || history.status === "error" || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions),
+        isSendDisabled: !ready || saving || !!error || history.status === "loading" || history.status === "error" || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions),
         adapters: {
           ...(dictation ? { dictation: new WebSpeechDictationAdapter() } : {}),
           ...(speak ? { speech: new WebSpeechSynthesisAdapter() } : {}),
@@ -51,7 +52,7 @@ function PersistentAssistant({ dictation, speak, entry, runBoard, onExpand, onCl
       });
     },
     adapter,
-    initialThreadId: boardMode ? undefined : readActiveThread(entry),
+    initialThreadId: boardMode ? boardSessionId : readActiveThread(entry),
     onThreadIdChange(id) {
       if (boardMode) return;
       try {

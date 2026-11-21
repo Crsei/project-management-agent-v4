@@ -1,0 +1,6 @@
+/* Solid Glass 材质：项目概览的真实服务页面保持现有语义表面与边框，
+   只补上顶部亮边、内层细线、接触阴影和下方投影。 */
+.pane {
+  border-color: var(--glass-edge);
+  box-shadow: var(--edge-shadow);
+}

@@ -35,7 +35,7 @@ export function DocumentWorkbench(props: DocumentWorkbenchProps) {
   const state = useDocumentWorkbenchState(target);
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [treeOpen, setTreeOpen] = useState(() => !window.matchMedia('(max-width: 767px)').matches);
-  const [contextOpen, setContextOpen] = useState(() => window.matchMedia('(min-width: 1200px)').matches);
+  const [contextOpen, setContextOpen] = useState(() => window.matchMedia('(min-width: 1440px)').matches);
   const [contextWidth, setContextWidth] = useState(320);
   const [focusMode, setFocusMode] = useState(false);
   const [treeWidth, setTreeWidth] = useState(280);
@@ -163,7 +163,7 @@ export function DocumentWorkbench(props: DocumentWorkbenchProps) {
   const tree = <DocumentFileTree files={c.files} active={target} en={en} nativeStatus={c.accessError || c.query.isError ? 'error' : c.query.isPending ? 'loading' : 'ready'} nativeError={(c.accessError || c.query.error)?.message} onOpen={next => { void open(next); }} onNavigateEntity={file => { void navigateEntity(file); }} onExternalSourcesChange={sourcesChanged} onManageExternal={intent => { if (narrow) { treeDialogRef.current?.close(); setTreeOpen(false); } setManagement(intent); }} onSourceSettingsOpen={() => { if (narrow) { treeDialogRef.current?.close(); setTreeOpen(false); } }} />;
   const treeHeading = <div className="document-workbench-tree-heading"><strong>{en ? 'Workspace files' : '工作区文件'}</strong><button type="button" className="icon-button" aria-label={en ? 'Close file explorer' : '关闭文件浏览器'} onClick={() => setTreeOpen(false)}><X size={16} /></button></div>;
 
-  return <div className="document-workbench" data-document-workbench data-tree-open={!focusMode && treeOpen}>
+  return <div className="document-workbench" data-document-workbench data-tree-open={!focusMode && treeOpen} data-focus-mode={focusMode || undefined}>
     <header className="document-workbench-toolbar">
       <button type="button" className="secondary-button" onClick={() => { void exit(); }}><ArrowLeft size={15} /><span>{en ? 'Exit documents' : '退出文档工作台'}</span></button>
       <button ref={treeOpenerRef} type="button" className={`icon-button ${!focusMode && treeOpen ? 'active' : ''}`} aria-label={en ? 'Toggle workspace file explorer' : '切换工作区文件浏览器'} aria-expanded={!focusMode && treeOpen} aria-controls={treeId} onClick={() => { setFocusMode(false); setTreeOpen(value => !value); }}><PanelLeft size={17} /></button>

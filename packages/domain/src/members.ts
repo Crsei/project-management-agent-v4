@@ -54,6 +54,7 @@ export type MemberDirectory = {
   capabilities: {
     canReadDirectory: true;
     canManageMembers: boolean;
+    canInviteMembers: boolean;
     canEditSelfProfile: boolean;
     twoFactor: { supported: false };
   };

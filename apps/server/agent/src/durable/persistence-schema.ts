@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { acceptedChatContextSchema, canonicalChatContextJson } from "@agent-workspace/contracts/message-context";
 import { chatDraftInputSchema } from "@agent-workspace/contracts/chat";
+import { EVALUATION_NAMESPACES, validateEvaluationRecord, fenceEvaluationCopy } from "../evaluation-feedback/persistence.ts";
 
 export const PERSISTENCE_NAMESPACE = "agent:persistence:v1";
 export const PERSISTENCE_VERSION = 1;
@@ -26,10 +27,12 @@ export type StoreIdentity = {
   migrations: { migrationId: string; planHash: string; at: string }[];
 };
 export type NamespacePolicy = {
-  owner: "chat" | "business" | "provider" | "mcp" | "workspace" | "settings" | "persistence";
+  owner: "chat" | "business" | "provider" | "mcp" | "workspace" | "settings" | "persistence" | "evaluation";
   structureVersion: number; sensitive: boolean; rebuildable: boolean;
-  backup: "retain" | "revoke" | "exclude-native";
-  deletion: "visible" | "evidence" | "identity" | "capability";
+  backup: "retain" | "revoke" | "exclude-native" | "exclude-feedback";
+  deletion: "visible" | "evidence" | "identity" | "capability" | "feedback";
+  retention?: "configured-expiry" | "minimal-audit-fence";
+  restore?: "disable-and-purge-derived";
 };
 const policies = new Map<string, NamespacePolicy>();
 function register(names: string[], owner: NamespacePolicy["owner"], deletion: NamespacePolicy["deletion"], backup: NamespacePolicy["backup"] = "retain", rebuildable = false): void {
@@ -40,11 +43,18 @@ register(["chat:threads", "chat:requests", "chat:cancellations", "chat:imports"]
 register(["chat:history", "chat:sidebar", "chat:message-queue", "chat:draft-stash"], "chat", "visible");
 register(["chat:generations", "chat:events", "chat:execution-grants", "chat:thread-actions", "chat:steering", "native-output", "durable:workspaces", "durable:imports", "durable:forks", "durable:transfers", "durable:fork-keys"], "chat", "evidence");
 register(["provider:t3code:continuations"], "provider", "capability", "exclude-native");
-register(["agent:workspaces:v1", "agent:scratch:v1"], "workspace", "identity");
+register(["agent:workspaces:v1", "agent:scratch:v1", "chat-worktrees-v1"], "workspace", "identity");
+register(["chat-fanouts-v1"], "workspace", "identity");
 register(["settings:chat-defaults", "settings:usage", "usage:turns", "usage:threads", "usage:launches"], "settings", "evidence");
 register(["usage:pricing"], "settings", "evidence", "retain", true);
 register(["mcp:codes", "mcp:tokens", "mcp:consents", "mcp:grants", "mcp-app-model-context-v1"], "mcp", "capability", "revoke");
 register(["mcp:execution-roots", "mcp:tool-receipts", "mcp-app-producing-items-v1", "mcp-app-private-assets-v1"], "mcp", "evidence");
+for (const namespace of Object.values(EVALUATION_NAMESPACES)) policies.set(namespace, {
+  owner: "evaluation", structureVersion: 1, sensitive: true, rebuildable: false,
+  backup: namespace === EVALUATION_NAMESPACES.admissions || namespace === EVALUATION_NAMESPACES.denominators ? "exclude-feedback" :
+    namespace === EVALUATION_NAMESPACES.policies ? "revoke" : "retain", deletion: "feedback",
+  retention: namespace === EVALUATION_NAMESPACES.admissions ? "configured-expiry" : "minimal-audit-fence", restore: "disable-and-purge-derived",
+});
 register([
   "pm-tool-calls", "pm-content-provenance", "pm-quote-provenance", "pm-core:observation", "pm-analysis:scratch-v1",
   "durable:runs", "durable:requests", "durable:submissions", "durable:events",
@@ -124,6 +134,8 @@ export function preflightPersistence(db: DatabaseSync): { empty: boolean; legacy
     if (version !== undefined && (row.namespace === "chat:threads" ? version !== 1 && version !== 2 : version !== 1))
       throw new Error(`Unsupported record structure version in ${String(row.namespace)}; no writer was admitted.`);
   }
+  for (const row of db.prepare("SELECT namespace,value FROM records WHERE namespace LIKE 'evaluation:%'").iterate())
+    validateEvaluationRecord(String(row.namespace), JSON.parse(String(row.value)));
   const nonempty = Boolean(db.prepare("SELECT 1 FROM records LIMIT 1").get() || db.prepare("SELECT 1 FROM run_events LIMIT 1").get());
   return { empty: !nonempty, legacy: !meta && nonempty };
 }
@@ -217,6 +229,12 @@ export function inventoryPersistence(db: DatabaseSync, options: { omitCredential
       if (context && (context.threadId !== value.threadId || context.messageId !== value.inputMessageId)) blockers.push(`generation_input_binding_mismatch:${row.key}`);
       if (value.threadId !== undefined && !threads.has(String(value.threadId))) blockers.push(`orphan_generation:${row.key}`);
       if (value.threadId === undefined) legacyWarnings.push(`legacy_generation_without_thread:${row.key}`);
+    }
+    if (row.namespace === EVALUATION_NAMESPACES.admissions) {
+      const generation = generations.get(String(value?.generationId));
+      if (value?.generationId !== row.key || !generation || generation.threadId !== value?.threadId ||
+          !records.some(record => record.namespace === EVALUATION_NAMESPACES.policies && record.key === object(value?.observation)?.policyId))
+        blockers.push(`invalid_evaluation_admission:${row.key}`);
     }
     if (row.namespace === "native-output" && value?.generationId !== undefined && value.generationId !== row.key) blockers.push(`native_output_identity_mismatch:${row.key}`);
     if (row.namespace === "chat:events" && value && (!generations.has(String(value.generationId)) || !Number.isSafeInteger(value.seq) || Number(value.seq) < 1))
@@ -319,6 +337,7 @@ export function restorePersistenceIdentity(db: DatabaseSync): StoreIdentity {
   const source = initializePersistence(db), restoredAt = new Date().toISOString();
   if (source.restoreEpoch >= Number.MAX_SAFE_INTEGER) throw new Error("Agent restore epoch is exhausted; no target identity was allocated.");
   const restoredThreads = Object.fromEntries(db.prepare("SELECT key FROM records WHERE namespace='chat:threads'").all().map(row => [String(row.key), true as const]));
+  fenceEvaluationCopy(db, source);
   const identity: StoreIdentity = { ...source, sourceStoreId: source.storeId, storeId: randomUUID(), restoreEpoch: source.restoreEpoch + 1, restoredAt, restoredThreads };
   db.prepare("UPDATE records SET value=? WHERE namespace=? AND key='store'").run(JSON.stringify(identity), PERSISTENCE_NAMESPACE);
   return identity;

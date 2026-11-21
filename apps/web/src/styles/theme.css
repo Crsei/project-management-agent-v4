@@ -147,20 +147,40 @@
   --motion-layout: 280ms;
   --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --motion-ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
-  /* 材质：默认不透明；实体表面只用一层边缘，输入区与浮层使用一层阴影 */
-  --edge-highlight: rgba(255, 255, 255, 0.9);
+  /* 材质：默认不透明；Solid Glass 的边缘配方——顶部亮边、内层细线、
+     接触阴影与下方投影。已有容器继续用 1px border 作切边，
+     --edge-shadow 不再画外圈，避免边框与阴影形成双线。 */
+  --glass-rim: rgba(255, 255, 255, 0.9);
+  --glass-inner: rgba(255, 255, 255, 0.35);
+  --glass-edge: rgba(20, 18, 16, 0.1);
+  --glass-contact: rgba(20, 18, 16, 0.05);
+  --glass-shade: rgba(20, 18, 16, 0.14);
+  --glass-lift: rgba(20, 18, 16, 0.1);
+  --glass-state: rgba(20, 18, 16, 0.06);
+  --glass-state-rim: rgba(255, 255, 255, 0.85);
+  --glass-state-edge: rgba(20, 18, 16, 0.1);
+  --field-rim: rgba(255, 255, 255, 0.9);
+  --primary-rim: rgba(255, 255, 255, 0.24);
+  --primary-under: rgba(0, 0, 0, 0.18);
+  --edge-highlight: var(--glass-rim);
   --edge-shade: rgba(20, 18, 16, 0.04);
   --edge-shadow:
-    inset 0 1px 0 var(--edge-highlight),
-    inset 0 -1px 0 var(--edge-shade),
-    0 1px 2px rgba(20, 18, 16, 0.04);
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 0 0 1px var(--glass-inner),
+    0 1px 2px var(--glass-contact),
+    0 12px 28px -18px var(--glass-shade);
+  --control-shadow:
+    inset 0 1px 0 var(--glass-rim),
+    0 1px 2px var(--glass-contact);
   --shadow-composer: 0 1px 2px rgba(20, 18, 16, 0.06);
   /* Composer：输入区初始高度与内滚上限 */
   --composer-min-height: 68px;
   --composer-max-height: 240px;
   --shadow-floating:
-    0 12px 32px rgba(20, 18, 16, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    0 24px 60px -18px var(--glass-shade),
+    0 6px 16px -6px var(--glass-lift),
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 -1px 0 var(--edge-shade);
   /* 图表：默认降低饱和度，多系列保留区分色 */
   --chart-1: #7a6a63;
   --chart-2: #5b6b7a;
@@ -227,16 +247,34 @@
   --status-waiting: var(--warning);
   --status-success: var(--success);
   --status-error: var(--destructive);
-  --edge-highlight: rgba(255, 255, 255, 0.08);
+  --edge-highlight: var(--glass-rim);
   --edge-shade: rgba(0, 0, 0, 0.4);
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-inner: rgba(255, 255, 255, 0.04);
+  --glass-edge: rgba(255, 255, 255, 0.08);
+  --glass-contact: rgba(0, 0, 0, 0.25);
+  --glass-shade: rgba(0, 0, 0, 0.55);
+  --glass-lift: rgba(0, 0, 0, 0.22);
+  --glass-state: rgba(255, 255, 255, 0.07);
+  --glass-state-rim: rgba(255, 255, 255, 0.11);
+  --glass-state-edge: rgba(255, 255, 255, 0.08);
+  --field-rim: rgba(255, 255, 255, 0.1);
+  --primary-rim: rgba(255, 255, 255, 0.3);
+  --primary-under: rgba(0, 0, 0, 0.22);
   --edge-shadow:
-    inset 0 1px 0 var(--edge-highlight),
-    inset 0 -1px 0 var(--edge-shade),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 0 0 1px var(--glass-inner),
+    0 1px 2px var(--glass-contact),
+    0 12px 28px -18px var(--glass-shade);
+  --control-shadow:
+    inset 0 1px 0 var(--glass-rim),
+    0 1px 2px var(--glass-contact);
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-floating:
-    0 16px 40px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 24px 60px -18px var(--glass-shade),
+    0 6px 16px -6px var(--glass-lift),
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 -1px 0 var(--edge-shade);
   --chart-1: #b9a79d;
   --chart-2: #9fb4c6;
   --chart-3: #a9bda6;

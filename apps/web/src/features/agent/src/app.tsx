@@ -32,7 +32,7 @@ function ApplicationFrame() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.altKey || event.shiftKey || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "u") return;
       const target = event.target;
-      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [data-terminal-drawer], .xterm, [role='dialog'], [role='alertdialog'], [role='menu'], [aria-modal='true']")) return;
+      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [data-terminal-drawer], [data-terminal-surface], .xterm, [role='dialog'], [role='alertdialog'], [role='menu'], [aria-modal='true']")) return;
       event.preventDefault();
       if (location.pathname === USAGE_PATH) return;
       const guardedLink = document.querySelector<HTMLAnchorElement>("[data-usage-navigation]");

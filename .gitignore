@@ -17,6 +17,9 @@ apps/desktop/release/
 .omp/
 .tmp/
 *.tsbuildinfo
+
+# agent evaluation build outputs (large, regenerated)
+.evaluation-build-*/
 test-results/
 playwright-report/
 storybook-static/

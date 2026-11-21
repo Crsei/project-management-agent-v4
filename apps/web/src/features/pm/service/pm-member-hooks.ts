@@ -29,11 +29,14 @@ export function useMemberDirectory() {
   return { ...query, estimatedServerNow: clock.instant + Math.max(0, tick - clock.received) }
 }
 
-export function useMemberInvitations() {
+export function useMemberInvitations(includeOwn = false) {
   const { actor, workspace } = usePmService()
-  const enabled = allowed(workspace, "access.manage")
+  const administrator = allowed(workspace, "access.manage")
+  const memberInviter = !!workspace && (workspace.capabilities.includes("planning.edit") || administrator)
+  const enabled = includeOwn ? memberInviter : administrator
+  const requiredCapability = administrator ? "access.manage" : "planning.edit"
   const key = [...pmKeys.workspace(window.location.origin, actor?.id ?? "anonymous", workspace?.id ?? "none"), "members", "invitations"]
-  const query = usePrivateQuery<InvitationListDto>(key, "access.manage", undefined, (client, workspaceId, signal) => client.listMemberInvitations(workspaceId, { signal }), enabled)
+  const query = usePrivateQuery<InvitationListDto>(key, requiredCapability, undefined, (client, workspaceId, signal) => client.listMemberInvitations(workspaceId, { signal }), enabled)
   const refresh = query.refetch
   const sending = query.data?.items.some(item => item.status === "pending" && (item.delivery?.status === "queued" || item.delivery?.status === "sending"))
   const pending = query.data?.items.some(item => item.status === "pending")

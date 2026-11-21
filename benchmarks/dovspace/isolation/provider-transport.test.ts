@@ -326,6 +326,40 @@ test('native cancellation closes the upstream request and cannot settle missing 
     assert.equal(runtime.broker.events.find(event => event.type === 'observation_complete')?.data.providerRequests, false);
   } finally { await runtime.close(); }
 });
+for (const withUsage of [true, false]) {
+  test(`native terminal consumer close retains ${withUsage ? 'settled' : 'unknown'} observation`, { timeout: 5000 }, async () => {
+    const upstreamClosed = Promise.withResolvers<void>();
+    const runtime = await nativeBoundary((incoming, outgoing) => {
+      incoming.resume(); outgoing.once('close', upstreamClosed.resolve);
+      outgoing.writeHead(200, { 'content-type': 'text/event-stream', 'x-bench-request-id': String(incoming.headers['x-bench-request-id']) });
+      const response = { model: 'gpt-6.1-sol', ...(withUsage ? { usage: { input_tokens: 100, output_tokens: 20, input_tokens_details: { cached_tokens: 20 } } } : {}) };
+      outgoing.write(`data: ${JSON.stringify({ type: 'response.done', response })}\n\n`);
+      // Deliberately hold HTTP open: the native consumer terminates on response.done.
+    });
+    try {
+      const consumed = Promise.withResolvers<void>();
+      const client = request({ socketPath: runtime.socketPath, path: '/provider/v1/codex/responses', method: 'POST', headers: { authorization: 'Bearer synthetic-capability', 'content-type': 'application/json' } }, response => {
+        let received = '';
+        response.on('data', chunk => {
+          received += String(chunk);
+          if (!received.includes('\n\n')) return;
+          client.destroy(); response.destroy(); consumed.resolve();
+        });
+        response.on('error', () => { /* Deliberate consumer close after the full terminal frame. */ });
+      });
+      client.on('error', () => { /* Deliberate consumer close after the full terminal frame. */ });
+      client.end(JSON.stringify(nativeBody));
+      await consumed.promise; await upstreamClosed.promise; await runtime.broker.close();
+      const response = runtime.broker.events.find(event => event.type === 'provider_response')!;
+      assert.equal(response.data.terminal, true);
+      assert.equal(response.data.usageRecorded, withUsage);
+      assert.equal(response.data.streamEnd, withUsage ? 'terminal-consumed' : 'downstream-cancelled');
+      assert.equal(runtime.broker.events.find(event => event.type === 'provider_usage')?.data.costUsd, withUsage ? 0.000362 : null);
+      assert.equal(runtime.broker.events.find(event => event.type === 'observation_complete')?.data.providerRequests, withUsage);
+      assert.equal(runtime.broker.events.filter(event => event.type === 'provider_request').length, 1);
+    } finally { await runtime.close(); }
+  });
+}
 test('native account/transport errors are returned once without credential leakage, account fallback, or a complete observation', async () => {
   let forwarded = 0;
   const runtime = await nativeBoundary((incoming, outgoing) => {

@@ -9,11 +9,15 @@ import { providerDataDirectory } from "../../providers/instances.ts";
 import type { UsageRecord } from "../types.ts";
 
 export const TRANSCRIPT_CACHE_FILE = "usage-transcript-cache-v1.json";
-const VERSION = 2;
+const VERSION = 3;
+/** OMP usage history was introduced after this cache's legacy global loss, so it cannot represent OMP contents. */
+const LEGACY_LOSS_EXEMPT = new Set<UsageRecord["provider"]>(["omp"]);
 const RETENTION_MS = 92 * 86400_000;
-const MAX_CACHE_BYTES = 96 * 1024 * 1024;
-const MAX_FILES = 256;
-const MAX_RECORDS = 200_000;
+const MAX_CACHE_BYTES = 128 * 1024 * 1024;
+// OMP keeps one native JSONL per session and can exceed the old 256-file bound by itself.
+const MAX_FILES = 4_096;
+const MAX_FILES_PER_PROVIDER = 512;
+const MAX_RECORDS = 300_000;
 const MAX_STRING = 8192;
 export interface TranscriptSourceIdentity { path: string; volumeId: string; binding: string }
 export interface TranscriptCacheEntry {
@@ -76,7 +80,9 @@ export class TranscriptCache {
   private loaded?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
   private dirty = false;
-  private lostBeforeMs: number | undefined;
+  private lostBefore = new Map<string, number>();
+  private lostBeforeAll: number | undefined;
+  private legacyLossAll: number | undefined;
   private active = 0;
   private queued: (() => void)[] = [];
   private pending = new Map<string, Promise<unknown>>();
@@ -91,8 +97,31 @@ export class TranscriptCache {
   }
   private key(file: string, provider: UsageRecord["provider"], binding: string): string { return JSON.stringify([provider, binding, path.resolve(file)]); }
   load(): Promise<void> { return this.loaded ??= this.read(); }
-  hasLostCoverage(sinceMs: number): boolean { return this.lostBeforeMs !== undefined && sinceMs < this.lostBeforeMs; }
-  private loseCoverage(): void { this.lostBeforeMs = this.now(); this.dirty = true; }
+  hasLostCoverage(sinceMs: number, provider: UsageRecord["provider"], binding: string): boolean {
+    const sourceLoss = this.lostBefore.get(this.lossKey(provider, binding));
+    if (sourceLoss !== undefined) return sinceMs < sourceLoss;
+    if (this.lostBeforeAll !== undefined) return sinceMs < this.lostBeforeAll;
+    return this.legacyLossAll !== undefined && !LEGACY_LOSS_EXEMPT.has(provider) && sinceMs < this.legacyLossAll;
+  }
+  private lossKey(provider: UsageRecord["provider"], binding: string): string { return JSON.stringify([provider, binding]); }
+  private loseCoverage(provider?: UsageRecord["provider"], binding?: string): void {
+    const lostBeforeMs = this.now();
+    if (provider !== undefined && binding !== undefined) {
+      const key = this.lossKey(provider, binding);
+      this.lostBefore.set(key, Math.max(this.lostBefore.get(key) ?? 0, lostBeforeMs));
+    } else this.lostBeforeAll = Math.max(this.lostBeforeAll ?? 0, lostBeforeMs);
+    this.dirty = true;
+  }
+  /** A version-2 cache cannot attribute its global loss to a source. Apply it only to sources it actually contained. */
+  private adoptLegacyLoss(lostBeforeMs: number): void {
+    const sources = new Set<string>();
+    for (const { entry } of this.entries.values()) {
+      if (LEGACY_LOSS_EXEMPT.has(entry.provider)) continue;
+      sources.add(this.lossKey(entry.provider, entry.source.binding));
+    }
+    if (sources.size === 0) { this.legacyLossAll = Math.max(this.legacyLossAll ?? 0, lostBeforeMs); return; }
+    for (const key of sources) this.lostBefore.set(key, Math.max(this.lostBefore.get(key) ?? 0, lostBeforeMs));
+  }
   private async read(): Promise<void> {
     try {
       const handle = await open(this.file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -102,9 +131,28 @@ export class TranscriptCache {
         if ((info.mode & 0o777) !== 0o600) this.dirty = true;
         const root = object(JSON.parse(await handle.readFile("utf8")));
         // Legacy reducers had no instance/revision binding. Never reuse their removed-file records for a new account.
-        if (!root || root.version !== VERSION || !Array.isArray(root.files) || root.files.length > MAX_FILES) { this.loseCoverage(); return; }
-        if (root.lostBeforeMs !== undefined) { if (finite(root.lostBeforeMs)) this.lostBeforeMs = root.lostBeforeMs; else this.loseCoverage(); }
+        const version = root?.version;
+        if (!root || !(version === VERSION || version === 2) || !Array.isArray(root.files) || root.files.length > MAX_FILES) { this.loseCoverage(); return; }
+        if (version !== VERSION) this.dirty = true;
         for (const row of root.files) { const decoded = decodeEntry(row); if (decoded) this.set(decoded.file, decoded.entry); else this.loseCoverage(); }
+        if (version === VERSION) {
+          if (root.lostBefore !== undefined) {
+            if (!Array.isArray(root.lostBefore)) this.loseCoverage();
+            else for (const row of root.lostBefore) {
+              const value = object(row), provider = usageProviderKindSchema.safeParse(value?.provider), binding = value?.binding, lostBeforeMs = value?.lostBeforeMs;
+              if (!provider.success || typeof binding !== "string" || !/^[a-f0-9]{64}$/.test(binding) || !finite(lostBeforeMs)) { this.loseCoverage(); continue; }
+              this.lostBefore.set(this.lossKey(provider.data, binding), lostBeforeMs);
+            }
+          }
+          if (root.lostBeforeAll !== undefined) {
+            if (finite(root.lostBeforeAll)) this.lostBeforeAll = root.lostBeforeAll; else this.loseCoverage();
+          }
+          if (root.legacyLossAll !== undefined) {
+            if (finite(root.legacyLossAll)) this.legacyLossAll = root.legacyLossAll; else this.loseCoverage();
+          }
+        } else if (root.lostBeforeMs !== undefined) {
+          if (finite(root.lostBeforeMs)) this.adoptLegacyLoss(root.lostBeforeMs); else this.loseCoverage();
+        }
         this.prune();
       } finally { await handle.close(); }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") this.loseCoverage(); }
@@ -125,8 +173,20 @@ export class TranscriptCache {
       const first = this.entries.entries().next().value; if (!first) break;
       records -= first[1].entry.records.length; bytes -= first[1].bytes; this.entries.delete(first[0]); this.dirty = true;
     }
+    // One provider with many native session files must not evict every other provider's cache.
+    const providerRows = new Map<UsageRecord["provider"], { key: string; mtime: number }[]>();
+    for (const [key, { entry }] of this.entries) {
+      const rows = providerRows.get(entry.provider);
+      if (rows) rows.push({ key, mtime: entry.mtime }); else providerRows.set(entry.provider, [{ key, mtime: entry.mtime }]);
+    }
+    for (const rows of providerRows.values()) {
+      if (rows.length <= MAX_FILES_PER_PROVIDER) continue;
+      rows.sort((a, b) => b.mtime - a.mtime);
+      for (const row of rows.slice(MAX_FILES_PER_PROVIDER)) { this.entries.delete(row.key); this.dirty = true; }
+    }
   }
   forgetSource(provider: UsageRecord["provider"], source: TranscriptSourceIdentity): void {
+    this.lostBefore.delete(this.lossKey(provider, source.binding));
     for (const [key, { entry }] of this.entries) if (entry.provider === provider && entry.source.path === source.path && entry.source.volumeId === source.volumeId && entry.source.binding === source.binding) {
       this.entries.delete(key); this.dirty = true;
     }
@@ -153,7 +213,11 @@ export class TranscriptCache {
       await this.load(); this.prune(); if (!this.dirty) return;
       this.dirty = false;
       const files = [...this.entries.values()].map(({ file, entry }) => ({ file, ...entry }));
-      const bytes = JSON.stringify({ version: VERSION, files, ...(this.lostBeforeMs === undefined ? {} : { lostBeforeMs: this.lostBeforeMs }) });
+      const lostBefore = [...this.lostBefore].map(([key, lostBeforeMs]) => {
+        const [provider, binding] = JSON.parse(key) as [UsageRecord["provider"], string];
+        return { provider, binding, lostBeforeMs };
+      });
+      const bytes = JSON.stringify({ version: VERSION, files, ...(lostBefore.length ? { lostBefore } : {}), ...(this.lostBeforeAll === undefined ? {} : { lostBeforeAll: this.lostBeforeAll }), ...(this.legacyLossAll === undefined ? {} : { legacyLossAll: this.legacyLossAll }) });
       if (Buffer.byteLength(bytes) > MAX_CACHE_BYTES) { this.dirty = true; throw new Error("Derived usage cache exceeds its size bound."); }
       await mkdir(path.dirname(this.file), { recursive: true, mode: 0o700 });
       const temporary = `${this.file}.${randomUUID()}.tmp`;

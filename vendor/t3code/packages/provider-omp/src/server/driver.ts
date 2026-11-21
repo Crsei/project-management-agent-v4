@@ -13,6 +13,7 @@ import { OmpSettings } from "../settings.ts";
 import { OmpAdapterV2Driver, type OmpAdapterV2DriverEnv } from "./adapter.ts";
 import { buildInitialOmpProviderSnapshot, checkOmpProviderStatus, discoverOmpCommandsForCwd } from "./status.ts";
 import { makeOmpTextGeneration } from "./textGeneration.ts";
+import { ompUsageReader } from "./usage.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("omp");
 const decodeSettings = Schema.decodeSync(OmpSettings);
@@ -21,6 +22,7 @@ export type OmpDriverEnv = OmpAdapterV2DriverEnv | ProviderHost.ProviderHost | C
 export const OmpDriver: ProviderDriver<OmpSettings, OmpDriverEnv> = {
   driverKind: DRIVER_KIND,
   metadata: { displayName: "Oh My Pi", supportsMultipleInstances: true },
+  usage: ompUsageReader,
   configSchema: OmpSettings,
   defaultConfig: () => decodeSettings({}),
   create: Effect.fn("OmpDriver.create")(function* (input) {

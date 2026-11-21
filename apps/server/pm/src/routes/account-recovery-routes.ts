@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { beginRecoveryEmail, confirmRecoveryEmail, cancelRecoveryEmail, unbindRecoveryEmail, requestPasswordRecovery, lookupRecoveryRequest, inspectPasswordRecovery, completePasswordRecovery, lookupPasswordResetAction, limitRecoveryBearer } from '../../../../packages/application/src/account-recovery.ts';
-import { consumeAuthRateLimit } from '../../../../packages/infrastructure/src/auth.ts';
-import { recoveryTokenSchema, recoveryActionInputSchema, completePasswordRecoverySchema, confirmRecoveryEmailSchema, recoveryRequestIdSchema } from '../../../../packages/contracts/src/account-recovery-schemas.ts';
-import type { AccountRecoveryMailConfig } from '../../../../packages/infrastructure/src/account-recovery-mail.ts';
+import { beginRecoveryEmail, confirmRecoveryEmail, cancelRecoveryEmail, unbindRecoveryEmail, requestPasswordRecovery, lookupRecoveryRequest, inspectPasswordRecovery, completePasswordRecovery, lookupPasswordResetAction, limitRecoveryBearer } from '../../../../../packages/application/src/account-recovery.ts';
+import { consumeAuthRateLimit } from '../../../../../packages/infrastructure/src/auth.ts';
+import { recoveryTokenSchema, recoveryActionInputSchema, completePasswordRecoverySchema, confirmRecoveryEmailSchema, recoveryRequestIdSchema } from '../../../../../packages/contracts/src/account-recovery-schemas.ts';
+import type { AccountRecoveryMailConfig } from '../../../../../packages/infrastructure/src/account-recovery-mail.ts';
 
 export type AccountRecoveryRouteOptions = { database: () => Pool; token: (request: FastifyRequest) => string; mailConfig?: AccountRecoveryMailConfig };
 export function registerAccountRecoveryRoutes(app: FastifyInstance, options: AccountRecoveryRouteOptions): void {
